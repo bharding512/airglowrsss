@@ -83,7 +83,7 @@ def FilterData(DATA):
     '''
     #winderrorlimit = 50.
     #temperrorlimit = 100.
-    calerrorlimit = 100.
+    calerrorlimit = 300.
     cloudlimit = 2
     winderrorlimit = 25.
     temperrorlimit = 50.
@@ -313,7 +313,7 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True):
                             else:
                                 vData[bin,count[bin]] = r1.v[zelda]
                                 veData[bin,count[bin]] = r1.ve[zelda]
-                        if len(r1.w) > 0:
+                        if len(r1.w) > 0 and r1.parent[0].reference == 'laser':
                             wData[bin,count[bin]] = r1.w[zelda]
                             weData[bin,count[bin]] = r1.we[zelda]
                         if len(r1.T) > 0:

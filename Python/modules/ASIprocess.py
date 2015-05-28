@@ -93,6 +93,7 @@ def process_instr(inst,year,doy,do_DB=True):
     
     # Location of files
     data_stub = '/rdata/airglow/imaging/' + inst + '/' + site + '/'
+    warn_flag = True
 
     # Loop through each requested filter
     for (fils,fil_name, un_ht, in_id, target_lat, target_lon) in zip(filters, filter_names, unwarp_ht, inst_id, t_lat, t_lon):
@@ -139,9 +140,10 @@ def process_instr(inst,year,doy,do_DB=True):
             if len(darks) is 0 or dark_flag:
                 darks = None
 
-	    # Go through images for each filter
-            if len(files) is not 0:
+        # Go through images for each filter
+            if len(files) is not 0 :
                 files.sort()
+                warn_flag = False
 
                 # Output names
                 movie_name = inst + '_' + site + '_' + datestr + '_' + fils + 'movie.avi'
@@ -200,8 +202,8 @@ def process_instr(inst,year,doy,do_DB=True):
                         sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\", SummaryMovie=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (web_stub + keo_name, web_stub + movie_name, site_id, in_id, startut)
                         cur.execute(sql_cmd)
             else:
-                print 'No files used for'+fils+'on this day.'
-                warnings = warnings + 'No files in folder.\n'
+                print 'No files used for '+fils+' on this day.'
+            
         except:
             print 'Something bad happenend...'
             warnings = warnings + traceback.format_exc() + '\n'
@@ -213,6 +215,9 @@ def process_instr(inst,year,doy,do_DB=True):
             # Delete the files that were created
             for f in files_created:
                 os.remove(f)
+    
+    if warn_flag:
+        warnings = warnings + 'No files in folders!\n'
                 
     return(warnings)
     
