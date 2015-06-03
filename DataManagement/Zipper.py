@@ -75,12 +75,12 @@ def activeinstruments():
     code['vti']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/meriwej/My Documents/ClarityII/'}
 #    code['vti']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://10.20.1.2/log.txt'}
     
-    code['caj']['fpi']['02'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split'}
-    code['caj']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/MiniME/My Documents/ClarityII/'}
-    code['caj']['pic']['05'] = {'send_dir':'/data/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split'}
-    code['caj']['scn']['0U'] = {'send_dir':'/home/scintmon/Sending/', 'local_dir':'/home/scintmon/cascade-1.62/', 'split':'/usr/bin/split'}
-    code['caj']['tec']['02'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps/data/', 'split':'/usr/bin/split'}
-    code['caj']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.2/log.txt'}
+#    code['caj']['fpi']['02'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split'}
+#    code['caj']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/MiniME/My Documents/ClarityII/'}
+#    code['caj']['pic']['05'] = {'send_dir':'/data/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split'}
+#    code['caj']['scn']['0U'] = {'send_dir':'/home/scintmon/Sending/', 'local_dir':'/home/scintmon/cascade-1.62/', 'split':'/usr/bin/split'}
+#    code['caj']['tec']['02'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps/data/', 'split':'/usr/bin/split'}
+#    code['caj']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.2/log.txt'}
 
     code['car']['fpi']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split'}
     code['car']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/MINIMECARIRI/My Documents/ClarityII/'}
