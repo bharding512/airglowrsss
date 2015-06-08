@@ -851,9 +851,9 @@ def tangent_point(satlatlonalt, az, ze, tol=1e-6):
     f1 = slope(s1)
 
     # Throw an error if there doesn't appear to be a tangent altitude.
-    # (i.e., if the slope is decreasing, which would happen if the line
+    # (i.e., if the slope is positive, which would happen if the line
     # of sight is looking upward instead of downward)
-    if f1 <= f0:
+    if f0 >= 0.0:
         raise Exception('No Tangent Altitude: Altitude not decreasing along line of sight')
 
     M = 2 # multiplier for line search to find straddle points
