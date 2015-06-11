@@ -22,7 +22,6 @@ import subprocess
 import re
 import fpiinfo
 import matplotlib.pyplot as plt
-import FPIprocessLevel2
 import traceback
 import FPIResults
 import FPIwindfield
@@ -30,7 +29,6 @@ from matplotlib import dates
 import shutil
 
 # For quick testing of these modules, force a reload
-reload(FPIprocessLevel2)
 reload(FPIDisplay)
 reload(FPI)
 reload(fpiinfo)
@@ -443,8 +441,6 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
     
     # Try to make plots
     try: 
-        #obj1 = FPIprocessLevel2.GetLevel1(nominal_dt, instr_name)
-
         # Plot some quick-look single-station data (LOSwinds and Temps)
         (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, reference = reference, Zenith_Times=zenith_times)
         

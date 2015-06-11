@@ -10,7 +10,7 @@ from matplotlib.ticker import FuncFormatter
 import datetime
 from scipy import interpolate
 import os as os
-import FPIprocessLevel2
+import FPIprocessLevel2_Legacy as FPIprocessLevel2
 
 def NetworkSummary(network, times, bin_time = np.arange(17,32,0.5),
                 Tmin=500, Tmax=1500, Dmin=-200, Dmax=200, Imin=0, Imax=200, cloudy_temperature=-15.0,

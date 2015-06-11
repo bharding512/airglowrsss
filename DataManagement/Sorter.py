@@ -15,8 +15,10 @@ import sys
 import traceback
 import tarfile
 from glob import glob
+import numpy as np
 import datetime as dt
 import pytz
+from optparse import OptionParser
 from collections import defaultdict
 import Emailer
 import matplotlib
@@ -183,9 +185,25 @@ def makeinfo(f):
     check.close()
     return
     
-    
-if __name__=="__main__":
 
+def sorter(san,pgm):
+    '''
+    Summary
+    -------
+        sorter(san,core):
+        program that runs through all rx data for one site to sort it.
+
+    Inputs
+    ------
+        san = site abbreviated name (e.g. uao)
+        pgm = program running (for pid checking)
+
+    History
+    -------
+        2/13/14 -- Written by DJF (dfisher2@illinois.edu)
+        6/11/15 -- Modified for site-by-site multicore
+    '''
+    
     # The location of programs (needed since running in crontab)
     dir_local = '/rdata/airglow/'
     #dir_script = '/usr/local/share/airglowrsss/Python/Programs/'
@@ -197,8 +215,11 @@ if __name__=="__main__":
 
     # Close Program if already running (just in case...)
     pid = str(os.getpid())
-    pidfile = "/tmp/Sorter.pid"
-    if os.path.isfile(pidfile):
+    pidfile = "/tmp/Sorter_%s.pid"%pgm
+    if os.path.isfile("/tmp/Sorterall.pid"):
+        print "Sorterall exists, must finish before calling new batch"
+        sys.exit()
+    elif os.path.isfile(pidfile):
         print "%s already exists, exiting" % pidfile
         sys.exit()
     else:
@@ -221,9 +242,14 @@ if __name__=="__main__":
         for x in rxfiles:
             for files in glob(x + '*'):
                 makeinfo(files)
-        # Go through all txt files to Sort data
+        # Go through txt files to Sort data
         for i in ids:
-            for f in glob(i + '*.txt'):
+            # do everything if all, else limit to a site.
+            if pgm == 'all':
+                search = '*.txt'
+            else:
+                search = '*'+san+'*.txt'
+            for f in glob(i + search):
                 # Get information for assembling & sos this unAmericarting file
                 name = f[0:18]              # name         = IIIII_SSS_YYYYMMDD
                 instrument = f[0:5].lower() # instrument   = IIIII
@@ -429,4 +455,39 @@ if __name__=="__main__":
     finally:
         print "\n!!! Unpack Complete!"
         os.unlink(pidfile)
+    
+
+        
+if __name__=="__main__":
+
+    # Parse the command line
+    usage = "usage: Sorter -s SITE"
+    parser = OptionParser(usage=usage)
+    parser.add_option("-s", "--site", dest="site", help="specific program to run (eg site,other,all)",
+                   metavar="SITE", type="str",default='all')
+    #parser.add_option("-s", "--split", dest="split", help="Number of split Sorter Processes",metavar="SPLIT", type="int",default=1)
+    (options, args) = parser.parse_args()
+    pgm = options.site.lower()
+
+    # CASE= if 'all'
+    if pgm == 'all':
+        print 'All sites to be sorted - no additional calls may be made!'
+        sites = fpiinfo.get_all_sites_info().keys() + \
+                asiinfo.get_all_sites_info().keys() + \
+                gpsinfo.get_all_sites_info().keys()
+        sites = np.unique(sites)
+    
+    # CASE= if 'other' (not fpi sites)
+    elif pgm == 'other':
+        fpis  = fpiinfo.get_all_sites_info().keys()
+        other = asiinfo.get_all_sites_info().keys() + \
+                gpsinfo.get_all_sites_info().keys()
+        sites = [x for x in other if x not in fpis]
+        
+    else:
+        sites = [pgm]
+    
+    # Sort by site!
+    for san in sites:
+        sorter(san,pgm)
     
