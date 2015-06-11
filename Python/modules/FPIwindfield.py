@@ -200,7 +200,7 @@ class WindField:
             directions = fpir['direction']
             uniqdirecs = list(set(directions))
             losu = fpir['LOSwind']
-            losue = fpir['sigma_LOSwind']
+            losue = fpir['sigma_fit_LOSwind'] # TODO: change this back to sigma_LOSwind
             times = fpir['sky_times']
             cloud = fpir['Clouds']
             site_name = fpiinfo.get_site_of(instr_name, dn)
@@ -337,22 +337,13 @@ class WindField:
               will be done in level 0.
         '''
 
-        # For Oct 02 2013 Storm, manually correct ANN laser drift
-        # Planned ultimate resolution: Improve doppler_reference function
-        # to return a time-dependent line instead of a scalar. (But is this what
-        # we always want, even on normal days? Probably not.)
-        if year == 2013 and doy == 274 and instr_name == 'minime08':
-            hour = array([t.hour for t in dt])
-            du = du - 100.*(1 - hour/11.)
-            du[0] = nan
-            self.message += '\tminime08: Manually corrected for laser drift and ignored first sample.\n'
 
         # For "wave" event on 2014 doy 127, ignore the first part of PAR data,
         # when the laser is acting up.
         # Planned ultimate resolution: Go through database and remove data
         # that coincide with large variantions in laser intensity or etalon
         # gap.
-        elif year == 2014 and doy == 127 and instr_name == 'minime06':
+        if year == 2014 and doy == 127 and instr_name == 'minime06':
             hour = array([t.hour for t in dt])
             minute = array([t.minute for t in dt])
             delete = (hour + minute/60.) < 4.5
@@ -1657,7 +1648,7 @@ class WindField:
             m.drawparallels(np.arange(-45,46,5.),labels=[1,0,0,0],color='black',linewidth=0) # draw parallels
             m.drawmeridians(np.arange(0,360,5.),labels=[0,0,0,1],color='black',linewidth=0) # draw meridians
 
-            savefig('%s/%05i.png' % (pngdir, timeindex)) 
+            savefig('%s/%05i.png' % (pngdir, timeindex), bbox_inches='tight') 
             # To save memory, close the figure.
             close(fig)
             
@@ -1817,7 +1808,7 @@ class WindField:
             m.drawparallels(np.arange(-45,46,5.),labels=[1,0,0,0],color='black',linewidth=0) # draw parallels
             m.drawmeridians(np.arange(0,360,5.),labels=[0,0,0,1],color='black',linewidth=0) # draw meridians
 
-            savefig('%s/%05i.png' % (pngdir, timeindex)) 
+            savefig('%s/%05i.png' % (pngdir, timeindex), bbox_inches='tight') 
             # To save memory, close the figure.
             close(fig)
             
@@ -2089,7 +2080,7 @@ class WindField:
             fname = '%05d.png' % count
             count += 1
             
-            savefig('%s/%05i.png' % (pngdir, timeindex)) 
+            savefig('%s/%05i.png' % (pngdir, timeindex), bbox_inches='tight') 
             # To save memory, close the figure.
             close(fig)  
             
