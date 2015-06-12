@@ -707,8 +707,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
         ESTIMATE_BLUR = False
     # The threshold for CCD temperature, above which a human should be
     # notified, because there is probably something wrong with the CCD.
-    MAX_CCD_TEMP = -60.0 # C
-    LAS_I_THRESH = 10. # counts. If the laser intensity is less than this, ignore it.
+    # These images will be ignored in the analysis.
+    MAX_CCD_TEMP = -50.0 # C
+    LAS_I_THRESH = 13. # counts. If the laser intensity is less than this, ignore it.
 
 
     ############## TEMPORARY ################
@@ -1264,6 +1265,8 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
 
     for i, fname in enumerate(sky):
 
+        ignore_this_one = False
+
         # Read in the sky image
         d = ReadIMG(fname)
         img = np.asarray(d)
@@ -1271,8 +1274,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
         # Check the CCD temperature and send an email if necessary
         if d.info['CCDTemperature'] > MAX_CCD_TEMP:
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
-                    'WARNING: %s was taken with a CCD temperature of %.1f C.\n' % (fname, d.info['CCDTemperature']))
+                    'WARNING: %s was taken with a CCD temperature of %.1f C. It will be ignored.\n' % (fname, d.info['CCDTemperature']))
             notify_the_humans = True
+            ignore_this_one = True
             Novertemp += 1
 
         # Calculate the annuli to use for this time
@@ -1283,7 +1287,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
         sky_spectra, sky_sigma = AnnularSum(img,annuli,0)
         
         # See if there are any NaNs in the spectra.  If so, skip this one.
-        if np.isnan(sky_spectra).sum() == 0:
+        if np.isnan(sky_spectra).sum() == 0 and not ignore_this_one:
             
             # Append the time of the sky image
             sky_times.append(local.localize(d.info['LocalTime']))
@@ -1485,7 +1489,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
     # Warn again if the CCD was too hot
 
     if Novertemp > 0:
-        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'WARNING: %i/%i sky exposures were taken with a CCD temperature that was too hot (>-60C).\n' % (Novertemp, len(sky_out)))
+        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'WARNING: %i/%i sky exposures were taken with a CCD temperature that was too hot.\n' % (Novertemp, len(sky_out)))
 
     # Convert sky_params to array
     n = len(sky_out)
