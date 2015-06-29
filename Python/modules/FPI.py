@@ -708,7 +708,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
     # The threshold for CCD temperature, above which a human should be
     # notified, because there is probably something wrong with the CCD.
     # These images will be ignored in the analysis.
-    MAX_CCD_TEMP = -50.0 # C
+    MAX_CCD_TEMP = -60.0 # C
     LAS_I_THRESH = 13. # counts. If the laser intensity is less than this, ignore it.
 
 
@@ -1489,7 +1489,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
     # Warn again if the CCD was too hot
 
     if Novertemp > 0:
-        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'WARNING: %i/%i sky exposures were taken with a CCD temperature that was too hot.\n' % (Novertemp, len(sky_out)))
+        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'WARNING: %i/%i sky exposures were taken with a CCD temperature that was too hot. They were ignored.\n' % (Novertemp, len(sky)))
 
     # Convert sky_params to array
     n = len(sky_out)
