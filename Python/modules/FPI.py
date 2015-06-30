@@ -1148,36 +1148,61 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
 
         return moonAngle*180./pi
         
+        
     # Define function to characterize the wind error arising from etalon
     # gap fluctuations
-    def calc_wind_calib_error(my_dt):
+    def calc_wind_calib_error(dt, gaps, my_dt):
         '''
-        Calculate the error induced by the misknowledge of the 
-        etalon gap, at the time indicated
+        Calculate the error induced by the inaccurate (not imprecise!) knowledge
+        of the etalon gap, at the time indicated.
         INPUTS:
-            my_dt: number of seconds since first laser exposure.
+            dt: array of floats, number of seconds since first laser exposure, 
+                for each laser exposure. The first element should be 0.
+            gaps: array of floats, the estimated gap at each laser time
+            my_dt: number of seconds since first laser exposure: the time you want
+                   to calculate the calibration error at.
         OUTPUTS:
             wind_cal_error: m/s. This is nan if it's not straddled by laser 
                             exposures.
         HISTORY:
             2015 Feb 02: Written by Brian J. Harding
+            2015 Jun 30: Rewritten by Brian J. Harding to use gap temporal curvature 
+                         instead of gradient as proxy for calibration error.
         '''
-        
-        # Find previous and next laser images:
-        dt = np.array([(laser_time - laser_times[0]).total_seconds() for laser_time in laser_times])
-        
+
+        c = 3e8
+        #dt = np.array([(laser_time - laser_times[0]).total_seconds() for laser_time in laser_times])
+
         if my_dt < dt[0] or my_dt > dt[-1]: # not bounded by laser images
-            wind_cal_error = nan
-        else:
-            # Determine the index of the last laser image
-            j = sum(dt <= my_dt)-1
-            # Load the estimated etalon gap from the "before" and "after" laser exposures
-            t0 = output[j].params['t'].value
-            t1 = output[j+1].params['t'].value
-            # Translate the difference to a calibration wind error
-            wind_cal_error = 3e8/t0 * abs(t1-t0)
-        #print '%s %s %s [%s, %s]\n' % (my_dt, wind_cal_error, j, dt[0], dt[-1])
+            return np.nan
+        elif my_dt < dt[1]: # extrapolate from second laser image
+            my_dt = dt[1]
+        elif my_dt > dt[-2]: # extrapolate from second-to-last laser image
+            my_dt = dt[-2]
+        
+        # Calculate the cal_error at each laser image and linearly interpolate to my_dt
+        cal_error_vec = np.zeros(len(dt))
+        for k in range(1,len(dt)-1):
+            # Extract gap before, during, and after this image
+            gt0 = dt[k-1]
+            gt1 = dt[k]
+            gt2 = dt[k+1]
+            g0 = gaps[k-1]
+            g1 = gaps[k]
+            g2 = gaps[k+1]
+            # Estimate uncertainty due to curvature
+            g1interp = (gt1-gt0) * (g2-g0)/(gt2-gt0) + g0
+            g1diff = g1 - g1interp
+            # Convert to an uncertainty in wind
+            cal_error = abs(c/g1*g1diff)
+            cal_error_vec[k] = cal_error
+        
+        # linearly interpolate to my_dt
+        sfit = interpolate.interp1d(dt[1:-1], cal_error_vec[1:-1])
+        wind_cal_error = sfit(my_dt)
         return wind_cal_error
+
+            
             
     # Grab all sky images. Don't use sky images when sun is up, 
     # or before (after) the first (last) laser image (if reference=='laser'),
@@ -1446,7 +1471,13 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
             sky_redchi.append(sky_fit.redchi)
             sky_out.append(sky_fit) 
             
-
+            # Calculate calibration wind error
+            sigma_cal_v = 0.0 # default to 0 for zenith reference
+            if uselaser: # if laser reference, calculate calibration error
+                caltref = laser_times[0]
+                calt = np.array([(last - caltref).total_seconds() for last in laser_times])
+                skyt = (sky_times[-1] - caltref).total_seconds()
+                sigma_cal_v = calc_wind_calib_error(calt, laser_value['t'], skyt)
 
             # Transform from lamc to v and collect all parameters
             lamc = sky_params['lamc'].value
@@ -1461,9 +1492,6 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
             sigma_fit_v = c * sigma_lamc / lam0
             LOSwind.append(v) # positive LOSwind is away from instrument
             sigma_fit_LOSwind.append(sigma_fit_v) # fit error
-            sigma_cal_v = 0.0 # default to 0 for zenith reference
-            if uselaser: # if laser reference, calculate calibration error
-                sigma_cal_v =calc_wind_calib_error(my_dt) # cal error
             sigma_cal_LOSwind.append(sigma_cal_v)
             sigma_LOSwind.append(sqrt(sigma_fit_v**2 + sigma_cal_v**2))
             T.append(sky_fit.params['T'].value)
