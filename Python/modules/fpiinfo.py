@@ -168,6 +168,8 @@ _sites['uao'] = {
 		            'n_exp': 0, 'last_exp': None, 'delay':0},
 	            'Along_B': {'ze': -23.6, 'az': -2.6, 'exptime': 180, 
 		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'MTM_Search': {'ze': 56.55, 'az': 105.72, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
                 },
     }
 
@@ -216,6 +218,8 @@ _sites['ann'] = {
 	            'Windfield12': {'ze': -54.5, 'az': 137.0, 'exptime': 180, 
 		            'n_exp': 0, 'last_exp': None, 'delay':0},
 	            'Along_B': {'ze': -22.1, 'az': -6.3, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'MTM_Search': {'ze': -27.77, 'az': -21.47, 'exptime': 180, 
 		            'n_exp': 0, 'last_exp': None, 'delay':0},
                 },
     }
@@ -282,6 +286,8 @@ _sites['eku'] = {
 		            'n_exp': 0, 'last_exp': None, 'delay':0},
 	            'Along_B': {'ze': -26.1, 'az': -5.1, 'exptime': 180, 
 		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'MTM_Search': {'ze': -65.26, 'az': -0.11, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
                 },
     }
 
@@ -340,6 +346,10 @@ _sites['par'] = {
 	            'Windfield06': {'ze': -38.7, 'az': 78.4, 'exptime': 180, 
 		            'n_exp': 0, 'last_exp': None, 'delay':0},
 	            'Along_B': {'ze': -28.5, 'az': -5.9, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'MTM_Search_1': {'ze':-64.16, 'az': 17.4, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'MTM_Search_2': {'ze': -47.6, 'az': 31.63, 'exptime': 180, 
 		            'n_exp': 0, 'last_exp': None, 'delay':0},
                 },
     }
