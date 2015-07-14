@@ -950,8 +950,8 @@ _instruments['minime08'] = {
         'sql_temperatures_id'   : 75,           # ID for SQL database
         'sql_diagnostics_id'    : 88,           # ID for SQL database
         'many_fringes'          : True,         # indicates whether radial falloff terms should be used
-        'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
-        'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'bad_wind_dates'        : [(datetime.datetime(2015,6,26), datetime.datetime(2015,7,14),2,)],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'bad_temperature_dates' : [(datetime.datetime(2015,6,26), datetime.datetime(2015,7,14),2,)],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'send_to_madrigal'      : True, # whether or not we should send this instrument's data to Madrigal
     }
 
