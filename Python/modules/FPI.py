@@ -772,8 +772,6 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
     sunrise = obs.next_rising(sun).datetime().replace(tzinfo = pytz.utc)
 
     lasers = []
-    if len(lasers_all) > 20: # ignore the first couple laser images (ad-hoc solution)
-        lasers_all = lasers_all[2::]
     for fn in lasers_all:
         d = ReadIMG(fn)
         dt = local.localize(d.info['LocalTime'])
