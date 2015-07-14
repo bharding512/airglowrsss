@@ -1596,7 +1596,7 @@ class WindField:
             if lam0 == 1e10:
                 smooth_factor = inf
 
-            fig = figure(num=None, figsize=figsize, dpi=80, facecolor='w', edgecolor='k')
+            fig = figure(num=None, figsize=figsize, dpi=300, facecolor='w', edgecolor='k')
 
             # Transform U,V to inches
             Uest = sc*Uest
@@ -1756,7 +1756,7 @@ class WindField:
             if lam0 == 1e10:
                 smooth_factor = inf
 
-            fig = figure(num=None, figsize=figsize, dpi=80, facecolor='w', edgecolor='k')
+            fig = figure(num=None, figsize=figsize, dpi=300, facecolor='w', edgecolor='k')
 
             # Transform U,V to inches
             Uest = sc*Uest
@@ -1936,7 +1936,7 @@ class WindField:
         exagg = 3. # how much to exaggerate the transport of air parcels
         scale = 1./(timestep*exagg)
         npts = 5 # this will need to be adjusted with the time step (5 for timestep=90 seconds seems good)
-        res  = 1.0 # deg, size of grid for flow tracers, scaled for size of FoV
+        res  = 1.3 # deg, size of grid for flow tracers, scaled for size of FoV (prev 1.0)
             
         all_t = self.all_t
         distthresh = self.distthresh
@@ -2080,7 +2080,7 @@ class WindField:
             fname = '%05d.png' % count
             count += 1
             
-            savefig('%s/%05i.png' % (pngdir, timeindex), bbox_inches='tight') 
+            savefig('%s/%05i.png' % (pngdir, timeindex), bbox_inches='tight', dpi=300) 
             # To save memory, close the figure.
             close(fig)  
             
