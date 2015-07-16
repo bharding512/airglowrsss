@@ -586,7 +586,7 @@ def Sky_Residual(pars, x, lamvec, A, sigma=None, data=None):
 	
     return (model - data) / sigma
 
-def get_conv_matrix_1D(instr_params, r, L, lam0):
+def get_conv_matrix_1D(instr_params, r, L, lam0, nFSRs = 4.):
     ''' (A, lamvec) = get_conv_matrix_1D(instr_params, M, L, lam0)
     Precomputes the matrix that implements the convolution between the instrument
     function and the sky spectrum
@@ -598,6 +598,8 @@ def get_conv_matrix_1D(instr_params, r, L, lam0):
               of the forward model)
           lam0 - The emission wavelength in meters (e.g., 630.0e-9). The modeled spectrum
                  will be a couple FSRs around lam0
+          nFSRs - The size of the domain for the spectrum in the forward model, measured in
+                  units of FSR. (default 4.)
     
     OUTPUTS:
           A - the shape-(M,L) matrix that implements the convolution as:
@@ -615,7 +617,7 @@ def get_conv_matrix_1D(instr_params, r, L, lam0):
     # Q: does the source of "t" matter? A: probably not, as long as we use a wide-enough range
 
     # Find a reasonable range to add wavelength contributions over that includes the whole emission
-    lamvec = np.linspace(lam0-2*FSR,lam0+2*FSR,L+1) 
+    lamvec = np.linspace(lam0-nFSRs/2*FSR, lam0+nFSRs/2*FSR, L+1) 
     lamvec = lamvec[0:-1] # the last wavelength in this list is indistinguishable from the first
     dellam = lamvec[1]-lamvec[0]
     A = np.zeros((len(r),L))
