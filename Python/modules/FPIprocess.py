@@ -391,7 +391,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
             t_flag = 1
             w_flag = 1
         if laser_drift:
-            w_flag = 2
+            w_flag = 1
         c = FPI_Results['Clouds']['mean'][ii]
         if np.isnan(c): # There isn't a cloud sensor, or it isn't working
             t_flag = 1
