@@ -689,7 +689,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
 	
 
     # Tunable parameters
-    CENTER_VARIATION_MAX = 5 # pixels, variation throughout night. Above this, outliers >1 stdev will be ignored.
+    CENTER_VARIATION_MAX = 1.5 # pixels, variation throughout night. Above this, outliers >1 stdev will be ignored.
     # Set threshold below which, the solved-for lamc 
     # will be used to center the grid search for the next iteration.
     # This has a small effect; it is used to discourage FSR-jumps in wind.
@@ -854,7 +854,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
             if (np.std(center,0) > CENTER_VARIATION_MAX).any(): # if variation is more than a few pixels, there's probably a bad point.
                 cenx = center[:,0]
                 ceny = center[:,1]
-                good = (abs(cenx - np.mean(cenx)) < np.std(cenx)) & (abs(cy - np.mean(ceny)) < np.std(ceny))
+                good = (abs(cenx - np.mean(cenx)) < 2*np.std(cenx)) & (abs(ceny - np.mean(ceny)) < 2*np.std(ceny))
                 center = center[good,:]
                 dt_laser = dt_laser[good]
                 # Should we ignore the laser images in the subsequent analysis? For now,
@@ -2248,14 +2248,15 @@ def DopplerReference(FPI_Results, reference='zenith', AVERAGING_TIME=[17.,7.], s
                             rawzenith = FPI_Results['LOSwind'][ind]
                             rawsigma_zenith = FPI_Results['sigma_LOSwind'][ind]
                             # Find minimum weighted norm dopp ref.
-                            mxz = prctile(rawzenith, 95)
-                            mnz = prctile(rawzenith, 5)
+                            mxz = prctile(rawzenith, 90)
+                            mnz = prctile(rawzenith, 10)
                             if mxz < mnz: # There aren't many samples. Just use actual min/max
                                 mxz = max(rawzenith)
                                 mnz = min(rawzenith)
                             N = int((mxz-mnz)/res)
-                            if N > 1e6:
-                                raise Exception('Doppler reference failed: Too many trial values (%i)' % N)
+                            if N > 1e6: # This is probably a low quality day. Try median instead of mode
+                                return DopplerReference(FPI_Results, reference=reference, \
+                                         AVERAGING_TIME=AVERAGING_TIME, statistic='median')
                             dtest = np.linspace(mnz, mxz, N)
                             cost = np.zeros(N)
                             for j in range(N):
