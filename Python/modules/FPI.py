@@ -1709,7 +1709,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
             # account for different exposure times
             I = np.array([si/intT for (si,d,intT) in zip(skyI, direction,sky_intT) if d == direc])
             t = np.array([si for (si,d) in zip(sky_times, direction) if d == direc])
-            ax.plot(t, I, '.-', label=direc)
+            ax.semilogy(t, I, '.-', label=direc)
         ax.set_xlim([sky_times[0] - datetime.timedelta(hours=0.5), sky_times[-1] + datetime.timedelta(hours=0.5)])
         ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
         ax.set_ylabel('Line Intensity, [arbitrary]')
