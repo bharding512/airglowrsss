@@ -48,6 +48,7 @@ def bin_SSUSI(ssusi_fname, width, height):
     # Used to correct for slant-path.  Assumes optically thin emission.
     cosan = np.cos(np.deg2rad(angles))**0.91 # Why 0.91?
 
+
     # cosan is just the angles for one strip.  Replicate this so it can easily be used against the i1356 value
     sz = np.shape(i1356)
     xx = np.tile(cosan,(sz[2],1))
