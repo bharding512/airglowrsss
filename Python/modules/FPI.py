@@ -1379,6 +1379,11 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
             L = 301
             A_1D, lamvec = get_conv_matrix_1D(sky_params, annuli['r'][N0:N1], L, lam0)
             
+            # "Ignore" first and last few samples due to the way that the blurring in the
+            # forward model works along the edges of the image
+            sky_sigma[N0:N0+5] = sky_sigma[N0:N0+5]*10
+            sky_sigma[N1-5:N1] = sky_sigma[N1-5:N1]*10
+            
             # Come up with good initial guesses for the sky parameters
             skyI_guess = sky_spectra[N0:N1].max() - sky_spectra[N0:N1].min()
             skyB_guess = 0.0
