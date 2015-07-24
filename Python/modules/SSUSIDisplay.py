@@ -332,6 +332,7 @@ def create_plots(target_lat, target_lon,lat_centers, lon_centers, binned_i1356, 
     xpt, ypt = m(lon_grid,lat_grid)
 
     I = np.ma.masked_where(np.isnan(binned_i1356),binned_i1356)
+    
     m.pcolormesh(xpt,ypt,I,vmin=0,vmax=200)
 
     m.drawparallels(np.arange(-80.,81.,20.),labels=[True,False,False,False])
@@ -366,7 +367,7 @@ def create_plots(target_lat, target_lon,lat_centers, lon_centers, binned_i1356, 
     m.plot(pts[:,0],pts[:,1],'k',linewidth=2)
     
     apex_lon = np.mod(apex_lon,360.)
-
+        
     ##
     plt.figure()
     I = np.ma.masked_where(hemisphere != 1,apex_i1356)
@@ -385,8 +386,7 @@ def create_plots(target_lat, target_lon,lat_centers, lon_centers, binned_i1356, 
     if SSUSIbubbles is not None:
         apex_bub = []
 
-	print np.shape(SSUSIbubbles)
-
+        print np.shape(SSUSIbubbles)
         for b in SSUSIbubbles:
             lon = b[0]
             lat = b[1]
@@ -396,8 +396,7 @@ def create_plots(target_lat, target_lon,lat_centers, lon_centers, binned_i1356, 
             lo = []
             la = []
             al = []
-
-	    if alt > 360.:		
+            if alt > 360.:
 
                 # Trace the field
                 pts = Line(ssusi_north_dn,lat,np.mod(lon,360),alt,target_ht=alt-1,step=25.)
@@ -411,7 +410,7 @@ def create_plots(target_lat, target_lon,lat_centers, lon_centers, binned_i1356, 
                 apex_bub.append([lo[i], la[i], al[i], ndep])
 
         apex_bub = np.array(apex_bub)
-	print np.shape(apex_bub)
+        print np.shape(apex_bub)
 
         plt.scatter(apex_bub[:,0],apex_bub[:,2],c=apex_bub[:,3],marker='.',linewidth=0,s=25)
 
@@ -437,10 +436,12 @@ def create_plots(target_lat, target_lon,lat_centers, lon_centers, binned_i1356, 
 #    theCM._lut[:,-1] = alphas
     
     # Get the closest CNFI image to the north pass
+
     plt.figure()
     cnfi_lat,cnfi_lon,cnfi_apex_ht,cnfi_apex_lon,im,cnfi_dn = get_cnfi_image(ssusi_north_dn)
-    cnfi_apex_lon[np.where(cnfi_apex_lon > 170)] -= 360.
-
+    #cnfi_apex_lon[np.where(cnfi_apex_lon > 170)] -= 360.
+    #apex_lon[np.where(apex_lon > 170)] -= 360.
+   
     im_min = im.mean()-im.std()
     im_max = im.mean()+2*im.std()
 
@@ -463,12 +464,12 @@ def create_plots(target_lat, target_lon,lat_centers, lon_centers, binned_i1356, 
     plt.ylim([200,1400]);
     
     if SSUSIbubbles is not None:
-	plt.scatter(apex_bub[:,0],apex_bub[:,2],c=apex_bub[:,3],marker='.',linewidth=0,s=25)
+        plt.scatter(apex_bub[:,0],apex_bub[:,2],c=apex_bub[:,3],marker='.',linewidth=0,s=25)
 
     # Get the closest CNFI image to the south pass
     plt.figure()
     cnfi_lat,cnfi_lon,cnfi_apex_ht,cnfi_apex_lon,im,cnfi_dn = get_cnfi_image(ssusi_south_dn)
-    cnfi_apex_lon[np.where(cnfi_apex_lon > 170)] -= 360.
+    #cnfi_apex_lon[np.where(cnfi_apex_lon > 170)] -= 360.
 
     im_min = im.mean()-im.std()
     im_max = im.mean()+2*im.std()
