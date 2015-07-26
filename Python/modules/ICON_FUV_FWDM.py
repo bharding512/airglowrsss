@@ -615,7 +615,7 @@ def get_azze_default():
     # Create zenith angle vector by evenly distributing the FUV FOV angles 
     # For the azimuth angle we just assume that the satellite is facing north
     az = np.zeros(npixely) 
-    az[:] = 27
+    az[:] = 0.
     ze = np.linspace(fov_l,fov_u,npixely)
 
     return az,ze
