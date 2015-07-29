@@ -415,10 +415,10 @@ def create_cells_Matrix_spherical_symmetry(theta,Horbit,RE=6371.):
         Horbit - satellite altitude, km
         RE - radius of Earth, km
     OUTPUTS:
+        S - Weight Matrix
         rtop - Upper Bound for each cell
         rmid - Mid Point for each cell
         rbot - Bottom Bound for each cell
-        S - Weight Matrix
     Comments:
         --  rbot is the tangent altitude for each zenith angle. 
         --  We want to have the same number of cells as the number 
