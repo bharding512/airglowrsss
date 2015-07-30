@@ -817,25 +817,25 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
 	if ('Clouds' in FPI_Results.keys()) is False:
 		FPI_Results['Clouds'] = None
 
-	if FPI_Results['Clouds'] is None:
-	    # No cloud data so create plot without alpha
-            for (t,y,ey,z,ez) in zip(FPI_Results['sky_times'][ind], FPI_Results['T'][ind], FPI_Results['sigma_T'][ind],Doppler_Wind,Doppler_Error):
 
-		# Plot the points and error bars on the graphs
-                Temperature_Graph.errorbar(t,y,yerr=ey,color=fmt[x]['Color'],fmt=fmt[x]['Marker'],label='_nolegend_')
-                Doppler_Graph.errorbar(t,z,yerr=ez,color=fmt[x]['Color'],fmt=fmt[x]['Marker'],label='_nolegend_')
-	else:
-            # Loop through each point (needed to be done this way to allow setting
-            # the alpha value for each individual point)
-            for (t,y,ey,z,ez,sky_temp) in zip(FPI_Results['sky_times'][ind], FPI_Results['T'][ind], FPI_Results['sigma_T'][ind],Doppler_Wind,Doppler_Error,FPI_Results['Clouds']['mean'][ind]):
-            
-                # Calculate the alpha value to be used for this point.  Scaled linearly
-                # between [.1,1] corresponding to a sky temp range of [full_cloud, full_clear]
-                alpha_val = 1-max(0,min(((sky_temp-full_clear)/(full_cloud-full_clear)),.9))
-            
-                # Plot the points and error bars on the graphs
-                Temperature_Graph.errorbar(t,y,yerr=ey,alpha=alpha_val,color=fmt[x]['Color'],fmt=fmt[x]['Marker'],label='_nolegend_')
-	        Doppler_Graph.errorbar(t,z,yerr=ez,alpha=alpha_val,color=fmt[x]['Color'],fmt=fmt[x]['Marker'],label='_nolegend_')
+        # Loop through each point (needed to be done this way to allow setting
+        # the alpha value for each individual point)
+        for (t,y,ey,z,ez,wq,tq) in zip(FPI_Results['sky_times'][ind], FPI_Results['T'][ind], FPI_Results['sigma_T'][ind],Doppler_Wind,Doppler_Error,FPI_Results['wind_quality_flag'][ind],FPI_Results['temp_quality_flag'][ind]):
+        
+            # Calculate the alpha value to be used for this point, based on quality flag
+            w_alpha_val = 1.
+            t_alpha_val = 1.
+            if wq == 1:
+                w_alpha_val = 0.5
+            if tq == 1:
+                t_alpha_val = 0.5
+            if wq == 2:
+                w_alpha_val = 0.2
+            if tq == 2:
+                t_alpha_val = 0.2
+            # Plot the points and error bars on the graphs
+            Temperature_Graph.errorbar(t,y,yerr=ey,alpha=t_alpha_val,color=fmt[x]['Color'],fmt=fmt[x]['Marker'],label='_nolegend_')
+            Doppler_Graph.errorbar(t,z,yerr=ez,alpha=w_alpha_val,color=fmt[x]['Color'],fmt=fmt[x]['Marker'],label='_nolegend_')
 
     # Plotting font setup
     fontP = FontProperties() 

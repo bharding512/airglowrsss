@@ -1316,7 +1316,8 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
             
             # Append the time of the sky image
             sky_times.append(local.localize(d.info['LocalTime']))
-            sky_intT.append(d.info['ExposureTime'])
+            intT = d.info['ExposureTime']
+            sky_intT.append(intT)
             sky_temperature.append(d.info['CCDTemperature'])
             sky_fns.append(fname)
             
@@ -1501,10 +1502,11 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
             sigma_LOSwind.append(sqrt(sigma_fit_v**2 + sigma_cal_v**2))
             T.append(sky_fit.params['T'].value)
             sigma_T.append(sky_fit.params['T'].stderr)
-            skyI.append(sky_params['skyI'].value)
-            sigma_skyI.append(sky_params['skyI'].stderr)
-            skyB.append(sky_params['skyB'].value)
-            sigma_skyB.append(sky_params['skyB'].stderr)
+            # Normalize skyI and skyB by integration time
+            skyI.append(sky_params['skyI'].value/intT)
+            sigma_skyI.append(sky_params['skyI'].stderr/intT)
+            skyB.append(sky_params['skyB'].value/intT)
+            sigma_skyB.append(sky_params['skyB'].stderr/intT)
             ccdB.append(sky_params['ccdB'].value)
             sigma_ccdB.append(sky_params['ccdB'].stderr)
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + '%s reduced chisqr: %.4f.\n\t\t\tMessage:"%s"\n' % (fname, sky_fit.redchi, sky_fit.message))
@@ -1712,10 +1714,14 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
         ax = fig.add_subplot(426)
         for direc in list(set(direction)):
             # account for different exposure times
-            I = np.array([si/intT for (si,d,intT) in zip(skyI, direction,sky_intT) if d == direc])
+            I = np.array([si for (si,d) in zip(skyI, direction) if d == direc])
             t = np.array([si for (si,d) in zip(sky_times, direction) if d == direc])
             ax.semilogy(t, I, '.-', label=direc)
-        ax.set_xlim([sky_times[0] - datetime.timedelta(hours=0.5), sky_times[-1] + datetime.timedelta(hours=0.5)])
+        tp0 = sky_times[0] - datetime.timedelta(hours=0.5)
+        tp1 = sky_times[-1] + datetime.timedelta(hours=0.5)
+        sky_thresh = instrument['skyI_quality_thresh']
+        ax.semilogy([tp0, tp1],[sky_thresh, sky_thresh],'k--',label='qual. thresh')
+        ax.set_xlim([tp0, tp1])
         ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
         ax.set_ylabel('Line Intensity, [arbitrary]')
         ax.set_xlabel('Universal Time')

@@ -65,7 +65,7 @@ def quality_hack(instr_name, year, doy, FPI_Results, logfile):
 
     
     
-def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zenith_times=[17.,7.], wind_err_thresh=100., temp_err_thresh=100.):
+def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zenith_times=[17.,7.], wind_err_thresh=100., temp_err_thresh=100., cloud_thresh = [-22.,-10.]):
     '''
     Process all the data from the instrument with name instr_name on
     the day specified by (year, doy). This function looks in the appropriate
@@ -89,7 +89,9 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
         wind_err_thresh - float, m/s. Samples with a fit error above this should get a quality
                             flag of 2.
         temp_err_thresh - float, K. Samples with a fit error above this should get a quality
-                            flag of 2.                         
+                            flag of 2.      
+        cloud_thresh - [float,float], K. The two cloud sensor readings that indicate 
+                        partially- and fully-cloudy. This affects the quality flag.              
     OUTPUTS:
         warnings - str - If this script believes a manual check of the data
                    is a good idea, a message will be returned in this string.
@@ -376,43 +378,59 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
     
     
     ######### Quality Flags #########
+    # Compute quality flags and write any tripped flags to log
     [t_flag_manual, w_flag_manual] = fpiinfo.get_bad_data_flags(instr_name, nominal_dt)
     laser_drift = laser_is_drifting()
     logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + ' Quality Flag Calculation:\n')
     logfile.write('\t\tManual Wind Flag: %i\n' % w_flag_manual)
     logfile.write('\t\tManual Temperature Flag: %i\n' % t_flag_manual)
     logfile.write('\t\tLaser Drift: %s\n' % laser_drift)
+    logfile.write('\t\tSample-specific flags:\n')
     wind_quality_flag = np.zeros(len(FPI_Results['sky_times']))
     temp_quality_flag = np.zeros(len(FPI_Results['sky_times']))
     for ii in range(len(FPI_Results['sky_times'])): # Loop over samples
+        logfile.write('\t\t%s ' % FPI_Results['sky_fns'][ii].split('/')[-1])
         t_flag = 0 # default
         w_flag = 0 # default
+        if (FPI_Results['skyI'][ii] < instrument['skyI_quality_thresh']):
+            # The sky brightness is low enough that OH is probably an issue.
+            t_flag = 1
+            w_flag = 1
+            logfile.write('[skyI low W1T1] ')
         if (reference == 'zenith'): # Zenith Processing
             t_flag = 1
             w_flag = 1
+            logfile.write('[zen ref W1T1] ')
         if laser_drift:
             w_flag = 1
+            logfile.write('[laser drift W1] ')
         c = FPI_Results['Clouds']['mean'][ii]
         if np.isnan(c): # There isn't a cloud sensor, or it isn't working
             t_flag = 1
             w_flag = 1
-        if c > -25: # It's at least a little bit cloudy. Caution.
+            logfile.write('[no cloud data W1T1] ')
+        if c > cloud_thresh[0]: # It's at least a little bit cloudy. Caution.
             t_flag = 1
             w_flag = 1
-        if c > -10: # It's definitely cloudy
+            logfile.write('[cloud>%.0f: W1T1] '%cloud_thresh[0])
+        if c > cloud_thresh[1]: # It's definitely cloudy
             t_flag = 1
             w_flag = 2
+            logfile.write('[cloud>%.0f: W2T1] '%cloud_thresh[1])
         w_fit_err = FPI_Results['sigma_fit_LOSwind'][ii]
         if (w_fit_err > wind_err_thresh): # Sample is not trustworthy at all
             w_flag = 2
+            logfile.write('[sigma_wind large: W2] ')
         t_fit_err = FPI_Results['sigma_T'][ii]
         if (t_fit_err > temp_err_thresh): # Sample is not trustworthy at all
             w_flag = 2
+            logfile.write('[sigma_T large: T2] ')
         # A manual override can increase the calculated flag, but not decrease
         t_flag = max(t_flag,t_flag_manual)
         w_flag = max(w_flag,w_flag_manual)
         wind_quality_flag[ii] = w_flag
         temp_quality_flag[ii] = t_flag
+        logfile.write('[FINAL: W%iT%i]\n' % (w_flag,t_flag))
     FPI_Results['wind_quality_flag'] = wind_quality_flag
     FPI_Results['temp_quality_flag'] = temp_quality_flag
             
@@ -450,7 +468,8 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
             ct = FPI_Results['sky_times']
             cloud = FPI_Results['Clouds']['mean']
             ax.plot(ct, cloud, 'k.-')
-            ax.plot([ct[0],ct[-1]], [-25,-25], 'k--')
+            ax.plot([ct[0],ct[-1]], [cloud_thresh[0],cloud_thresh[0]], 'k--')
+            ax.plot([ct[0],ct[-1]], [cloud_thresh[1],cloud_thresh[1]], 'k--')
             ax.set_xlim([ct[0] - datetime.timedelta(hours=0.5), ct[-1] + datetime.timedelta(hours=0.5)])
             ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
             ax.set_ylim([-50,0])
