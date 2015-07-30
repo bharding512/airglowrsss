@@ -58,7 +58,36 @@ def quality_hack(instr_name, year, doy, FPI_Results, logfile):
         FPI_Results['LOSwind'] = FPI_Results['LOSwind'] + drift_corr
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                       'FPIprocess.quality_hack(): Manual intervention to fix laser drift.\n')
-    
+                      
+    # Correct for Morocco timezone problems during Ramadan.
+    # Daylight savings time paused during Ramadan, but the computer didn't know this.
+    # After 2015, we switched the computer to UTC, so this won't happen again.
+    if instr_name == 'minime03':
+        t = FPI_Results['sky_times']
+        tutc = np.array([ti.astimezone(pytz.utc).replace(tzinfo=None) for ti in t])
+        
+        # 2015 
+        idx = (tutc > datetime.datetime(2015,6,13,1)) & (tutc < datetime.datetime(2015,7,18,2))
+        t[idx] = t[idx] - datetime.timedelta(hours=1)
+        dst_secs = np.array([ti.dst().total_seconds() for ti in t])
+        idx2 = (tutc >= datetime.datetime(2015,7,18,2)) & (tutc < datetime.datetime(2015,7,18,3)) & (dst_secs == 0.)
+        t[idx2] = t[idx2] - datetime.timedelta(hours=1)
+        if sum(idx) > 0:
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
+                      'FPIprocess.quality_hack(): Manual intervention to fix timing offset during ' + \
+                      '2015 Ramadan DST pause.\n')
+        
+        # 2014
+        idx = (tutc > datetime.datetime(2014,6,28,1)) & (tutc < datetime.datetime(2014,8,2,2))
+        t[idx] = t[idx] - datetime.timedelta(hours=1)
+        dst_secs = np.array([ti.dst().total_seconds() for ti in t])
+        idx2 = (tutc >= datetime.datetime(2014,8,2,2)) & (tutc < datetime.datetime(2014,8,2,3)) & (dst_secs == 0.)
+        t[idx2] = t[idx2] - datetime.timedelta(hours=1)
+        if sum(idx) > 0:
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
+                      'FPIprocess.quality_hack(): Manual intervention to fix timing offset during ' + \
+                      '2014 Ramadan DST pause.\n')
+                      
     return FPI_Results
     
     
@@ -232,8 +261,8 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
             logfile.close()
             raise
 
-        # Do any necessary manual corrections, as per the quality_hack function
-        FPI_Results = quality_hack(instr_name, year, doy, FPI_Results, logfile)
+    # Do any necessary manual corrections, as per the quality_hack function
+    FPI_Results = quality_hack(instr_name, year, doy, FPI_Results, logfile)
 
 
     # Grab the SVN number
