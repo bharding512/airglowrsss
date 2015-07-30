@@ -200,7 +200,7 @@ class WindField:
             directions = fpir['direction']
             uniqdirecs = list(set(directions))
             losu = fpir['LOSwind']
-            losue = fpir['sigma_fit_LOSwind'] # TODO: change this back to sigma_LOSwind
+            losue = fpir['sigma_LOSwind'] # sigma_LOSwind or sigma_fit_LOSwind?
             times = fpir['sky_times']
             cloud = fpir['Clouds']
             site_name = fpiinfo.get_site_of(instr_name, dn)
