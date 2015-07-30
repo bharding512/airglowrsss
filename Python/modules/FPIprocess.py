@@ -122,7 +122,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
 
     # Import the site information
     site_name = fpiinfo.get_site_of(instr_name, nominal_dt)
-    site = fpiinfo.get_site_info(site_name)
+    site = fpiinfo.get_site_info(site_name, nominal_dt)
     # Import the instrument information
     instrument = fpiinfo.get_instr_info(instr_name, nominal_dt)
 

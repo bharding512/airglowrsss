@@ -441,7 +441,7 @@ _sites['mor'] = {
         'Location':     (31.206, -7.866, 2700),
         'Name':         'Morocco Oukaimeden Observatory',
         'Abbreviation': 'mor',
-        'Timezone':     'Africa/Casablanca',
+        'Timezone':     'UTC',
         'BufferTime':   45,
         'CloudThresh':  -25.0,
         'scpUser':      'MiniME',
@@ -1108,12 +1108,13 @@ for instr_name in _instruments.iterkeys():
 ################## Site information functions ####################
     
 
-def get_site_info(site_name):
+def get_site_info(site_name, dn=datetime.datetime.now()):
     '''
     Return a dictionary with information about a site.
 
     INPUT:
         site_name - abbreviated site name (e.g., 'uao')
+        dn - datetime.datetime
     OUTPUT:
         site_info - dictionary with information about the site.
         (keys are 'Location', 'TimeZone', 'Name', etc.)
@@ -1125,15 +1126,20 @@ def get_site_info(site_name):
         raise Exception('Site name ("%s") not recognized. Try one of %s.' % \
                          (site_name, str(_sites.keys())))         
     
-    return _sites[site_name].copy()
+    if site_name == 'mor' and dn < datetime.datetime(2015,7,30):
+        # We changed the MOR FPI to follow UTC time on 7/30/15
+        site_info['Timezone'] = 'Africa/Casablanca'
+    
+    return site_info
 
-def get_network_info(network_name):
+def get_network_info(network_name, dn=datetime.datetime.now()):
     '''
     Return a dictionary of site dictionaries, keyed by the site name. Only 
     sites in the network specified by network_name are included.
 
     INPUT:
         network_name - abbreviated network name (e.g., 'nation')
+        dn - datetime.datetime
     OUTPUT:
         network_dict - dictionary whose keys are site names (e.g., 'uao') and values
         are dictionaries with information about the site (see get_site_info).
@@ -1148,7 +1154,7 @@ def get_network_info(network_name):
     
     for site_name in _sites:
         if _sites[site_name]['Network'] == network_name:
-            network_dict[site_name] = _sites[site_name]
+            network_dict[site_name] = get_site_info(site_name, dn)
 
     if len(network_dict) == 0: # network_name not recognized
         allowable_names = list(set([_sites[site_name]['Network'] for site_name in _sites]))
@@ -1156,17 +1162,21 @@ def get_network_info(network_name):
                          (network_name, str(allowable_names)))
     return network_dict
 
-def get_all_sites_info():
+def get_all_sites_info(dn=datetime.datetime.now()):
     '''
     Return a dictionary of all site dictionaries, keyed by the site name.
-
+    
+    INPUT:
+        dn - datetime.datetime
     OUTPUT:
         all_site_dicts - dictionary whose keys are site names (e.g., 'uao') and values
         are dictionaries with information about the site (see get_site_info).
         For example, all_site_dicts['uao'] is the same as get_site_info('uao')
     '''
-    
-    return _sites.copy()
+    all_site_dicts = {}
+    for site_name in _sites.keys():
+        all_site_dicts[site_name] = get_site_info(site_name, dn)
+    return all_site_dicts
 
 
 
