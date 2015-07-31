@@ -1725,7 +1725,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
         ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
         ax.set_ylabel('Line Intensity, [arbitrary]')
         ax.set_xlabel('Universal Time')
-        ax.legend(loc='best', prop={'size':6}, numpoints=1, ncol=3)
+        ax.legend(loc='best', prop={'size':6}, numpoints=1, ncol=5, framealpha=0.5)
         ax.grid(True)
         
         
