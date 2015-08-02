@@ -13,7 +13,6 @@ import Regularization as reg
 from scipy.io import netcdf
 from time import gmtime, strftime
 
-
 # ICON FUV
 def get_FUV_instrument_constants():
     '''
@@ -209,17 +208,18 @@ def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scali
     return Rayleigh
 
 # ICON FUV WGS84
-def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scaling=1., step=10.):
+def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry = 0,cont=1,Ne_scaling=1., step=10.):
     '''
     Step along a desired look direction from a given observing location and
     calculate the 135.6-nm intensity. Lines-of-sight are calculated using a non-spherical non-symmetric earth.
     INPUTS:
-        ze          - zenith angle of look direction (radians)
-        az          - azimuth angle of look direction (0 is north, pi/4 is east) (radians)
+        ze          - zenith angle of look direction (deg)
+        az          - azimuth angle of look direction (0 is north, pi/4 is east) (deg)
         satlat      - latitude of satellite (deg)
         satlon      - longitude of satellite (deg)
         satalt      - altitude of satellite (km)
         dn          - UT date and time to be run (datetime)
+        symmetry    - flag indicating if symmetry [0] or non-symmetry[1] will be used
         cont        - contribution factors, cont=1 -> RR+MN, 2-> RR
         Ne_scaling  - Scaling factor for Ne [default 1 => No scaling]
         step        - resolution of the integration along the line of sight (km, default = 10 km)
@@ -253,7 +253,11 @@ def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,cont=1,Ne
         # Calculate 1356 Emission for a single point        
         # Return Radiative Recombination, Mutual Neutralization and Ne value for each point on the line
         # The Ne can be scalled to test algorithm for various pertubations
-        VER,MN,Ne,_ = calc_1356_nighttime(latlonalt[0,j],latlonalt[1,j],latlonalt[2,j],dn,Ne_scaling)
+        # The symmetry check changes the call so the lat lon coordinates will be the same as nadir direction or not. 
+        if symmetry == 0:
+            VER,MN,Ne,_ = calc_1356_nighttime(satlat,satlon,latlonalt[2,j],dn,Ne_scaling)
+        elif symmetry == 1:
+            VER,MN,Ne,_ = calc_1356_nighttime(latlonalt[0,j],latlonalt[1,j],latlonalt[2,j],dn,Ne_scaling)
         
         #print '%f,%f,%f' %(latlonalt[0,j],latlonalt[1,j],latlonalt[2,j])
         
@@ -282,8 +286,7 @@ def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,cont=1,Ne
     return Rayleigh
 
 # ICON FUV
-# ICON FUV
-def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,exposure=0.,TE=0.,cont=1,Ne_scaling = 1.,step = 10, stripes_used = 0):
+def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,symmetry =0,shperical=1,exposure=0.,TE=0.,cont=1,Ne_scaling = 1.,step = 10, stripes_used = 0):
     '''
     Calls 'calculate_pixel_1356_nighttime' which calculates the Brightness through integrated VER for a given zenith angle.
     INPUTS:
@@ -293,6 +296,8 @@ def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,exp
         satlon      - longitude of satellite (deg)
         satalt      - altitude of satellite (km)
         dn          - UT date and time to be run (datetime)
+        symmetry    - flag indicating if symmetry [0] or non-symmetry[1] will be used
+        shperical   - flag indicating if spherical [0] or WGS84 model[1] will be used
         exposure    - Exposure time of the FUV CCD, if input is zero the default parameters are loaded
         TE          - Total Efficiency of the FUC optical system, if input is zero the default parameters are loaded
         cont        - contribution factors, cont=1 -> RR+MN, 2-> RR
@@ -314,6 +319,9 @@ def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,exp
         12-Dec-2014: Written by Dimitrios Iliou (iliou2@illinois.edu) 
         01-Apr-2015: pixels_per_rescell -> stripes used 
         08-Jul-2015: Changed the calculate_pixel_1356_nighttime to calculate_pixel_1356_nighttime_WGS84 to include non-spherical non-symmetric earth
+        26-Jul-2015: Added the spherical and symmetry parameters on the function
+
+
     '''
     
     # Check if instrument parameters are zero from input to load default values
@@ -326,9 +334,10 @@ def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,exp
         stripes_used = params['stripes_usedl']
 
     # Get Brightness for a given zenith angle 
-    Brightness = calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont,Ne_scaling,step)
-    
-    #Brightness = calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,cont,Ne_scaling,step)
+    if shperical == 0:
+        Brightness = calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont,Ne_scaling,step)
+    elif shperical == 1:
+        Brightness = calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry,cont,Ne_scaling,step)
     
     # Number of pixels in rescell = 8
     r = TE * exposure * stripes_used
@@ -343,8 +352,7 @@ def get_Photons_from_Brightness_1356_nighttime_star(a_b):
     return get_Photons_from_Brightness_1356_nighttime(*a_b)
 
 # ICON FUV
-# ICON FUV
-def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satalt,dn,exposure=0.,TE=0.,cont=1,Ne_scaling = 1.,step = 10,stripes_used = 0,proc=16):
+def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satalt,dn,symmetry=0,shperical=1,exposure=0.,TE=0.,cont=1,Ne_scaling = 1.,step = 10,stripes_used = 0,proc=16):
     '''
     Calls 'get_Photons_from_Brightness_1356_nighttime' which calculates the Brightness and Electron density by going through integrated VER for all given zenith angles.
     INPUTS:
@@ -354,6 +362,8 @@ def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satal
         satlon      - longitude of satellite (deg)
         satalt      - altitude of satellite (km)
         dn          - UT date and time to be run (datetime)
+        symmetry    - flag indicating if symmetry [0] or non-symmetry[1] will be used
+        shperical   - flag indicating if spherical [0] or WGS84 model[1] will be used
         exposure    - Exposure time of the FUV CCD, if input is zero the default parameters are loaded
         TE          - Total Efficiency of the FUC optical system, if input is zero the default parameters are loaded
         cont        - contribution factors, cont=1 -> RR+MN, 2-> RR
@@ -373,6 +383,7 @@ def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satal
     HISTORY:
         12-Dec-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
         01-Apr-2015: pixels_per_rescell -> stripes used 
+        26-Jul-2015: Added the spherical and symmetry parameters on the function
     '''
 
     params = get_FUV_instrument_constants()
@@ -387,7 +398,7 @@ def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satal
     Rayl = np.zeros(np.size(ze))
     
     # i put index on azimuth
-    job_args = [(ze[i],az[i] ,satlat,satlon,satalt, dn,exposure,TE,cont,Ne_scaling,step,stripes_used) for i in range(0,len(ze))]
+    job_args = [(ze[i],az[i] ,satlat,satlon,satalt, dn,symmetry,shperical,exposure,TE,cont,Ne_scaling,step,stripes_used) for i in range(0,len(ze))]
     N = multiprocessing.cpu_count()
 
     # Create the pool.  Be nice.  Don't use all the cores!
@@ -405,7 +416,6 @@ def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satal
     #print t1-t0
     
     return Rayl,photons
-
 
 # ICON FUV
 def add_noise_to_photon_and_brightness(photons,exposure=0.,TE=0.,stripes_used = 0,reps=1):
@@ -456,14 +466,15 @@ def add_noise_to_photon_and_brightness(photons,exposure=0.,TE=0.,stripes_used = 
     
     return Rayl_,shot_noise
 
-def run_forward_modelling(satlatlonalt,date,symmetry = 1,exp=12,reps=1000,sens=0,cont=2,Ne_sc=1.,step=10,stripes_used=0,proc=16):
+def run_forward_modelling(satlatlonalt,date,symmetry = 0.,shperical=1, exp=12,reps=1000,sens=0,cont=2,Ne_sc=1.,step=10,stripes_used=0,proc=16):
     '''
     Top forward model modules. Creates brightness profile and adds noise returning the noisy Brighntess profile(s) to 
     be used for the inversion process. 
     INPUTS:
         satlatlonalt - vector containing the satellite coordinates [lat-lon-alt] (km)
         date         - datetime input
-        symmetry     - flag indicating if spherical symmetry [0] or WGS84 model[1] will be used
+        symmetry     - flag indicating if symmetry [0] or non-symmetry[1] will be used
+        shperical    - flag indicating if spherical [0] or WGS84 model[1] will be used
         exp          - exposude time in order to be used as proxy for SNR increase or decrease (s)
         reps         - number of noise realizations for the Brightness profile. Determines the size of the ouput vector.
         sens         - Sensitivity of the FUV optical system, if input is zero the default parameters are loaded
@@ -490,6 +501,7 @@ def run_forward_modelling(satlatlonalt,date,symmetry = 1,exp=12,reps=1000,sens=0
         03-Jun-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
         08-Jul-2015: Changed everything to assume non-symmetric non-spherical earth. Choice for symmetry is given.
         22-Jul-2015: Changed VER in Symmetry to include satalt and satlot instead of zero-zero
+        26-Jul-2015: Added the spherical parameter on the function
     '''
     
     # Satellite coordinates
@@ -505,17 +517,13 @@ def run_forward_modelling(satlatlonalt,date,symmetry = 1,exp=12,reps=1000,sens=0
     '''
     Locate limb lower bound ~150km 
     '''
-    # Initialize
-    if (symmetry==0):
-        RE = 6371.
-        h = np.zeros(np.size(ze))
-    else:
-        h = np.zeros((np.size(ze),3))
         
     check = 0
     
     # Locate limb lower bound ~150km 
-    if (symmetry==0):
+    if (shperical==0):
+        h = np.zeros(np.size(ze))
+        RE = 6371.
         h = ic.angle2tanht(ze_v, satalt, RE) 
         h = h[np.where(h>150)]
         disk = len(h)
@@ -547,11 +555,13 @@ def run_forward_modelling(satlatlonalt,date,symmetry = 1,exp=12,reps=1000,sens=0
     '''
     Multicore Processing for Calculate Brighness
     '''
+    ### ___ I NEED TO ADD THE SPHERICAL THING HERE
+    
     # Takes s/c coordinates as input for poing location to calculate the brightness profile. This must change to tan. point
-    if (symmetry==0):
-        Bright,photons = get_Photons_from_Brightness_Profile_1356_nighttime(ze_v,az_v,satlat,satlon,satalt,date,exp,sens,cont,Ne_sc,step,stripes_used,proc)
+    if (shperical==0):
+        Bright,photons = get_Photons_from_Brightness_Profile_1356_nighttime(ze_v,az_v,satlat,satlon,satalt,date,symmetry,shperical,exp,sens,cont,Ne_sc,step,stripes_used,proc)
     else:
-        Bright,photons = get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satalt,date,exp,sens,cont,Ne_sc,step,stripes_used,proc)
+        Bright,photons = get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satalt,date,symmetry,shperical,exp,sens,cont,Ne_sc,step,stripes_used,proc)
         #Bright,photons = ic.get_Photons_from_Brightness_Profile_1356_nighttime(ze_v,az_v,satlat,satlon,satalt,date,exp,sens,cont,Ne_sc,step,stripes_used,proc)
     #Bright,photons = ic.get_Photons_from_Brightness_Profile_1356_nighttime(ze_v,az_v,h[:,0],h[:,1],satalt,date,exp,0,2)
     
@@ -577,14 +587,16 @@ def run_forward_modelling(satlatlonalt,date,symmetry = 1,exp=12,reps=1000,sens=0
     Calculates fixed NE for location 0,0 (S/C location)-> Needs to be changed for the WGS84 case where each tangent
     point has different lat and lon.
     '''
-    if (symmetry==0):
+    if (shperical==0):
         VER_true,VER,MN,NE,O = calculate_VER_1356_nighttime(satlat,satlon,h,date)
     else:
-        for i in range(0,len(h)):
-            _,_,_,NE[i],O[i] = calculate_VER_1356_nighttime(h_loc[0,i,0],h_loc[0,i,1],h_loc[0,i,2],date)
+        if symmetry == 0:
+            _,_,_,NE,O = calculate_VER_1356_nighttime(satlat,satlon,h,date)
+        else:
+            for i in range(0,len(h)):
+                _,_,_,NE[i],O[i] = calculate_VER_1356_nighttime(h_loc[0,i,0],h_loc[0,i,1],h_loc[0,i,2],date)
 
     return NE,Bright,Bright_n,h,O#,h_coord
-
 
 def get_azze_default():
     '''
@@ -882,6 +894,45 @@ def find_hm_nm_f2_Diff(Ne_e,rbot_e,Ne,rbot,abs_flag=0.):
     
     return Hmf2,Nmf2, Hmf2_s,Nmf2_s
 
+def find_hm_nm_f2_aoe(Ne_e,rbot_e,Ne,rbot,abs_flag=0.):
+    
+    '''
+    Calculates the difference for the NmF2 and hmF2 of a given electron density profile and the estimated one.
+    INPUTS:
+        NE_e     - Estimated Electron density profile [cm^{-3}]
+        rbot_e   - altitude vector for estimated electron density profile [km]
+        Ne       - Original Electron density profile [cm^{-3}]
+        rbot     - altitude vector for original electron density profile [km]
+        abs_flag - flag that indicates if the return differences will be the absolute values [0:Regular Difference (default), 1:Absolute Difference]
+    OUTPUT:
+        Nmdift   -  all of the maximum intesity values of each Ne profile
+        Hmdift   -  all of  peak intensity value of the altitude profiles
+    NOTES:
+        NONE
+    HISTORY:
+        27-Jul-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
+    '''
+
+    hmF2o,Nmf2o = find_hm_Nm_F2(Ne,rbot)
+    
+    Nmdift = np.zeros(np.size(Ne_e,1))
+    Hmdift = np.zeros(np.size(Ne_e,1))
+    
+    for i in range(0,np.size(Ne_e,1)):
+        indexf2= Ne_e[:,i].argmax()
+
+        Hmf2_t = rbot_e[indexf2]
+        Nmf2_t = Ne_e[indexf2,i]
+        if abs_flag == 0:
+            Nmdift[i] = (Nmf2o-Nmf2_t)/(Nmf2o)
+            Hmdift[i] =hmF2o-Hmf2_t
+        else:
+            Nmdift[i] = abs((Nmf2o-Nmf2_t)/(Nmf2o))
+            Hmdift[i] = abs(hmF2o-Hmf2_t)
+
+    
+    return Nmdift,Hmdift
+
 def FUV_Level_2_OutputProduct_NetCDF(dn,satlatlonalt,az,ze,tanlatlonalt,Bright,VER,Ne,NmF2,hmF2,path='/home/dimitris/public_html/Datafiles/LVL2TEST/'):
     '''
     This function takes as input all the necessary outputs from LVL2.5 processing and writes them on a NetCDF file
@@ -995,3 +1046,88 @@ def FUV_Level_2_OutputProduct_NetCDF(dn,satlatlonalt,az,ze,tanlatlonalt,Bright,V
     hmF2_f.long_name = 'hmF2 Value'
     
     f.close()
+
+def Get_lvl2_5_product(path_input='/home/dimitris/Data_Files/ICON_FUV_ray_UT_15sec_night.nc',path_output='/home/dimitris/public_html/Datafiles/LVL2TEST/'):
+    '''
+    Operational Code that reads Lvl1 file and creates the corresponding Lvl2.5
+    INPUTS:
+        path_input  - Input file path 
+        path_output - Output file path
+    OUTPUT:
+        Creates a NetCDF file on the desired output_path
+    NOTES:
+        This versions uses paths as input and output. That can change in case needed. Also, the lvl1 file that is used
+        is elementary. No actual LVL1 file has been given yet.
+    HISTORY:
+        24-Jul-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
+    '''
+    # Open input NetCDF file
+    data = netcdf.netcdf_file(path_input,mode='r')
+    
+    # Get Data from file.
+    # For now we use only one stripe from the image. This process must be done for the whole CCD
+    FUV_1356_IMAGE = data.variables['FUV_1356_IMAGE'][0][:][:]
+
+    FUV_TANGENT_ALTITUDES = data.variables['FUV_TANGENT_ALTITUDES'][0][:][:]
+    FUV_TANGENT_ALTITUDES_END = data.variables['FUV_TANGENT_ALTITUDES_END'][0][:][:]
+    FUV_TANGENT_ALTITUDES_START = data.variables['FUV_TANGENT_ALTITUDES_START'][0][:][:]
+
+    FUV_TANGENT_LATITUDES = data.variables['FUV_TANGENT_LATITUDES'][0][:][:]
+    FUV_TANGENT_LATITUDES_END = data.variables['FUV_TANGENT_LATITUDES_END'][0][:][:]
+    FUV_TANGENT_LATITUDES_START = data.variables['FUV_TANGENT_LATITUDES_START'][0][:][:]
+
+    FUV_TANGENT_LONGITUDES = data.variables['FUV_TANGENT_LONGITUDES'][0][:][:]
+    FUV_TANGENT_LONGITUDES_END = data.variables['FUV_TANGENT_LONGITUDES_END'][0][:][:]
+    FUV_TANGENT_LONGITUDES_START = data.variables['FUV_TANGENT_LONGITUDES_START'][0][:][:]
+
+    FUV_TANGENT_N2 = data.variables['FUV_TANGENT_N2'][0][:][:]
+    FUV_TANGENT_O1 = data.variables['FUV_TANGENT_O1'][0][:][:]
+    FUV_TANGENT_O2 = data.variables['FUV_TANGENT_O2'][0][:][:]
+    FUV_TANGENT_OP = data.variables['FUV_TANGENT_OP'][0][:][:]
+
+    FUV_TANGENT_POINT_INDEX = data.variables['FUV_TANGENT_POINT_INDEX'][0][:][:]
+
+    FUV_ECEF_VECTORS_START = data.variables['FUV_ECEF_VECTORS_START'][0][:][:]
+
+    ICON_WGS84_LATITUDE_START =  data.variables['ICON_WGS84_LATITUDE_START'][0]
+    ICON_WGS84_LONGITUDE_START =  data.variables['ICON_WGS84_LONGITUDE_START'][0]
+    ICON_WGS84_ALTITUDE_START =  data.variables['ICON_WGS84_ALTITUDE_START'][0]
+
+    satlatlonalt = [ICON_WGS84_LATITUDE_START,ICON_WGS84_LONGITUDE_START,ICON_WGS84_ALTITUDE_START]
+
+    ICON_UT_START = data.variables['ICON_UT_START'].data
+    
+    # Stripe 4 used for now. We know that this stripe contains all the information without any loss of data
+    STRIPE = 4
+    
+    # Calculate viewing geometry vectors
+    FUV_ZE_VECTORS_START = np.zeros((np.size(FUV_ECEF_VECTORS_START,0),np.size(FUV_ECEF_VECTORS_START,1)));
+    FUV_AZ_VECTORS_START = np.zeros((np.size(FUV_ECEF_VECTORS_START,0),np.size(FUV_ECEF_VECTORS_START,1)));
+    for i in range(0,np.size(FUV_ECEF_VECTORS_START,0)):
+        for j in range(0,np.size(FUV_ECEF_VECTORS_START,1)):
+            [FUV_AZ_VECTORS_START[i][j],FUV_ZE_VECTORS_START[i][j]]= ic.ecef_to_azze(satlatlonalt,FUV_ECEF_VECTORS_START[i,j,:])
+    
+    limb = np.where(FUV_TANGENT_ALTITUDES[:,STRIPE]>=150)
+    # Call the function that calculates the solution
+    dn = ICON_UT_START[limb][::-1]
+
+    az = FUV_AZ_VECTORS_START[limb,STRIPE][0][::-1]
+    ze = FUV_ZE_VECTORS_START[limb,STRIPE][0][::-1]
+    
+    #tanlatlonalt = [FUV_TANGENT_LATITUDES[limb,STRIPE][0][::-1],FUV_TANGENT_LONGITUDES[limb,STRIPE][0][::-1],FUV_TANGENT_ALTITUDES[limb,STRIPE][0][::-1]]
+    tanlatlonalt = np.column_stack((FUV_TANGENT_LATITUDES[limb,STRIPE][0][::-1],FUV_TANGENT_LONGITUDES[limb,STRIPE][0][::-1],FUV_TANGENT_ALTITUDES[limb,STRIPE][0][::-1]))
+
+    bright = FUV_1356_IMAGE[limb,STRIPE][0][::-1]
+    # h needs to be changed when non-symmetric earth is assumed. For now we have symmetry
+    h = FUV_TANGENT_ALTITUDES[limb,STRIPE][0][::-1]
+    # That might not work well now if non-symmetric earth is assumed from Scott
+    O = FUV_TANGENT_O1[limb,STRIPE][0][::-1]
+
+    ver,Ne,h = FUV_Level_2_OutputProduct_Calculation(bright,h,satlatlonalt,az,ze,O,cont =1, regu=1,regu_order = 2,S_mp = 1)
+    hmF2,NmF2 = find_hm_Nm_F2(Ne,h)
+    NmF2 = NmF2*100
+    
+    FUV_Level_2_OutputProduct_NetCDF(dn,satlatlonalt,az,ze,tanlatlonalt,bright,ver,Ne,NmF2,hmF2,path_output)
+    
+    print 'LVL2.5 Processing Terminated. File created!'
+
