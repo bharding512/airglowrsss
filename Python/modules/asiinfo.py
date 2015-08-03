@@ -428,7 +428,7 @@ def get_instr_info(instr_name, dn):
         elif dn < datetime.datetime(2015,7,27):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO02elaz_1182015.npz'
         else:
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO02elaz_i2092015.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO02elaz_2092015.npz'
     if instr_name == 'picasso04':
         if dn < datetime.datetime(2008,1,1) + datetime.timedelta(days = 269):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_2202008.npz'
