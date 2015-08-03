@@ -67,6 +67,7 @@ def quality_hack(instr_name, year, doy, FPI_Results, logfile):
         tutc = np.array([ti.astimezone(pytz.utc).replace(tzinfo=None) for ti in t])
         
         # 2015 
+        # sky images
         idx = (tutc > datetime.datetime(2015,6,13,1)) & (tutc < datetime.datetime(2015,7,18,2))
         t[idx] = t[idx] - datetime.timedelta(hours=1)
         dst_secs = np.array([ti.dst().total_seconds() for ti in t])
@@ -76,8 +77,18 @@ def quality_hack(instr_name, year, doy, FPI_Results, logfile):
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                       'FPIprocess.quality_hack(): Manual intervention to fix timing offset during ' + \
                       '2015 Ramadan DST pause.\n')
-        
+        # laser images
+        t = FPI_Results['laser_times']
+        tutc = np.array([ti.astimezone(pytz.utc).replace(tzinfo=None) for ti in t])
+        idx = (tutc > datetime.datetime(2015,6,13,1)) & (tutc < datetime.datetime(2015,7,18,2))
+        t[idx] = t[idx] - datetime.timedelta(hours=1)
+        dst_secs = np.array([ti.dst().total_seconds() for ti in t])
+        idx2 = (tutc >= datetime.datetime(2015,7,18,2)) & (tutc < datetime.datetime(2015,7,18,3)) & (dst_secs == 0.)
+        t[idx2] = t[idx2] - datetime.timedelta(hours=1)
+
+
         # 2014
+        # sky images
         idx = (tutc > datetime.datetime(2014,6,28,1)) & (tutc < datetime.datetime(2014,8,2,2))
         t[idx] = t[idx] - datetime.timedelta(hours=1)
         dst_secs = np.array([ti.dst().total_seconds() for ti in t])
@@ -87,6 +98,14 @@ def quality_hack(instr_name, year, doy, FPI_Results, logfile):
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                       'FPIprocess.quality_hack(): Manual intervention to fix timing offset during ' + \
                       '2014 Ramadan DST pause.\n')
+        # laser images
+        t = FPI_Results['laser_times']
+        tutc = np.array([ti.astimezone(pytz.utc).replace(tzinfo=None) for ti in t])
+        idx = (tutc > datetime.datetime(2014,6,28,1)) & (tutc < datetime.datetime(2014,8,2,2))
+        t[idx] = t[idx] - datetime.timedelta(hours=1)
+        dst_secs = np.array([ti.dst().total_seconds() for ti in t])
+        idx2 = (tutc >= datetime.datetime(2014,8,2,2)) & (tutc < datetime.datetime(2014,8,2,3)) & (dst_secs == 0.)
+        t[idx2] = t[idx2] - datetime.timedelta(hours=1)
                       
     return FPI_Results
     
@@ -449,11 +468,13 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
         w_fit_err = FPI_Results['sigma_fit_LOSwind'][ii]
         if (w_fit_err > wind_err_thresh): # Sample is not trustworthy at all
             w_flag = 2
-            logfile.write('[sigma_wind large: W2] ')
+            t_flag = 2
+            logfile.write('[sigma_wind large: W2T2] ')
         t_fit_err = FPI_Results['sigma_T'][ii]
         if (t_fit_err > temp_err_thresh): # Sample is not trustworthy at all
+            t_flag = 2
             w_flag = 2
-            logfile.write('[sigma_T large: T2] ')
+            logfile.write('[sigma_T large: W2T2] ')
         # A manual override can increase the calculated flag, but not decrease
         t_flag = max(t_flag,t_flag_manual)
         w_flag = max(w_flag,w_flag_manual)

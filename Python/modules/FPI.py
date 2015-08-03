@@ -863,7 +863,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
                 lasers = [fn for (fn, valid) in zip(lasers, good) if valid]
                 laser_times_center = [t for (t, valid) in zip(laser_times_center, good) if valid]
                 nignored = len(good) - sum(good)
-                if nignored > 0:
+                if nignored > 1:
                     notify_the_humans = True
                     logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                             'WARNING: %03i laser images ignored because the center is an outlier.\n' % nignored)
