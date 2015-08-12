@@ -255,6 +255,8 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True):
     weData = _np.empty((b_len,500))*_np.nan
     TData = _np.empty((b_len,500))*_np.nan
     TeData = _np.empty((b_len,500))*_np.nan
+    iData = _np.empty((b_len,500))*_np.nan
+    ieData = _np.empty((b_len,500))*_np.nan
     count = _np.zeros((b_len))
     lat = []
     lon = []
@@ -319,6 +321,9 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True):
                         if len(r1.T) > 0:
                             TData[bin,count[bin]] = r1.T[zelda]
                             TeData[bin,count[bin]] = r1.Te[zelda]
+                        if len(r1.i) > 0:
+                            iData[bin,count[bin]] = r1.i[zelda]
+                            ieData[bin,count[bin]] = r1.ie[zelda]
                         count[bin] += 1
             
     # Mean LLA
@@ -332,8 +337,10 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True):
     # Vert            
     wD,weD = WeightedAverage(wData,weData)
     # Temps
-
     TD,TeD = WeightedAverage(TData,TeData)
+    # Intensities
+    iD,ieD = WeightedAverage(iData,ieData)
+
     if SPLIT:
         # Zonal2 - West
         u2D,u2eD = WeightedAverage(u2Data,u2eData)
@@ -349,6 +356,8 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True):
     d.we = weD
     d.T = TD
     d.Te = TeD
+    d.i = iD
+    d.ie = ieD
     if SPLIT:
         d.u2 = u2D
         d.u2e = u2eD
@@ -395,6 +404,8 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis'):
     weData = _np.empty((b_len,1))*_np.nan
     TData = _np.empty((b_len,1))*_np.nan
     TeData = _np.empty((b_len,1))*_np.nan
+    iData = _np.empty((b_len,1))*_np.nan
+    ieData = _np.empty((b_len,1))*_np.nan
     
     # Get Empty
     d = _BinnedData(dn,WMODEL)
@@ -435,6 +446,11 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis'):
             print 'Bad Temp Model'
         TeData[tind] = 1.
     
+        # Intensity
+        pt.run_airglow()
+        iData[tind] = pt.ag6300
+        ieData[tind] = 1.
+
     # Save Averages
     d.u = uData[:,0]
     d.ue = ueData[:,0]
@@ -444,6 +460,8 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis'):
     d.we = weData[:,0]
     d.T = TData[:,0]
     d.Te = TeData[:,0]
+    d.i = iData[:,0]
+    d.ie = ieData[:,0]
     d.doabarrelroll()
     
     return d
@@ -501,6 +519,8 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     weData = _np.empty((b_len,dim))*_np.nan
     TData = _np.empty((b_len,dim))*_np.nan
     TeData = _np.empty((b_len,dim))*_np.nan
+    iData = _np.empty((b_len,dim))*_np.nan
+    ieData = _np.empty((b_len,dim))*_np.nan
     count = 0
     mflag = False
     oscar = []
@@ -578,6 +598,9 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
             if len(DD.T) > 0:
                 TData[:,count] = DD.T
                 TeData[:,count] = DD.Te
+            if len(DD.i) > 0:
+                iData[:,count] = DD.i
+                ieData[:,count] = DD.ie
             if SPLIT and not(mflag) and len(DD.u2) > 0:
                 u2Data[:,count] = DD.u2
                 u2eData[:,count] = DD.u2e
@@ -595,6 +618,8 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     wcount = [_np.nan if x<dimset else x for x in wcount]
     Tcount = dim - sum(_np.isnan(TData.T))
     Tcount = [_np.nan if x<dimset else x for x in Tcount]
+    icount = dim - sum(_np.isnan(iData.T))
+    icount = [_np.nan if x<dimset else x for x in icount]
     u2count = dim - sum(_np.isnan(u2Data.T))
     u2count = [_np.nan if x<dimset else x for x in u2count]
     v2count = dim - sum(_np.isnan(v2Data.T))
@@ -661,6 +686,8 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     wD,wDe,wV,wVe,wV2,wU = WeightedAverage(wData,weData,wcount,test=True)
     #  Temps
     TD,TDe,TV,TVe,TV2,TU = WeightedAverage(TData,TeData,Tcount,test=True)
+    # Intensity
+    iD,iDe,iV,iVe,iV2,iU = WeightedAverage(iData,ieData,icount,test=True)
     if SPLIT and not(mflag):
         # Zonal2 - West
         u2D,u2De,u2V,u2Ve,u2V2,u2U = WeightedAverage(u2Data,u2eData,u2count,test=True)
@@ -697,6 +724,14 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     d.Tu = TU
     d.Tc = Tcount
     d.Tv2= TV2
+    d.i  = iD
+    d.ie = iDe
+    d.iv = iV
+    d.ive= iVe
+    d.iv2= iV2
+    d.iu = iU
+    d.ic = icount
+    
     if SPLIT and not(mflag):
         d.u2  = u2D
         d.u2e = u2De
@@ -1934,6 +1969,8 @@ class _BinnedData:
         self.ve  = _np.roll(self.ve,roll)
         self.w   = _np.roll(self.w ,roll)
         self.we  = _np.roll(self.we,roll)
+        self.i   = _np.roll(self.i ,roll)
+        self.ie  = _np.roll(self.ie,roll)
         if 'Tv' in ship:
             self.Tv   = _np.roll(self.Tv ,roll)
             self.Tc   = _np.roll(self.Tc ,roll)
