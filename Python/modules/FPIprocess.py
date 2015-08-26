@@ -113,18 +113,20 @@ def quality_hack(instr_name, year, doy, FPI_Results, logfile):
 
     
     
-def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zenith_times=[17.,7.], wind_err_thresh=100., temp_err_thresh=100., cloud_thresh = [-22.,-10.]):
+def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zenith_times=[17.,7.],
+                  wind_err_thresh=100., temp_err_thresh=100., cloud_thresh = [-22.,-10.],
+                  fpi_dir='/rdata/airglow/fpi/', bw_dir='/rdata/airglow/templogs/cloudsensor/'):
     '''
     Process all the data from the instrument with name instr_name on
     the day specified by (year, doy). This function looks in the appropriate
-    directory on remote2, analyzes the laser and sky images to obtain line of
+    directory, analyzes the laser and sky images to obtain line of
     sight winds, temperatures, etc., and saves them in a .npz file in the
     appropriate place. It also generates summary plots and sends them to the
     website. Finally, it generates summary ASCII files for Madrigal.
     INPUTS:
         instr_name - 'minime01', 'minime02', etc.
         year - int
-        doy - int (1-indexed, right?)
+        doy - int (i.e., Jan 1 is doy=1)
     OPTIONAL INPUTS:
         reference - str, 'laser' or 'zenith'. Passed on to FPI.ParameterFit(...)
         use_npz - bool, if True, the call to FPI.ParameterFit(...) will be skipped,
@@ -139,20 +141,24 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
         temp_err_thresh - float, K. Samples with a fit error above this should get a quality
                             flag of 2.      
         cloud_thresh - [float,float], K. The two cloud sensor readings that indicate 
-                        partially- and fully-cloudy. This affects the quality flag.              
+                        partially- and fully-cloudy. This affects the quality flag.
+        fpi_dir = str. the base directory where the data are stored. It is assumed that 
+                  data are organized in a folder like: <fpi_dir>/minime01/car/2015/20150810/
+        bw_dir = str. the directory where the Boltwood Cloud Sensor files are stored. Set
+                      this to None if no sensor exists.
     OUTPUTS:
         warnings - str - If this script believes a manual check of the data
                    is a good idea, a message will be returned in this string.
-                   If not, the empty string will be returned. For now, the
-                   whole log will be the message. 
+                   If not, the empty string will be returned. For now, the message
+                   is the entire log.
         
     '''
     
 
     # Define constants that do not depend on the site
     direc_tol = 10.0 # tolerance in degrees to recognize a look direction with
-    fpi_dir =               '/rdata/airglow/fpi/'
-    bw_dir =                '/rdata/airglow/templogs/cloudsensor/'
+    
+    
     x300_dir =              '/rdata/airglow/templogs/x300/'
     results_stub =          '/rdata/airglow/fpi/results/'
     temp_plots_stub =       '/rdata/airglow/fpi/results/temporary_plots/' # where to save pngs on remote2
@@ -285,7 +291,8 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
 
 
     # Grab the SVN number
-    p = subprocess.Popen('svnversion /usr/local/share/airglowrsss/Python/modules/',shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    svndir = '/'.join(FPI.__file__.split('/')[:-1])
+    p = subprocess.Popen('svnversion %s'%svndir,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     (stdout,stderr) = p.communicate()
     sv = re.split(':|\n', stdout)[0]
 
