@@ -115,7 +115,11 @@ def quality_hack(instr_name, year, doy, FPI_Results, logfile):
     
 def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zenith_times=[17.,7.],
                   wind_err_thresh=100., temp_err_thresh=100., cloud_thresh = [-22.,-10.],
-                  fpi_dir='/rdata/airglow/fpi/', bw_dir='/rdata/airglow/templogs/cloudsensor/'):
+                  send_to_website=True, enable_share=True, send_to_madrigal=True, 
+                  enable_windfield_estimate=True,
+                  fpi_dir='/rdata/airglow/fpi/', bw_dir='/rdata/airglow/templogs/cloudsensor/',
+                  x300_dir='/rdata/airglow/templogs/x300/', results_stub='/rdata/airglow/fpi/results/',
+):
     '''
     Process all the data from the instrument with name instr_name on
     the day specified by (year, doy). This function looks in the appropriate
@@ -142,10 +146,25 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
                             flag of 2.      
         cloud_thresh - [float,float], K. The two cloud sensor readings that indicate 
                         partially- and fully-cloudy. This affects the quality flag.
-        fpi_dir = str. the base directory where the data are stored. It is assumed that 
+        send_to_website - bool. If True, connect to the database at Illinois and update
+                          the website. This will only work if run at Illinois.
+        enable_share - bool. If True, and if site['share']==True, then save a copy of the npz
+                       file elsewhere on remote2 for transfer to other institutions.
+        send_to_madrigal - bool. If True, and if instrument['send_to_madrigal']==True, 
+                       then create an ASCII file of the results and save it to the appropriate
+                       place at Illinois for Madrigal to read. This only works at Illinois.
+        enable_windfield_estimate - bool. If True, and if this site is part of the 'nation'
+                       or 'peru' networks, then the wind field estimation analysis will be
+                       run. Right now, this only works at Illinois.            
+        fpi_dir - str. the base directory where the data are stored. It is assumed that 
                   data are organized in a folder like: <fpi_dir>/minime01/car/2015/20150810/
-        bw_dir = str. the directory where the Boltwood Cloud Sensor files are stored. Set
-                      this to None if no sensor exists.
+        bw_dir - str. the directory where the Boltwood Cloud Sensor files are stored. Set
+                      this to empty string ('') if no sensor exists
+        x300_dir - str. the directory where the X300 temperature sensor files are stored. 
+                       Set this to empty string ('') if no sensor exists
+        results_stub - str. the directory where the results will be saved. A .npz file 
+                       and a .log file will be created.
+                    
     OUTPUTS:
         warnings - str - If this script believes a manual check of the data
                    is a good idea, a message will be returned in this string.
@@ -158,16 +177,16 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
     # Define constants that do not depend on the site
     direc_tol = 10.0 # tolerance in degrees to recognize a look direction with
     
-    
-    x300_dir =              '/rdata/airglow/templogs/x300/'
-    results_stub =          '/rdata/airglow/fpi/results/'
-    temp_plots_stub =       '/rdata/airglow/fpi/results/temporary_plots/' # where to save pngs on remote2
-    scp_user =              'data@airglow.ece.illinois.edu' # User to scp to
-    db_image_stub =         'SummaryImages/' # relative path from web server directory on airglow
+    # Information about sending data to the website. Only used if send_to_website==True.
+    temp_plots_stub= '/rdata/airglow/fpi/results/temporary_plots/' #where to save png files
+    scp_user       = 'data@airglow.ece.illinois.edu'    
+    db_image_stub  =        'SummaryImages/' # relative path from web server directory on airglow
     db_log_stub =           'SummaryLogs/'
     web_images_stub =       '/data/SummaryImages/' # absolute location on airglow of summary images
     web_logs_stub =         '/data/SummaryLogs/' # absolute location on airglow of summary logs
+    # Information about sending to Madrigal. Only used if send_to_madrigal==True
     madrigal_stub =         '/rdata/airglow/database/' # where reduced ascii txt and png files are saved for Madrigal
+    # Information about sending to partner institutions. Only used if enable_share==True
     share_stub    =         '/rdata/airglow/share/' # where to save a copy of the .npz file for sharing with collaborators
     
     notify_the_humans = False # default
@@ -183,7 +202,6 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
     # Create "minime05_uao_20130729" string
     datestr = nominal_dt.strftime('%Y%m%d')
     instrsitedate = instr_name + '_' + site_name + '_' + datestr
-
 
 
     # Construct the directories to the relevant data products
@@ -290,8 +308,8 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
     FPI_Results = quality_hack(instr_name, year, doy, FPI_Results, logfile)
 
 
-    # Grab the SVN number
-    svndir = '/'.join(FPI.__file__.split('/')[:-1])
+    # Grab the SVN revision number, so we know what code was used to process this day.
+    svndir = '/'.join(FPI.__file__.split('/')[:-1]) # get the directory of FPI.py
     p = subprocess.Popen('svnversion %s'%svndir,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
     (stdout,stderr) = p.communicate()
     sv = re.split(':|\n', stdout)[0]
@@ -379,23 +397,24 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
             FPI_Results['Inside'] = {'mean': Inside[:,0], 'max': Inside[:,1], 'min': Inside[:,2]}
 
         # Write things to the log
-        if FPI_Results['Clouds'] is None:
+        if FPI_Results['Clouds'] is None: # if it wasn't found
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'No Boltwood cloud sensor data found.\n')
             c = np.nan*np.zeros(len(FPI_Results['LOSwind']))
             FPI_Results['Clouds'] = {'mean': c, 'max': c, 'min': c}
-            notify_the_humans = True
+            if bw_dir: # it should have been found 
+                notify_the_humans = True
         else:
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Found and loaded Boltwood cloud sensor data.\n')
-        if FPI_Results['Dome'] is None:
+        if FPI_Results['Dome'] is None:# if it wasn't found but should have been
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'No X300 temperature sensor data found.\n')
-            #notify_the_humans = True
+            #notify_the_humans = True # No need to notify about X300's.
         else:
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Found and loaded X300 temperature sensor data.\n')
     except: # There was an error in the Boltwood or X300 code. Write the log but continue.
         c = np.nan*np.zeros(len(FPI_Results['LOSwind']))
         FPI_Results['Clouds'] = {'mean': c, 'max': c, 'min': c}
         tracebackstr = traceback.format_exc()
-        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error obtaining Boltwood or X300 data for %s. Traceback listed below. Analysis will continue without these data.\n-----------------------------------\n%s\n-----------------------------------\n' % (datestr,tracebackstr))
+        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Unknown error obtaining Boltwood or X300 data for %s. Traceback listed below. Analysis will continue without these data.\n-----------------------------------\n%s\n-----------------------------------\n' % (datestr,tracebackstr))
         notify_the_humans = True
         
         
@@ -496,11 +515,11 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
     # Save the results
     np.savez(npzname, FPI_Results=FPI_Results, site=site, instrument=instrument)
     logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Results saved to %s\n' % npzname)
-    if site['share']: # save a copy of the npz file in a separate folder
+    if enable_share and site['share']: # save a copy of the npz file in a separate folder
         npznameshare = share_stub + site_name + '/' + instrsitedate + '.npz'
         np.savez(npznameshare, FPI_Results=FPI_Results, site=site, instrument=instrument)
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Results also saved to %s\n' % npznameshare)
-    if instrument['send_to_madrigal']: # save the summary ASCII file to send to the Madrigal database
+    if send_to_madrigal and instrument['send_to_madrigal']: # save the summary ASCII file to send to the Madrigal database
         asciiname = madrigal_stub + instrsitedate + '.txt'
         FPIResults.CreateL1ASCII(npzname, asciiname)
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'ASCII results saved to %s\n' % asciiname)
@@ -515,155 +534,152 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
     npzfile.close()
     
     # Try to make plots
-    try: 
-        # Plot some quick-look single-station data (LOSwinds and Temps)
-        (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, reference = reference, Zenith_Times=zenith_times)
-        
-        # Add Level 1 diagnostics to diagnostics fig
-        ax = Diagnostic_Fig.add_subplot(427) # TODO: generalize diagnostic figure generation?
-        if FPI_Results['Clouds'] is not None:
-            ct = FPI_Results['sky_times']
-            cloud = FPI_Results['Clouds']['mean']
-            ax.plot(ct, cloud, 'k.-')
-            ax.plot([ct[0],ct[-1]], [cloud_thresh[0],cloud_thresh[0]], 'k--')
-            ax.plot([ct[0],ct[-1]], [cloud_thresh[1],cloud_thresh[1]], 'k--')
-            ax.set_xlim([ct[0] - datetime.timedelta(hours=0.5), ct[-1] + datetime.timedelta(hours=0.5)])
-            ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
-            ax.set_ylim([-50,0])
-            ax.set_ylabel('Cloud indicator [degrees C]')
-            ax.grid(True)
-            ax.set_xlabel('Universal Time, [hours]')
-        #obj1.plot_diagnostics(ax)
-        Diagnostic_Fig.tight_layout()
-        # Concatenate level0 and level1 logs
-        #logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Level 1 processing log:\n' + \
-        #              '--------------------------------------------------\n' + obj1.log + \
-        #              '\nEnd Level 1 processing log\n' + \
-        #              '--------------------------------------------------\n')
-    except: 
-        # Summary plots crashed. We still want to send the diagnostics and log to the
-        # website, so continue on with dummy plots.
-        tracebackstr = traceback.format_exc()
-        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error making plots for %s. Traceback listed below. Dummy plots sent to website.\n-----------------------------------\n%s\n-----------------------------------\n' % (datestr,tracebackstr))
-        notify_the_humans = True
-        Temperature_Fig = plt.figure()
-        Temperature_Fig.text(0.5, 0.5, 'Plotting error - see log file', fontsize = 20, ha='center')
-        Doppler_Fig = plt.figure()
-        Doppler_Fig.text(0.5, 0.5, 'Plotting error - see log file', fontsize = 20, ha='center')
-        
-        
-    # Create (or update) the level 3 wind field map, if use_npz=False (so that use_npz=True is fast)
-    network_name = site['Network']
-    gif_fn = None # filename of the gif to send to the website
-    if network_name in  ['nation','peru'] and not use_npz:
-        try:
-            wf = FPIwindfield.WindField([network_name], year, doy, timestep_fit = 1800)
-            if len(wf.instr_names) >= 3: # If there are 3 sites, try the inversion
-                losfig = wf.plot_los_winds()
-                plt.close(losfig)
-                wf.run_inversion()
-                gif_fn = wf.make_quiver_gif(show_vert_wind=True)
-                shutil.copy(gif_fn, '/home/bhardin2/public_html/windfield_movies/')
-                quicklook_fig, quicklook_fn = wf.make_quicklook(show_vert_wind=True)
-                shutil.copy(quicklook_fn, '/home/bhardin2/public_html/windfield_quicklooks/')
-                plt.close(quicklook_fig)
-        except:
+    if send_to_website: # For now, let's only make plots if we plan to send to the website.
+        try: 
+            # Plot some quick-look single-station data (LOSwinds and Temps)
+            (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, reference = reference, Zenith_Times=zenith_times)
+            
+            # Add Level 1 diagnostics to diagnostics fig
+            ax = Diagnostic_Fig.add_subplot(427) # TODO: generalize diagnostic figure generation?
+            if FPI_Results['Clouds'] is not None:
+                ct = FPI_Results['sky_times']
+                cloud = FPI_Results['Clouds']['mean']
+                ax.plot(ct, cloud, 'k.-')
+                ax.plot([ct[0],ct[-1]], [cloud_thresh[0],cloud_thresh[0]], 'k--')
+                ax.plot([ct[0],ct[-1]], [cloud_thresh[1],cloud_thresh[1]], 'k--')
+                ax.set_xlim([ct[0] - datetime.timedelta(hours=0.5), ct[-1] + datetime.timedelta(hours=0.5)])
+                ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+                ax.set_ylim([-50,0])
+                ax.set_ylabel('Cloud indicator [degrees C]')
+                ax.grid(True)
+                ax.set_xlabel('Universal Time, [hours]')
+            Diagnostic_Fig.tight_layout()
+        except: 
+            # Summary plots crashed. We still want to send the diagnostics and log to the
+            # website, so continue on with dummy plots.
             tracebackstr = traceback.format_exc()
-            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error creating windfield quicklook plot. Traceback listed below.\n-----------------------------------\n%s\n-----------------------------------\n' % (tracebackstr,))
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error making plots for %s. Traceback listed below. Dummy plots sent to website.\n-----------------------------------\n%s\n-----------------------------------\n' % (datestr,tracebackstr))
             notify_the_humans = True
-    
-    
-    # Update the database with the summary images and log file
-    summary_figs = [Diagnostic_Fig,
-                    Temperature_Fig,
-                    Doppler_Fig,]
-    summary_fns = [instrsitedate + '_diagnostics.png',
-                   instrsitedate + '_temperature.png', # e.g., 'minime05_uao_20130107_temperature.png'
-                   instrsitedate + '_winds.png',]
-    db_ids = [instrument['sql_diagnostics_id'],
-              instrument['sql_temperatures_id'],
-              instrument['sql_winds_id'], ]
-    if use_npz: # don't update diagnostics fig
-        summary_figs.pop(0)
-        summary_fns.pop(0)
-        db_ids.pop(0)
+            Temperature_Fig = plt.figure()
+            Temperature_Fig.text(0.5, 0.5, 'Plotting error - see log file', fontsize = 20, ha='center')
+            Doppler_Fig = plt.figure()
+            Doppler_Fig.text(0.5, 0.5, 'Plotting error - see log file', fontsize = 20, ha='center')
 
-    site_id = site['sql_id']
-    utc = pytz.utc # Define timezones
-    # Start and stop time of observations
-    d = FPI.ReadIMG(sky_fns[0])
-    dtime = local.localize(d.info['LocalTime'])
-    startut = dtime.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
-    d = FPI.ReadIMG(sky_fns[-1])
-    dtime = local.localize(d.info['LocalTime'])
-    stoput = dtime.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')  
-    # Open the database (see http://zetcode.com/databases/mysqlpythontutorial/ for help)
-    # Read the user and password from a file.
-    con = mdb.connect(host='airglow.ece.illinois.edu', db='webdatabase', read_default_file="~/.my.cnf")
-    cur = con.cursor()  
-    # Create the summary images
-    for fig, fn, db_id in zip(summary_figs, summary_fns, db_ids):
-        fig.savefig(temp_plots_stub + fn) # save it in the remote2 data dir
-        flag = subprocess.call(['scp', temp_plots_stub + fn, scp_user + ':' + web_images_stub + fn]) # send to airglow
-        if flag != 0: # Sending png to airglow failed
-            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
-            notify_the_humans = True            
-        # If we are supposed to put this png in Madrigal, put it in the Madrigal database directory
-        send_to_madrigal = instrument['send_to_madrigal'] and 'diagnostic' not in fn # don't send diag. fig
-        if send_to_madrigal:
-            fig.savefig(madrigal_stub + fn) # save the figure to the madrigal directory
-        os.remove(temp_plots_stub + fn) # remove the png
-        # update the database
-        # Send winds png. First find out if the entry is in there (i.e., we are just updating the png)
-        sql_cmd = 'SELECT id FROM DataSet WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (site_id, db_id, startut)
-        cur.execute(sql_cmd)
-        rows = cur.fetchall()
-        log_fn = db_log_stub + instrsitedate + '_log.log'
-        if len(rows) == 0: # Create the entry
-            sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%d, %d, \"%s\", \"%s\", \"%s\", \"%s\")' % (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
-            cur.execute(sql_cmd)
-        else: # Entry exists. Update it.
-            sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + fn, log_fn, site_id, db_id, startut)
-            cur.execute(sql_cmd)
-        # close figure to save memory
-        plt.close(fig)
-            
-    # Send level 3 windfield gif to website, if we made one
-    if gif_fn is not None:
-        # Since the start/stop time of a network is ill-defined, just make up a start time: 21 UT on the 1st night, and 12 UT on the second night. This will have to be updated for networks other than NATION.
+    gif_fn = None # filename of the gif to send to the website            
+    if enable_windfield_estimate:    
+        # Create (or update) the level 3 wind field map, if use_npz=False (so that use_npz=True is fast)
+        network_name = site['Network']
+
+        if network_name in  ['nation','peru'] and not use_npz:
+            try:
+                wf = FPIwindfield.WindField([network_name], year, doy, timestep_fit = 1800)
+                if len(wf.instr_names) >= 3: # If there are 3 sites, try the inversion
+                    losfig = wf.plot_los_winds()
+                    plt.close(losfig)
+                    wf.run_inversion()
+                    gif_fn = wf.make_quiver_gif(show_vert_wind=True)
+                    shutil.copy(gif_fn, '/home/bhardin2/public_html/windfield_movies/')
+                    quicklook_fig, quicklook_fn = wf.make_quicklook(show_vert_wind=True)
+                    shutil.copy(quicklook_fn, '/home/bhardin2/public_html/windfield_quicklooks/')
+                    plt.close(quicklook_fig)
+            except:
+                tracebackstr = traceback.format_exc()
+                logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error creating windfield quicklook plot. Traceback listed below.\n-----------------------------------\n%s\n-----------------------------------\n' % (tracebackstr,))
+                notify_the_humans = True
+    
+    if send_to_website:
+        # Update the database with the summary images and log file
+        summary_figs = [Diagnostic_Fig,
+                        Temperature_Fig,
+                        Doppler_Fig,]
+        summary_fns = [instrsitedate + '_diagnostics.png',
+                       instrsitedate + '_temperature.png', # e.g., 'minime05_uao_20130107_temperature.png'
+                       instrsitedate + '_winds.png',]
+        db_ids = [instrument['sql_diagnostics_id'],
+                  instrument['sql_temperatures_id'],
+                  instrument['sql_winds_id'], ]
+        if use_npz: # don't update diagnostics fig
+            summary_figs.pop(0)
+            summary_fns.pop(0)
+            db_ids.pop(0)
+
+        site_id = site['sql_id']
+        utc = pytz.utc # Define timezones
+        # Start and stop time of observations
         d = FPI.ReadIMG(sky_fns[0])
-        # Define midnight on the first night
-        dtime = d.info['LocalTime'] - datetime.timedelta(hours=12)
-        midnight = dtime - datetime.timedelta(hours=dtime.hour, minutes=dtime.minute, seconds=dtime.second)
-        start = midnight + datetime.timedelta(hours=21)
-        stop  = midnight + datetime.timedelta(hours=36)
-        startut = start.strftime('%Y-%m-%d %H:%M:%S')
-        stoput = stop.strftime('%Y-%m-%d %H:%M:%S')
-        network_info = fpiinfo.get_network_info(network_name)
-        network_id   = network_info['sql_id']
-        gif_id       = network_info['quicklook_gif_id']
-        flag = subprocess.call(['scp', gif_fn, scp_user + ':' + web_images_stub + gif_fn.split('/')[-1]]) # send to airglow
-        if flag != 0: # Sending png to airglow failed
-            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending "%s" to airglow server for displaying on website.\n' % gif_fn)
-            notify_the_humans = True
-        # Register the gif. First find out if the entry is in there (i.e., we are just updating it)
-        sql_cmd = 'SELECT id FROM DataSet WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (network_id, gif_id, startut)
-        cur.execute(sql_cmd)
-        rows = cur.fetchall()
-        if len(rows) == 0: # Create the entry
-            sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage) VALUES(%d, %d, \"%s\", \"%s\", \"%s\")' % (network_id, gif_id, startut, stoput, db_image_stub + gif_fn.split('/')[-1])
+        dtime = local.localize(d.info['LocalTime'])
+        startut = dtime.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
+        d = FPI.ReadIMG(sky_fns[-1])
+        dtime = local.localize(d.info['LocalTime'])
+        stoput = dtime.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')  
+        # Open the database (see http://zetcode.com/databases/mysqlpythontutorial/ for help)
+        # Read the user and password from a file.
+        con = mdb.connect(host='airglow.ece.illinois.edu', db='webdatabase', read_default_file="~/.my.cnf")
+        cur = con.cursor()  
+        # Create the summary images
+        for fig, fn, db_id in zip(summary_figs, summary_fns, db_ids):
+            fig.savefig(temp_plots_stub + fn) # save it in the remote2 data dir
+            flag = subprocess.call(['scp', temp_plots_stub + fn, scp_user + ':' + web_images_stub + fn]) # send to airglow
+            if flag != 0: # Sending png to airglow failed
+                logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
+                notify_the_humans = True            
+            # If we are supposed to put this png in Madrigal, put it in the Madrigal database directory
+            send_to_madrigal = instrument['send_to_madrigal'] and 'diagnostic' not in fn # don't send diag. fig
+            if send_to_madrigal:
+                fig.savefig(madrigal_stub + fn) # save the figure to the madrigal directory
+            os.remove(temp_plots_stub + fn) # remove the png
+            # update the database
+            # Send winds png. First find out if the entry is in there (i.e., we are just updating the png)
+            sql_cmd = 'SELECT id FROM DataSet WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (site_id, db_id, startut)
             cur.execute(sql_cmd)
-        else: # Entry exists. Update it.
-            sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + gif_fn.split('/')[-1], network_id, gif_id, startut)
+            rows = cur.fetchall()
+            log_fn = db_log_stub + instrsitedate + '_log.log'
+            if len(rows) == 0: # Create the entry
+                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%d, %d, \"%s\", \"%s\", \"%s\", \"%s\")' % (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
+                cur.execute(sql_cmd)
+            else: # Entry exists. Update it.
+                sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + fn, log_fn, site_id, db_id, startut)
+                cur.execute(sql_cmd)
+            # close figure to save memory
+            plt.close(fig)
+                
+        # Send level 3 windfield gif to website, if we made one
+        if gif_fn is not None:
+            # Since the start/stop time of a network is ill-defined, just make up a start time: 21 UT on the 1st night, and 12 UT on the second night. This will have to be updated for networks other than NATION.
+            d = FPI.ReadIMG(sky_fns[0])
+            # Define midnight on the first night
+            dtime = d.info['LocalTime'] - datetime.timedelta(hours=12)
+            midnight = dtime - datetime.timedelta(hours=dtime.hour, minutes=dtime.minute, seconds=dtime.second)
+            start = midnight + datetime.timedelta(hours=21)
+            stop  = midnight + datetime.timedelta(hours=36)
+            startut = start.strftime('%Y-%m-%d %H:%M:%S')
+            stoput = stop.strftime('%Y-%m-%d %H:%M:%S')
+            network_info = fpiinfo.get_network_info(network_name)
+            network_id   = network_info['sql_id']
+            gif_id       = network_info['quicklook_gif_id']
+            flag = subprocess.call(['scp', gif_fn, scp_user + ':' + web_images_stub + gif_fn.split('/')[-1]]) # send to airglow
+            if flag != 0: # Sending png to airglow failed
+                logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending "%s" to airglow server for displaying on website.\n' % gif_fn)
+                notify_the_humans = True
+            # Register the gif. First find out if the entry is in there (i.e., we are just updating it)
+            sql_cmd = 'SELECT id FROM DataSet WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (network_id, gif_id, startut)
             cur.execute(sql_cmd)
-            
+            rows = cur.fetchall()
+            if len(rows) == 0: # Create the entry
+                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage) VALUES(%d, %d, \"%s\", \"%s\", \"%s\")' % (network_id, gif_id, startut, stoput, db_image_stub + gif_fn.split('/')[-1])
+                cur.execute(sql_cmd)
+            else: # Entry exists. Update it.
+                sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + gif_fn.split('/')[-1], network_id, gif_id, startut)
+                cur.execute(sql_cmd)
+                
 
-    # Send the log file
+
     logfile.close()
-    subprocess.call(['scp', logname, scp_user + ':' + web_logs_stub + instrsitedate + '_log.log'])
-    
-    # Close the connection to airglow database
-    con.close()
+    if send_to_website:
+        # Send the log file
+        subprocess.call(['scp', logname, scp_user + ':' + web_logs_stub + instrsitedate + '_log.log'])
+        # Close the connection to airglow database
+        con.close()
 
     # Return log as string if an email to humans is suggested.
     s = ''
@@ -683,7 +699,7 @@ def process_site(site_name, year, doy, reference='laser'):
     INPUTS:
         site_name - 'uao', 'eku', etc.
         year - int
-        doy - int (1-indexed, right?)
+        doy - int (1-indexed)
     OPTIONAL INPUTS:
         reference - str, 'laser' or 'zenith'. Passed on to FPI.ParameterFit(...)
     HISTORY:
