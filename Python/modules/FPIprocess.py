@@ -7,9 +7,7 @@ matplotlib.use('AGG')
 import FPI
 import glob
 from lmfit import Parameters
-#import logging
 from optparse import OptionParser
-import MySQLdb as mdb
 import datetime
 import numpy as np
 import os
@@ -23,8 +21,6 @@ import re
 import fpiinfo
 import matplotlib.pyplot as plt
 import traceback
-import FPIResults
-import FPIwindfield
 from matplotlib import dates
 import shutil
 
@@ -520,6 +516,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
         np.savez(npznameshare, FPI_Results=FPI_Results, site=site, instrument=instrument)
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Results also saved to %s\n' % npznameshare)
     if send_to_madrigal and instrument['send_to_madrigal']: # save the summary ASCII file to send to the Madrigal database
+        import FPIResults
         asciiname = madrigal_stub + instrsitedate + '.txt'
         FPIResults.CreateL1ASCII(npzname, asciiname)
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'ASCII results saved to %s\n' % asciiname)
@@ -572,6 +569,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
 
         if network_name in  ['nation','peru'] and not use_npz:
             try:
+                import FPIwindfield
                 wf = FPIwindfield.WindField([network_name], year, doy, timestep_fit = 1800)
                 if len(wf.instr_names) >= 3: # If there are 3 sites, try the inversion
                     losfig = wf.plot_los_winds()
@@ -588,6 +586,8 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
                 notify_the_humans = True
     
     if send_to_website:
+        import MySQLdb as mdb
+
         # Update the database with the summary images and log file
         summary_figs = [Diagnostic_Fig,
                         Temperature_Fig,
