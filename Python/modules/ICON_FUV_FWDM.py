@@ -176,8 +176,8 @@ def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scali
         lon = np.nan # for now, this doesn't matter    
         
         # After this altitude the Raypath goes through the disk so no calculation is done for these altitudes
-        if alt < 150:    # USUALLY 100
-            break
+        #if alt < 150:    # 150 USUALLY 100
+            #break
        
         # Calculate 1356 Emission for a single point
         VER,MN,Ne,_ = calc_1356_nighttime(satlat,satlon,alt,dn,Ne_scaling)
@@ -636,7 +636,7 @@ def decs(x, pos, sc = 1e-5):
     'The two args are the value and tick position'
     return '%1.f' % (x*sc)
 
-def FUV_Level_2_OutputProduct_Calculation(Bright,h,satlatlonalt,az,ze,O,cont =1, regu=1,regu_order = 2,S_mp = 1):
+def FUV_Level_2_OutputProduct_Calculation(Bright,h,satlatlonalt,az,ze,O,spherical=1,cont =1, regu=1,regu_order = 2,S_mp = 1):
     '''
     Within this function, given the LVL1 Input file the VER and Ne profiles for the tangent altitude point are
     calculated
@@ -647,6 +647,7 @@ def FUV_Level_2_OutputProduct_Calculation(Bright,h,satlatlonalt,az,ze,O,cont =1,
         az          - Azimuth [degrees]
         ze          - Zenith [degrees]
         O           - Oxygen profile ( Assume known. We can also pull it from MSIS)
+        shperical   - Spherical Earth Assumption, 0=> Spherical, 1=>WGS84
         cont        - Contribution, 1=> RR+MN, 2=>RR ( This will be removed propably) [int]
         regu        - Choose regularization, 0=> Gaussian Elimination, 1=> Tikhonov L-Curve, 2=> GSVD [int]
         regu_order  - Regularization Order [int] (0,1,2 Possible Values)
@@ -667,12 +668,17 @@ def FUV_Level_2_OutputProduct_Calculation(Bright,h,satlatlonalt,az,ze,O,cont =1,
     az = az[0:len(h)]
     ze = ze[0:len(h)]
 
-    if S_mp ==1:
-        S,rmid = Calculate_D_Matrix_WGS84_mp(satlatlonalt,az,ze)
-    elif S_mp == 0:
-        S = Calculate_D_Matrix_WGS84(satlatlonalt,az,ze)
+    if (spherical==0):
+        S,_,rbot,_ = ic.create_cells_Matrix_spherical_symmetry(np.deg2rad(ze),satlatlonalt[2])
+    elif (spherical ==1):
+        if S_mp ==1:
+            S,rmid = Calculate_D_Matrix_WGS84_mp(satlatlonalt,az,ze)
+        elif S_mp == 0:
+            S = Calculate_D_Matrix_WGS84(satlatlonalt,az,ze)
+        else:
+            raise Exception('Not valid S multiprocessing choice')
     else:
-        raise Exception('Not valid S multiprocessing choice')
+        raise Exception('Not valid shperical earth choice')
 
     #S = S[0:len(h),0:len(h)]
     #print 'Distance Matrix Calculated'
