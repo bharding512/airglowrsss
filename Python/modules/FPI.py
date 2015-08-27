@@ -709,7 +709,6 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
         ESTIMATE_BLUR = False
     # The threshold for CCD temperature, above which a human should be
     # notified, because there is probably something wrong with the CCD.
-    # These images will be ignored in the analysis.
     MAX_CCD_TEMP = -60.0 # C
     LAS_I_THRESH = 13. # counts. If the laser intensity is less than this, ignore it.
 
@@ -993,7 +992,6 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
                             
                     data = laser_spectra[N0:N1]
                     sigma = laser_sigma[N0:N1]
-                    #sigma = laser_sigma[N0:N1].mean() * np.ones_like(laser_sigma[N0:N1]) # TODO: Delete me.
                     laser_fit = Minimizer(Laser_Residual,laser_params, \
                         fcn_args=(annuli['r'][N0:N1],), fcn_kws={'data': data, 'sigma': sigma}, \
                         scale_covar = True)
@@ -1301,7 +1299,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                     'WARNING: %s was taken with a CCD temperature of %.1f C. It will be ignored.\n' % (fname, d.info['CCDTemperature']))
             notify_the_humans = True
-            ignore_this_one = True
+            ignore_this_one = False # We'll still analyze these images, but they should get a quality flag of 1.
             Novertemp += 1
 
         # Calculate the annuli to use for this time
@@ -1524,7 +1522,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
     # Warn again if the CCD was too hot
 
     if Novertemp > 0:
-        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'WARNING: %i/%i sky exposures were taken with a CCD temperature that was too hot. They were ignored.\n' % (Novertemp, len(sky)))
+        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'WARNING: %i/%i sky exposures were taken with a CCD temperature that was too hot. They were flagged with the quality flag.\n' % (Novertemp, len(sky)))
 
     # Convert sky_params to array
     n = len(sky_out)
@@ -1749,14 +1747,14 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
              'laser_times': np.array(laser_times), 'laser_chisqr': np.array(laser_redchi),
              'laser_value': laser_value, 'laser_stderr': laser_stderr,
              'sky_value': sky_value, 'sky_stderr': sky_stderr,
-             'laser_intT': np.array(laser_intT), 'laser_temperature': np.array(laser_temperature),
-             'sky_intT': np.array(sky_intT), 'sky_temperature': np.array(sky_temperature),
-             'reference': reference, 'lam0': lam0, 'sky_fns': sky_fns, 'laser_fns':laser_fns, }
-    #		 'SVNRevision': sv})
+             'laser_intT': np.array(laser_intT), 'laser_ccd_temperature': np.array(laser_temperature),
+             'sky_intT': np.array(sky_intT), 'sky_ccd_temperature': np.array(sky_temperature),
+             'reference': reference, 'lam0': lam0, 'sky_fns': sky_fns, 'laser_fns':laser_fns, 'center_pixel':center,}
     
     # Apply Doppler reference
     dref,drefe = DopplerReference(FPI_Results, reference=reference,AVERAGING_TIME=zenith_times)
     FPI_Results['LOSwind'] = FPI_Results['LOSwind'] - dref
+    FPI_Results['doppler_reference'] = dref
     # For now, do not add extra error bar Doppler reference,
     # because it is small and it's not clear how it should
     # be calculated.

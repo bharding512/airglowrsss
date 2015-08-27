@@ -172,6 +172,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
 
     # Define constants that do not depend on the site
     direc_tol = 10.0 # tolerance in degrees to recognize a look direction with
+    ccd_temp_thresh = -60. # sky exposures with a CCD temp above this will get a quality flag.
     
     # Information about sending data to the website. Only used if send_to_website==True.
     temp_plots_stub= '/rdata/airglow/fpi/results/temporary_plots/' #where to save png files
@@ -248,6 +249,9 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
     laser_fns.sort()
     sky_fns.sort()
 
+    # Uncomment these for rapid testing of new code
+    #laser_fns = laser_fns[::6]
+    #sky_fns = [sky_fns[20],sky_fns[78],sky_fns[119]]
 
     if not laser_fns and not sky_fns:
         raise Exception('No %s data found between %s and %s. \n' % (instr_name, str(start_dt), str(stop_dt)))
@@ -483,6 +487,10 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
             t_flag = 1
             w_flag = 1
             logfile.write('[cloud>%.0f: W1T1] '%cloud_thresh[0])
+        if FPI_Results['sky_ccd_temperature'][ii] > ccd_temp_thresh:
+            t_flag = 1
+            w_flag = 1
+            logfile.write('[ccdtemp>%.0f: W1T1] '%ccd_temp_thresh)
         if c > cloud_thresh[1]: # It's definitely cloudy
             t_flag = 1
             w_flag = 2
