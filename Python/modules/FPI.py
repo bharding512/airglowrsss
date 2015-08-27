@@ -1554,6 +1554,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
 
         fontP = FontProperties()
         fontP.set_size('small')
+        #mpl.rcParams.update({'font.size': 5})
         #fontsize = 8
 
         ################ Plot center location ######################
@@ -1581,7 +1582,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
             if all(xdev < m) and all(xdev > -m) and all(ydev < m) and all(ydev > -m): # Set the x and y lims at +/- m 
                 ax.set_ylim([-m, m])
 
-            ax.set_ylabel('Center deviation, [pixels]')
+            ax.set_ylabel('Center deviation\n[pixels]')
             #ax.set_xlabel('Universal Time, [hours]')
             ax.set_title(site['Abbreviation'] + ':' + \
                 laser_times_center[0].strftime(' %d %b, %Y %H:%M LT') + ' - ' + laser_times_center[-1].strftime('%H:%M LT') )
@@ -1598,7 +1599,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
             ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
             ax.set_xlim([sky_times[0] - datetime.timedelta(hours=0.5), sky_times[-1] + datetime.timedelta(hours=0.5)])
             #ax.set_xlabel('Universal Time')
-            ax.set_ylabel('Laser Fit Reduced Chi^2')
+            ax.set_ylabel('Laser Fit\nReduced Chi^2')
             ax.set_title(site['Abbreviation'] + ':' + \
                     laser_times[0].strftime(' %d %b, %Y %H:%M LT') + ' - ' + laser_times[-1].strftime('%H:%M LT') )
             ax.grid(True)
@@ -1618,7 +1619,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
             ax.errorbar(laser_times,Ir,yerr=Ie,fmt='k.-')
             ax.set_xlim([sky_times[0] - datetime.timedelta(hours=0.5), sky_times[-1] + datetime.timedelta(hours=0.5)])
             ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
-            ax.set_ylabel('Laser Intensity, [counts]')
+            ax.set_ylabel('Laser Intensity\n[counts]')
             #ax.set_xlabel('Universal Time')
             #title = ax.set_title(site['Abbreviation'] + ':' + \
             #         laser_times[0].strftime(' %d %b, %Y %H:%M LT') + ' - ' + laser_times[-1].strftime('%H:%M LT') )
@@ -1705,7 +1706,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
         ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
         ax.set_xlim([sky_times[0] - datetime.timedelta(hours=0.5), sky_times[-1] + datetime.timedelta(hours=0.5)])
         #ax.set_xlabel('Universal Time')
-        ax.set_ylabel('Sky Fit Reduced Chi^2')
+        ax.set_ylabel('Sky Fit\nReduced Chi^2')
         #title = ax.set_title(site['Abbreviation'] + ':' + \
         #        laser_times[0].strftime(' %d %b, %Y %H:%M LT') + ' - ' + laser_times[-1].strftime('%H:%M LT') )
         ax.grid(True)
@@ -1723,15 +1724,14 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
         ax.semilogy([tp0, tp1],[sky_thresh, sky_thresh],'k--',label='qual. thresh')
         ax.set_xlim([tp0, tp1])
         ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
-        ax.set_ylabel('Line Intensity, [arbitrary]')
+        ax.set_ylabel('Line Intensity\n[arbitrary]')
         ax.set_xlabel('Universal Time')
         ax.legend(loc='best', prop={'size':6}, numpoints=1, ncol=5, framealpha=0.5)
         ax.grid(True)
         
         
         # Do some aesthetic things
-        fig.subplots_adjust(hspace = 0.35, wspace = 0.3) # Is this still necessary if we use tight_layout?
-        mpl.rcParams.update({'font.size': 8})
+        #fig.subplots_adjust(hspace = 0.35, wspace = 0.3) # Is this still necessary if we use tight_layout?
     
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
             'Created diagnostic plots.\n')

@@ -271,7 +271,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
     
 
     npzname = results_stub + instrsitedate + '.npz' # the name of the npz file to save to
-    Diagnostic_Fig = plt.figure(dpi=300, figsize=(8,6)) # Figure for diagnostics to be drawn to   
+    Diagnostic_Fig = plt.figure(dpi=300, figsize=(10,7.5)) # Figure for diagnostics to be drawn to   
     if use_npz: # Load previously-analyzed results
         npzfile = np.load(npzname)
         FPI_Results = npzfile['FPI_Results']
@@ -547,7 +547,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
                 ax.set_xlim([ct[0] - datetime.timedelta(hours=0.5), ct[-1] + datetime.timedelta(hours=0.5)])
                 ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
                 ax.set_ylim([-50,0])
-                ax.set_ylabel('Cloud indicator [degrees C]')
+                ax.set_ylabel('Cloud indicator\n[degrees C]')
                 ax.grid(True)
                 ax.set_xlabel('Universal Time, [hours]')
             Diagnostic_Fig.tight_layout()
@@ -618,7 +618,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
         cur = con.cursor()  
         # Create the summary images
         for fig, fn, db_id in zip(summary_figs, summary_fns, db_ids):
-            fig.savefig(temp_plots_stub + fn) # save it in the remote2 data dir
+            fig.savefig(temp_plots_stub + fn, bbox_inches='tight') # save it in the remote2 data dir
             flag = subprocess.call(['scp', temp_plots_stub + fn, scp_user + ':' + web_images_stub + fn]) # send to airglow
             if flag != 0: # Sending png to airglow failed
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
