@@ -632,8 +632,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
                 notify_the_humans = True            
             # If we are supposed to put this png in Madrigal, put it in the Madrigal database directory
-            send_to_madrigal = instrument['send_to_madrigal'] and 'diagnostic' not in fn # don't send diag. fig
-            if send_to_madrigal:
+            if send_to_madrigal and instrument['send_to_madrigal'] and 'diagnostic' not in fn: # don't send diag fig
                 fig.savefig(madrigal_stub + fn) # save the figure to the madrigal directory
             os.remove(temp_plots_stub + fn) # remove the png
             # update the database
