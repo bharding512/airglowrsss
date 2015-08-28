@@ -62,41 +62,6 @@ def calculate_slice(ze,az,satlat,satlon,satalt,ver,v,t,instr_params, step=1.):
     return igram
         
 
-def calculate_image(h0,az,satlat, satlon, satalt,ver,v,t,instr_params,step=1.):
-    '''
-    Simulate the entire interferogram image, by calling calculate_slice many times.
-    INPUTS:
-        h0      - km, lowest tangent height. (Center of bottom pixel)
-        az      - radians, azimuth angle of look direction (0 is north, 90 is east)
-        satlat  - degrees, latitude of satellite
-        satlon  - degrees, longitude of satellite
-        satalt  - km,      altitude of satellite
-        ver     - function of (lat,lon,alt) which specifies the volume emission rate
-                  of the observed emission, in phot/cm^3/s
-        v       - function of (lat,lon,alt) which specifies the neutral velocity
-        t       - function of (lat,lon,alt) which specifies the neutral temperature
-        instr_params  - dictionary containing MIGHTI instrument parameters (see "interferogram")
-        step    - km, resolution of the integration along the line of sight
-     OUTPUTS:
-        interferogram  - array of length instr_params['npixel']. 
-   
-    '''
-    th0 = tanht2angle(h0,satalt) # zenith angle at bottom of image
-    th1 = th0 - instr_params['coneangle2']*np.pi/180. # zenith angle at top of image
-    h1 = angle2tanht(th1,satalt)# top tangent height
-
-    # Assume equi-angle lens projection
-    nx = instr_params['npixelx']
-    ny = instr_params['npixely']
-    thvec = np.linspace(th0,th1,ny)
-    hvec = angle2tanht(thvec,satalt)
-    Iraw = np.zeros((ny,nx))
-    for i in range(ny):
-        igram = calculate_slice(thvec[i], az, satlat, satlon, satalt, ver, v, t, instr_params, step=step)
-        Iraw[i,:] = igram
-    return Iraw
-    
-    
     
 def add_noise(I, instr_params):
     signal = I.copy() # in electrons
@@ -133,13 +98,13 @@ def interferogram(params):
     INPUTS: a dictionary with the following entries
         frq - the spatial frequency to simulate [fringes per grating width]
         mass - the atomic mass of the line [amu]
-        sigma - wavenumber of center wavelength [cm^-1]
+        sigma - wavenumber of center wavelength [m^-1]
         T - temperature of the line [K]
         V - line of sight wind velocity [m/s]
         amplitude - interferogram amplitude at zero path for perfect visibility
         npixel - number of pixels in one fringe
-        startpath - optical path difference on left edge of CCD [cm]
-        endpath - optical path difference on right edge of CCD [cm]
+        startpath - optical path difference on left edge of CCD [m]
+        endpath - optical path difference on right edge of CCD [m]
         and others... (see below)
     OUTPUTS:
         interferogram - array of interference pattern, in units of electrons on the CCD
@@ -160,11 +125,11 @@ def interferogram(params):
     # unpack the parameter dictionary
     startpath = params['startpath']              
     endpath = params['endpath']
-    npixelx = params['npixelx']
-    npixely = params['npixely']
+    npixelx = params['nx']
+    npixely = params['ny']
     frq = params['frq']
     mass = params['mass']
-    lam = params['lam'] # wavelength [cm]
+    lam = params['lam'] # wavelength [m]
     T = params['T'] # Neutral Temperature [K]
     V = params['V'] # Neutral velocity [m/s]
     I = params['I'] # Intensity of emission, in Rayleighs.
@@ -172,7 +137,7 @@ def interferogram(params):
                           # I've never been clear about this.
                           # e.g., VER*path put into units of Mphot/cm2/sec
     gain = params['gain']
-    aperture_area = params['aperture_area'] # cm^2
+    aperture_area = params['aperture_area'] # m^2
     coneangle1 = params['coneangle1']
     coneangle2 = params['coneangle2']
     opteff     = params['opteff']
@@ -204,8 +169,8 @@ def interferogram(params):
     # Assume equi-angle lens projection in vertical direction.
     # (TODO: make sure this is right)
     solidangle = np.sin(coneangle1)*np.sin(coneangle2)/npixely
-    photons = I*1.e6                          # phot/cm^2/sec into 4*pi steradians
-    photons = photons * solidangle/(4*np.pi)  # phot/cm^2/sec into detector
+    photons = I*1.e10                         # phot/m^2/sec into 4*pi steradians
+    photons = photons * solidangle/(4*np.pi)  # phot/m^2/sec into detector
     photons = photons * aperture_area         # phot/sec into detector
     photons = photons * exptime               # total photons entering MIGHTI
     electrons = photons * opteff              # total electrons on this row of CCD
@@ -219,11 +184,11 @@ def get_emission_constants():
 
     emissions = {'green': {'frq': 40.2, # fringe frequency across array [cycles/pixel]
                            'mass': 16., # atomic mass of emitting specie [amu]
-                           'lam': 557.7e-7, # center wavelength of emission [cm]
+                           'lam': 557.7e-9, # center wavelength of emission [m]
                            }, 
                  'red':   {'frq': 85.7, # fringe frequency across array [cycles/pixel]
                            'mass': 16.,# atomic mass of emitting specie [amu]
-                           'lam': 630.0e-7, # center wavelength of emission [cm]
+                           'lam': 630.0e-9, # center wavelength of emission [m]
                            }
                  }
 
@@ -232,11 +197,11 @@ def get_emission_constants():
 
 def get_instrument_constants():
 
-    instrument = {    'npixelx': 512,  # number of superpixels per slice of the interferogram (horizontal)
-                      'npixely': 1456/16,  # number of superpixels in vertical (altitude) direction on CCD.
-                    'startpath': 4.52, # optical path difference at start of interferometer [cm]
-                      'endpath': 5.50, # optical path difference at end of interferometer [cm]
-                'aperture_area': 3.078*3.078, # cm^2
+    instrument = {    'nx': 512,  # number of superpixels per slice of the interferogram (horizontal)
+                      'ny': 1456/16,  # number of superpixels in vertical (altitude) direction on CCD.
+                    'startpath': 4.52e-2, # optical path difference at start of interferometer [m]
+                      'endpath': 5.50e-2, # optical path difference at end of interferometer [m]
+                'aperture_area': 3.078e-2*3.078e-2, # cm^2
                    'coneangle1': 3.22, # fov of instrument in horizontal direction, [deg]
                    'coneangle2': 5.74, # fov of instrument in vertical direction, [deg]
                         'gain' : 1, # gain of CCD (counts per electron)
