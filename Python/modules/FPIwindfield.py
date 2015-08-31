@@ -140,6 +140,7 @@ class WindField:
         base_dir = '/rdata/airglow/fpi/results/level3_windfield/'
         self.dir = '%s%s/' % (base_dir, self.get_stub())
         self.toffset = 20 # minutes after the first observation to start inverting
+        self.success = True # True by default. Will be set to False if necessary
         
         # Write the parameters to the log, so users can see which parameters
         # were used in this inversion
@@ -1295,6 +1296,10 @@ class WindField:
         self.lats = lats
         self.lons = lons
         
+        if len(self.windfield['t']) == 0:
+            self.success = False
+            self.message += 'All inversions failed. Setting success=False.\n'
+
         # Write log file
         logfn = '%s%s_windfield_log.txt' % (self.dir, self.get_stub())
         f = open(logfn, 'w')
@@ -1512,6 +1517,8 @@ class WindField:
                      (default None)
             framerate: Hz. Frame rate for the output movie
             show_vert_wind: If true, use color to display the vertical wind estimate (default True)
+        OUTPUTS:
+            movie_fn: full path to the created file. Returns None if it failed.
         '''
         if timestep is None:
             timestep = self.timestep_fit
@@ -1655,8 +1662,10 @@ class WindField:
         # Make movie
         cmd = 'avconv -framerate %i -i "%s/%%05d.png" -y -vcodec qtrle %s' % (framerate,pngdir,moviefn)
         return_code = subprocess.call(cmd, shell=True)
-        
-        return moviefn
+        if return_code == 0: 
+            return moviefn
+        else: 
+            return None
         
         
         
@@ -1672,6 +1681,8 @@ class WindField:
                      (default 1800)
             framerate: Hz. Frame rate for the output gif
             show_vert_wind: If true, use color to display the vertical wind estimate (default False)
+        OUTPUTS:
+            gif_fn: full path to the created file. Returns None if it failed.
         '''
         if timestep is None:
             timestep = self.timestep_fit
@@ -1817,7 +1828,10 @@ class WindField:
         cmd = 'convert -delay %i %s/*.png %s' % (delay, pngdir, giffn)
         #print cmd
         return_code = subprocess.call(cmd, shell=True)
-        return giffn
+        if return_code == 0:
+            return giffn
+        else:
+            return None
  
  
  
