@@ -583,11 +583,15 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
                     losfig = wf.plot_los_winds()
                     plt.close(losfig)
                     wf.run_inversion()
-                    gif_fn = wf.make_quiver_gif(show_vert_wind=True)
-                    shutil.copy(gif_fn, '/home/bhardin2/public_html/windfield_movies/')
-                    quicklook_fig, quicklook_fn = wf.make_quicklook(show_vert_wind=True)
-                    shutil.copy(quicklook_fn, '/home/bhardin2/public_html/windfield_quicklooks/')
-                    plt.close(quicklook_fig)
+                    if wf.success:
+                        gif_fn = wf.make_quiver_gif(show_vert_wind=True)
+                        shutil.copy(gif_fn, '/home/bhardin2/public_html/windfield_movies/')
+                        quicklook_fig, quicklook_fn = wf.make_quicklook(show_vert_wind=True)
+                        shutil.copy(quicklook_fn, '/home/bhardin2/public_html/windfield_quicklooks/')
+                        plt.close(quicklook_fig)
+                        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Wind field estimation successful. Created gif and quicklook plot.\n')
+                    else:
+                        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Wind field estimation not successful. No plots created.\n')
             except:
                 tracebackstr = traceback.format_exc()
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error creating windfield quicklook plot. Traceback listed below.\n-----------------------------------\n%s\n-----------------------------------\n' % (tracebackstr,))
