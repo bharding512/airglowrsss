@@ -186,7 +186,7 @@ def get_emission_constants():
                            'mass': 16., # atomic mass of emitting specie [amu]
                            'lam': 557.7e-9, # center wavelength of emission [m]
                            }, 
-                 'red':   {'frq': 85.7, # fringe frequency across array [cycles/pixel]
+                 'red':   {'frq': 85.7, # fringe frequency across array [total cycles]
                            'mass': 16.,# atomic mass of emitting specie [amu]
                            'lam': 630.0e-9, # center wavelength of emission [m]
                            }
@@ -197,7 +197,8 @@ def get_emission_constants():
 
 def get_instrument_constants():
 
-    instrument = {    'nx': 512,  # number of superpixels per slice of the interferogram (horizontal)
+    instrument = {    #'nx': 512,  # number of superpixels per slice of the interferogram (horizontal)
+                      'nx': 512,  # number of superpixels per slice of the interferogram (horizontal)
                       'ny': 1456/16,  # number of superpixels in vertical (altitude) direction on CCD.
                     'startpath': 4.52e-2, # optical path difference at start of interferometer [m]
                       'endpath': 5.50e-2, # optical path difference at end of interferometer [m]

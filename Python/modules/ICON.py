@@ -8,6 +8,7 @@ import multiprocessing
 from multiprocessing import Pool
 import time
 import math
+from scipy import optimize
 
 # ICON FUV
 def get_FUV_instrument_constants():
@@ -365,6 +366,8 @@ def add_noise_to_photon_and_brightness(photons,exposure=0.,TE=0.,stripes_used = 
     return Rayl_,shot_noise
 
   
+  
+  
 def angle2tanht(theta, H, RE=6371.):
     '''
     Return the tangent altitude of the observation with zenith angle theta.
@@ -380,6 +383,8 @@ def angle2tanht(theta, H, RE=6371.):
         raise Exception('Angle must be between pi/2 and pi, exclusive.')
     h = (H+RE)*np.sin(theta) - RE
     return h 
+
+
 
 
 def calc_earth_radius_WGS84(lat):
@@ -406,6 +411,8 @@ def calc_earth_radius_WGS84(lat):
     RE = np.sqrt((a**4*np.cos(lat_r)**2 + b**4*np.sin(lat_r)**2)/(a**2*np.cos(lat_r)**2 + b**2*np.sin(lat_r)**2))
 
     return RE   
+
+
 
 def create_cells_Matrix_spherical_symmetry(theta,Horbit,RE=6371.):
     '''
@@ -461,12 +468,16 @@ def create_cells_Matrix_spherical_symmetry(theta,Horbit,RE=6371.):
             
     return S,rmid,rbot,rtop
 
+
+
 def wgs84constants():
     # http://en.wikipedia.org/wiki/World_Geodetic_System (Nov 10, 2014)
     a = 6378.137 # semi-major axis of earth [km]
     b = 6356.75231424518 # semi-minor axis of earth [km]
     e = np.sqrt(1-b**2/a**2) # eccentricity of earth
     return a,b,e
+
+
 
 def ecef_to_wgs84(ecef_xyz):
     '''
@@ -480,7 +491,7 @@ def ecef_to_wgs84(ecef_xyz):
        latlonalt - a length-3 array containing the WGS-84 coordinates:
                    [latitude (degrees), longitude (degrees), altitude (km)]
                    Altitude is defined as the height above the reference
-                   ellipsoid.
+                   ellipsoid. Longitude is defined in [0,360).
 
     HISTORY:
        11-Jun-2006: Initial MATLAB template created by Jonathan J. Makela
@@ -558,121 +569,78 @@ def wgs84_to_ecef(latlonalt):
     
 def ven_to_ecef(latlonalt, ven):
     '''
-    Convert a direction vector in local vertical-east-north (VEN) coordinates, defined at the 
-    location given in WGS84 coordinates [latitude, longitude, altitude],
-    to a unit vector in earth-centered earth-fixed (ECEF) coordinates [x,y,z]
+    Convert a direction vector (e.g., velocity) in local vertical-east-north (VEN) 
+    coordinates, defined at the location given in WGS84 coordinates 
+    [latitude, longitude, altitude], to a vector in earth-centered earth-fixed 
+    (ECEF) coordinates [x,y,z].
     
     INPUTS:
         latlonalt - a length-3 array containing the WGS-84 coordinates of the location:
                    [latitude (degrees), longitude (degrees), altitude (km)]
         ven - the local direction vector [vertical, east, north] which will be converted to 
-             ECEF coordinates. This will be converted to a unit vector
-       
+             ECEF coordinates.
     OUTPUTS:
-        xyz - the unit direction vector in ECEF coordinates [x,y,z]
+        xyz - the direction vector in ECEF coordinates [x,y,z]
         
     HISTORY:
        10-Nov-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
+       02-Sep-2015: Changed from numerical to analytical solution (BJH)
     '''
-    
-    
-    step = 1e-6 # step size for determining transformation from VEN to ECEF 
-                # (units of degrees lat/lon or km altitude)
                 
     # Convert to float values, in case they are integers
     latlonalt = np.array([float(x) for x in latlonalt])
 
-    # Convert reference location to ECEF
-    ecef_xyz = wgs84_to_ecef(latlonalt)
+    # Construct rotation matrix to take ECEF to VEN
+    latr = latlonalt[0]*np.pi/180.
+    lonr = latlonalt[1]*np.pi/180.
+    M = np.array([[ np.cos(latr)*np.cos(lonr),   np.cos(latr)*np.sin(lonr),  np.sin(latr)],
+                  [-np.sin(lonr),                np.cos(lonr),               0],
+                  [-np.sin(latr)*np.cos(lonr),  -np.sin(latr)*np.sin(lonr),  np.cos(latr)]
+                  ])
+    
+    # Perform rotation
+    ecef = np.linalg.solve(M,ven)
 
-    # Find ecef vectors for single steps in vertical, east, and north
-    # (1) vertical step in ECEF coordinates
-    latlonalt2 = latlonalt.copy()
-    latlonalt2[2] += step
-    v_ecef = wgs84_to_ecef(latlonalt2) - ecef_xyz
-    v_ecef = v_ecef/np.linalg.norm(v_ecef)
-    # (2) east step in ECEF coordinates
-    latlonalt2 = latlonalt.copy()
-    latlonalt2[1] += step
-    e_ecef = wgs84_to_ecef(latlonalt2) - ecef_xyz
-    e_ecef = e_ecef/np.linalg.norm(e_ecef)
-    # (3) north step in ECEF coordinates
-    latlonalt2 = latlonalt.copy()
-    latlonalt2[0] += step
-    n_ecef = wgs84_to_ecef(latlonalt2) - ecef_xyz
-    n_ecef = n_ecef/np.linalg.norm(n_ecef)
-
-    # Create matrix that will transform a vector in VEN to ECEF
-    M = np.zeros((3,3))
-    M[:,0] = v_ecef
-    M[:,1] = e_ecef
-    M[:,2] = n_ecef
-
-    # Transform
-    s = np.linalg.norm(ven)
-    ven = ven / s
-    xyz = M.dot(ven)
-
-    return xyz
+    return ecef
 
 
 
 
 def ecef_to_ven(latlonalt, ecef):
     '''
-    Convert a direction vector in earth-centered earth-fixed (ECEF) coordinates [dx,dy,dz], 
-    defined at the location given in WGS84 coordinates [latitude, longitude, altitude],
-    to a unit vector in local vertical-east-north (VEN) coordinates.
+    Convert a direction vector (e.g., velocity) in earth-centered earth-fixed (ECEF) 
+    coordinates [dx,dy,dz], defined at the location given in WGS84 coordinates
+    [latitude, longitude, altitude], to a vector in local vertical-east-north (VEN)
+    coordinates.
     
     INPUTS:
         latlonalt - a length-3 array containing the WGS-84 coordinates of the location:
                    [latitude (degrees), longitude (degrees), altitude (km)]
         ecef - the direction vector [dx,dy,dz] which will be converted to 
-               VEN coordinates. This will be converted to a unit vector.
+               VEN coordinates.
        
     OUTPUTS:
-        ven - the unit direction vector in [vertical, east, north] coordinates.
+        ven - the direction vector in [vertical, east, north] coordinates.
         
     HISTORY:
        06-Jan-2015: Written by Brian J. Harding (bhardin2@illinois.edu)
+       02-Sep-2015: Changed from numerical to analytical solution (BJH)
     '''
-    step = 1e-6 # step size for determining transformation from ECEF to VEN 
-                # (units of degrees lat/lon or km altitude)
                 
     # Convert to float values, in case they are integers
     latlonalt = np.array([float(x) for x in latlonalt])
-
-    # Convert reference location to ECEF
-    ecef_xyz = wgs84_to_ecef(latlonalt)
     
-    # Find ecef vectors for single steps in vertical, east, and north
-    # (1) vertical step in ECEF coordinates
-    latlonalt2 = latlonalt.copy()
-    latlonalt2[2] += step
-    v_ecef = wgs84_to_ecef(latlonalt2) - ecef_xyz
-    v_ecef = v_ecef/np.linalg.norm(v_ecef)
-    # (2) east step in ECEF coordinates
-    latlonalt2 = latlonalt.copy()
-    latlonalt2[1] += step
-    e_ecef = wgs84_to_ecef(latlonalt2) - ecef_xyz
-    e_ecef = e_ecef/np.linalg.norm(e_ecef)
-    # (3) north step in ECEF coordinates
-    latlonalt2 = latlonalt.copy()
-    latlonalt2[0] += step
-    n_ecef = wgs84_to_ecef(latlonalt2) - ecef_xyz
-    n_ecef = n_ecef/np.linalg.norm(n_ecef)
-
-    # Create matrix that will transform a vector in VEN to ECEF
-    M = np.zeros((3,3))
-    M[:,0] = v_ecef
-    M[:,1] = e_ecef
-    M[:,2] = n_ecef
+    # Construct rotation matrix to take ECEF to VEN
+    latr = latlonalt[0]*np.pi/180.
+    lonr = latlonalt[1]*np.pi/180.
+    M = np.array([[ np.cos(latr)*np.cos(lonr),   np.cos(latr)*np.sin(lonr),  np.sin(latr)],
+                  [-np.sin(lonr),                np.cos(lonr),               0],
+                  [-np.sin(latr)*np.cos(lonr),  -np.sin(latr)*np.sin(lonr),  np.cos(latr)]
+                  ])
     
-    # Transform
-    s = np.linalg.norm(ecef)
-    ecef = ecef / s
-    ven = np.linalg.solve(M,ecef)
-    
+    # Perform rotation
+    ven = M.dot(ecef)
+        
     return ven
 
 
@@ -680,16 +648,16 @@ def ecef_to_ven(latlonalt, ecef):
 
 def ecef_to_azze(latlonalt, ecef):
     '''
-    Convert a direction vector in earth-centered earth-fixed (ECEF) coordinates [dx,dy,dz], 
-    defined at the location given in WGS84 coordinates [latitude, longitude, altitude],
-    to the azimuth and zenith angles of the direction vector. This function is similar
-    to ecef_to_ven.
+    Convert a direction vector (e.g., velocity) in earth-centered earth-fixed (ECEF)
+    coordinates [dx,dy,dz],  defined at the location given in WGS84 coordinates 
+    [latitude, longitude, altitude], to the azimuth and zenith angles of the 
+    direction vector. This function is similar to ecef_to_ven.
     
     INPUTS:
         latlonalt - a length-3 array containing the WGS-84 coordinates of the location:
                    [latitude (degrees), longitude (degrees), altitude (km)]
         ecef - the direction vector [dx,dy,dz] which will be converted to 
-               azimuth and zenith angles. This will be converted to a unit vector.
+               azimuth and zenith angles.
        
     OUTPUTS:
         az,ze - the azimuth (degrees East from North) and zenith (degrees down
@@ -797,9 +765,12 @@ def project_line_of_sight(satlatlonalt, az, ze, step_size = 1., total_distance =
  
     
     
-def tangent_point(satlatlonalt, az, ze, tol=1e-6):
+def tangent_point(satlatlonalt, az, ze, tol=1e-7):
     '''
     Find the location (lat, lon, alt) of the tangent point of a ray from the satellite.
+    Current implementation finds the minimum altitude along the line of sight by using
+    a numerical method with a precision of about 0.1 m. The vertical
+    precision is much better than the horizontal precision.
     
     INPUTS:
         satlatlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the satellite
@@ -811,13 +782,13 @@ def tangent_point(satlatlonalt, az, ze, tol=1e-6):
               by more than a horizontal distance of tol.
         
     OUTPUTS:
-        latlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the tangent location
+        latlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the tangent location.
     
     HISTORY:
         10-Dec-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
+        02-Sep-2015: Use scipy.optimize to do minimization instead of my own implementation.
     '''
-    maxiters = 1e4 # Just in case, so it doesn't hang forever
-
+    
     # Convert to radians
     zer = ze*np.pi/180.
     azr = az*np.pi/180.
@@ -830,59 +801,25 @@ def tangent_point(satlatlonalt, az, ze, tol=1e-6):
     lookxyz = ven_to_ecef(satlatlonalt, lookven)
 
     # Find the step size which minimizes the altitude. This problem is convex,
-    # so it's easy.
+    # so it's easy. Define a function which will be minimized.
     def altitude(step_size):
         xyzi = satxyz + step_size*lookxyz
         latlonalt = ecef_to_wgs84(xyzi)
         return latlonalt[2]
 
-    # Or, find the step size for which the slope is zero.
-    # Define function to calculate the slope numerically
-    def slope(step_size):
-        numerical_step = 1e-4 # km
-        alt1 = altitude(step_size - numerical_step/2)
-        alt2 = altitude(step_size + numerical_step/2)
-        return (alt2-alt1)/numerical_step
-
-    # Find two values which straddle the solution.
-    s0 = 0. # start at the satellite
-    s1 = 1. # iterate on the next value until we've straddled the solution
-    f0 = slope(s0)
-    f1 = slope(s1)
-
     # Throw an error if there doesn't appear to be a tangent altitude.
     # (i.e., if the slope is positive, which would happen if the line
     # of sight is looking upward instead of downward)
-    if f0 >= 0.0:
+    if altitude(1.) >= altitude(0.):
         raise Exception('No Tangent Altitude: Altitude not decreasing along line of sight')
 
-    M = 2 # multiplier for line search to find straddle points
-    iters = 0
-    while(np.sign(f0)==np.sign(f1)):
-        iters += 1
-        if iters > maxiters:
-            raise Exception('Initial line search failed: Maximum iterations reached')
-        s1 = s1 * M
-        f1 = slope(s1)
+    # Perform minimization using scipy minimization function (golden section search)
+    #res = optimize.minimize_scalar(altitude, method='golden', tol=tol)
+    res = optimize.minimize_scalar(altitude, method='golden', options={'xtol':tol})
+    s = res.x
 
-    # Straddle points found. Use bisection to converge to the answer.
-    iters = 0
-    while(abs(s0-s1) > tol):
-
-        iters += 1
-        if iters > maxiters:
-            raise Exception('Bisection method failed: Maximum iterations reached')
-
-        sn = (s0+s1)/2
-        fn = slope(sn)
-        if np.sign(fn)==np.sign(f0):
-            s0 = sn
-            f0 = fn
-        else:
-            s1 = sn
-            f1 = fn
-
-    xyzi = satxyz + sn*lookxyz
+    # Determine tangent location from step size
+    xyzi = satxyz + s*lookxyz
     latlonalt = ecef_to_wgs84(xyzi)
     return latlonalt
 
