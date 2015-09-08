@@ -868,7 +868,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
     #    tick.label.set_fontsize(fontsize-2)
 
     # Mark the plots with the Doppler reference type
-    Doppler_Fig.text(1.0,0.0,'Doppler ref: %s' % reference, horizontalalignment='right', verticalalignment='bottom', fontsize = fontsize-2)
+    Doppler_Fig.text(0.8,0.0,'Doppler ref: %s' % reference, horizontalalignment='right', verticalalignment='bottom', fontsize = fontsize-2)
 
     # If no cloud data, mark this on the plots
     if FPI_Results['Clouds'] is None:
