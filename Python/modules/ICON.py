@@ -13,8 +13,11 @@ from scipy import optimize
 
 def wgs84constants():
     # http://en.wikipedia.org/wiki/World_Geodetic_System (Nov 10, 2014)
+    # https://en.wikipedia.org/wiki/Flattening (Sep 9, 2015) 
     a = 6378.137 # semi-major axis of earth [km]
-    b = 6356.75231424518 # semi-minor axis of earth [km]
+    inv_f = 298.257223563
+    f = 1.0/inv_f
+    b = a*(1-f) # semi-minor axis of earth [km]
     e = np.sqrt(1-b**2/a**2) # eccentricity of earth
     return a,b,e
 
@@ -42,35 +45,71 @@ def ecef_to_wgs84(ecef_xyz):
        10-Nov-2014: Translated to Python by Brian J. Harding
        (bhardin2@illinois.edu)
        19-Jan-2015: Changed from iterative to closed-form implementation (BJH)
+       09-Sep-2015: Changed from ublox implementation (with mm accuracy) to
+                    Olson implementation (with nm accuracy). (BJH)
+                    https://possiblywrong.wordpress.com/2014/02/14/when-approximate-is-better-than-exact/
     '''
     
     
-    a,b,e = wgs84constants()
+    # WGS-84 ellipsoid parameters
+    a,b,_ = wgs84constants()
+    f = 1-b/a
 
-    x = 1.0*ecef_xyz[0]
-    y = 1.0*ecef_xyz[1]
-    z = 1.0*ecef_xyz[2]
-   
-    lon = np.arctan2(y,x)
-    # longitude is defined in [0,360) or [0,2*pi)
-    if lon < 0.0:
-        lon += 2*np.pi
-     
-    ep = np.sqrt((a**2-b**2)/b**2)
-    p = np.sqrt(x**2 + y**2)
-    th = np.arctan2(z*a,(p*b))
+    # Derived parameters
+    e2 = f * (2 - f)
+    a1 = a * e2
+    a2 = a1 * a1
+    a3 = a1 * e2 / 2
+    a4 = 2.5 * a2
+    a5 = a1 + a3
+    a6 = 1 - e2
 
-    lat = np.arctan2((z + ep**2 * b * np.sin(th)**3),(p - e**2 * a * np.cos(th)**3))
+    def ecef_to_lla(ecef):
+        """Convert ECEF (meters) to LLA (radians and meters).
+        """
+        # Olson, D. K., Converting Earth-Centered, Earth-Fixed Coordinates to
+        # Geodetic Coordinates, IEEE Transactions on Aerospace and Electronic
+        # Systems, 32 (1996) 473-476.
+        w = math.sqrt(ecef[0] * ecef[0] + ecef[1] * ecef[1])
+        z = ecef[2]
+        zp = abs(z)
+        w2 = w * w
+        r2 = z * z + w2
+        r  = math.sqrt(r2)
+        s2 = z * z / r2
+        c2 = w2 / r2
+        u = a2 / r
+        v = a3 - a4 / r
+        if c2 > 0.3:
+            s = (zp / r) * (1 + c2 * (a1 + u + s2 * v) / r)
+            lat = math.asin(s)
+            ss = s * s
+            c = math.sqrt(1 - ss)
+        else:
+            c = (w / r) * (1 - s2 * (a5 - u - c2 * v) / r)
+            lat = math.acos(c)
+            ss = 1 - c * c
+            s = math.sqrt(ss)
+        g = 1 - e2 * ss
+        rg = a / math.sqrt(g)
+        rf = a6 * rg
+        u = w - rg * c
+        v = zp - rf * s
+        f = c * u + s * v
+        m = c * v - s * u
+        p = m / (rf / g + f)
+        lat = lat + p
+        if z < 0:
+            lat = -lat
 
-    N = a/np.sqrt(1 - e**2*np.sin(lat)**2)
-    alt = p/np.cos(lat) - N
-    lla = np.array([lat*180/np.pi, lon*180/np.pi, alt])
-
-    return lla
-
-
-
-
+        lat = 180./np.pi * lat
+        lon = 180./np.pi * math.atan2(ecef[1], ecef[0])
+        if lon < 0.0:
+            lon += 360.
+        alt = f + m * p / 2
+        return np.array([lat, lon, alt])
+    
+    return ecef_to_lla(ecef_xyz)
 
 def wgs84_to_ecef(latlonalt):
     '''
