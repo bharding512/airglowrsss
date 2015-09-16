@@ -108,7 +108,8 @@ def GetLocation(SITE,DIRECTION,ALT=250.):
     return latlonalt
 
 def GetLevel1(dn, instr_name):
-    stub = '/rdata/airglow/fpi/results'
+    # Temporary change for newNPZ
+    stub = '/rdata/airglow/fpi/results/old_delete_me'
     site_name = fpiinfo.get_site_of(instr_name, dn)
     f = '%s/%s_%s_%4i%02d%02d.npz' \
             % (stub, instr_name, site_name.lower(), dn.year, dn.month, dn.day)
