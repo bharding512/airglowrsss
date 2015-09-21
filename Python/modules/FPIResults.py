@@ -293,9 +293,10 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True):
                 for zelda in range(len(r1.t1)):
                     # If the kp is in the specified range
                     try:
-                        kpi = _pyglow.Point(r1.t1[zelda],0,0,0).kp
+                        pt = _pyglow.Point(r1.t1[zelda],0,0,0)
+                        kpi = pt.kp
                     except:
-                        kpi = KP[0]
+                        kpi = 999.9 
                     if KP[0]<= kpi <=KP[1]:
                         bin = _np.floor(_np.mod((r1.t1[zelda].astimezone(_utc).replace(tzinfo=None)-arbdate).total_seconds(),60*60*24)/(60*24*60/b_len))
                         # If the data exists
@@ -468,7 +469,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis'):
         
         
 
-def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan],DLIST=[],YLIST=[],KP=[0,10],CV=True,MOON=[True,True]):
+def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan],DLIST=[],YLIST=[],KP=[0,10],CV=True):
     '''
     Summary:
         Returns filted and binned data over one month.
@@ -483,7 +484,6 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         YLIST = list of years in year [default = [] - only YEAR used]
         KP = limits of kp for filtering days [default = [0,10] - all kp used]
         CV = use CV modes [default = True]
-        MOON = list of 2: use moondown days, use moonup days [default = [True,True]]
 
     Outputs:
         DATA = dictionary of data whose keys are Zonal, Meridional, or Temp 
@@ -503,7 +503,6 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     d = _BinnedData(dn,SITE)
     d.t = times
     d.key = '{0:%B}'.format(dn, "month")
-    d.moonup = MOON
     
     # Get Empty 
     dim = 31*5*10
@@ -521,6 +520,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     TeData = _np.empty((b_len,dim))*_np.nan
     iData = _np.empty((b_len,dim))*_np.nan
     ieData = _np.empty((b_len,dim))*_np.nan
+    F107 = _np.empty((dim))*_np.nan
     count = 0
     mflag = False
     oscar = []
@@ -563,16 +563,22 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
             if 'hwm' in s:
                 DD = GetModels(SITELLA,YEAR,doy,s)
                 mflag = True
-                # Models don't care about moonup/down issue so don't need moon code
+
+                # get F107 weighted at midnight of data (assume constant for night)
+                point = _pyglow.Point(DD.dn,0,0,250)
+                F107[count] = (point.f107 + point.f107a)/2.
+
             else:
                 DD = BinDailyData(s,yr,doy,SPLIT,KP,CV)
-                if (not(DD.moonup) and MOON[0]) or (DD.moonup and MOON[1]):
-                    mflag = False
-                    cards += DD.cards
-                    cvs += DD.cvs
-                    bads += DD.bads
-                else:
-                    continue
+                mflag = False
+                cards += DD.cards
+                cvs += DD.cvs
+                bads += DD.bads
+
+                # get F107 weighted at midnight of data (assume constant for night)
+                point = _pyglow.Point(DD.dn,0,0,250)
+                F107[count] = (point.f107 + point.f107a)/2.*(DD.cards+DD.cvs)
+
             # Undo shift for easy averaging
             DD.doabarrelroll()
             # Debug, Overplot all Horizontal winds.
@@ -586,6 +592,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
                 lat.append(DD.lla[0])
                 lon.append(DD.lla[1])
                 alt.append(DD.lla[2])
+            # Add data
             if len(DD.u) > 0:
                 uData[:,count] = DD.u
                 ueData[:,count] = DD.ue
@@ -607,6 +614,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
             if SPLIT and not(mflag) and len(DD.v2) > 0:
                 v2Data[:,count] = DD.v2
                 v2eData[:,count] = DD.v2e
+
             count += 1
     
     # Get count of days used in each bin
@@ -693,6 +701,11 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         u2D,u2De,u2V,u2Ve,u2V2,u2U = WeightedAverage(u2Data,u2eData,u2count,test=True)
         # Meridional2 - South
         v2D,v2De,v2V,v2Ve,v2V2,v2U = WeightedAverage(v2Data,v2eData,v2count,test=True)
+    # F107
+    if 'hwm' in SITE:
+        d.f107 = _np.nanmean(F107)
+    else:
+        d.f107 = _np.nansum(F107)/(cards+cvs)
     
     # Save Averages
     d.lla = _np.array([_np.nanmean(lat),_np.nanmean(lon),_np.nanmean(alt)])
@@ -767,7 +780,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
 
 
 
-def PlotClimatology(SITE,YEAR,MONTHSTART,NMONTHS=12,SPLIT=False,KP=[0,10],UT=True):
+def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=True):
     '''
     Summary:
         Plots monthly averages in a 2x6 month plot
@@ -775,11 +788,11 @@ def PlotClimatology(SITE,YEAR,MONTHSTART,NMONTHS=12,SPLIT=False,KP=[0,10],UT=Tru
     Inputs:
         SITE = sites of interest, e.g. 'UAO'
         YEAR = year, e.g. 2013
-        MONTHSTART = month to start yearly climatology, e.g. 4
-        NMONTHS = number of months e.g. 12
+        MONTHSTART = month to start yearly climatology [default = 1 - Jan]
+        NMONTHS = number of months desired from MONTHSTART [default = 12]
         SPLIT = Split look directions in binning [default = False]
         KP = Filter days by KP [default = [0,10] - all kp]
-        UT = Plot in UT [default = True]
+        UT = Plot in UT or SLT [default = True]
 
     Outputs:
 
@@ -790,7 +803,21 @@ def PlotClimatology(SITE,YEAR,MONTHSTART,NMONTHS=12,SPLIT=False,KP=[0,10],UT=Tru
     
     # Set up Figures
     axlim = 0
+    _mpl.rcParams.update({'font.size':9})
+    _mpl.rcParams['savefig.dpi'] = 300
+    _mpl.rcParams['figure.figsize'] = (6,4)
     
+    # Get UT offset if SLT needed
+    ut_offset = 0
+    if not(UT):
+        if SITE == 'renoir':
+            ut_offset = - _dt.timedelta(hours=2,minutes=12).total_seconds()
+        else:
+            try:
+                ut_offset = _fpiinfo.get_site_info(SITE)['Location'][1]/360.*(24*60*60)
+            except:
+                print 'No UT/LT conversion... Plots lie! Actually in UT'
+
     # Get Monthly Average for basis
     dn = _dt.datetime(YEAR,MONTHSTART,1)
     if SPLIT and NMONTHS > 12:
@@ -807,18 +834,9 @@ def PlotClimatology(SITE,YEAR,MONTHSTART,NMONTHS=12,SPLIT=False,KP=[0,10],UT=Tru
             
         MD = BinMonthlyData(SITE,year,month,SPLIT,KP)
         tlim = [MD.t[len(MD.t)/5],MD.t[-len(MD.t)/5]]
+        MD.t  = MD.t + _dt.timedelta(seconds=ut_offset)
         MD.t2 = MD.t + _dt.timedelta(minutes=3)
         gflag = 'on'
-        if not(UT):
-            # FIX THIS TO BE UNIVERSAL OR DELETE LATER...
-            if SITE == 'mor':
-                MD.t = MD.t - _dt.timedelta(minutes=31)
-            elif SITE == 'par':
-                MD.t = MD.t - _dt.timedelta(hours=5,minutes=31)
-            elif SITE == 'renoir':
-                MD.t = MD.t - _dt.timedelta(hours=2,minutes=12)
-            else:
-                print 'No UT/LT conversion... in UT'
         
         ## Subplot data
         tits = ['Zonal Wind','Meridional Wind','Veritcal Wind','Temperature']
@@ -899,8 +917,10 @@ def PlotClimatology(SITE,YEAR,MONTHSTART,NMONTHS=12,SPLIT=False,KP=[0,10],UT=Tru
         
     for i in range(4):
         fig = _plt.figure(i)
-        fig.suptitle("Average %s %s" % (SITE, tits[i]), fontsize=16, fontweight='bold')
+        fig.suptitle("Average %s %s" % (SITE.upper(), tits[i]), fontsize=16, fontweight='bold')
         _plt.subplots_adjust(hspace = 0.001)
+        _plt.subplots_adjust(wspace = 0.320)
+        _plt.subplots_adjust(left   = 0.140)
         if UT:
             fig.text(0.5,0.05,'Hour [UTC]',ha='center',va='center', fontsize=14)
         else:
@@ -914,7 +934,7 @@ def PlotClimatology(SITE,YEAR,MONTHSTART,NMONTHS=12,SPLIT=False,KP=[0,10],UT=Tru
         
 
     
-def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False):
+def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True):
     '''
     Summary:
         Plots single site monthly averages w/ models
@@ -925,16 +945,24 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False):
         MONTH = month to plot, e.g. 4
         MODEL = list of model keys to plot with data [default is empty]
         SPLIT = Split look directions in binning [default = False]
+        KP = Filter days by KP [default = [0,10] - all kp]
+        UT = Plot in UT or SLT [default = True]
 
     History:
         5/8/14 -- Written by DJF (dfisher2@illinois.edu)
     '''
 
+    # Get UT offset if SLT needed
+    ut_offset = 0
+    if not(UT):
+        ut_offset = _fpiinfo.get_site_info(SITE)['Location'][1]/360.*(24*60*60)
+        
     # Get Monthly Average for basis
-    MD = BinMonthlyData(SITE,YEAR,MONTH,SPLIT)
+    MD = BinMonthlyData(SITE,YEAR,MONTH,SPLIT,KP)
     mon = _cal.month_name[MONTH]
-    MD.t2 = MD.t + _dt.timedelta(minutes=3)
-    
+    MD.t  = MD.t + _dt.timedelta(seconds=ut_offset)
+    MD.t2 = MD.t + _dt.timedelta(minutes=3) 
+
     # Get models
     tm = {}; Tm = {}; Tem = {}; Um = {}; Uem = {}; Vm = {}; Vem = {}; Wm = {}; Wem = {};
     if isinstance(MODEL, str):
@@ -943,7 +971,9 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False):
         if _np.nan in MD.lla:
             break
         MM = BinMonthlyData(m,YEAR,MONTH,SPLIT,SITELLA=MD.lla)
-        tm[m] = MM.t + _dt.timedelta(minutes=3*(nm+2))
+        tm[m] = MM.t + _dt.timedelta(minutes=3*(nm+2)) + _dt.timedelta(seconds=ut_offset)
+        if not(UT):
+            tm[m] = tm[m] + _dt.timedelta
         Tm[m] = MM.T
         Tem[m] = MM.Tv
         Um[m] = MM.u
@@ -980,7 +1010,10 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False):
     _plt.xlim([MD.t[tstart],MD.t[tend]])
     ax.xaxis.set_major_formatter(_md.DateFormatter('%H'))
     _plt.ylabel('Temperature [K]')
-    _plt.xlabel('Time [UT]')
+    if UT:
+        _plt.xlabel('Time [UT]')
+    else:
+        _plt.xlabel('Time [SLT]')
     _plt.title('%04i %s Average Temperatures at %s' % (YEAR,mon,name))
     _plt.legend()
     _plt.grid()
@@ -1008,7 +1041,10 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False):
     _plt.xlim([MD.t[tstart],MD.t[tend]])
     ax.xaxis.set_major_formatter(_md.DateFormatter('%H'))
     _plt.ylabel('Wind Speed [m/s]')
-    _plt.xlabel('Time [UT]')
+    if UT:
+        _plt.xlabel('Time [UT]')
+    else:
+        _plt.xlabel('Time [SLT]')
     _plt.title('%04i %s Average Zonal Winds at %s' % (YEAR,mon,name))
     _plt.legend()
     _plt.grid()
@@ -1036,14 +1072,16 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False):
     _plt.xlim([MD.t[tstart],MD.t[tend]])
     ax.xaxis.set_major_formatter(_md.DateFormatter('%H'))
     _plt.ylabel('Wind Speed [m/s]')
-    _plt.xlabel('Time [UT]')
+    if UT:
+        _plt.xlabel('Time [UT]')
+    else:
+        _plt.xlabel('Time [SLT]')
     _plt.title('%04i %s Average Meridional Winds at %s' % (YEAR,mon,name))
     _plt.legend()
     _plt.grid()
     _plt.draw(); #_plt.show()
     _plt.savefig('%s%s_%04d-%s_meridional_winds.png' % (dirout,SITE,YEAR,mon))
     
-    '''
     # Winds Figure Vertical
     fig = _plt.figure(3,figsize=(10,6)); _plt.clf()
     ax = fig.add_subplot(1,1,1)
@@ -1054,19 +1092,21 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False):
             cap.set_markeredgewidth(markerwide)
     for cap in caps1:
         cap.set_markeredgewidth(markerwide)
-    _plt.plot([t[0],t[-1]],[0,0],'k--')
-    _plt.ylim([-200,200])
+    _plt.plot([MD.t[0],MD.t[-1]],[0,0],'k--')
+    _plt.ylim([-75,75])
     _plt.xlim([MD.t[tstart],MD.t[tend]])
     ax.xaxis.set_major_formatter(_md.DateFormatter('%H'))
     _plt.ylabel('Wind Speed [m/s]')
-    _plt.xlabel('Time [UT]')
+    if UT:
+        _plt.xlabel('Time [UT]')
+    else:
+        _plt.xlabel('Time [SLT]')
     _plt.title('%04i %s Average Vertical Winds at %s' % (YEAR,mon,name))
     _plt.legend()
     _plt.grid()
     _plt.draw(); #_plt.show()
     _plt.savefig('%s%s_%04d-%s_vertical_winds.png' % (dirout,SITE,YEAR,mon))
-    '''
-
+    
 
 
 def PlotSpaghetti(SITE,YEAR,MONTH,SPLIT=False,LIST=[],CV=False,KP=[0,10]):
@@ -1984,6 +2024,9 @@ class _BinnedData:
             self.wv   = _np.roll(self.wv ,roll)
             self.wve  = _np.roll(self.wve,roll)
             self.wc   = _np.roll(self.wc ,roll)
+            self.iv   = _np.roll(self.iv ,roll)
+            self.ive  = _np.roll(self.ive,roll)
+            self.ic   = _np.roll(self.ic ,roll)
         if 'u2' in ship:
             self.u2   = _np.roll(self.u2 ,roll)
             self.u2e  = _np.roll(self.u2e,roll)
@@ -2001,10 +2044,12 @@ class _BinnedData:
             self.Tu  = _np.roll(self.Tu ,roll)
             self.vu  = _np.roll(self.vu ,roll)
             self.wu  = _np.roll(self.wu ,roll)
+            self.iu  = _np.roll(self.iu ,roll)
             self.uv2 = _np.roll(self.uv2,roll)
             self.Tv2 = _np.roll(self.Tv2,roll)
             self.vv2 = _np.roll(self.vv2,roll)
             self.wv2 = _np.roll(self.wv2,roll)
+            self.iv2 = _np.roll(self.iv2,roll)
         if 'u2u' in ship:
             self.u2u = _np.roll(self.u2u,roll)
             self.v2u = _np.roll(self.v2u,roll)
