@@ -803,9 +803,28 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
     
     # Set up Figures
     axlim = 0
-    _mpl.rcParams.update({'font.size':9})
+    _mpl.rcParams.update({'font.size':8})
     _mpl.rcParams['savefig.dpi'] = 300
     _mpl.rcParams['figure.figsize'] = (6,4)
+    _plt.figure(0)
+    axz={};fz,((axz[0],axz[1]),(axz[2],axz[3]),(axz[4],axz[5]), \
+               (axz[6],axz[7]),(axz[8],axz[9]),(axz[10],axz[11]))  \
+               = _plt.subplots(6,2, sharex=True, sharey=False)
+    _plt.figure(1)
+    axm={};fm,((axm[0],axm[1]),(axm[2],axm[3]),(axm[4],axm[5]), \
+               (axm[6],axm[7]),(axm[8],axm[9]),(axm[10],axm[11])) \
+               = _plt.subplots(6,2, sharex=True, sharey=False)
+    _plt.figure(2)
+    axv={};fv,((axv[0],axv[1]),(axv[2],axv[3]),(axv[4],axv[5]), \
+               (axv[6],axv[7]),(axv[8],axv[9]),(axv[10],axv[11])) \
+               = _plt.subplots(6,2, sharex=True, sharey=False)
+    _plt.figure(3)
+    axt={};ft,((axt[0],axt[1]),(axt[2],axt[3]),(axt[4],axt[5]), \
+               (axt[6],axt[7]),(axt[8],axt[9]),(axt[10],axt[11])) \
+               = _plt.subplots(6,2, sharex=True, sharey=False)
+    csize = 0.0001
+    lwide = 2
+    msize = 3
     
     # Get UT offset if SLT needed
     ut_offset = 0
@@ -843,94 +862,70 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         xlabs = ['Wind Speed [m/s]','Wind Speed [m/s]','Wind Speed [m/s]','Temperature [K]']
         title = ['Clima-Z','Clima-M','Clima-V','Clima-T']
         #years  = [2009, 2010, 2011, 2012, 2013, 2014, 2015]
-        colors = ['r.-','b.-','g.-','m.-','c.-','y.-','k.-']
+        colors = ['r.-','b.-','g.-','m.-','c.-','y.-','k.-','rs-','bs-','gs-','ms-','cs-','ys-','ks-']
         colors2= ['ro-','bo-','go-','mo-']
         markerwide = 0
         
         # Zonal
-        _plt.figure(0)
-        p = _plt.subplot(6,2,nsp+1)
-        #_plt.ylabel("%s %4.0f" % (_cal.month_abbr[month], year))
-        _plt.ylabel("%s" % (_cal.month_abbr[month]),labelpad=2)
-        _plt.ylim(-50, 150)
-        _plt.xlim(tlim)
-        p.xaxis.set_visible(False)
-        _plt.yticks([-50, 0, 50, 100])
+        # ylabel("%s %4.0f" % (_cal.month_abbr[month], year))
+        axz[nsp].set_ylabel("%s" % (_cal.month_abbr[month]),labelpad=2)
+        axz[nsp].set_ylim(-50, 150)
+        axz[nsp].set_xlim(tlim)
+        axz[nsp].set_yticks([0, 50, 100])  #[-50, 0, 50, 100]
         if SPLIT:
-            (_, caps1, _) = _plt.errorbar(MD.t,MD.u,yerr=MD.uv,fmt=colors2[2],linewidth=2,elinewidth=2,label='East') 
-            (_, caps3, _) = _plt.errorbar(MD.t2,MD.u2,yerr=MD.u2v,fmt=colors2[3],linewidth=2,elinewidth=2,label='West')
-            for cap in caps3:
-                cap.set_markeredgewidth(markerwide)
+            axz[nsp].errorbar(MD.t,MD.u,yerr=MD.uv,fmt=colors2[2],linewidth=lwide,elinewidth=lwide,capsize=csize,markersize=msize,label='East') 
+            axz[nsp].errorbar(MD.t2,MD.u2,yerr=MD.u2v,fmt=colors2[3],linewidth=lwide,elinewidth=lwide,capsize=csize,markersize=msize,label='West')
         else:
-            (_, caps1, _) = _plt.errorbar(MD.t+_dt.timedelta(minutes=3*(year-YEAR)),MD.u,yerr=MD.uv,fmt=colors[year-YEAR],linewidth=2,elinewidth=2,label='Data')
-        for cap in caps1:
-            cap.set_markeredgewidth(markerwide)
-        p.grid(gflag)
-        _plt.plot([MD.t[0],MD.t[-1]],[0,0],'k--')
+            axz[nsp].errorbar(MD.t+_dt.timedelta(minutes=3*(year-YEAR)),MD.u,yerr=MD.uv,fmt=colors[year-YEAR],linewidth=lwide,elinewidth=lwide,capsize=csize,markersize=msize,label='Data')
+        axz[nsp].grid(gflag)
+        axz[nsp].plot([MD.t[0],MD.t[-1]],[0,0],'k--',label=None)
 
         # Meridional
-        _plt.figure(1)
-        p = _plt.subplot(6,2,nsp+1)
-        #_plt.ylabel("%s %4.0f" % (_cal.month_abbr[month], year))
-        _plt.ylabel("%s" % (_cal.month_abbr[month]),labelpad=2)
-        _plt.ylim(-100, 100)
-        _plt.xlim(tlim)
-        p.xaxis.set_visible(False)
-        _plt.yticks([ -50, 0, 50])
+        axm[nsp].set_ylabel("%s" % (_cal.month_abbr[month]),labelpad=2) #"%s %4.0f" % (_cal.month_abbr[month], year)
+        axm[nsp].set_ylim(-100, 100)
+        axm[nsp].set_xlim(tlim)
+        axm[nsp].set_yticks([-50, 0, 50])
         if SPLIT:
-            (_, caps1, _) = _plt.errorbar(MD.t,MD.v,yerr=MD.vv,fmt=colors2[0],linewidth=2,elinewidth=2,label='East') 
-            (_, caps3, _) = _plt.errorbar(MD.t2,MD.v2,yerr=MD.v2v,fmt=colors2[1],linewidth=2,elinewidth=2,label='West')
-            for cap in caps3:
-                cap.set_markeredgewidth(markerwide)
+            axm[nsp].errorbar(MD.t,MD.v,yerr=MD.vv,fmt=colors2[0],linewidth=lwide,elinewidth=lwide,capsize=csize,markersize=msize,label='North') 
+            axm[nsp].errorbar(MD.t2,MD.v2,yerr=MD.v2v,fmt=colors2[1],linewidth=lwide,elinewidth=lwide,capsize=csize,markersize=msize,label='South')
         else:
-            (_, caps1, _) = _plt.errorbar(MD.t+_dt.timedelta(minutes=3*(year-YEAR)),MD.v,yerr=MD.vv,fmt=colors[year-YEAR],linewidth=2,elinewidth=2,label='Data')
-        for cap in caps1:
-            cap.set_markeredgewidth(markerwide)
-        p.grid(gflag)
-        _plt.plot([MD.t[0],MD.t[-1]],[0,0],'k--',label=None)
+            axm[nsp].errorbar(MD.t+_dt.timedelta(minutes=3*(year-YEAR)),MD.v,yerr=MD.vv,fmt=colors[year-YEAR],linewidth=lwide,elinewidth=lwide,capsize=csize,markersize=msize,label='Data')
+        axm[nsp].grid(gflag)
+        axm[nsp].plot([MD.t[0],MD.t[-1]],[0,0],'k--',label=None)
         
         # Vertical
-        _plt.figure(2)
-        p = _plt.subplot(6,2,nsp+1)
-        #_plt.ylabel("%s %4.0f" % (_cal.month_abbr[month], year))
-        _plt.ylabel("%s" % (_cal.month_abbr[month]),labelpad=2)
-        _plt.ylim(-75, 75)
-        _plt.xlim(tlim)
-        p.xaxis.set_visible(False)
-        _plt.yticks([ -25, 0, 25])
-        p.grid(gflag)
-        _plt.errorbar(MD.t+_dt.timedelta(minutes=3*(year-YEAR)),MD.w,yerr=MD.wv,fmt=colors[year-YEAR],linewidth=2,elinewidth=2)
-        _plt.plot([MD.t[0],MD.t[-1]],[0,0],'k--',label=None)
-
+        axv[nsp].set_ylabel("%s" % (_cal.month_abbr[month]),labelpad=2)
+        axv[nsp].set_ylim(-75, 75)
+        axv[nsp].set_xlim(tlim)
+        axv[nsp].set_yticks([-25, 0, 25])
+        axv[nsp].errorbar(MD.t+_dt.timedelta(minutes=3*(year-YEAR)),MD.w,yerr=MD.wv,fmt=colors[year-YEAR],linewidth=lwide,elinewidth=lwide,capsize=csize,markersize=msize,label='Data')
+        axv[nsp].grid(gflag)
+        axv[nsp].plot([MD.t[0],MD.t[-1]],[0,0],'k--',label=None)
         
         # Temps
-        _plt.figure(3)
-        p = _plt.subplot(6,2,nsp+1)
-        #_plt.ylabel("%s %4.0f" % (_cal.month_abbr[month], year))
-        _plt.ylabel("%s" % (_cal.month_abbr[month]),labelpad=2)
-        _plt.ylim(600, 1200)
-        _plt.xlim(tlim)
-        p.xaxis.set_visible(False)
-        _plt.yticks([700, 800, 900, 1000, 1100])
-        p.grid(gflag)
-        _plt.errorbar(MD.t+_dt.timedelta(minutes=3*(year-YEAR)),MD.T,yerr=MD.Tv,fmt=colors[year-YEAR],linewidth=2,elinewidth=2)
-        
-    for i in range(4):
-        fig = _plt.figure(i)
-        fig.suptitle("Average %s %s" % (SITE.upper(), tits[i]), fontsize=16, fontweight='bold')
-        _plt.subplots_adjust(hspace = 0.001)
-        _plt.subplots_adjust(wspace = 0.320)
-        _plt.subplots_adjust(left   = 0.140)
+        axt[nsp].set_ylabel("%s" % (_cal.month_abbr[month]),labelpad=2)
+        axt[nsp].set_ylim(600, 1200)
+        axt[nsp].set_xlim(tlim)
+        axt[nsp].set_yticks([700, 800, 900, 1000, 1100])
+        axt[nsp].grid(gflag)
+        axt[nsp].errorbar(MD.t+_dt.timedelta(minutes=3*(year-YEAR)),MD.T,yerr=MD.Tv,fmt=colors[year-YEAR],linewidth=lwide,elinewidth=lwide,capsize=csize,markersize=msize)
+    
+    # Finalize Plots
+        axz[0].xaxis.set_major_formatter(_md.DateFormatter('%H')) # :%M
+        axm[0].xaxis.set_major_formatter(_md.DateFormatter('%H')) 
+        axv[0].xaxis.set_major_formatter(_md.DateFormatter('%H')) 
+        axt[0].xaxis.set_major_formatter(_md.DateFormatter('%H')) 
+    for i,f in enumerate([fz,fm,fv,ft]):
+        f.suptitle("Average %s %s" % (SITE.upper(), tits[i]), fontsize=16, fontweight='bold')
+        f.subplots_adjust(hspace = 0.001)
+        f.subplots_adjust(wspace = 0.320)
+        f.subplots_adjust(left   = 0.140)
         if UT:
-            fig.text(0.5,0.05,'Hour [UTC]',ha='center',va='center', fontsize=14)
+            f.text(0.5,0.05,'Hour [UTC]',ha='center',va='center', fontsize=13)
         else:
-            fig.text(0.5,0.05,'Hour [SLT]',ha='center',va='center', fontsize=14)
-        fig.text(0.05,0.5,xlabs[i],ha='center',va='center',rotation='vertical', fontsize=14)
-        p1 = _plt.subplot(6,2,11)
-        p2 = _plt.subplot(6,2,12)
-        p1.xaxis.set_major_formatter(_md.DateFormatter('%H')) # :%M
-        p2.xaxis.set_major_formatter(_md.DateFormatter('%H'))
-        fig.savefig("%s%s-%4.0f-%s.eps" % (dirout,title[i],YEAR,SITE))
+            f.text(0.5,0.05,'Hour [SLT]',ha='center',va='center', fontsize=13)
+        f.text(0.05,0.5,xlabs[i],ha='center',va='center',rotation='vertical', fontsize=14)
+        #fig.savefig("%s%s-%4.0f-%s.eps" % (dirout,title[i],YEAR,SITE))
         
 
     
@@ -987,7 +982,7 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True):
     tstart = _np.where(_np.isnan(MD.T[:-1])*_np.isfinite(MD.T[1:]))[0][0]-1
     tend   = _np.where(_np.isfinite(MD.T[:-1])*_np.isnan(MD.T[1:]))[0][0]+1
 
-    color = ['r--','g--']
+    color = ['r--','g--','m--','y--']
     markerwide = 0
     try:
         name = _fpiinfo.get_site_info(SITE)['Name']
@@ -1018,14 +1013,14 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True):
     _plt.legend()
     _plt.grid()
     _plt.draw();# _plt.show()
-    _plt.savefig('%s%s_%04d-%s_temps.png' % (dirout,SITE,YEAR,mon))
+    #_plt.savefig('%s%s_%04d-%s_temps.png' % (dirout,SITE,YEAR,mon))
     
     # Winds Figure Zonal
     fig = _plt.figure(1,figsize=(10,6)); _plt.clf()
     ax = fig.add_subplot(1,1,1)
     if SPLIT:
         (_, caps1, _) = _plt.errorbar(MD.t,MD.u,yerr=MD.uv,fmt='b-',label='East')
-        (_, caps3, _) = _plt.errorbar(MD.t2,MD.u2,yerr=MD.u2v,fmt='m-',label='West')
+        (_, caps3, _) = _plt.errorbar(MD.t2,MD.u2,yerr=MD.u2v,fmt='c-',label='West')
         for cap in caps3:
             cap.set_markeredgewidth(markerwide)
     else:
@@ -1056,7 +1051,7 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True):
     ax = fig.add_subplot(1,1,1)
     if SPLIT:
         (_, caps1, _) = _plt.errorbar(MD.t,MD.v,yerr=MD.vv,fmt='b-',label='North')
-        (_, caps3, _) = _plt.errorbar(MD.t2,MD.v2,yerr=MD.v2v,fmt='m-',label='South')
+        (_, caps3, _) = _plt.errorbar(MD.t2,MD.v2,yerr=MD.v2v,fmt='c-',label='South')
         for cap in caps3:
             cap.set_markeredgewidth(markerwide)
     else:
@@ -1080,7 +1075,7 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True):
     _plt.legend()
     _plt.grid()
     _plt.draw(); #_plt.show()
-    _plt.savefig('%s%s_%04d-%s_meridional_winds.png' % (dirout,SITE,YEAR,mon))
+    #_plt.savefig('%s%s_%04d-%s_meridional_winds.png' % (dirout,SITE,YEAR,mon))
     
     # Winds Figure Vertical
     fig = _plt.figure(3,figsize=(10,6)); _plt.clf()
@@ -1105,7 +1100,7 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True):
     _plt.legend()
     _plt.grid()
     _plt.draw(); #_plt.show()
-    _plt.savefig('%s%s_%04d-%s_vertical_winds.png' % (dirout,SITE,YEAR,mon))
+    #_plt.savefig('%s%s_%04d-%s_vertical_winds.png' % (dirout,SITE,YEAR,mon))
     
 
 

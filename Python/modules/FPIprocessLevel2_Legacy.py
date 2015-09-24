@@ -108,8 +108,7 @@ def GetLocation(SITE,DIRECTION,ALT=250.):
     return latlonalt
 
 def GetLevel1(dn, instr_name):
-    # Temporary change for newNPZ
-    stub = '/rdata/airglow/fpi/results/old_delete_me'
+    stub = '/rdata/airglow/fpi/results'
     site_name = fpiinfo.get_site_of(instr_name, dn)
     f = '%s/%s_%s_%4i%02d%02d.npz' \
             % (stub, instr_name, site_name.lower(), dn.year, dn.month, dn.day)
@@ -230,14 +229,14 @@ class Level1:
             return
 
         # fill in dictionaries with directions as keys:
-        for (kk, (t, direction, los, sigma, fit, cal, T, Te, zenith, azimuth, i, ie, b, be, fw, fT)) \
+        for (kk, (t, direction, los, sigma, fit, cal, T, Te, zenith, azimuth, i, ie, it, b, be, fw, fT)) \
                 in enumerate(zip( \
                 self.r['sky_times'], self.r['direction'], \
                 self.r['LOSwind'], self.r['sigma_LOSwind'], \
                 self.r['sigma_fit_LOSwind'], self.r['sigma_cal_LOSwind'], \
                 self.r['T'], self.r['sigma_T'], \
                 self.r['ze'], self.r['az'], \
-                self.r['skyI'], self.r['sigma_skyI'], \
+                self.r['skyI'], self.r['sigma_skyI'], self.r['sky_intT'],\
                 self.r['ccdB'], self.r['sigma_ccdB'], \
                 self.r['wind_quality_flag'], self.r['temp_quality_flag'] \
                 )):
@@ -251,7 +250,7 @@ class Level1:
             self.Te[direction].append( Te )
             self.zenith[direction].append( zenith )
             self.azimuth[direction].append( azimuth )
-            self.i[direction].append( i )
+            self.i[direction].append( i / it )
             self.ie[direction].append( ie )
             self.b[direction].append( b )
             self.be[direction].append( be )
@@ -613,7 +612,7 @@ class Level1:
 
         
 
-            
+# Note iw,iwe,iwef,iwec are never used in L2       
 class Level2:
     def __init__(self, dn):
         import numpy as np
