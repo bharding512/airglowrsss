@@ -24,11 +24,9 @@ History
 -------
 3/20/13 -- Written by DJF (dfisher2@illinois.edu)
 '''
-
 import matplotlib as _mpl
 import matplotlib.dates as _md
 import matplotlib.pyplot as _plt
-#matplotlib.use('AGG')
 from pyglow import pyglow as _pyglow
 import datetime as _dt
 import calendar as _cal
@@ -69,24 +67,31 @@ SetBinTime(30)
 
 
 
-def FilterData(DATA):
+def FilterData(DATA,QF=1):
     '''
     Summary:
         Returns filters single input day.
 
     Inputs:
         DATA = The data object
+        QF = Quality Flags [default = 1], can pass vector of flag,wind_uncertainty_limit,temp_uncertainty_limit, or just single digit for flag 
 
     History:
         3/20/13 -- Written by DJF (dfisher2@illinois.edu)
 
     '''
-    #winderrorlimit = 50.
-    #temperrorlimit = 100.
-    calerrorlimit = 300.
-    cloudlimit = 2
-    winderrorlimit = 25.
-    temperrorlimit = 50.
+    try:
+        # Check for 3 vector of flags
+        if len(QF) == 3:
+            qualitylimit   = QF[0]+1 
+            winderrorlimit = QF[1]
+            temperrorlimit = QF[2]
+    except:
+        # Set default flag limits
+        qualitylimit = QF+1 
+        winderrorlimit = 25.
+        temperrorlimit = 50.
+    calerrorlimit = 300.  # TODO is this incorperated in QF yet???
 
     lim = {'Tmax':1400.,'Tmin':600.,'Te':temperrorlimit, \
            'umax':250.,'umin':-250.,'uef':winderrorlimit, 'uec':calerrorlimit,\
@@ -108,10 +113,10 @@ def FilterData(DATA):
             ind1 = range(len(r1.t1))
             alld = len(ind1)
 
-            # Filter using flags TODO: Fix with BJH
+            # Filter using flags 
             if len(r1.flag_T) >= 1:
-                ind1 = _np.delete(ind1, _np.where(r1.flag_T[ind1] >= cloudlimit))
-                ind1 = _np.delete(ind1, _np.where(r1.flag_wind[ind1] >= cloudlimit))
+                ind1 = _np.delete(ind1, _np.where(r1.flag_T[ind1] >= qualitylimit))
+                ind1 = _np.delete(ind1, _np.where(r1.flag_wind[ind1] >= qualitylimit))
 
             # Bad Data Filtering Temps
             if len(r1.T) >= 1:
@@ -201,7 +206,7 @@ def WeightedAverage(VAL,STD,CNT=None,AXIS=0,test=False):
     
     
 
-def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True):
+def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
     '''
     Summary:
         Returns filted and binned single data for a single instrument over one night.
@@ -213,6 +218,7 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True):
         SPLIT = Split look directions in binning [default = False]
         KP = Filter days by KP [default = [0,10] - all kp]
         CV = Include CV directions [default = True]
+        QF = Quality Flag Limit Allowed [default = 1]
 
     Outputs:
         DATA = Object with winds, Temps, and more
@@ -237,7 +243,7 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True):
         sites = [SITE.lower()]
         project = _fpiinfo.get_site_info(sites[0])['Network']
     data = L2.GetLevel2(project,dn)
-    bc = FilterData(data)
+    bc = FilterData(data,QF)
     
     # Get Empty
     d = _BinnedData(dn,SITE)
@@ -292,12 +298,9 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True):
                 # For the total number of exposures (time)
                 for zelda in range(len(r1.t1)):
                     # If the kp is in the specified range
-                    try:
-                        pt = _pyglow.Point(r1.t1[zelda],0,0,0)
-                        kpi = pt.kp
-                    except:
-                        kpi = 999.9 
-                    if KP[0]<= kpi <=KP[1]:
+                    pt = _pyglow.Point(r1.t1[zelda],0,0,0)
+                    kpi = pt.kp
+                    if KP[0]<= kpi <=KP[1] or _np.isnan(kpi):
                         bin = _np.floor(_np.mod((r1.t1[zelda].astimezone(_utc).replace(tzinfo=None)-arbdate).total_seconds(),60*60*24)/(60*24*60/b_len))
                         # If the data exists
                         if len(r1.u) > 0:
@@ -469,7 +472,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis'):
         
         
 
-def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan],DLIST=[],YLIST=[],KP=[0,10],CV=True):
+def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan],DLIST=[],YLIST=[],KP=[0,10],CV=True,QF=1):
     '''
     Summary:
         Returns filted and binned data over one month.
@@ -484,6 +487,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         YLIST = list of years in year [default = [] - only YEAR used]
         KP = limits of kp for filtering days [default = [0,10] - all kp used]
         CV = use CV modes [default = True]
+        QF = Quality Flag Limit Allowed [default = 1]
 
     Outputs:
         DATA = dictionary of data whose keys are Zonal, Meridional, or Temp 
@@ -569,7 +573,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
                 F107[count] = (point.f107 + point.f107a)/2.
 
             else:
-                DD = BinDailyData(s,yr,doy,SPLIT,KP,CV)
+                DD = BinDailyData(s,yr,doy,SPLIT=SPLIT,KP=KP,CV=CV,QF=QF)
                 mflag = False
                 cards += DD.cards
                 cvs += DD.cvs
@@ -780,7 +784,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
 
 
 
-def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=True):
+def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=True,QF=1):
     '''
     Summary:
         Plots monthly averages in a 2x6 month plot
@@ -793,6 +797,7 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         SPLIT = Split look directions in binning [default = False]
         KP = Filter days by KP [default = [0,10] - all kp]
         UT = Plot in UT or SLT [default = True]
+        QF = Quality Flags [default = True]
 
     Outputs:
 
@@ -850,8 +855,8 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
             year = YEAR + (month-1)/12
             month = month - 12*((month-1)/12)
         print nsp,year,month
-            
-        MD = BinMonthlyData(SITE,year,month,SPLIT,KP)
+
+        MD = BinMonthlyData(SITE,year,month,SPLIT=SPLIT,KP=KP,QF=QF)
         tlim = [MD.t[len(MD.t)/5],MD.t[-len(MD.t)/5]]
         MD.t  = MD.t + _dt.timedelta(seconds=ut_offset)
         MD.t2 = MD.t + _dt.timedelta(minutes=3)
@@ -929,7 +934,7 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         
 
     
-def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True):
+def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1):
     '''
     Summary:
         Plots single site monthly averages w/ models
@@ -942,6 +947,7 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True):
         SPLIT = Split look directions in binning [default = False]
         KP = Filter days by KP [default = [0,10] - all kp]
         UT = Plot in UT or SLT [default = True]
+        QF = Quality Flag Limit Allowed [default = 1]
 
     History:
         5/8/14 -- Written by DJF (dfisher2@illinois.edu)
@@ -953,7 +959,7 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True):
         ut_offset = _fpiinfo.get_site_info(SITE)['Location'][1]/360.*(24*60*60)
         
     # Get Monthly Average for basis
-    MD = BinMonthlyData(SITE,YEAR,MONTH,SPLIT,KP)
+    MD = BinMonthlyData(SITE,YEAR,MONTH,SPLIT=SPLIT,KP=KP,QF=QF)
     mon = _cal.month_name[MONTH]
     MD.t  = MD.t + _dt.timedelta(seconds=ut_offset)
     MD.t2 = MD.t + _dt.timedelta(minutes=3) 
@@ -965,7 +971,7 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True):
     for nm,m in enumerate(MODEL):
         if _np.nan in MD.lla:
             break
-        MM = BinMonthlyData(m,YEAR,MONTH,SPLIT,SITELLA=MD.lla)
+        MM = BinMonthlyData(m,YEAR,MONTH,SPLIT=SPLIT,SITELLA=MD.lla)
         tm[m] = MM.t + _dt.timedelta(minutes=3*(nm+2)) + _dt.timedelta(seconds=ut_offset)
         if not(UT):
             tm[m] = tm[m] + _dt.timedelta
@@ -1102,9 +1108,10 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True):
     _plt.draw(); #_plt.show()
     #_plt.savefig('%s%s_%04d-%s_vertical_winds.png' % (dirout,SITE,YEAR,mon))
     
+    return(MD)
 
 
-def PlotSpaghetti(SITE,YEAR,MONTH,SPLIT=False,LIST=[],CV=False,KP=[0,10]):
+def PlotSpaghetti(SITE,YEAR,MONTH,SPLIT=False,LIST=[],CV=False,KP=[0,10],QF=1):
     '''
     Summary:
         Plots all raw data for one month in spaghetti plot!
@@ -1118,6 +1125,7 @@ def PlotSpaghetti(SITE,YEAR,MONTH,SPLIT=False,LIST=[],CV=False,KP=[0,10]):
         LIST = List of doys to use in averaging
         CV = Include CV directions [default = False]
         KP = Filter days by KP [default = [0,10] - all kp]
+        QF = Quality Flag Allowed [default = 1]
 
     History:
         10/17/14 -- Written by DJF (dfisher2@illinois.edu)
@@ -1129,12 +1137,12 @@ def PlotSpaghetti(SITE,YEAR,MONTH,SPLIT=False,LIST=[],CV=False,KP=[0,10]):
     if not LIST:
         for k,d in enumerate(range(_cal.monthrange(YEAR,MONTH)[1])):
             L = L2.GetLevel2(SITE,dn+_dt.timedelta(days=d))
-            FilterData(L); D[k] = L
+            FilterData(L,QF); D[k] = L
     else:
         for k,d in enumerate(LIST):
             L = L2.GetLevel2(SITE,_dt.datetime(YEAR,1,1)+_dt.timedelta(days=d-1))
-            FilterData(L); D[k] = L
-    M = BinMonthlyData(SITE,YEAR,MONTH,SPLIT,CV,LIST,KP)
+            FilterData(L,QF); D[k] = L
+    M = BinMonthlyData(SITE,YEAR,MONTH,SPLIT=SPLIT,CV=CV,DLIST=LIST,KP=KP,QF=QF)
     M.t = M.t + _dt.timedelta(days=(_dt.datetime(YEAR-1,1,2+_cal.isleap(YEAR-1))-_dt.datetime(M.t[0].year,1,1)).days)
 
     markerwide = 0
@@ -1250,7 +1258,7 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True):
     dn = _dt.datetime(YEAR,MONTH,1)
     for k,d in enumerate(range(_cal.monthrange(YEAR,MONTH)[1])):
         D[k] = L2.GetLevel2(SITE,dn+_dt.timedelta(days=d))
-    #M = BinMonthlyData(SITE,YEAR,MONTH,SPLIT)
+    #M = BinMonthlyData(SITE,YEAR,MONTH,SPLIT=SPLIT)
     #M.t = M.t + _dt.timedelta(seconds=(_dt.datetime(YEAR-1,1,1)-_dt.datetime(M.t[0].year,1,1)).total_seconds())
 
     markerwide = 0
@@ -1632,7 +1640,6 @@ def CreateL2ASCII(PROJECT,YEAR,DOY):
     results_stub = '/rdata/airglow/database/L2/'
     notename = results_stub + PROJECT + '_' + date + '.txt'
     D = L2.GetLevel2(PROJECT,process_dn)
-    #FilterData(D)
 
     # Write out ASCII
     note = open(notename,'w')
@@ -1669,7 +1676,7 @@ def CreateL2ASCII(PROJECT,YEAR,DOY):
     
     
 
-def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY):
+def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1):
     '''
     Summary:
         Script to save out Legacy ASCII of all L2 date for a Project.
@@ -1678,6 +1685,7 @@ def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY):
         PROJECT - Name of project for sites, ex: 'NATION'
         YEAR = year, e.g. 2013
         DOY = day of year, e.g. 64
+        QF = Quality Flag Limit Allowed [default = 1]
 
     Outputs:
         ASCII text file of data in /mnt/FPIData/Results/ASCII
@@ -1697,7 +1705,7 @@ def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY):
     results_stub = '/rdata/airglow/database/L2/'
     notename = results_stub + PROJECT + '_' + date + 'L.txt'
     D = _L2L.GetLevel2(PROJECT,process_dn)
-    FilterData(D)
+    FilterData(D,QF)
 
     # Write out ASCII
     note = open(notename,'w')
@@ -1730,7 +1738,7 @@ def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY):
     note.close()
     
 
-def CreateMonthlyASCII(PROJECT,YEAR,MONTH):
+def CreateMonthlyASCII(PROJECT,YEAR,MONTH,QF=1):
     '''
     Summary:
         Script to output ASCII Monthly averaged results for a project.
@@ -1739,6 +1747,7 @@ def CreateMonthlyASCII(PROJECT,YEAR,MONTH):
         PROJECT - Name of project for sites, ex: 'NATION'
         YEAR = year, e.g. 2013
         MONTH = month, e.g. 6
+        QF = Quality Flag Limit Allowed [default = 1]
 
     Outputs:
         ASCII text file of data in /mnt/FPIData/Results/ASCII
@@ -1764,7 +1773,7 @@ def CreateMonthlyASCII(PROJECT,YEAR,MONTH):
     note.write('Hour[UTC]  Lat  Lon  Temp[K]  Temp_Error[K]  Zonal_Wind[m/s]  Zonal_Wind_Error[m/s] Meridional_Wind[m/s]  Meridional_Wind_Error[m/s] Vertical_Wind[m/s]  Vertical_Wind_Error[m/s] \n')
         
     for site in SITES:
-        MD = BinMonthlyData(site,YEAR,MONTH)
+        MD = BinMonthlyData(site,YEAR,MONTH,QF=QF)
         
         for ind,dn in enumerate(MD.t):
             #dn = MD.t[ind] #.astimezone(_utc)
