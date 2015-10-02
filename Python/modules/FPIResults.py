@@ -859,9 +859,13 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         MD = BinMonthlyData(SITE,year,month,SPLIT=SPLIT,KP=KP,QF=QF)
         tlim = [MD.t[len(MD.t)/5],MD.t[-len(MD.t)/5]]
         MD.t  = MD.t + _dt.timedelta(seconds=ut_offset)
+#	tlim = [MD.t[len(MD.t)/5],MD.t[-len(MD.t)/5]]
         MD.t2 = MD.t + _dt.timedelta(minutes=3)
         gflag = 'on'
-        
+ 
+	tstart = _np.where(_np.isnan(MD.T[:-1])*_np.isfinite(MD.T[1:]))[0][0]-1
+    	tend   = _np.where(_np.isfinite(MD.T[:-1])*_np.isnan(MD.T[1:]))[0][0]+1
+       
         ## Subplot data
         tits = ['Zonal Wind','Meridional Wind','Veritcal Wind','Temperature']
         xlabs = ['Wind Speed [m/s]','Wind Speed [m/s]','Wind Speed [m/s]','Temperature [K]']
@@ -875,7 +879,12 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         # ylabel("%s %4.0f" % (_cal.month_abbr[month], year))
         axz[nsp].set_ylabel("%s" % (_cal.month_abbr[month]),labelpad=2)
         axz[nsp].set_ylim(-50, 150)
-        axz[nsp].set_xlim(tlim)
+	if UT:
+	    axz[nsp].set_xlim(tlim)
+	else:
+#        print MD.t[tstart], MD.t[tend]
+#        axz[nsp].set_xlim(MD.t[tstart],MD.t[tend])
+            axz[nsp].set_xlim([_dt.datetime(1969,12,31,17,00,00),_dt.datetime(1970,1,1,7,0,0)])
         axz[nsp].set_yticks([0, 50, 100])  #[-50, 0, 50, 100]
         if SPLIT:
             axz[nsp].errorbar(MD.t,MD.u,yerr=MD.uv,fmt=colors2[2],linewidth=lwide,elinewidth=lwide,capsize=csize,markersize=msize,label='East') 
@@ -888,7 +897,13 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         # Meridional
         axm[nsp].set_ylabel("%s" % (_cal.month_abbr[month]),labelpad=2) #"%s %4.0f" % (_cal.month_abbr[month], year)
         axm[nsp].set_ylim(-100, 100)
-        axm[nsp].set_xlim(tlim)
+#        axm[nsp].set_xlim(tlim)
+        if UT:
+            axm[nsp].set_xlim(tlim)
+        else:
+#        print MD.t[tstart], MD.t[tend]
+#        axz[nsp].set_xlim(MD.t[tstart],MD.t[tend])
+            axm[nsp].set_xlim([_dt.datetime(1969,12,31,17,00,00),_dt.datetime(1970,1,1,7,0,0)])
         axm[nsp].set_yticks([-50, 0, 50])
         if SPLIT:
             axm[nsp].errorbar(MD.t,MD.v,yerr=MD.vv,fmt=colors2[0],linewidth=lwide,elinewidth=lwide,capsize=csize,markersize=msize,label='North') 
@@ -901,7 +916,13 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         # Vertical
         axv[nsp].set_ylabel("%s" % (_cal.month_abbr[month]),labelpad=2)
         axv[nsp].set_ylim(-75, 75)
-        axv[nsp].set_xlim(tlim)
+#        axv[nsp].set_xlim(tlim)
+        if UT:
+            axv[nsp].set_xlim(tlim)
+        else:
+#        print MD.t[tstart], MD.t[tend]
+#        axz[nsp].set_xlim(MD.t[tstart],MD.t[tend])
+            axv[nsp].set_xlim([_dt.datetime(1969,12,31,17,00,00),_dt.datetime(1970,1,1,7,0,0)])
         axv[nsp].set_yticks([-25, 0, 25])
         axv[nsp].errorbar(MD.t+_dt.timedelta(minutes=3*(year-YEAR)),MD.w,yerr=MD.wv,fmt=colors[year-YEAR],linewidth=lwide,elinewidth=lwide,capsize=csize,markersize=msize,label='Data')
         axv[nsp].grid(gflag)
@@ -910,7 +931,13 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         # Temps
         axt[nsp].set_ylabel("%s" % (_cal.month_abbr[month]),labelpad=2)
         axt[nsp].set_ylim(600, 1200)
-        axt[nsp].set_xlim(tlim)
+#        axt[nsp].set_xlim(tlim)
+        if UT:
+            axt[nsp].set_xlim(tlim)
+        else:
+#        print MD.t[tstart], MD.t[tend]
+#        axz[nsp].set_xlim(MD.t[tstart],MD.t[tend])
+            axt[nsp].set_xlim([_dt.datetime(1969,12,31,17,00,00),_dt.datetime(1970,1,1,7,0,0)])
         axt[nsp].set_yticks([700, 800, 900, 1000, 1100])
         axt[nsp].grid(gflag)
         axt[nsp].errorbar(MD.t+_dt.timedelta(minutes=3*(year-YEAR)),MD.T,yerr=MD.Tv,fmt=colors[year-YEAR],linewidth=lwide,elinewidth=lwide,capsize=csize,markersize=msize)
@@ -934,7 +961,7 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         
 
     
-def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1):
+def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1,HIST=False):
     '''
     Summary:
         Plots single site monthly averages w/ models
@@ -948,6 +975,7 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1):
         KP = Filter days by KP [default = [0,10] - all kp]
         UT = Plot in UT or SLT [default = True]
         QF = Quality Flag Limit Allowed [default = 1]
+ 	HIST = Plot histogram of number of data in each bin [default = False]
 
     History:
         5/8/14 -- Written by DJF (dfisher2@illinois.edu)
@@ -973,8 +1001,8 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1):
             break
         MM = BinMonthlyData(m,YEAR,MONTH,SPLIT=SPLIT,SITELLA=MD.lla)
         tm[m] = MM.t + _dt.timedelta(minutes=3*(nm+2)) + _dt.timedelta(seconds=ut_offset)
-        if not(UT):
-            tm[m] = tm[m] + _dt.timedelta
+#        if not(UT):
+#            tm[m] = tm[m] - _dt.timedelta(seconds=ut_offset) # JJM
         Tm[m] = MM.T
         Tem[m] = MM.Tv
         Um[m] = MM.u
@@ -989,6 +1017,7 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1):
     tend   = _np.where(_np.isfinite(MD.T[:-1])*_np.isnan(MD.T[1:]))[0][0]+1
 
     color = ['r--','g--','m--','y--']
+    facecolor = {'MSIS': 'r','HWM93': 'g', 'HWM07': 'y', 'HWM14': 'm'}
     markerwide = 0
     try:
         name = _fpiinfo.get_site_info(SITE)['Name']
@@ -997,15 +1026,17 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1):
     # Temp Figure
     fig = _plt.figure(0,figsize=(10,6)); _plt.clf()
     ax = fig.add_subplot(1,1,1)
-    (_, caps1, _) = _plt.errorbar(MD.t,MD.T,yerr=MD.Tv,label='Data')
+    (_, caps1, _) = _plt.errorbar(MD.t,MD.T,yerr=MD.Tv,label='Data',color='k',linewidth=2)
     # Hardcoded Tmodel -- Fix
     for nm,m in enumerate(MODEL):
         if nm == 0:
-            (_, caps2, _) = _plt.errorbar(tm[m],Tm[m],yerr=Tem[m],fmt=color[nm],label='MSIS')
-            for cap in caps2:
-                cap.set_markeredgewidth(markerwide)
-    for cap in caps1:
-        cap.set_markeredgewidth(markerwide)
+	    _plt.fill_between(tm[m],Tm[m]-Tem[m],Tm[m]+Tem[m],alpha=0.5,linewidth=0,facecolor=facecolor['MSIS'])
+	    _plt.plot(tm[m],Tm[m],'r',label='MSIS')
+#            (_, caps2, _) = _plt.errorbar(tm[m],Tm[m],yerr=Tem[m],fmt=color[nm],label='MSIS')
+#            for cap in caps2:
+#                cap.set_markeredgewidth(markerwide)
+#    for cap in caps1:
+#        cap.set_markeredgewidth(markerwide)
     _plt.plot([MD.t[0],MD.t[-1]],[0,0],'k--')
     _plt.ylim([600,1200])
     _plt.xlim([MD.t[tstart],MD.t[tend]])
@@ -1018,28 +1049,39 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1):
     _plt.title('%04i %s Average Temperatures at %s' % (YEAR,mon,name))
     _plt.legend()
     _plt.grid()
+
+    if(HIST):
+        bin_width = (MD.t[1]-MD.t[0])/4
+        ax2 = ax.twinx()
+        ax2.bar(MD.t-bin_width,MD.Tc,.015,alpha=0.5,linewidth=0)
+        ax2.set_ylabel('N/bin')
+        ax2.set_ylim([0,100])
+    _plt.xlim([MD.t[tstart],MD.t[tend]])
+
     _plt.draw();# _plt.show()
     #_plt.savefig('%s%s_%04d-%s_temps.png' % (dirout,SITE,YEAR,mon))
     
     # Winds Figure Zonal
     fig = _plt.figure(1,figsize=(10,6)); _plt.clf()
     ax = fig.add_subplot(1,1,1)
+    for nm,m in enumerate(MODEL):
+        _plt.fill_between(tm[m],Um[m]-Uem[m],Um[m]+Uem[m],alpha=0.5,linewidth=0,facecolor=facecolor[m.upper()])
+        _plt.plot(tm[m],Um[m],color=facecolor[m.upper()],label=m.upper())
+#        (_, caps2, _) = _plt.errorbar(tm[m],Um[m],yerr=Uem[m],fmt=color[nm],label=m.upper())
+#        for cap in caps2:
+#            cap.set_markeredgewidth(markerwide)
     if SPLIT:
         (_, caps1, _) = _plt.errorbar(MD.t,MD.u,yerr=MD.uv,fmt='b-',label='East')
         (_, caps3, _) = _plt.errorbar(MD.t2,MD.u2,yerr=MD.u2v,fmt='c-',label='West')
         for cap in caps3:
             cap.set_markeredgewidth(markerwide)
     else:
-        (_, caps1, _) = _plt.errorbar(MD.t,MD.u,yerr=MD.uv,label='Data')
-    for nm,m in enumerate(MODEL):
-        (_, caps2, _) = _plt.errorbar(tm[m],Um[m],yerr=Uem[m],fmt=color[nm],label=m.upper())
-        for cap in caps2:
-            cap.set_markeredgewidth(markerwide)
+        (_, caps1, _) = _plt.errorbar(MD.t,MD.u,yerr=MD.uv,label='Data',color='k',linewidth=2)
     for cap in caps1:
         cap.set_markeredgewidth(markerwide)
+
     _plt.plot([MD.t[0],MD.t[-1]],[0,0],'k--')
     _plt.ylim([-200,200])
-    _plt.xlim([MD.t[tstart],MD.t[tend]])
     ax.xaxis.set_major_formatter(_md.DateFormatter('%H'))
     _plt.ylabel('Wind Speed [m/s]')
     if UT:
@@ -1049,23 +1091,37 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1):
     _plt.title('%04i %s Average Zonal Winds at %s' % (YEAR,mon,name))
     _plt.legend()
     _plt.grid()
+
+    if(HIST):
+	bin_width = (MD.t[1]-MD.t[0])/4
+        ax2 = ax.twinx()
+        ax2.bar(MD.t-bin_width,MD.uc,.015,alpha=0.5,linewidth=0)
+        ax2.set_ylabel('N/bin',position=(1,.1875))
+	ticklabelpad = _mpl.rcParams['xtick.major.pad']
+        ax2.set_ylim([0,80])
+	ax2.set_yticks([0,10,20,30])
+
+    _plt.xlim([MD.t[tstart],MD.t[tend]])
+
     _plt.draw(); #_plt.show()
     _plt.savefig('%s%s_%04d-%s_zonal_winds.png' % (dirout,SITE,YEAR,mon))
     
     # Winds Figure Meridional
     fig = _plt.figure(2,figsize=(10,6)); _plt.clf()
     ax = fig.add_subplot(1,1,1)
+    for nm,m in enumerate(MODEL):
+        _plt.fill_between(tm[m],Vm[m]-Vem[m],Vm[m]+Vem[m],alpha=0.5,linewidth=0,facecolor=facecolor[m.upper()])
+        _plt.plot(tm[m],Vm[m],color=facecolor[m.upper()],label=m.upper())
+#        (_, caps2, _) = _plt.errorbar(tm[m],Um[m],yerr=Uem[m],fmt=color[nm],label=m.upper())
+#        for cap in caps2:
+#            cap.set_markeredgewidth(markerwide)
     if SPLIT:
         (_, caps1, _) = _plt.errorbar(MD.t,MD.v,yerr=MD.vv,fmt='b-',label='North')
         (_, caps3, _) = _plt.errorbar(MD.t2,MD.v2,yerr=MD.v2v,fmt='c-',label='South')
         for cap in caps3:
             cap.set_markeredgewidth(markerwide)
     else:
-        (_, caps1, _) = _plt.errorbar(MD.t,MD.v,yerr=MD.vv,label='Data')
-    for nm,m in enumerate(MODEL):
-        (_, caps2, _) = _plt.errorbar(tm[m],Vm[m],yerr=Vem[m],fmt=color[nm],label=m.upper())
-        for cap in caps2:
-            cap.set_markeredgewidth(markerwide)
+        (_, caps1, _) = _plt.errorbar(MD.t,MD.v,yerr=MD.vv,label='Data',color='k',linewidth=2)
     for cap in caps1:
         cap.set_markeredgewidth(markerwide)
     _plt.plot([MD.t[0],MD.t[-1]],[0,0],'k--')
@@ -1080,17 +1136,28 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1):
     _plt.title('%04i %s Average Meridional Winds at %s' % (YEAR,mon,name))
     _plt.legend()
     _plt.grid()
+
+    if(HIST):
+	bin_width = (MD.t[1]-MD.t[0])/4
+        ax2 = ax.twinx()
+        ax2.bar(MD.t-bin_width,MD.vc,.015,alpha=0.5,linewidth=0)
+        ax2.set_ylabel('N/bin',position=(1,.1875))
+        ax2.set_ylim([0,80])
+        ax2.set_yticks([0,10,20,30])
+
+    _plt.xlim([MD.t[tstart],MD.t[tend]])
+
     _plt.draw(); #_plt.show()
     #_plt.savefig('%s%s_%04d-%s_meridional_winds.png' % (dirout,SITE,YEAR,mon))
     
     # Winds Figure Vertical
     fig = _plt.figure(3,figsize=(10,6)); _plt.clf()
     ax = fig.add_subplot(1,1,1)
-    (_, caps1, _) = _plt.errorbar(MD.t,MD.w,yerr=MD.wv,label='Data')
-    for nm,m in enumerate(MODEL):
-        (_, caps2, _) = _plt.errorbar(tm[m],Wm[m],yerr=Wem[m],fmt=color[nm],label=m.upper())
-        for cap in caps2:
-            cap.set_markeredgewidth(markerwide)
+    (_, caps1, _) = _plt.errorbar(MD.t,MD.w,yerr=MD.wv,label='Data',color='k',linewidth=2)
+#    for nm,m in enumerate(MODEL):
+#        (_, caps2, _) = _plt.errorbar(tm[m],Wm[m],yerr=Wem[m],fmt=color[nm],label=m.upper())
+#        for cap in caps2:
+#            cap.set_markeredgewidth(markerwide)
     for cap in caps1:
         cap.set_markeredgewidth(markerwide)
     _plt.plot([MD.t[0],MD.t[-1]],[0,0],'k--')
@@ -1105,6 +1172,17 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1):
     _plt.title('%04i %s Average Vertical Winds at %s' % (YEAR,mon,name))
     _plt.legend()
     _plt.grid()
+
+    if(HIST):
+	bin_width = (MD.t[1]-MD.t[0])/4
+        ax2 = ax.twinx()
+        ax2.bar(MD.t-bin_width,MD.wc,.015,alpha=0.5,linewidth=0)
+        ax2.set_ylabel('N/bin',position=(1,.1875))
+        ax2.set_ylim([0,80])
+        ax2.set_yticks([0,10,20,30])
+
+    _plt.xlim([MD.t[tstart],MD.t[tend]])
+
     _plt.draw(); #_plt.show()
     #_plt.savefig('%s%s_%04d-%s_vertical_winds.png' % (dirout,SITE,YEAR,mon))
     
