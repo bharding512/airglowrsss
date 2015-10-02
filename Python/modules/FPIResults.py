@@ -249,21 +249,22 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
     d = _BinnedData(dn,SITE)
     d.key = "Daily"
     d.t = times
-    uData = _np.empty((b_len,500))*_np.nan
-    ueData = _np.empty((b_len,500))*_np.nan
-    vData = _np.empty((b_len,500))*_np.nan
-    veData = _np.empty((b_len,500))*_np.nan
-    u2Data = _np.empty((b_len,500))*_np.nan
-    u2eData = _np.empty((b_len,500))*_np.nan
-    v2Data = _np.empty((b_len,500))*_np.nan
-    v2eData = _np.empty((b_len,500))*_np.nan
-    wData = _np.empty((b_len,500))*_np.nan
-    weData = _np.empty((b_len,500))*_np.nan
-    TData = _np.empty((b_len,500))*_np.nan
-    TeData = _np.empty((b_len,500))*_np.nan
-    iData = _np.empty((b_len,500))*_np.nan
-    ieData = _np.empty((b_len,500))*_np.nan
-    count = _np.zeros((b_len))
+    count_len = 500
+    uData   = _np.empty((b_len,count_len))*_np.nan
+    ueData  = _np.empty((b_len,count_len))*_np.nan
+    vData   = _np.empty((b_len,count_len))*_np.nan
+    veData  = _np.empty((b_len,count_len))*_np.nan
+    u2Data  = _np.empty((b_len,count_len))*_np.nan
+    u2eData = _np.empty((b_len,count_len))*_np.nan
+    v2Data  = _np.empty((b_len,count_len))*_np.nan
+    v2eData = _np.empty((b_len,count_len))*_np.nan
+    wData   = _np.empty((b_len,count_len))*_np.nan
+    weData  = _np.empty((b_len,count_len))*_np.nan
+    TData   = _np.empty((b_len,count_len))*_np.nan
+    TeData  = _np.empty((b_len,count_len))*_np.nan
+    iData   = _np.empty((b_len,count_len))*_np.nan
+    ieData  = _np.empty((b_len,count_len))*_np.nan
+    count   = _np.zeros((b_len))
     lat = []
     lon = []
     alt = []
@@ -354,19 +355,26 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
     # Save Averages
     d.u = uD
     d.ue = ueD
+    d.uc = count_len-_np.nansum(_np.isnan(uData),1)
     d.v = vD
     d.ve = veD
+    d.vc = count_len-_np.nansum(_np.isnan(vData),1)
     d.w = wD
     d.we = weD
+    d.wc = count_len-_np.nansum(_np.isnan(wData),1)
     d.T = TD
     d.Te = TeD
+    d.Tc = count_len-_np.nansum(_np.isnan(TData),1)
     d.i = iD
     d.ie = ieD
+    d.ic = count_len-_np.nansum(_np.isnan(iData),1)
     if SPLIT:
         d.u2 = u2D
         d.u2e = u2eD
+        d.u2c = count_len-_np.nansum(_np.isnan(u2Data),1)
         d.v2 = v2D
         d.v2e = v2eD
+        d.v2c = count_len-_np.nansum(_np.isnan(v2Data),1)
     d.cards = cc
     d.cvs = cvc
     d.bads = bc
@@ -510,21 +518,28 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     
     # Get Empty 
     dim = 31*5*10
-    uData = _np.empty((b_len,dim))*_np.nan
-    ueData = _np.empty((b_len,dim))*_np.nan
-    vData = _np.empty((b_len,dim))*_np.nan
-    veData = _np.empty((b_len,dim))*_np.nan
-    u2Data = _np.empty((b_len,dim))*_np.nan
+    uData   = _np.empty((b_len,dim))*_np.nan
+    ueData  = _np.empty((b_len,dim))*_np.nan
+    uCount  = _np.zeros((b_len))
+    vData   = _np.empty((b_len,dim))*_np.nan
+    veData  = _np.empty((b_len,dim))*_np.nan
+    vCount  = _np.zeros((b_len))
+    u2Data  = _np.empty((b_len,dim))*_np.nan
     u2eData = _np.empty((b_len,dim))*_np.nan
-    v2Data = _np.empty((b_len,dim))*_np.nan
+    u2Count = _np.zeros((b_len))
+    v2Data  = _np.empty((b_len,dim))*_np.nan
     v2eData = _np.empty((b_len,dim))*_np.nan
-    wData = _np.empty((b_len,dim))*_np.nan
-    weData = _np.empty((b_len,dim))*_np.nan
-    TData = _np.empty((b_len,dim))*_np.nan
-    TeData = _np.empty((b_len,dim))*_np.nan
-    iData = _np.empty((b_len,dim))*_np.nan
-    ieData = _np.empty((b_len,dim))*_np.nan
-    F107 = _np.empty((dim))*_np.nan
+    v2Count = _np.zeros((b_len))
+    wData   = _np.empty((b_len,dim))*_np.nan
+    weData  = _np.empty((b_len,dim))*_np.nan
+    wCount  = _np.zeros((b_len))
+    TData   = _np.empty((b_len,dim))*_np.nan
+    TeData  = _np.empty((b_len,dim))*_np.nan
+    TCount  = _np.zeros((b_len))
+    iData   = _np.empty((b_len,dim))*_np.nan
+    ieData  = _np.empty((b_len,dim))*_np.nan
+    iCount  = _np.zeros((b_len))
+    F107    = _np.empty((dim))*_np.nan
     count = 0
     mflag = False
     oscar = []
@@ -600,57 +615,65 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
             if len(DD.u) > 0:
                 uData[:,count] = DD.u
                 ueData[:,count] = DD.ue
+                uCount += DD.uc
             if len(DD.v) > 0:
                 vData[:,count] = DD.v
                 veData[:,count] = DD.ve
+                vCount += DD.vc
             if len(DD.w) > 0:
                 wData[:,count] = DD.w
                 weData[:,count] = DD.we
+                wCount += DD.wc
             if len(DD.T) > 0:
                 TData[:,count] = DD.T
                 TeData[:,count] = DD.Te
+                TCount += DD.Tc
             if len(DD.i) > 0:
                 iData[:,count] = DD.i
                 ieData[:,count] = DD.ie
+                iCount += DD.ic
             if SPLIT and not(mflag) and len(DD.u2) > 0:
                 u2Data[:,count] = DD.u2
                 u2eData[:,count] = DD.u2e
+                u2Count += DD.u2c
             if SPLIT and not(mflag) and len(DD.v2) > 0:
                 v2Data[:,count] = DD.v2
                 v2eData[:,count] = DD.v2e
+                v2Count += DD.v2c
 
             count += 1
     
     # Get count of days used in each bin
-    ucount = dim - sum(_np.isnan(uData.T))
-    ucount = [_np.nan if x<dimset else x for x in ucount]
-    vcount = dim - sum(_np.isnan(vData.T))
-    vcount = [_np.nan if x<dimset else x for x in vcount]
-    wcount = dim - sum(_np.isnan(wData.T))
-    wcount = [_np.nan if x<dimset else x for x in wcount]
-    Tcount = dim - sum(_np.isnan(TData.T))
-    Tcount = [_np.nan if x<dimset else x for x in Tcount]
-    icount = dim - sum(_np.isnan(iData.T))
-    icount = [_np.nan if x<dimset else x for x in icount]
-    u2count = dim - sum(_np.isnan(u2Data.T))
-    u2count = [_np.nan if x<dimset else x for x in u2count]
-    v2count = dim - sum(_np.isnan(v2Data.T))
-    v2count = [_np.nan if x<dimset else x for x in v2count]
+    uDays = dim - sum(_np.isnan(uData.T))
+    uDays = [_np.nan if x<dimset else x for x in uDays]
+    vDays = dim - sum(_np.isnan(vData.T))
+    vDays = [_np.nan if x<dimset else x for x in vDays]
+    wDays = dim - sum(_np.isnan(wData.T))
+    wDays = [_np.nan if x<dimset else x for x in wDays]
+    TDays = dim - sum(_np.isnan(TData.T))
+    TDays = [_np.nan if x<dimset else x for x in TDays]
+    iDays = dim - sum(_np.isnan(iData.T))
+    iDays = [_np.nan if x<dimset else x for x in iDays]
+    if SPLIT:
+        u2Days = dim - sum(_np.isnan(u2Data.T))
+        u2Days = [_np.nan if x<dimset else x for x in u2Days]
+        v2Days = dim - sum(_np.isnan(v2Data.T))
+        v2Days = [_np.nan if x<dimset else x for x in v2Days]
     '''
     ## Weighted Mean & Statistical Variance of Winds
     # Zonal
-    uD,uDe,uV,uVe = WeightedAverage(uData,ueData,ucount)
+    uD,uDe,uV,uVe = WeightedAverage(uData,ueData,uDays)
     # Meridional
-    vD,vDe,vV,vVe = WeightedAverage(vData,veData,vcount)
+    vD,vDe,vV,vVe = WeightedAverage(vData,veData,vDays)
     # Vert            
-    wD,wDe,wV,wVe = WeightedAverage(wData,weData,wcount)
+    wD,wDe,wV,wVe = WeightedAverage(wData,weData,wDays)
     #  Temps
-    TD,TDe,TV,TVe = WeightedAverage(TData,TeData,Tcount)
+    TD,TDe,TV,TVe = WeightedAverage(TData,TeData,TDays)
     if SPLIT and not(mflag):
         # Zonal2 - West
-        u2D,u2De,u2V,u2Ve = WeightedAverage(u2Data,u2eData,u2count)
+        u2D,u2De,u2V,u2Ve = WeightedAverage(u2Data,u2eData,u2Days)
         # Meridional2 - South
-        v2D,v2De,v2V,v2Ve = WeightedAverage(v2Data,v2eData,v2count)
+        v2D,v2De,v2V,v2Ve = WeightedAverage(v2Data,v2eData,v2Days)
         
     # Save Averages
     d.lla = _np.array([_np.nanmean(lat),_np.nanmean(lon),_np.nanmean(alt)])
@@ -691,20 +714,20 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     '''
     
     # Zonal
-    uD,uDe,uV,uVe,uV2,uU = WeightedAverage(uData,ueData,ucount,test=True)
+    uD,uDe,uV,uVe,uV2,uU = WeightedAverage(uData,ueData,uDays,test=True)
     # Meridional
-    vD,vDe,vV,vVe,vV2,vU = WeightedAverage(vData,veData,vcount,test=True)
+    vD,vDe,vV,vVe,vV2,vU = WeightedAverage(vData,veData,vDays,test=True)
     # Vert            
-    wD,wDe,wV,wVe,wV2,wU = WeightedAverage(wData,weData,wcount,test=True)
+    wD,wDe,wV,wVe,wV2,wU = WeightedAverage(wData,weData,wDays,test=True)
     #  Temps
-    TD,TDe,TV,TVe,TV2,TU = WeightedAverage(TData,TeData,Tcount,test=True)
+    TD,TDe,TV,TVe,TV2,TU = WeightedAverage(TData,TeData,TDays,test=True)
     # Intensity
-    iD,iDe,iV,iVe,iV2,iU = WeightedAverage(iData,ieData,icount,test=True)
+    iD,iDe,iV,iVe,iV2,iU = WeightedAverage(iData,ieData,iDays,test=True)
     if SPLIT and not(mflag):
         # Zonal2 - West
-        u2D,u2De,u2V,u2Ve,u2V2,u2U = WeightedAverage(u2Data,u2eData,u2count,test=True)
+        u2D,u2De,u2V,u2Ve,u2V2,u2U = WeightedAverage(u2Data,u2eData,u2Days,test=True)
         # Meridional2 - South
-        v2D,v2De,v2V,v2Ve,v2V2,v2U = WeightedAverage(v2Data,v2eData,v2count,test=True)
+        v2D,v2De,v2V,v2Ve,v2V2,v2U = WeightedAverage(v2Data,v2eData,v2Days,test=True)
     # F107
     if 'hwm' in SITE:
         d.f107 = _np.nanmean(F107)
@@ -719,27 +742,31 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     d.uve= uVe
     d.uv2= uV2
     d.uu = uU
-    d.uc = ucount
+    d.uc = uCount
+    d.ud = uDays
     d.v  = vD
     d.ve = vDe
     d.vv = vV
     d.vve= vVe
     d.vv2= vV2
     d.vu = vU
-    d.vc = vcount
+    d.vc = vCount
+    d.vd = vDays
     d.w  = wD
     d.we = wDe
     d.wv = wV
     d.wve= wVe
     d.wv2= wV2
     d.wu = wU
-    d.wc = wcount
+    d.wc = wCount
+    d.wd = wDays
     d.T  = TD
     d.Te = TDe
     d.Tv = TV
     d.Tve= TVe
     d.Tu = TU
-    d.Tc = Tcount
+    d.Tc = TCount
+    d.Td = TDays
     d.Tv2= TV2
     d.i  = iD
     d.ie = iDe
@@ -747,7 +774,8 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     d.ive= iVe
     d.iv2= iV2
     d.iu = iU
-    d.ic = icount
+    d.ic = iCount
+    d.id = iDays
     
     if SPLIT and not(mflag):
         d.u2  = u2D
@@ -757,6 +785,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         d.u2v2= u2V2
         d.u2u = u2U
         d.u2c = u2count
+        d.u2d = u2Days
         d.v2  = v2D
         d.v2e = v2De
         d.v2v = v2V
@@ -764,6 +793,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         d.v2v2= v2V2
         d.v2u = v2U
         d.v2c = v2count
+        d.v2d = v2Days
     d.cards = cards
     d.cvs = cvs
     d.daysused = _np.unique(oscar)
@@ -772,10 +802,12 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     #print '%s %s %04d'%(SITE, mon,YEAR),'Days used:',len(d.daysused),' Ave pts/time: %02.2f'%(_np.nanmin(_np.array([_np.ma.masked_array(ucount,_np.isnan(ucount)).mean(), _np.ma.masked_array(vcount,_np.isnan(vcount)).mean(), _np.ma.masked_array(Tcount,_np.isnan(Tcount)).mean()])))
     print '%s %s %04d'%(SITE, mon,YEAR),' Days used:',len(d.daysused)
     if SPLIT and not(mflag):
-        print 'Ave pts/time: u-%02.2f  u2-%02.2f  v-%02.2f  v2-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(ucount),_np.nanmean(u2count),_np.nanmean(vcount),_np.nanmean(v2count),_np.nanmean(wcount),_np.nanmean(Tcount))
+        print 'Ave pts/bin: u-%02.2f  u2-%02.2f  v-%02.2f  v2-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uCount),_np.nanmean(u2Count),_np.nanmean(vCount),_np.nanmean(v2Count),_np.nanmean(wCount),_np.nanmean(TCount))
+        print 'Ave day/bin: u-%02.2f  u2-%02.2f  v-%02.2f  v2-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uDays),_np.nanmean(u2Days),_np.nanmean(vDays),_np.nanmean(v2Days),_np.nanmean(wDays),_np.nanmean(TDays))
 
     else:
-        print 'Ave pts/time: u-%02.2f  v-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(ucount),_np.nanmean(vcount),_np.nanmean(wcount),_np.nanmean(Tcount))
+        print 'Ave pts/bin: u-%02.2f  v-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uCount),_np.nanmean(vCount),_np.nanmean(wCount),_np.nanmean(TCount))
+        print 'Ave day/bin: u-%02.2f  v-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uDays),_np.nanmean(vDays),_np.nanmean(wDays),_np.nanmean(TDays))
     print 'Cards:',cards,' CVs:',cvs,' %%CV: %02.2f'%(100.*cvs/(cvs+cards+.000001))
     print 'Bads:',bads, ' %%Good: %02.2f'%(100.*(cards+cvs)/(cards+cvs+bads+.000001))
     print 'Days:',d.daysused,'\n'
@@ -854,7 +886,7 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         if month > 12:
             year = YEAR + (month-1)/12
             month = month - 12*((month-1)/12)
-        print nsp,year,month
+        #print nsp,year,month
 
         MD = BinMonthlyData(SITE,year,month,SPLIT=SPLIT,KP=KP,QF=QF)
         tlim = [MD.t[len(MD.t)/5],MD.t[-len(MD.t)/5]]
@@ -2093,34 +2125,45 @@ class _BinnedData:
         self.we  = _np.roll(self.we,roll)
         self.i   = _np.roll(self.i ,roll)
         self.ie  = _np.roll(self.ie,roll)
+        if 'uc' in ship:
+            self.Tc   = _np.roll(self.Tc ,roll)
+            self.uc   = _np.roll(self.uc ,roll)
+            self.vc   = _np.roll(self.vc ,roll)
+            self.wc   = _np.roll(self.wc ,roll)
+            self.ic   = _np.roll(self.ic ,roll)
+        if 'ud' in ship:
+            self.Td   = _np.roll(self.Td ,roll)
+            self.ud   = _np.roll(self.ud ,roll)
+            self.vd   = _np.roll(self.vd ,roll)
+            self.wd   = _np.roll(self.wd ,roll)
+            self.id   = _np.roll(self.id ,roll)
         if 'Tv' in ship:
             self.Tv   = _np.roll(self.Tv ,roll)
-            self.Tc   = _np.roll(self.Tc ,roll)
             self.Tve  = _np.roll(self.Tve,roll)
             self.uv   = _np.roll(self.uv ,roll)
             self.uve  = _np.roll(self.uve,roll)
-            self.uc   = _np.roll(self.uc ,roll)
             self.vv   = _np.roll(self.vv ,roll)
             self.vve  = _np.roll(self.vve,roll)
-            self.vc   = _np.roll(self.vc ,roll)
             self.wv   = _np.roll(self.wv ,roll)
             self.wve  = _np.roll(self.wve,roll)
-            self.wc   = _np.roll(self.wc ,roll)
             self.iv   = _np.roll(self.iv ,roll)
             self.ive  = _np.roll(self.ive,roll)
-            self.ic   = _np.roll(self.ic ,roll)
         if 'u2' in ship:
             self.u2   = _np.roll(self.u2 ,roll)
             self.u2e  = _np.roll(self.u2e,roll)
             self.v2   = _np.roll(self.v2 ,roll)
             self.v2e  = _np.roll(self.v2e,roll)
+        if 'u2c' in ship:
+            self.u2c  = _np.roll(self.u2c ,roll)
+            self.v2c  = _np.roll(self.v2c ,roll)
+        if 'u2d' in ship:
+            self.u2d  = _np.roll(self.u2d ,roll)
+            self.v2d  = _np.roll(self.v2d ,roll)
         if 'u2v' in ship:
             self.u2v  = _np.roll(self.u2v ,roll)
             self.u2ve = _np.roll(self.u2ve,roll)
-            self.u2c  = _np.roll(self.u2c ,roll)
             self.v2v  = _np.roll(self.v2v ,roll)
             self.v2ve = _np.roll(self.v2ve,roll)
-            self.v2c  = _np.roll(self.v2c ,roll)
         if 'Tu' in ship:
             self.uu  = _np.roll(self.uu ,roll)
             self.Tu  = _np.roll(self.Tu ,roll)
