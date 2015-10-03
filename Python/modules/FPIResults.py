@@ -320,6 +320,7 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
                             else:
                                 vData[bin,count[bin]] = r1.v[zelda]
                                 veData[bin,count[bin]] = r1.ve[zelda]
+                        #if len(r1.w) > 0 and ('zenith' in r1.key.lower() or 'in' in r1.key.lower()) and r1.parent[0].reference == 'laser':
                         if len(r1.w) > 0 and r1.parent[0].reference == 'laser':
                             wData[bin,count[bin]] = r1.w[zelda]
                             weData[bin,count[bin]] = r1.we[zelda]

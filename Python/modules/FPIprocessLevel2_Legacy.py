@@ -634,6 +634,8 @@ class Level2:
         self.we = np.array([])
         self.wef= np.array([])
         self.wec= np.array([])
+        self.wi = np.array([])
+        self.wie= np.array([])
         
         self.i  = np.array([])
         self.ie = np.array([])
@@ -656,12 +658,14 @@ class Level2:
         self.flag_wind= np.array([])
         self.flag_T   = np.array([])
 
+        '''
         # interpolated stuff:
         self.it  = np.array([])
         self.iw  = np.array([])
         self.iwe = np.array([])
         self.iwef= np.array([])
         self.iwec= np.array([])
+        '''
 
         self.T  = np.array([])
         self.Te = np.array([])
@@ -707,6 +711,7 @@ class Level2:
         self.length = len(inds)
         
         # cut them:
+        '''
         if len(self.it) > 0:
             self.it = self.it[inds]
 
@@ -721,7 +726,7 @@ class Level2:
 
         if len(self.iwec) > 0:
             self.iwec = self.iwec[inds]
-
+        '''
         if len(self.T) > 0:
             self.T = self.T[inds]
 
@@ -769,6 +774,12 @@ class Level2:
 
         if len(self.wec) > 0:
             self.wec = self.wec[inds]
+
+        if len(self.wi) > 0:
+            self.wi = self.wi[inds]
+            
+        if len(self.wie) > 0:
+            self.wie = self.wie[inds]
 
         if len(self.i) > 0:
             self.i = self.i[inds]
@@ -828,7 +839,7 @@ class Level2:
             switch_plot_v = False
         if len(self.w) <3:
             switch_plot_w = False
-        if len(self.iw) <3:
+        if len(self.wi) <3:
             switch_plot_iw = False
 
         if (not (switch_plot_u or switch_plot_v or switch_plot_w)):
@@ -854,8 +865,8 @@ class Level2:
             plt.errorbar(self.t1, self.w, yerr=self.we, \
                     color='r', marker='*', label='w')
 
-        if switch_plot_iw:
-            plt.errorbar(self.it, self.iw, yerr=self.iwe, \
+        if switch_plot_wi:
+            plt.errorbar(self.it, self.wi, yerr=self.wie, \
                 color='k', label='iw')
 
         dnp1 = self.dn + timedelta(days=1)
@@ -960,6 +971,7 @@ def CardFinder(dn, instr1):
         u = np.array([]); ue = np.array([]); uef = np.array([]); uec = np.array([])
         v = np.array([]); ve = np.array([]); vef = np.array([]); vec = np.array([])
         w = np.array([]); we = np.array([]); wef = np.array([]); wec = np.array([])
+        #wi= np.array([]); wie= np.array([])
 
         ind1 = l1.ind[look]
         
@@ -976,13 +988,9 @@ def CardFinder(dn, instr1):
         d_loop.b  = l1.b [look]
         d_loop.be = l1.be[look]
 
-        # vertical wind is the interpolated,
-        # If 'Zenith', this will be soon
-        # overwritten as measured vertical wind:
-        w  = l1.iw [look]
-        we = l1.iwe[look]
-        wef= l1.iwef[look]
-        wec= l1.iwec[look]
+        # Save out interpolated wind
+        wi  = l1.iw [look]
+        wie = l1.iwe[look]
 
         # record parent Level 1 LOS errors:
         d_loop.los_sigma1 = l1.los_sigma[look]
@@ -1002,7 +1010,10 @@ def CardFinder(dn, instr1):
             wef = l1.wef
             wec = l1.wec
             d_loop.notes += 'Vertical wind is measurement\n'           
-            
+            # Set interpolated winds to 0.
+            wi = np.array([])
+            wie= np.array([])
+
         elif 'East' in look:
             # ------------------
             # Eastern Zonal measurement
@@ -1083,6 +1094,8 @@ def CardFinder(dn, instr1):
         d_loop.vef = vef
         d_loop.vec = vec
         d_loop.w = w
+        d_loop.wi = wi 
+        d_loop.wie = wie
         d_loop.we = we
         d_loop.wef = wef
         d_loop.wec = wec
@@ -1275,6 +1288,7 @@ def CVFinder(dn, instr1, instr2):
         u = np.array([]); ue = np.array([]); uef = np.array([]); uec = np.array([])
         v = np.array([]); ve = np.array([]); vef = np.array([]); vec = np.array([])
         w = np.array([]); we = np.array([]); wef = np.array([]); wec = np.array([])
+        iw= np.array([]); iwe= np.array([])
 
         # -----------------------------------------------------
         # this section of code gets rid of times that do 
@@ -1393,14 +1407,14 @@ def CVFinder(dn, instr1, instr2):
 
 	    # Calculated Average vertical wind at cv points
 
-            w = np.average(np.vstack((iw1,iw2)), \
+            iw = np.average(np.vstack((iw1,iw2)), \
                     axis=0, \
                     weights=(1./np.vstack((iwef1,iwef2))**2),\
                     )
 
-            we = np.sqrt((iwe1**-2 + iwe2**-2)/(iwe1**-4+ iwe2**-4))
-            wef = np.sqrt((iwef1**-2 + iwef2**-2)/(iwef1**-4+ iwef2**-4))
-            wec = np.sqrt((iwec1**-2 + iwec2**-2)/(iwec1**-4+ iwec2**-4))
+            iwe = np.sqrt((iwe1**-2 + iwe2**-2)/(iwe1**-4+ iwe2**-4))
+            iwef = np.sqrt((iwef1**-2 + iwef2**-2)/(iwef1**-4+ iwef2**-4))
+            iwec = np.sqrt((iwec1**-2 + iwec2**-2)/(iwec1**-4+ iwec2**-4))
 
             d_loop.notes += 'Vertical wind is interpolated\n'
             
@@ -1414,24 +1428,24 @@ def CVFinder(dn, instr1, instr2):
 
             # FIX cos[ze] is from look direction, not at the point in the sky where they are equal...
             # vh = velocity horizontal
-            vh1 = (los_wind1+w*cosd(ze1)) / \
+            vh1 = (los_wind1+iw*cosd(ze1)) / \
                     sind(ze1)
-            vh2 = (los_wind2+w*cosd(ze2)) / \
+            vh2 = (los_wind2+iw*cosd(ze2)) / \
                     sind(ze2)
             
-            vh1e = np.sqrt( los_sigma1**2+(we*cosd(ze1))**2) / \
+            vh1e = np.sqrt( los_sigma1**2+(iwe*cosd(ze1))**2) / \
                     sind(ze1)
-            vh2e = np.sqrt( los_sigma2**2+(we*cosd(ze2))**2) / \
+            vh2e = np.sqrt( los_sigma2**2+(iwe*cosd(ze2))**2) / \
                     sind(ze2)
 
-            vh1ef = np.sqrt( los_fit1**2+(we*cosd(ze1))**2) / \
+            vh1ef = np.sqrt( los_fit1**2+(iwe*cosd(ze1))**2) / \
                     sind(ze1)
-            vh2ef = np.sqrt( los_fit2**2+(we*cosd(ze2))**2) / \
+            vh2ef = np.sqrt( los_fit2**2+(iwe*cosd(ze2))**2) / \
                     sind(ze2)
 
-            vh1ec = np.sqrt( los_cal1**2+(we*cosd(ze1))**2) / \
+            vh1ec = np.sqrt( los_cal1**2+(iwe*cosd(ze1))**2) / \
                     sind(ze1)
-            vh2ec = np.sqrt( los_cal2**2+(we*cosd(ze2))**2) / \
+            vh2ec = np.sqrt( los_cal2**2+(iwe*cosd(ze2))**2) / \
                     sind(ze2)
 
             # Calculate winds
@@ -1493,7 +1507,9 @@ def CVFinder(dn, instr1, instr2):
         d_loop.vef = np.array(vef)
         d_loop.vec = np.array(vec)
         d_loop.w = w
+        d_loop.wi = iw
         d_loop.we = we
+        d_loop.wie = iwe
         d_loop.wef = wef
         d_loop.wec = wec
         d_loop.T = T
