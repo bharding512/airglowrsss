@@ -10,7 +10,338 @@ from matplotlib.ticker import FuncFormatter
 import datetime
 from scipy import interpolate
 import os as os
-import FPIprocessLevel2_Legacy as FPIprocessLevel2
+import FPIprocessLevel2
+
+from pyglow import pyglow
+from matplotlib.backends.backend_pdf import PdfPages
+import matplotlib
+import pytz
+from pytz import timezone
+import os.path
+from calendar import Calendar, SUNDAY
+import ephem
+import fpiinfo
+import FPI
+
+import sys
+
+def MonthlySummary(site_name, year, month):
+#
+# Generates PDF pages summarizing a month of FPI data for the requested site.  Pulls Kp values and displays
+# data coverage on a plot of the 3-hour Kp.  Displays meridional and zonal winds along with monthly averages.
+# Displays vertical winds.  Displays temperatures with montly averages.  Displays whether the moon is up/down.
+#
+# INPUTS:
+#	site_name - site name, matching those defined in fpiiinfo
+#	year - year to plot
+#	month - month to plot [1-12]
+# HISTORY:
+#	Written on 29 January 2015 by Jonathan J. Makela (jmakela@illinois.edu)
+
+    # Reduce the font size for the x-axis and set the output to be standard paper size
+    matplotlib.rc('xtick', labelsize=8) 
+    matplotlib.rcParams['figure.figsize']= 8.5,11
+
+    # Get information for the requested site
+    site = fpiinfo.get_site_info(site_name)
+    sitetz = timezone(site['Timezone'])
+    instrument = fpiinfo.get_instr_at(site_name,datetime.datetime(year,month,1))[0]
+
+    # Set up an observer so that we will be able to calculate sun/moon rise/set times
+    obs = ephem.Observer()
+    obs.pressure = 0
+    obs.horizon = '0'
+    obs.lat, obs.lon = '%.2f' % site['Location'][0], '%.2f' % site['Location'][1]
+
+    # Determines files to be averaged
+    f = glob.glob('/rdata/airglow/fpi/results/%s_%s_%04d%02d*.npz' % (instrument,site_name,year,month))
+    
+    # Calculate sunrise and sunset time
+    npzfile = np.load(f[-1])
+    d = npzfile['FPI_Results'].ravel()[0]
+    del npzfile.f
+    npzfile.close()
+
+    psst = ephem.Date(obs.previous_setting(ephem.Sun(), start=d['sky_times'][0].astimezone(pytz.utc))).datetime()
+    nsrt = ephem.Date(obs.next_rising(ephem.Sun(), start=d['sky_times'][0].astimezone(pytz.utc))).datetime()
+    
+    # Set up the bins to be used in the monthly averages.  These are in UT
+    t0 = psst.hour - 1
+    t1 = nsrt.hour + 1
+    if t0 > t1:
+        t1 = t1+24
+    bins = np.arange(t0,t1,0.5)
+    if bins[0] < 12:
+        bins = bins+24.
+    
+    # Average all of the data from the requested month
+    center_time, (bin_T, bin_eT), (bin_U, bin_eU), (bin_U2, bin_eU2), (bin_V, bin_eV), (bin_V2, bin_eV2) = FPI.average_data(f, bins=bins)
+
+    # The start date in UT
+    base = pytz.utc.localize(datetime.datetime(year,month,1))
+
+    # The output file (TODO: GENERALIZE THE PATH!)
+    pdf_pages = PdfPages('/home/jmakela/%s_%s_%04d%02d.pdf' % (instrument,site_name,year,month))
+
+    # Number of dates to consider per page
+    span = 7
+    grid_size = (8,4)
+
+    # Find the number of days in the requested month
+    cal = Calendar(SUNDAY)
+    days_in_month = max(cal.itermonthdays(year,month))
+    dateList = [base + datetime.timedelta(days = x) for x in range(0,days_in_month,1)]
+
+    # Loop through each day in the month
+    for dn in dateList:
+        # Every seventh day represents a new page and we need to create the Kp plot
+        if np.mod(dn.day-1,span) == 0:
+            # Create a new page
+            fig = plt.figure()
+ 	    agraph = plt.subplot2grid(grid_size, (0,0), rowspan=1, colspan=4)
+
+            # Files read in
+            files = []
+
+            # Plot Kp over the time period
+            colors = ['k|-','b|-','r|-','g|-','c|-']
+            kpc = ['green','green','green','green','yellow','red','red','red','red']
+            dn_end = dn + datetime.timedelta(days = span)
+            thrs = (dn_end-dn+datetime.timedelta(days=1)).total_seconds()/3600.
+            for hrs in np.linspace(0,thrs,thrs/3+1):
+                t = (dn+datetime.timedelta(hours=hrs)).astimezone(pytz.utc)
+                try:
+                    kpi = pyglow.Point(t,0,0,250).kp
+                except:
+                    kpi = 0
+                agraph.fill([t,t,t+datetime.timedelta(hours=3),t+datetime.timedelta(hours=3)],[0,kpi,kpi,0],color=kpc[int(kpi)],alpha=0.3,linewidth=1.0)
+
+            agraph.set_ylim([0,9])
+            agraph.xaxis.set_major_formatter(dates.DateFormatter('%b %d'))
+            agraph.set_yticks([0,3,6,9])
+            agraph.set_title('%s %s %d' % (instrument, site_name, year))
+
+        # Append the next file
+        files.append('/rdata/airglow/fpi/results/%s_%s_%s.npz' % (instrument, site_name, dn.strftime('%Y%m%d')))
+
+        # Set up the subplots for this day
+        ugraph = plt.subplot2grid(grid_size, (np.mod(dn.day-1,span)+1, 0), rowspan=1, colspan=1)            
+        vgraph = plt.subplot2grid(grid_size, (np.mod(dn.day-1,span)+1, 1), rowspan=1, colspan=1)
+        wgraph = plt.subplot2grid(grid_size, (np.mod(dn.day-1,span)+1, 2), rowspan=1, colspan=1)
+        bgraph = plt.subplot2grid(grid_size, (np.mod(dn.day-1,span)+1, 3), rowspan=1, colspan=1)
+
+	# Work with the requested file
+        if os.path.isfile(files[-1]):
+
+            try:
+                # Calculate sunrise and sunset time in UT
+                npzfile = np.load(files[-1])
+                d = npzfile['FPI_Results'].ravel()[0]
+                del npzfile.f
+		npzfile.close()
+                psst = ephem.Date(obs.previous_setting(ephem.Sun(), start=d['sky_times'][0].astimezone(pytz.utc))).datetime()
+                nsrt = ephem.Date(obs.next_rising(ephem.Sun(), start=d['sky_times'][0].astimezone(pytz.utc))).datetime()
+
+		# Calculate the moon set time
+                obs.date = psst
+                moonset = ephem.Moon()
+                moonset.compute(obs)
+
+                if moonset.alt < obs.horizon:
+                    # moon is not yet up
+                    rt = ephem.Date(obs.next_rising(ephem.Moon(), start=psst)).datetime()
+                else:
+                    # moon is up
+                    rt = ephem.Date(obs.previous_rising(ephem.Moon(), start=psst)).datetime()
+
+		# Calculate the moon rise time
+                obs.date = nsrt
+                moonrise = ephem.Moon()
+                moonrise.compute(obs)
+
+                if moonrise.alt > obs.horizon:
+                    # moon is up at sunrise
+                    st = ephem.Date(obs.next_setting(ephem.Moon(), start=nsrt)).datetime()
+                else:
+                    st = ephem.Date(obs.previous_setting(ephem.Moon(), start=nsrt)).datetime()
+
+                if st < rt:
+                    st = ephem.Date(obs.next_setting(ephem.Moon(), start=nsrt)).datetime()
+
+		# Plot the day's zonal winds.  Send in references to the various graphs.
+                PlotDay(files[-1],directions=['East','West'],Doppler_Fig = fig, Doppler_Graph = ugraph, Temperature_Fig = fig, Temperature_Graph = bgraph, cull=True);
+                ugraph.legend().set_visible(False)
+                ugraph.set_ylabel('')
+                if np.mod(dn.day-1,span) == 0:
+		    # This is the top graph.  Label it
+                    ugraph.set_title('Zonal')
+                else:
+                    ugraph.set_title('')
+                ugraph.set_xlabel('')
+                ugraph.set_yticks(np.arange(-200,201,100))
+                plt.setp(ugraph.get_lines(),markersize=4)
+                ugraph.fill_between([rt,st],[-200,-200],[200,200],alpha=0.1,linewidth=0,facecolor='k')
+                ugraph.set_xlim([psst,nsrt])
+
+		# Plot the monthly averages
+                ind = np.isfinite(bin_U)
+                center_dn = np.array([dn+datetime.timedelta(hours = x) for x in center_time])
+		center_dn = np.array([x.replace(tzinfo=pytz.utc) for x in center_dn])
+                ugraph.fill_between(center_dn[ind],bin_U[ind]-bin_eU[ind],bin_U[ind]+bin_eU[ind],alpha=0.5,linewidth=0,facecolor='k')
+                ugraph.set_xlim([psst, nsrt])
+
+		# Plot the day's meridional winds.  Send in references to the various graphs.
+                PlotDay(files[-1],directions=['North','South'],Doppler_Fig = fig, Doppler_Graph = vgraph, Temperature_Fig = fig, Temperature_Graph = bgraph, cull=True);
+                vgraph.legend().set_visible(False)
+                vgraph.set_ylabel('')
+                if np.mod(dn.day-1,span) == 0:
+		    # This is the top graph.  Label it
+                    vgraph.set_title('Meridional')
+                else:
+                    vgraph.set_title('')
+                vgraph.set_xlabel('')
+                vgraph.set_yticks(np.arange(-200,201,100))
+                plt.setp(vgraph.get_lines(),markersize=4)
+                vgraph.fill_between([rt,st],[-200,-200],[200,200],alpha=0.1,linewidth=0,facecolor='k')
+                vgraph.set_xlim([psst,nsrt])
+
+		# Plot the monthly averages
+                ind = np.isfinite(bin_V)
+                center_dn = np.array([dn+datetime.timedelta(hours = x) for x in center_time])
+                center_dn = np.array([x.replace(tzinfo=sitetz) for x in center_dn])
+		vgraph.fill_between(center_dn[ind],bin_V[ind]-bin_eV[ind],bin_V[ind]+bin_eV[ind],alpha=0.5,linewidth=0,facecolor='k')
+                vgraph.set_xlim([psst, nsrt])
+
+		# Plot the day's vertical winds.  Send in references to the various graphs.
+                PlotDay(files[-1],directions=['Zenith'],Doppler_Fig = fig, Doppler_Graph = wgraph, Temperature_Fig = fig, Temperature_Graph = bgraph, cull=True);
+                wgraph.legend().set_visible(False)
+                wgraph.set_ylabel('')
+                if np.mod(dn.day-1,span) == 0:
+		    # This is the top plot.  Label it.
+                    wgraph.set_title('Vertical')
+                else:
+                    wgraph.set_title('')
+                wgraph.set_xlabel('')
+                wgraph.set_yticks(np.arange(-200,201,100))
+                plt.setp(wgraph.get_lines(),markersize=4)
+                wgraph.fill_between([rt,st],[-200,-200],[200,200],alpha=0.1,linewidth=0,facecolor='k')
+                wgraph.set_xlim([psst, nsrt])
+
+		# Work the temperature plot
+                bgraph.legend().set_visible(False)
+                bgraph.set_ylabel('')
+                if np.mod(dn.day-1,span) == 0:
+		    # This is the top plot. Label it.
+                    bgraph.set_title('Temperature')
+                else:
+                    bgraph.set_title('')
+                bgraph.set_xlabel('')
+                bgraph.set_yticks(np.arange(500,1501,250))
+                plt.setp(bgraph.get_lines(),markersize=4)
+                bgraph.fill_between([rt,st],[500,500],[1500,1500],alpha=0.1,linewidth=0,facecolor='k')
+                bgraph.set_xlim([psst, nsrt])
+
+		# Monthly averages
+                ind = np.isfinite(bin_T)
+                center_dn = np.array([dn+datetime.timedelta(hours = x) for x in center_time])
+		center_dn = np.array([x.replace(tzinfo=sitetz) for x in center_dn])
+                bgraph.fill_between(center_dn[ind],bin_T[ind]-bin_eT[ind],bin_T[ind]+bin_eT[ind],alpha=0.5,linewidth=0,facecolor='k')
+
+		# Label the row on the right-most axis
+                bgraph2 = bgraph.twinx()
+                if center_dn[0].astimezone(pytz.utc).day == center_dn[-1].astimezone(pytz.utc).day:
+                    bgraph2.set_ylabel(dn.astimezone(pytz.utc).strftime('%b %d %Y'))
+                else:
+                    bgraph2.set_ylabel('%s-%s' % (center_dn[0].astimezone(pytz.utc).strftime('%b %d'), center_dn[-1].astimezone(pytz.utc).strftime('%d %Y')))
+                bgraph2.set_yticks([])
+
+            except Exception,e:
+		print str(e) 
+                error = 'Error'
+                # No files, still create graphs, and label them if they are the top.
+                if np.mod(dn.day-1,span) == 0:
+                        ugraph.set_title('Zonal')
+                        vgraph.set_title('Meridional')
+                        wgraph.set_title('Vertical')
+                        bgraph.set_title('Temperature')
+
+		# But, remove the axis from the graphs.
+                ugraph.yaxis.set_visible(False)
+                vgraph.yaxis.set_visible(False)
+                wgraph.yaxis.set_visible(False)
+                bgraph.yaxis.set_visible(False)
+                ugraph.xaxis.set_visible(False)
+                vgraph.xaxis.set_visible(False)
+                wgraph.xaxis.set_visible(False)
+                bgraph.xaxis.set_visible(False)
+        else:
+            # No files, still create graphs, and label them if they are the top.
+            if np.mod(dn.day-1,span) == 0:
+                    ugraph.set_title('Zonal')
+                    vgraph.set_title('Meridional')
+                    wgraph.set_title('Vertical')
+                    bgraph.set_title('Temperature')
+
+	    # But, remove the axis from the graphs.
+            ugraph.yaxis.set_visible(False)
+            vgraph.yaxis.set_visible(False)
+            wgraph.yaxis.set_visible(False)
+            bgraph.yaxis.set_visible(False)
+            ugraph.xaxis.set_visible(False)
+            vgraph.xaxis.set_visible(False)
+            wgraph.xaxis.set_visible(False)
+            bgraph.xaxis.set_visible(False)
+
+
+        # Plot summary of when data are available on Kp plot
+        cloudthreshold = -25.
+        winderrorlimit = 50.
+        temperrorlimit = 100.
+        k_inst = 6
+
+	# Loop through the available files
+        for f in files:
+            if os.path.isfile(f):
+                npzfile = np.load(f)
+                d = npzfile['FPI_Results'].ravel()[0]
+                del npzfile.f
+                npzfile.close()
+
+                ind = []
+                try:
+                    # Cloud Check
+                    ind += list(np.where(d['Clouds']['mean'] > cloudthreshold)[0])
+                except:
+                    error = 'no cloudsensor'
+
+                # Error Check
+                ind += list(np.where(d['sigma_LOSwind'] > winderrorlimit)[0])
+                ind += list(np.where(d['sigma_T'] > temperrorlimit)[0])
+
+                # Direction Check
+                ind += [x for x in range(len(d['direction'])) if 'Unknown' in d['direction'][x]]
+                ind += [x for x in range(len(d['direction'])) if 'None' in d['direction'][x]]
+                try:
+                    # Plot laser start/stop times
+                    agraph.plot([d['laser_times'][0].astimezone(pytz.utc), d['laser_times'][-1].astimezone(pytz.utc)],\
+                                [k_inst, k_inst], 'k,-')
+                except:
+                    error = 'no laser'
+
+                # Plot good X exposures as \
+                good = list(set(range(len(d['direction'])))-set(ind))
+                times = [x.astimezone(pytz.utc) for x in d['sky_times'][good]]
+                agraph.plot(times,len(times)*[k_inst], 'b|')
+
+        # If this is the last plot on the page, save it
+        if np.mod(dn.day-1,span) == span-1:
+            plt.tight_layout()
+            pdf_pages.savefig(fig)
+
+    # Save the last page
+    plt.tight_layout()
+    pdf_pages.savefig(fig)        
+    pdf_pages.close()
 
 def NetworkSummary(network, times, bin_time = np.arange(17,32,0.5),
                 Tmin=500, Tmax=1500, Dmin=-200, Dmax=200, Imin=0, Imax=200, cloudy_temperature=-15.0,
@@ -143,7 +474,7 @@ def NetworkSummary(network, times, bin_time = np.arange(17,32,0.5),
     Temperature_Ax = Temperature_Fig.add_subplot(111)
 
     # Mask the data to be plotted
-    masked_T = ma.masked_where((np.isnan(all_T)) | (all_eT > 100) | (all_T > Tmax*2), all_T)
+    masked_T = ma.masked_where((np.isnan(all_T)) | (all_eT > 100) | (all_T > Tmax), all_T)
 
     # Plot the data
     mappable_T = Temperature_Ax.pcolormesh(times,center_time,masked_T,vmin=Tmin,vmax=Tmax)
@@ -684,7 +1015,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
             Tmin=500, Tmax=1500, Dmin=-200, Dmax=200,
             reference='laser',directions=None,
 	    Temperature_Fig = None, Temperature_Graph = None, Doppler_Fig = None, Doppler_Graph = None,
-        Zenith_Times=[21.,4.]):
+        Zenith_Times=[21.,4.],cull=False):
 #
 # Function to plot a single night's data for a single station
 #
@@ -761,7 +1092,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
     # Calculate the vertical wind and interpolate it
     ind = FPI.all_indices('Zenith',FPI_Results['direction'])
     w = (FPI_Results['LOSwind'][ind]-ref_Dop[ind]) # LOS is away from instrument
-    sigma_w = FPI_Results['sigma_LOSwind'][ind]
+    sigma_w = FPI_Results['sigma_fit_LOSwind'][ind]
     dt = []
     for x in FPI_Results['sky_times'][ind]:
         diff = (x - FPI_Results['sky_times'][0])
@@ -804,10 +1135,10 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
 
         if x == 'Zenith':
             Doppler_Wind = (FPI_Results['LOSwind'][ind]-ref_Dop[ind])
-            Doppler_Error = np.sqrt(FPI_Results['sigma_LOSwind'][ind]**2)
+            Doppler_Error = np.sqrt(FPI_Results['sigma_fit_LOSwind'][ind]**2)
         else:
             Doppler_Wind = (FPI_Results['LOSwind'][ind]-ref_Dop[ind]-w[ind]*np.cos(FPI_Results['ze'][ind]*np.pi/180.))/np.sin(FPI_Results['ze'][ind]*np.pi/180.)
-            Doppler_Error = np.sqrt(FPI_Results['sigma_LOSwind'][ind]**2+sigma_w[ind]**2)
+            Doppler_Error = np.sqrt(FPI_Results['sigma_fit_LOSwind'][ind]**2+sigma_w[ind]**2)
         if x == 'South' or x == 'West':
             Doppler_Wind = -Doppler_Wind
             
@@ -887,7 +1218,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
 
 def CompareData(files, full_clear=-30, full_cloud=-20,
             Tmin=500, Tmax=1500, Dmin=-200, Dmax=200,
-            reference='Laser',directions=None,
+            reference='Laser',directions=None,displayhours=False,
 	    Temperature_Fig = None, Temperature_Graph = None, Doppler_Fig = None, Doppler_Graph = None):
 #
 # Function to plot a single night's data for a single station
@@ -940,6 +1271,12 @@ def CompareData(files, full_clear=-30, full_cloud=-20,
             Doppler_Fig = plt.figure()
             Doppler_Graph = Doppler_Fig.add_subplot(111)
             Doppler_Graph.hold(True)
+
+	if len(all_colors) == 0:
+            all_markers = ['s', 'd', '^', 'x', 'p', '*', '+', 'v', '>', '<']
+            all_colors  = ['r', 'g', 'b', 'c', 'm', 'y', 'k']
+            all_markers.reverse() # pop() starts from the end
+	    all_colors.reverse()
 
         fmt = {'Color': all_colors.pop(), 'Marker': all_markers.pop()}
                 
@@ -1019,7 +1356,7 @@ def CompareData(files, full_clear=-30, full_cloud=-20,
 #            if x == 'North' or x == 'East':
 #                Doppler_Wind = -Doppler_Wind
                 
-            Doppler_Graph.plot(FPI_Results['sky_times'][ind],Doppler_Wind,color=fmt['Color'],alpha=0.3,marker=None,label='_nolegend_')
+#            Doppler_Graph.plot(FPI_Results['sky_times'][ind],Doppler_Wind,color=fmt['Color'],alpha=0.3,marker=None,label='_nolegend_')
             Doppler_Graph.plot(-999,-999,color=fmt['Color'],marker=fmt['Marker'],label='%s, %s' % (inst_name,x))
             
             if ('Clouds' in FPI_Results.keys()) is False:
@@ -1029,9 +1366,15 @@ def CompareData(files, full_clear=-30, full_cloud=-20,
                 # No cloud data so create plot without alpha
                 for (t,y,ey,z,ez) in zip(FPI_Results['sky_times'][ind], FPI_Results['T'][ind], FPI_Results['sigma_T'][ind],Doppler_Wind,Doppler_Error):
 
-                    # Plot the points and error bars on the graphs
-                    Temperature_Graph.errorbar(t,y,yerr=ey,color=fmt['Color'],fmt=fmt['Marker'],label='_nolegend_')
-                    Doppler_Graph.errorbar(t,z,yerr=ez,color=fmt['Color'],fmt=fmt['Marker'],label='_nolegend_')
+		    if (ez < 10.) and (abs(z) < 200.):
+			if displayhours:
+			    t = (t.hour * 3600 + t.minute * 60 + t.second)/3600.
+			    if t > 18:
+				t = t-24.
+
+                        # Plot the points and error bars on the graphs
+                        Temperature_Graph.errorbar(t,y,yerr=ey,color=fmt['Color'],fmt=fmt['Marker'],label='_nolegend_')
+                        Doppler_Graph.errorbar(t,z,yerr=ez,color=fmt['Color'],fmt=fmt['Marker'],label='_nolegend_')
             else:
                 # Loop through each point (needed to be done this way to allow setting
                 # the alpha value for each individual point)
@@ -1052,12 +1395,17 @@ def CompareData(files, full_clear=-30, full_cloud=-20,
     
     # Format the Temperature plot               
     Temperature_Graph.set_ylim(Tmin,Tmax)
+    if displayhours:
+        t0 = np.floor((t0.hour * 3600 + t0.minute * 60 + t0.second)/3600.) - 24.
+        t1 = np.ceil((t1.hour * 3600 + t1.minute * 60 + t1.second)/3600.)
+
     Temperature_Graph.set_xlim(t0,t1)
 
     #Temperature_Graph.set_xlim(FPI_Results['sky_times'][0],FPI_Results['sky_times'][-1])
     Temperature_Graph.legend(ncol=4, prop=fontP)
-    Temperature_Graph.xaxis.set_major_formatter(dates.DateFormatter('%H'))
-    Temperature_Graph.set_ylabel('Neutral Temperature [K]')#, fontsize = fontsize)
+    if not(displayhours):
+        Temperature_Graph.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+        Temperature_Graph.set_ylabel('Neutral Temperature [K]')#, fontsize = fontsize)
     Temperature_Graph.set_xlabel('Universal Time')#, fontsize = fontsize)
     Temperature_Graph.grid(True)
 
@@ -1068,8 +1416,9 @@ def CompareData(files, full_clear=-30, full_cloud=-20,
     Doppler_Graph.legend(ncol=4, prop=fontP)
     Doppler_Graph.xaxis.set_major_formatter(dates.DateFormatter('%H'))
     Doppler_Graph.set_ylabel('Neutral Winds [m/s]')#, fontsize = fontsize)
-    Doppler_Graph.set_xlabel('Universal Time')#, fontsize = fontsize)
-    Doppler_Graph.plot([FPI_Results['sky_times'][0],FPI_Results['sky_times'][-1]],[0,0],'k--')
+    if not(displayhours):
+        Doppler_Graph.set_xlabel('Universal Time')#, fontsize = fontsize)
+        Doppler_Graph.plot([FPI_Results['sky_times'][0],FPI_Results['sky_times'][-1]],[0,0],'k--')
     Doppler_Graph.grid(True)
 
     # Mark the plots with the Doppler reference type
