@@ -100,7 +100,7 @@ def activeinstruments():
     #code['cto']['scn']['0M'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps2/cascade/', 'split':'/usr/bin/split'}
 
     code['hka']['asi']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Data/', 'split':'C:/cygwin/bin/split'}
-    code['hka']['nfi']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Data/', 'split':'C:/cygwin/bin/split'}
+    code['hka']['nfi']['01'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split'}
     #code['hka']['scn']['0K'] = {'send_dir':'/home/gps/Sending', 'local_dir':'/home/gps/cascade', 'split':'/usr/bin/split'}
     code['hka']['cas']['01'] = {'send_dir':'/mnt/data/Sending/', 'local_dir':'mnt/data/','split':'/usr/bin/split'}
 
@@ -201,7 +201,7 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
 
 
     ########## TO ZIP UP NFI/ASI ##########  
-        if 'asi' == instr or 'nfi' == instr:
+        if 'asi' == instr: # or 'nfi' == instr:
             name = "%02s-%02s" %(day,nday)
             os.chdir(code[site][instr][num]['local_dir']+year)
             # Gun-Tar Folder
@@ -275,7 +275,7 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
                 
                 
     ########## TO ZIP UP PIC ##########
-        if 'pic' == instr:
+        if 'pic' == instr or 'nfi' == instr:
             os.chdir(code[site][instr][num]['local_dir']+year)
             # Grab all files made within 24 hour period
             name = [f for f in glob(os.path.join('*','*.tif')) if (dt.datetime(int(year),int(month),int(day),12) < dt.datetime.fromtimestamp(os.path.getmtime(f)) < (dt.datetime(int(year),int(month),int(day),12)+dt.timedelta(1)))]
