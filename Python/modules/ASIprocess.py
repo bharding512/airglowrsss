@@ -119,8 +119,10 @@ def process_instr(inst,year,doy,do_DB=True):
                 # Look in the data directory, and grab the files if they were
                 # taken between the start and stop times.
 
-                fns = glob.glob(data_dir + site.upper() + '_' + fils + '*.tif')
-                dks = glob.glob(data_dir + site.upper() + '_[dD][aA][rR][kK]_*.tif')
+                #fns = glob.glob(data_dir + site.upper() + '_' + fils + '*.tif')
+                #dks = glob.glob(data_dir + site.upper() + '_[dD][aA][rR][kK]_*.tif')
+                fns = glob.glob(data_dir + '*_' + fils + '*.tif')
+                dks = glob.glob(data_dir + '*_[dD][aA][rR][kK]_*.tif')
                 if len(fns) == 0:
                     # Do old data format if nothing is returned.
                     fns = glob.glob(data_dir + fils + '*.tif')
