@@ -674,6 +674,34 @@ _sites['mh'] = {
                 },
     }
 
+_sites['bdr'] = {
+        'Location':     (11.572, 37.394, 1791),
+        'Name':         '',
+        'Abbreviation': 'bdr',
+        'Timezone':     'Africa/Addis_Ababa',
+        'BufferTime':   None,
+        'CloudThresh':  -25.0,
+        'scpUser':      None,
+        'scpPort':      None,
+        'Network':      'ethiopia',
+        'sql_id':       None, # ID on the airglow SQL database
+        'share':        False, # whether or not to save a copy of the npz file in a separate folder
+        'borders':      True,
+        'Directions':   {
+                'Laser': {'ze': -179, 'az': 212, 'exptime': 30, 
+		            'n_exp': 0, 'last_exp': None, 'delay':600,}, 
+	            'Zenith': {'ze': 0, 'az': 0, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':1500,}, 
+	            'North': {'ze': 45, 'az': 0, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+	            'South': {'ze': 45, 'az': 180, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+	            'East': {'ze': 45, 'az': 90, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+	            'West': {'ze': 45, 'az': -90, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0,},
+                },
+    }
 _sites['ao'] = {
         'Location':     (18.3442, -66.7528, 0),
         'Name':         'Arecibo Observatory',

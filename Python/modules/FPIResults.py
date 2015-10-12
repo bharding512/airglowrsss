@@ -14,6 +14,7 @@ Included functions are:
     GetModels
     PlotAverages
     PlotClimatology
+    PlotClimatologyF107
     PlotGridMonth
     PlotSpaghetti
     SetBinTime
@@ -993,6 +994,239 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         #fig.savefig("%s%s-%4.0f-%s.eps" % (dirout,title[i],YEAR,SITE))
         
 
+def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,F_VAL=[50,100,150,200,250]):
+    '''
+    Summary:
+        Plots monthly averages in a 2x6 month plot binning by average F10.7
+    
+    Inputs:
+        SITE = sites of interest, e.g. 'UAO'
+        DNSTART = Datetime to start
+        DNEND = Datetime to end
+        SPLIT = Split look directions in binning [default = False]
+        KP = Filter days by KP [default = [0,10] - all kp]
+        UT = Plot in UT [default = True]
+        F_VALS = List of F10.7 Cutoff values
+
+    Outputs:
+
+    History:
+        6/13/13 -- Written by DJF (dfisher2@illinois.edu)
+    
+    '''
+    _mpl.rcParams.update({'font.size':8})
+    _mpl.rcParams['savefig.dpi'] = 200
+    _mpl.rcParams['figure.figsize'] = (6,4)   
+    
+    # Set up Figures
+    if len(F_VAL) == 2:
+        colors= ['#0000FF','#FF0000']
+    elif len(F_VAL) == 3:
+        colors= ['#0000FF','#008000','#FF0000']
+    else:
+        colors= ['#000000','#AA0000','#FF0000','#FFAA00','#FFFF00','#AAFF00','#00FF00','#00FFAA','#00FFFF','#00AAFF','#0000FF','#0000AA','#000000','#AA0000','#FF0000','#FFAA00','#FFFF00','#AAFF00','#00FF00','#00FFAA','#00FFFF','#00AAFF','#0000FF','#0000AA'][::-1]
+    markerwide = 0.0001
+    linewide = 1
+    ms = 3
+    
+    _plt.figure(0)
+    axz={};fz,((axz[0],axz[1]),(axz[2],axz[3]),(axz[4],axz[5]), \
+               (axz[6],axz[7]),(axz[8],axz[9]),(axz[10],axz[11]))  = _plt.subplots(6,2, sharex=True, sharey=False)
+    _plt.figure(1)
+    axm={};fm,((axm[0],axm[1]),(axm[2],axm[3]),(axm[4],axm[5]), \
+               (axm[6],axm[7]),(axm[8],axm[9]),(axm[10],axm[11]))  = _plt.subplots(6,2, sharex=True, sharey=False)
+    _plt.figure(2)
+    axv={};fv,((axv[0],axv[1]),(axv[2],axv[3]),(axv[4],axv[5]), \
+               (axv[6],axv[7]),(axv[8],axv[9]),(axv[10],axv[11]))  = _plt.subplots(6,2, sharex=True, sharey=False)
+    _plt.figure(3)
+    axt={};ft,((axt[0],axt[1]),(axt[2],axt[3]),(axt[4],axt[5]), \
+               (axt[6],axt[7]),(axt[8],axt[9]),(axt[10],axt[11]))  = _plt.subplots(6,2, sharex=True, sharey=False)
+    
+    # First Find F10.7 Range Bins
+    f_doy_index = []
+    f_yr_index = []
+    for a in F_VAL:
+        f_doy_index.append([])
+        f_yr_index.append([])
+
+    for step in range((DNEND-DNSTART).days):
+        dn = DNSTART+_dt.timedelta(days=step)
+        
+        pt = _pyglow.Point(dn,0,0,250)
+        try:
+            Fb = (pt.f107a+pt.f107)/2.
+            fbin = [k for k,i in enumerate(F_VAL) if Fb>=i and Fb-(F_VAL[1]-F_VAL[0])<i][0]
+        except:
+            fbin = [k for k,i in enumerate(F_VAL) if pt.f107a>=i and pt.f107a-(F_VAL[1]-F_VAL[0])<i][0]
+        f_doy_index[fbin].append(int((dn-_dt.datetime(dn.year,1,1)).total_seconds()/(60*60*24)+1))
+        f_yr_index[fbin].append(dn.year)
+    
+    # Get Monthly Average for basis
+    for nsp,mon in enumerate(range(1,13)):
+        nsp = ((nsp*2)%24 - 11*((nsp*2)%24>11))%12
+        for k,(f_doy,f_yr) in enumerate(zip(f_doy_index,f_yr_index)):
+            print mon,'-',F_VAL[k]
+            MD = BinMonthlyData(SITE,arbdate.year,mon,SPLIT=SPLIT,KP=KP,DLIST=f_doy,YLIST=f_yr)
+            #print '|_ F107b:',MD.f107,'\n\n'
+            MD.t2 = MD.t + _dt.timedelta(minutes=3)
+            '''
+            # Remove certain garbage data points:
+            if SITE == 'renoir' and mon == 8:
+                MD.w = MD.w*_np.nan
+            if SITE == 'renoir' and mon == 12*5+7:
+                MD.T[b_len/2:b_len/2+10] = _np.ones(10)*_np.nan
+                MD.v[b_len/2:b_len/2+10] = _np.ones(10)*_np.nan
+                MD.u[b_len/2:b_len/2+10] = _np.ones(10)*_np.nan
+                MD.w[b_len/2:b_len/2+10] = _np.ones(10)*_np.nan
+            if SITE == 'par' and (mon == 12*2+5 or mon == 12*2+7 or mon == 12*5+7):
+                MD.T = MD.T*_np.nan
+                MD.v = MD.v*_np.nan
+                MD.u = MD.u*_np.nan
+                MD.w = MD.w*_np.nan
+            if SITE == 'par' and mon == 12*3+5:
+                MD.v = MD.v*_np.nan
+            '''
+            for l,w in enumerate(MD.w):
+                if abs(w) > 40:
+                    MD.w[l] = _np.nan
+            gflag = 'on'
+            if not(UT):
+                # FIX THIS TO BE UNIVERSAL OR DELETE LATER...
+                if SITE == 'mor':
+                    sltoffset = - _dt.timedelta(minutes=31)
+                elif SITE == 'par':
+                    sltoffset = - _dt.timedelta(hours=5,minutes=31)
+                elif SITE == 'renoir':
+                    sltoffset = - _dt.timedelta(hours=2,minutes=12)
+                else:
+                    sltoffset = _dt.timedelta(minutes=0)
+                    print 'No UT/LT conversion... in UT'
+            else:
+                sltoffset = 0
+            MD.t = MD.t + sltoffset
+            #tlim = [MD.t[len(MD.t)/5] + sltoffset,MD.t[-len(MD.t)/5] + sltoffset]
+            tlim = [arbdate - _dt.timedelta(hours=7),arbdate + _dt.timedelta(hours=7)]
+            tshift = 10
+
+            # Zonal
+            axz[nsp].set_ylabel("%s" % (cal.month_abbr[mon]),labelpad=1)
+            axz[nsp].set_ylim(-100, 200)
+            axz[nsp].set_xlim(tlim)
+            axz[nsp].set_yticks([0, 100])
+            if SPLIT:
+                axz[nsp].errorbar(MD.t,MD.u,yerr=MD.uv,fmt='.-',color=colors[2],linewidth=linewide,elinewidth=linewide,capsize=markerwide,label='East',markersize=ms) 
+                axz[nsp].errorbar(MD.t2,MD.u2,yerr=MD.u2v,fmt='.-',color=colors[3],linewidth=linewide,elinewidth=linewide,capsize=markerwide,label='West',markersize=ms)
+            else:
+                axz[nsp].errorbar(MD.t+_dt.timedelta(minutes=tshift*k),MD.u,yerr=MD.uv,fmt='.-',color=colors[k],linewidth=linewide,elinewidth=linewide,capsize=markerwide,markersize=ms,label='Data')
+            axz[nsp].grid(gflag)
+            axz[nsp].plot([MD.t[0],MD.t[-1]],[0,0],'k--')
+
+            # Meridional
+            axm[nsp].set_ylabel("%s" % (cal.month_abbr[mon]),labelpad=1)
+            axm[nsp].set_ylim(-150, 150)
+            axm[nsp].set_xlim(tlim)
+            axm[nsp].set_yticks([ -75, 0, 75])
+            if SPLIT:
+                axm[nsp].errorbar(MD.t,MD.v,yerr=MD.vv,fmt='.-',color=colors[0],linewidth=linewide,elinewidth=linewide,capsize=markerwide,markersize=ms,label='East') 
+                axm[nsp].errorbar(MD.t2,MD.v2,yerr=MD.v2v,fmt='.-',color=colors[1],linewidth=linewide,elinewidth=linewide,capsize=markerwide,markersize=ms,label='West')
+            else:
+                axm[nsp].errorbar(MD.t+_dt.timedelta(minutes=tshift*k),MD.v,yerr=MD.vv,fmt='.-',color=colors[k],linewidth=linewide,elinewidth=linewide,capsize=markerwide,markersize=ms,label='Data')
+            axm[nsp].grid(gflag)
+            axm[nsp].plot([MD.t[0],MD.t[-1]],[0,0],'k--',label=None)
+
+            # Vertical
+            axv[nsp].set_ylabel("%s" % (cal.month_abbr[mon]),labelpad=1)
+            axv[nsp].set_ylim(-60, 60)
+            axv[nsp].set_xlim(tlim)
+            axv[nsp].set_yticks([ -25, 0, 25])
+            axv[nsp].grid(gflag)
+            axv[nsp].errorbar(MD.t+_dt.timedelta(minutes=tshift*k),MD.w,yerr=MD.wv,fmt='.-',color=colors[k],linewidth=linewide,elinewidth=linewide,capsize=markerwide,markersize=ms)
+            axv[nsp].plot([MD.t[0],MD.t[-1]],[0,0],'k--',label=None)
+
+            # Temps
+            axt[nsp].set_ylabel("%s" % (cal.month_abbr[mon]),labelpad=1)
+            axt[nsp].set_ylim(600, 1200)
+            axt[nsp].set_xlim(tlim)
+            axt[nsp].set_yticks([700, 900, 1100])
+            #axt[nsp].set_yticks([800, 1000])
+            axt[nsp].grid(gflag)
+            axt[nsp].errorbar(MD.t+_dt.timedelta(minutes=tshift*k),MD.T,yerr=MD.Tv,fmt='.-',color=colors[k],linewidth=linewide,elinewidth=linewide,capsize=markerwide,markersize=ms)
+
+    # Finalize legend
+    s = _plt.errorbar([-2,-1],[0,0],yerr=[1,1],fmt='.-',color='b',linewidth=linewide,elinewidth=linewide,capsize=markerwide,markersize=ms)
+    m = _plt.errorbar([-2,-1],[0,0],yerr=[1,1],fmt='.-',color='g',linewidth=linewide,elinewidth=linewide,capsize=markerwide,markersize=ms)
+    l = _plt.errorbar([-2,-1],[0,0],yerr=[1,1],fmt='.-',color='r',linewidth=linewide,elinewidth=linewide,capsize=markerwide,markersize=ms)
+    
+    if len(F_VAL) == 2:
+        titles = [r'$\overline{F_{10.7}} < 125$',r'$\overline{F_{10.7}} \geq 125$']
+        fz.legend([s,l],titles,bbox_to_anchor=(.15, .9, .76, .102), loc=3,ncol=2, mode="expand", borderaxespad=0.,frameon=False)
+        fm.legend([s,l],titles,bbox_to_anchor=(.15, .9, .76, .102), loc=3,ncol=2, mode="expand", borderaxespad=0.,frameon=False)
+        fv.legend([s,l],titles,bbox_to_anchor=(.15, .9, .76, .102), loc=3,ncol=2, mode="expand", borderaxespad=0.,frameon=False)
+        ft.legend([s,l],titles,bbox_to_anchor=(.15, .9, .76, .102), loc=3,ncol=2, mode="expand", borderaxespad=0.,frameon=False)
+    elif len(F_VAL) == 3:
+        titles = [r'$\overline{F_{10.7}} < 100$',r'$100 \leq \overline{F_{10.7}} < 200$',r'$\overline{F_{10.7}} \geq 200$']
+        fz.legend([s,m,l],titles,bbox_to_anchor=(.15, .9, .76, .102), loc=3,ncol=2, mode="expand", borderaxespad=0.,frameon=False)
+        fm.legend([s,m,l],titles,bbox_to_anchor=(.15, .9, .76, .102), loc=3,ncol=2, mode="expand", borderaxespad=0.,frameon=False)
+        fv.legend([s,m,l],titles,bbox_to_anchor=(.15, .9, .76, .102), loc=3,ncol=2, mode="expand", borderaxespad=0.,frameon=False)
+        ft.legend([s,m,l],titles,bbox_to_anchor=(.15, .9, .76, .102), loc=3,ncol=2, mode="expand", borderaxespad=0.,frameon=False)
+       
+    # Finalize Zonal
+    #fz.suptitle("Monthly Averaged Zonal Wind from %s" % name[SITE], fontsize=12, fontweight='bold')
+    fz.subplots_adjust(hspace = 0.001)
+    fz.subplots_adjust(wspace = .32)
+    fz.subplots_adjust(left=.14)
+    if UT:
+        fz.text(0.5,0.05,'Hour [UTC]',ha='center',va='center', fontsize=11)
+    else:
+        fz.text(0.5,0.05,'Hour [SLT]',ha='center',va='center', fontsize=11)
+    fz.text(0.02,0.5,'Wind Speed [$m/s$]',ha='center',va='center',rotation='vertical', fontsize=11)
+    axz[0].xaxis.set_major_formatter(md.DateFormatter('%H')) # :%M
+    fz.savefig("%s%s-F107b-%s.eps" % (dirout,'Clima-Z',SITE),format='eps')
+    #fz.savefig("%s%s-F107b-%s.pdf" % (dirout,'Clima-Z',SITE),format='pdf')
+    
+    # Finalize Meridional
+    #fm.suptitle("Monthly Averaged Meridional Wind from %s" % name[SITE], fontsize=12, fontweight='bold')
+    fm.subplots_adjust(hspace = 0.001)
+    fm.subplots_adjust(wspace = .32)
+    fm.subplots_adjust(left=.14)
+    if UT:
+        fm.text(0.5,0.05,'Hour [UTC]',ha='center',va='center', fontsize=11)
+    else:
+        fm.text(0.5,0.05,'Hour [SLT]',ha='center',va='center', fontsize=11)
+    fm.text(0.02,0.5,'Wind Speed [$m/s$]',ha='center',va='center',rotation='vertical', fontsize=11)
+    axm[0].xaxis.set_major_formatter(md.DateFormatter('%H')) # :%M
+    fm.savefig("%s%s-F107b-%s.eps" % (dirout,'Clima-M',SITE),format='eps')
+    #fm.savefig("%s%s-F107b-%s.pdf" % (dirout,'Clima-M',SITE),format='pdf')
+    
+    # Finalize Vert
+    #fv.suptitle("Monthly Averaged Vertical Wind from %s" % name[SITE], fontsize=12, fontweight='bold')
+    fv.subplots_adjust(hspace = 0.001)
+    fv.subplots_adjust(wspace = .32)
+    fv.subplots_adjust(left=.14)
+    if UT:
+        fv.text(0.5,0.05,'Hour [UTC]',ha='center',va='center', fontsize=11)
+    else:
+        fv.text(0.5,0.05,'Hour [SLT]',ha='center',va='center', fontsize=11)
+    fv.text(0.02,0.5,'Wind Speed [$m/s$]',ha='center',va='center',rotation='vertical', fontsize=11)
+    axv[0].xaxis.set_major_formatter(md.DateFormatter('%H')) # :%M
+
+    fv.savefig("%s%s-F107b-%s.eps" % (dirout,'Clima-V',SITE),format='eps')
+    #fv.savefig("%s%s-F107b-%s.pdf" % (dirout,'Clima-V',SITE),format='pdf')
+    
+    # Finalize Temp
+    #ft.suptitle("Monthly Averaged Temperature from %s" % name[SITE], fontsize=11, fontweight='bold')
+    ft.subplots_adjust(hspace = 0.001)
+    ft.subplots_adjust(wspace = .32)
+    ft.subplots_adjust(left=.14)
+    if UT:
+        ft.text(0.5,0.05,'Hour [UTC]',ha='center',va='center', fontsize=11)
+    else:
+        ft.text(0.5,0.05,'Hour [SLT]',ha='center',va='center', fontsize=11)
+    ft.text(0.02,0.5,'Temperature [$K$]',ha='center',va='center',rotation='vertical', fontsize=11)
+    axt[0].xaxis.set_major_formatter(md.DateFormatter('%H')) # :%M
+    ft.savefig("%s%s-F107b-%s.eps" % (dirout,'Clima-T',SITE),format='eps')
+    #ft.savefig("%s%s-F107b-%s.pdf" % (dirout,'Clima-T',SITE),format='pdf')
+    
     
 def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1,HIST=False):
     '''
@@ -1834,15 +2068,15 @@ def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1):
 		    if('Zenith' in x.key or 'IN' in x.key):
 		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.w[i], x.we[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
 		    elif('North' in x.key or 'South' in x.key):
-		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.v[i], x.ve[i], x.w[i], x.we[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
 		    elif('East' in x.key or 'West' in x.key):
-		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.w[i], x.we[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
 		    elif('CV_VTI_EKU_PAR' in x.key):
 		        line = ""
 		    elif('Unknown' in x.key):
 		        line = ""
 		    else:
-		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.w[i], x.we[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
 		    #line = "%14s  %19s  %3.1f  %3.1f  %4.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %1.3f  %1.3f  %5s  %30s" % (x.key, utctime, lat, lon, x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.w[i], x.we[i], x.I[i], x.Ie[i], x.cloudy[i], x.notes)
 		    note.write(line)
 		    

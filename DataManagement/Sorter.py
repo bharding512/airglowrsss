@@ -238,7 +238,7 @@ def sorter(san,pgm):
         os.chdir(dir_local+'rx/')
         #os.system('chmod 774 *') No longer have permissions, tx sends as 774.
         # Get info files for non-standard (Zip->Send->Sort) data
-        rxfiles = ["fpi04_kaf", "fpi9", "cas01_hka"]
+        rxfiles = ["fpi04_kaf", "cas01_hka"]
         for x in rxfiles:
             for files in glob(x + '*'):
                 makeinfo(files)
