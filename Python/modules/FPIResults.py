@@ -1109,7 +1109,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,F_VAL=[
             tshift = 10
 
             # Zonal
-            axz[nsp].set_ylabel("%s" % (cal.month_abbr[mon]),labelpad=1)
+            axz[nsp].set_ylabel("%s" % (_cal.month_abbr[mon]),labelpad=1)
             axz[nsp].set_ylim(-100, 200)
             axz[nsp].set_xlim(tlim)
             axz[nsp].set_yticks([0, 100])
@@ -1122,7 +1122,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,F_VAL=[
             axz[nsp].plot([MD.t[0],MD.t[-1]],[0,0],'k--')
 
             # Meridional
-            axm[nsp].set_ylabel("%s" % (cal.month_abbr[mon]),labelpad=1)
+            axm[nsp].set_ylabel("%s" % (_cal.month_abbr[mon]),labelpad=1)
             axm[nsp].set_ylim(-150, 150)
             axm[nsp].set_xlim(tlim)
             axm[nsp].set_yticks([ -75, 0, 75])
@@ -1135,7 +1135,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,F_VAL=[
             axm[nsp].plot([MD.t[0],MD.t[-1]],[0,0],'k--',label=None)
 
             # Vertical
-            axv[nsp].set_ylabel("%s" % (cal.month_abbr[mon]),labelpad=1)
+            axv[nsp].set_ylabel("%s" % (_cal.month_abbr[mon]),labelpad=1)
             axv[nsp].set_ylim(-60, 60)
             axv[nsp].set_xlim(tlim)
             axv[nsp].set_yticks([ -25, 0, 25])
@@ -1144,7 +1144,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,F_VAL=[
             axv[nsp].plot([MD.t[0],MD.t[-1]],[0,0],'k--',label=None)
 
             # Temps
-            axt[nsp].set_ylabel("%s" % (cal.month_abbr[mon]),labelpad=1)
+            axt[nsp].set_ylabel("%s" % (_cal.month_abbr[mon]),labelpad=1)
             axt[nsp].set_ylim(600, 1200)
             axt[nsp].set_xlim(tlim)
             axt[nsp].set_yticks([700, 900, 1100])
@@ -1180,7 +1180,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,F_VAL=[
     else:
         fz.text(0.5,0.05,'Hour [SLT]',ha='center',va='center', fontsize=11)
     fz.text(0.02,0.5,'Wind Speed [$m/s$]',ha='center',va='center',rotation='vertical', fontsize=11)
-    axz[0].xaxis.set_major_formatter(md.DateFormatter('%H')) # :%M
+    axz[0].xaxis.set_major_formatter(_md.DateFormatter('%H')) # :%M
     fz.savefig("%s%s-F107b-%s.eps" % (dirout,'Clima-Z',SITE),format='eps')
     #fz.savefig("%s%s-F107b-%s.pdf" % (dirout,'Clima-Z',SITE),format='pdf')
     
@@ -1194,7 +1194,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,F_VAL=[
     else:
         fm.text(0.5,0.05,'Hour [SLT]',ha='center',va='center', fontsize=11)
     fm.text(0.02,0.5,'Wind Speed [$m/s$]',ha='center',va='center',rotation='vertical', fontsize=11)
-    axm[0].xaxis.set_major_formatter(md.DateFormatter('%H')) # :%M
+    axm[0].xaxis.set_major_formatter(_md.DateFormatter('%H')) # :%M
     fm.savefig("%s%s-F107b-%s.eps" % (dirout,'Clima-M',SITE),format='eps')
     #fm.savefig("%s%s-F107b-%s.pdf" % (dirout,'Clima-M',SITE),format='pdf')
     
@@ -1208,7 +1208,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,F_VAL=[
     else:
         fv.text(0.5,0.05,'Hour [SLT]',ha='center',va='center', fontsize=11)
     fv.text(0.02,0.5,'Wind Speed [$m/s$]',ha='center',va='center',rotation='vertical', fontsize=11)
-    axv[0].xaxis.set_major_formatter(md.DateFormatter('%H')) # :%M
+    axv[0].xaxis.set_major_formatter(_md.DateFormatter('%H')) # :%M
 
     fv.savefig("%s%s-F107b-%s.eps" % (dirout,'Clima-V',SITE),format='eps')
     #fv.savefig("%s%s-F107b-%s.pdf" % (dirout,'Clima-V',SITE),format='pdf')
@@ -1223,7 +1223,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,F_VAL=[
     else:
         ft.text(0.5,0.05,'Hour [SLT]',ha='center',va='center', fontsize=11)
     ft.text(0.02,0.5,'Temperature [$K$]',ha='center',va='center',rotation='vertical', fontsize=11)
-    axt[0].xaxis.set_major_formatter(md.DateFormatter('%H')) # :%M
+    axt[0].xaxis.set_major_formatter(_md.DateFormatter('%H')) # :%M
     ft.savefig("%s%s-F107b-%s.eps" % (dirout,'Clima-T',SITE),format='eps')
     #ft.savefig("%s%s-F107b-%s.pdf" % (dirout,'Clima-T',SITE),format='pdf')
     
