@@ -554,7 +554,8 @@ def distance_to_tangent_point(satlatlonalt, az, ze):
 
 
 
-def azze_to_lla(satlatlonalt, az, ze, ht, tol=1e-6):
+
+def azze_to_lla(satlatlonalt, az, ze, ht):
     '''
     Find the location (lat, lon, alt) where the requested look direction (az, ze) from the requested location
     intersects the specified altitude
@@ -563,92 +564,24 @@ def azze_to_lla(satlatlonalt, az, ze, ht, tol=1e-6):
         satlatlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the satellite
         az - direction of line of sight. degrees east of north.
         ze - direction of line of sight. degrees down from zenith.
-        ht - altitude to calculate the intersection point for.
-        
-    OPTIONAL INPUTS:
-        tol - km, stopping criterion for the solver. Stop when the solution is not moving
-              by more than a horizontal distance of tol.
+        ht - altitude (km) to calculate the intersection point for.
         
     OUTPUTS:
         latlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the tangent location
     
     HISTORY:
         22-Jan-2015: Written by Jonathan J. Makela (jmakela@illinois.edu) based on ICON.tangent_point
+        13-Oct-2015: Updated by Brian J. Harding to use distance_to_shell function.
     '''
-    maxiters = 1e4 # Just in case, so it doesn't hang forever
-
-    # Convert to radians
-    zer = ze*np.pi/180.
-    azr = az*np.pi/180.
-
-    # Create unit vector describing the look direction in Vertical-East-North (VEN) coordinates
-    lookven = np.array([np.cos(zer), np.sin(zer)*np.sin(azr), np.sin(zer)*np.cos(azr)])
-    # Convert satellite location to ecef
-    satxyz = wgs84_to_ecef(satlatlonalt)
-    # Convert look direction to ecef. This is a unit vector.
-    lookxyz = ven_to_ecef(satlatlonalt, lookven)
-
-    # Find the step size which minimizes the altitude. This problem is convex,
-    # so it's easy.
-    def altitude(step_size):
-        xyzi = satxyz + step_size*lookxyz
-        latlonalt = ecef_to_wgs84(xyzi)
-        return latlonalt[2]
+    # This is the main workhorse:
+    s = distance_to_shell(satlatlonalt, az, ze, ht)
     
-    # Or, find the step size for which the slope is zero.
-    # Define function to calculate the slope numerically
-    def slope(step_size):
-        numerical_step = 1e-4 # km
-        alt1 = altitude(step_size - numerical_step/2)
-        alt2 = altitude(step_size + numerical_step/2)
-        return (alt2-alt1)/numerical_step
-
-    # Find two values which straddle the solution.
-    s0 = 0. # start at the satellite
-    s1 = 1. # iterate on the next value until we've straddled the solution
-    f0 = slope(s0)
-    f1 = slope(s1)
-        
-    if (f0 > 0) & (satlatlonalt[2] > ht):
-        raise Exception('Ray path will not intersect desired altitude')
-        
-    if (f0 < 0) & (satlatlonalt[2] < ht):
-        raise Exception('Ray path will not intersect desired altitude')
-
-    M = 2 # multiplier for line search to find straddle points
-    iters = 0
-    while(np.sign(f0)==np.sign(ht-altitude(s1))):
-        iters += 1
-        if iters > maxiters:
-            raise Exception('Initial line search failed: Maximum iterations reached')
-        s0 = s1
-        s1 = s1 * M
-
-    # Straddle points found. Use bisection to converge to the answer.
-    iters = 0
-    while(abs(s0-s1) > tol):
-
-        iters += 1
-        if iters > maxiters:
-            raise Exception('Bisection method failed: Maximum iterations reached')
-
-        # The next step
-        sn = (s0+s1)/2
-                
-        # Figure out what side of the desired altitude this new step is    
-        if(f0 < 0):
-            if altitude(sn) < ht:
-                s1 = sn
-            else:
-                s0 = sn
-        else:
-            if altitude(sn) < ht:
-                s0 = sn
-            else:
-                s1 = sn
-
-    xyzi = satxyz + sn*lookxyz
-    latlonalt = ecef_to_wgs84(xyzi)
+    # Then just use coordinate transforms:
+    sat_xyz = wgs84_to_ecef(satlatlonalt)
+    look_xyz = azze_to_ecef(satlatlonalt, az, ze)
+    xyz = sat_xyz + s*look_xyz
+    latlonalt = ecef_to_wgs84(xyz)
+    
     return latlonalt
     
     
