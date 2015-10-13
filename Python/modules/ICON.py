@@ -650,3 +650,32 @@ def azze_to_lla(satlatlonalt, az, ze, ht, tol=1e-6):
     xyzi = satxyz + sn*lookxyz
     latlonalt = ecef_to_wgs84(xyzi)
     return latlonalt
+    
+    
+    
+    
+def get_solar_zenith_angle(pt):
+    '''
+    Calculate the angle from zenith to the sun at the time and
+    location of the pyglow.Point pt.
+    INPUT:
+        pt - pyglow.Point
+    OUTPUT:
+        sza - Solar zenith angle (deg)
+    HISTORY:
+        13-Oct-2015: Written by Brian J. Harding
+    '''
+    import ephem
+    sun = ephem.Sun()
+    obs = ephem.Observer()
+    obs.lon = str(pt.lon)
+    obs.lat = str(pt.lat)
+    obs.date = pt.dn.strftime('%Y/%m/%d %H:%M:%S')
+    obs.pressure = 0. # ignore refraction. This makes a negligible difference.
+    obs.elevation = 1000*pt.alt
+    sun.compute(obs)
+    sza = np.pi/2 - float(sun.alt) # radians
+    return sza*180./np.pi
+    
+    
+    
