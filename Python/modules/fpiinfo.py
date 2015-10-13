@@ -79,6 +79,10 @@ _dates['minime92'] = {}
 _dates['minime92']['a3o'] = { 'start': datetime.datetime(2000, 1, 1),
                               'stop' : None, }
 
+_dates['minime94'] = {}
+_dates['minime94']['bdr'] = { 'start': datetime.datetime(2015, 4, 1),
+                              'stop' : None, }
+
 _dates['noto01'] = {}
 _dates['noto01']['mh'] = { 'start': datetime.datetime(1900,1,1), # TODO, if it matters
                             'stop' : None, }
@@ -1121,6 +1125,39 @@ _instruments['minime92'] = {
         'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
         'skyI_quality_thresh'   : -np.inf, # The brightness [counts/sec] below which we raise the quality flag
+    }
+
+# THIS IS COPIED FROM minime09-djf
+_instruments['minime94'] = {
+        'name'          : 'minime94',
+        'N'             : 500,          # Number of annuli
+        'N0'            : 0,            # First annulus to use
+        'N1'            : 500,          # Last annulus to use
+        'focal_length'  : 300e-3,       # focal length of lens in m
+        'pix_size'      : 13e-6,        # pixel size on CCD in m
+        'lam_laser'     : 632.8e-9,     # laser wavelength in m
+        'lam0'          : 630.0e-9,     # nominal line center wavelength in m
+        'nominal_t'     : 1.5e-2,       # approximate etalon gap in m
+        'default_params': {# instrument params to be used if the laser fails (i.e., zenith reference)
+                                'R': 0.75,
+                            'alpha': 8.4e-5,
+                                'I': 1.0,
+                                'B': 0.0,
+                               'a1': 3.0e-2,
+                               'a2': -3.1e-2,
+                               'b0': 2.0,
+                               'b1': 1.1,
+                               'b2': -2.8e-1, 
+                           'center':  (254.3, 258.7),
+                          },
+        'sql_winds_id'          : None,           # ID for SQL database
+        'sql_temperatures_id'   : None,           # ID for SQL database
+        'sql_diagnostics_id'    : None,           # ID for SQL database
+        'many_fringes'          : True,         # indicates whether radial falloff terms should be used
+        'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'send_to_madrigal'      : True, # whether or not we should send this instrument's data to Madrigal
+        'skyI_quality_thresh'   : 0.0891, # The brightness [counts/sec] below which we raise the quality flag
     }
 
 _instruments['noto01'] = {} # TODO (if we need to)
