@@ -1127,11 +1127,11 @@ _instruments['minime92'] = {
         'skyI_quality_thresh'   : -np.inf, # The brightness [counts/sec] below which we raise the quality flag
     }
 
-# THIS IS COPIED FROM minime09-djf
+# TODO: recalculate default parameters once more reliable laser images come through (2015Oct14 BJH)
 _instruments['minime94'] = {
         'name'          : 'minime94',
         'N'             : 500,          # Number of annuli
-        'N0'            : 0,            # First annulus to use
+        'N0'            : 50,           # First annulus to use
         'N1'            : 500,          # Last annulus to use
         'focal_length'  : 300e-3,       # focal length of lens in m
         'pix_size'      : 13e-6,        # pixel size on CCD in m
@@ -1139,16 +1139,16 @@ _instruments['minime94'] = {
         'lam0'          : 630.0e-9,     # nominal line center wavelength in m
         'nominal_t'     : 1.5e-2,       # approximate etalon gap in m
         'default_params': {# instrument params to be used if the laser fails (i.e., zenith reference)
-                                'R': 0.75,
-                            'alpha': 8.4e-5,
+                                'R': 5.240e-01,
+                            'alpha': 8.384e-05,
                                 'I': 1.0,
                                 'B': 0.0,
-                               'a1': 3.0e-2,
-                               'a2': -3.1e-2,
-                               'b0': 2.0,
-                               'b1': 1.1,
-                               'b2': -2.8e-1, 
-                           'center':  (254.3, 258.7),
+                               'a1': -5.601e-02,
+                               'a2': -3.740e-02,
+                               'b0': -3.728e-01,
+                               'b1': -5.562e-01,
+                               'b2': 6.961e-01, 
+                           'center':  (254.94, 253.00),
                           },
         'sql_winds_id'          : None,           # ID for SQL database
         'sql_temperatures_id'   : None,           # ID for SQL database
@@ -1157,7 +1157,7 @@ _instruments['minime94'] = {
         'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'send_to_madrigal'      : True, # whether or not we should send this instrument's data to Madrigal
-        'skyI_quality_thresh'   : 0.0891, # The brightness [counts/sec] below which we raise the quality flag
+        'skyI_quality_thresh'   : -np.inf, # The brightness [counts/sec] below which we raise the quality flag
     }
 
 _instruments['noto01'] = {} # TODO (if we need to)
