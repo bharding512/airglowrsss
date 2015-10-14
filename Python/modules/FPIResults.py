@@ -163,13 +163,22 @@ def WeightedAverage(VAL,STD,CNT=None,AXIS=0,test=False):
     Outputs:
         WM = weighted mean
         WE = weighted std
-        SV = sample variance (variability)
-        SE = std of sample variance (std of variability)
+    Outputs2:
+        SS = sample std (variability)
+        SE = sample std uncertainty
+        WSS= weighted sampel std
         AE = average uncertainty (average error/std)
+        P16= 16th percentile
+        P25= 25th percentile
+        P50= 50th percentile
+        P75= 75th percentile
+        P84= 84th percentile
+
 
     History:
         3/20/13 -- Written by DJF (dfisher2@illinois.edu)
         9/23/14 -- Redid as separate function w/ corrected errors: DJF
+        10/14/15-- Added Percentile to function: DJF
     '''
     # Rotate averaging axis if deisred
     if AXIS==1:
@@ -179,8 +188,6 @@ def WeightedAverage(VAL,STD,CNT=None,AXIS=0,test=False):
             CNT = CNT.T
     
     # weighted mean and weighted std
-    #mV = _np.ma.masked_array(VAL,_np.isnan(VAL))
-    #mE = _np.ma.masked_array(STD,_np.isnan(STD))
     wt = (VAL/VAL)/STD**2
     V1 = _np.nansum(wt,axis=1)
     V2 = _np.nansum(wt**2,axis=1)
@@ -190,20 +197,25 @@ def WeightedAverage(VAL,STD,CNT=None,AXIS=0,test=False):
         # Return wt mean and wt std only
         return(WM,WE)
     elif test:
-        # return wt mean and std and monthly variability/std
-        SV = _np.sqrt(_np.nansum(_np.subtract(VAL.T,WM)**2,axis=0)/(_np.array(CNT)-1.))
-        
-        WSV = _np.sqrt(_np.nansum(wt.T*_np.subtract(VAL.T,WM)**2,axis=0)/(V1-V2/V1))
+        # return wt mean and std and monthly variability and percentiles
+        SS = _np.sqrt(_np.nansum(_np.subtract(VAL.T,WM)**2,axis=0)/(_np.array(CNT)-1.))
         SE = 2.*WE**4/(_np.array(CNT)-1.)
+        WSS= _np.sqrt(_np.nansum(wt.T*_np.subtract(VAL.T,WM)**2,axis=0)/(V1-V2/V1))
         AE = _np.sqrt(_np.nansum(STD**2,axis=1)/CNT) 
-        return(WM,WE,SV,SE,WSV,AE)
+        P16 = _np.nanpercentile(VAL,16,axis=1)
+        P25 = _np.nanpercentile(VAL,25,axis=1)
+        P50 = _np.nanpercentile(VAL,50,axis=1)
+        P75 = _np.nanpercentile(VAL,75,axis=1)
+        P84 = _np.nanpercentile(VAL,84,axis=1)
+        return(WM,WE,SS,SE,WSS,AE,P16,P25,P50,P75,P84)
     else:
         # return wt mean and std and monthly variability/std
-        SV = _np.sqrt(_np.nansum(_np.subtract(VAL.T,WM)**2,axis=0)/(_np.array(CNT)-1.))
-        
-        WSV = _np.sqrt(_np.nansum(wt.T*_np.subtract(VAL.T,WM)**2,axis=0)/(V1-V2/V1))
+        SS = _np.sqrt(_np.nansum(_np.subtract(VAL.T,WM)**2,axis=0)/(_np.array(CNT)-1.))
         SE = 2.*WE**4/(_np.array(CNT)-1.)
-        return(WM,WE,SV,SE)
+        WSS = _np.sqrt(_np.nansum(wt.T*_np.subtract(VAL.T,WM)**2,axis=0)/(V1-V2/V1))
+        AE = _np.sqrt(_np.nansum(STD**2,axis=1)/CNT) 
+        return(WM,WE,SS,SE)
+        #return(WM,WE,SS,SE,WSS,AE)
     
     
 
@@ -663,6 +675,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         v2Days = [_np.nan if x<dimset else x for x in v2Days]
     '''
     ## Weighted Mean & Statistical Variance of Winds
+    #### UPDATE PLEASE OR REMOVE dfj ####
     # Zonal
     uD,uDe,uV,uVe = WeightedAverage(uData,ueData,uDays)
     # Meridional
@@ -716,20 +729,20 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     '''
     
     # Zonal
-    uD,uDe,uV,uVe,uV2,uU = WeightedAverage(uData,ueData,uDays,test=True)
+    uD,uDe,uV,uVe,uV2,uU,u16,u25,u50,u75,u84 = WeightedAverage(uData,ueData,uDays,test=True)
     # Meridional
-    vD,vDe,vV,vVe,vV2,vU = WeightedAverage(vData,veData,vDays,test=True)
+    vD,vDe,vV,vVe,vV2,vU,v16,v25,v50,v75,v84 = WeightedAverage(vData,veData,vDays,test=True)
     # Vert            
-    wD,wDe,wV,wVe,wV2,wU = WeightedAverage(wData,weData,wDays,test=True)
+    wD,wDe,wV,wVe,wV2,wU,w16,w25,w50,w75,w84 = WeightedAverage(wData,weData,wDays,test=True)
     #  Temps
-    TD,TDe,TV,TVe,TV2,TU = WeightedAverage(TData,TeData,TDays,test=True)
+    TD,TDe,TV,TVe,TV2,TU,T16,T25,T50,T75,T84 = WeightedAverage(TData,TeData,TDays,test=True)
     # Intensity
-    iD,iDe,iV,iVe,iV2,iU = WeightedAverage(iData,ieData,iDays,test=True)
+    iD,iDe,iV,iVe,iV2,iU,i16,i25,i50,i75,i84 = WeightedAverage(iData,ieData,iDays,test=True)
     if SPLIT and not(mflag):
         # Zonal2 - West
-        u2D,u2De,u2V,u2Ve,u2V2,u2U = WeightedAverage(u2Data,u2eData,u2Days,test=True)
+        u2D,u2De,u2V,u2Ve,u2V2,u2U,u216,u225,u250,u275,u284 = WeightedAverage(u2Data,u2eData,u2Days,test=True)
         # Meridional2 - South
-        v2D,v2De,v2V,v2Ve,v2V2,v2U = WeightedAverage(v2Data,v2eData,v2Days,test=True)
+        v2D,v2De,v2V,u2Ve,v2V2,v2U,v216,v225,v250,v275,v284 = WeightedAverage(v2Data,v2eData,v2Days,test=True)
     # F107
     if 'hwm' in SITE:
         d.f107 = _np.nanmean(F107)
@@ -746,6 +759,11 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     d.uu = uU
     d.uc = uCount
     d.ud = uDays
+    d.u16= u16
+    d.u25= u25
+    d.u50= u50
+    d.u75= u75
+    d.u84= u84
     d.v  = vD
     d.ve = vDe
     d.vv = vV
@@ -754,6 +772,11 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     d.vu = vU
     d.vc = vCount
     d.vd = vDays
+    d.v16= v16
+    d.v25= v25
+    d.v50= v50
+    d.v75= v75
+    d.v84= v84
     d.w  = wD
     d.we = wDe
     d.wv = wV
@@ -762,6 +785,11 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     d.wu = wU
     d.wc = wCount
     d.wd = wDays
+    d.w16= w16
+    d.w25= w25
+    d.w50= w50
+    d.w75= w75
+    d.w84= w84
     d.T  = TD
     d.Te = TDe
     d.Tv = TV
@@ -770,6 +798,11 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     d.Tc = TCount
     d.Td = TDays
     d.Tv2= TV2
+    d.T16= T16
+    d.T25= T25
+    d.T50= T50
+    d.T75= T75
+    d.T84= T84
     d.i  = iD
     d.ie = iDe
     d.iv = iV
@@ -778,6 +811,11 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     d.iu = iU
     d.ic = iCount
     d.id = iDays
+    d.i16= i16
+    d.i25= i25
+    d.i50= i50
+    d.i75= i75
+    d.i84= i84
     
     if SPLIT and not(mflag):
         d.u2  = u2D
@@ -788,6 +826,11 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         d.u2u = u2U
         d.u2c = u2count
         d.u2d = u2Days
+        d.u216= u216
+        d.u225= u225
+        d.u250= u250
+        d.u275= u275
+        d.u284= u284
         d.v2  = v2D
         d.v2e = v2De
         d.v2v = v2V
@@ -796,6 +839,11 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         d.v2u = v2U
         d.v2c = v2count
         d.v2d = v2Days
+        d.v216= v216
+        d.v225= v225
+        d.v250= v250
+        d.v275= v275
+        d.v284= v284
     d.cards = cards
     d.cvs = cvs
     d.daysused = _np.unique(oscar)
@@ -1532,10 +1580,20 @@ def PlotSpaghetti(SITE,YEAR,MONTH,SPLIT=False,LIST=[],CV=False,KP=[0,10],QF=1):
     ax[3].errorbar(M.t,M.T,yerr=M.Tv,fmt='b.-')
     ax[0].errorbar(M.t,M.u,yerr=M.uv,fmt='b.-')
     ax[1].errorbar(M.t,M.v,yerr=M.vv,fmt='b.-')
+
+    # Overlay 16th and 84th percentiles
+    '''
+    ax[0].plot(M.t,M.u16,'r.')
+    ax[0].plot(M.t,M.u84,'r.')
+    ax[1].plot(M.t,M.v16,'r.')
+    ax[1].plot(M.t,M.v84,'r.')
+    ax[3].plot(M.t,M.T16,'r.')
+    ax[3].plot(M.t,M.T84,'r.')
+    '''
     
     # finalize Temps
     f.subplots_adjust(hspace=0)
-    ax[3].set_ylim([500,1000])
+    ax[3].set_ylim([600,1200])
     _plt.xlim(tlim)
     ax[3].set_ylabel('Temperature [K]')
     yticks = ax[3].yaxis.get_major_ticks()
@@ -2075,7 +2133,7 @@ def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1):
 		        line = ""
 		    elif('Unknown' in x.key):
 		        line = ""
-		    else:
+                    elif('CV' in x.key):
 		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
 		    #line = "%14s  %19s  %3.1f  %3.1f  %4.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %1.3f  %1.3f  %5s  %30s" % (x.key, utctime, lat, lon, x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.w[i], x.we[i], x.I[i], x.Ie[i], x.cloudy[i], x.notes)
 		    note.write(line)
@@ -2372,16 +2430,16 @@ class _BinnedData:
             self.vd   = _np.roll(self.vd ,roll)
             self.wd   = _np.roll(self.wd ,roll)
             self.id   = _np.roll(self.id ,roll)
-        if 'Tv' in ship:
+        if 'uv' in ship:
             self.Tv   = _np.roll(self.Tv ,roll)
-            self.Tve  = _np.roll(self.Tve,roll)
             self.uv   = _np.roll(self.uv ,roll)
-            self.uve  = _np.roll(self.uve,roll)
             self.vv   = _np.roll(self.vv ,roll)
-            self.vve  = _np.roll(self.vve,roll)
             self.wv   = _np.roll(self.wv ,roll)
-            self.wve  = _np.roll(self.wve,roll)
             self.iv   = _np.roll(self.iv ,roll)
+            self.Tve  = _np.roll(self.Tve,roll)
+            self.uve  = _np.roll(self.uve,roll)
+            self.vve  = _np.roll(self.vve,roll)
+            self.wve  = _np.roll(self.wve,roll)
             self.ive  = _np.roll(self.ive,roll)
         if 'u2' in ship:
             self.u2   = _np.roll(self.u2 ,roll)
@@ -2396,10 +2454,10 @@ class _BinnedData:
             self.v2d  = _np.roll(self.v2d ,roll)
         if 'u2v' in ship:
             self.u2v  = _np.roll(self.u2v ,roll)
-            self.u2ve = _np.roll(self.u2ve,roll)
             self.v2v  = _np.roll(self.v2v ,roll)
+            self.u2ve = _np.roll(self.u2ve,roll)
             self.v2ve = _np.roll(self.v2ve,roll)
-        if 'Tu' in ship:
+        if 'uu' in ship:
             self.uu  = _np.roll(self.uu ,roll)
             self.Tu  = _np.roll(self.Tu ,roll)
             self.vu  = _np.roll(self.vu ,roll)
@@ -2415,6 +2473,44 @@ class _BinnedData:
             self.v2u = _np.roll(self.v2u,roll)
             self.u2v2= _np.roll(self.u2v2,roll)
             self.v2v2= _np.roll(self.v2v2,roll)
+        if 'u50' in ship:
+            self.u16 = _np.roll(self.u16,roll)
+            self.v16 = _np.roll(self.v16,roll)
+            self.w16 = _np.roll(self.w16,roll)
+            self.T16 = _np.roll(self.T16,roll)
+            self.i16 = _np.roll(self.i16,roll)
+            self.u25 = _np.roll(self.u25,roll)
+            self.v25 = _np.roll(self.v25,roll)
+            self.w25 = _np.roll(self.w25,roll)
+            self.T25 = _np.roll(self.T25,roll)
+            self.i25 = _np.roll(self.i25,roll)
+            self.u50 = _np.roll(self.u50,roll)
+            self.v50 = _np.roll(self.v50,roll)
+            self.w50 = _np.roll(self.w50,roll)
+            self.T50 = _np.roll(self.T50,roll)
+            self.i50 = _np.roll(self.i50,roll)
+            self.u75 = _np.roll(self.u75,roll)
+            self.v75 = _np.roll(self.v75,roll)
+            self.w75 = _np.roll(self.w75,roll)
+            self.T75 = _np.roll(self.T75,roll)
+            self.i75 = _np.roll(self.i75,roll)
+            self.u84 = _np.roll(self.u84,roll)
+            self.v84 = _np.roll(self.v84,roll)
+            self.w84 = _np.roll(self.w84,roll)
+            self.T84 = _np.roll(self.T84,roll)
+            self.i84 = _np.roll(self.i84,roll)
+        if 'u250' in ship:
+            self.u216 = _np.roll(self.u216,roll)
+            self.u225 = _np.roll(self.u225,roll)
+            self.u250 = _np.roll(self.u250,roll)
+            self.u275 = _np.roll(self.u275,roll)
+            self.u284 = _np.roll(self.u284,roll)
+            self.v216 = _np.roll(self.v216,roll)
+            self.v225 = _np.roll(self.v225,roll)
+            self.v250 = _np.roll(self.v250,roll)
+            self.v275 = _np.roll(self.v275,roll)
+            self.v284 = _np.roll(self.v284,roll)
+
         self.barrelroll = not(self.barrelroll)
 
 
