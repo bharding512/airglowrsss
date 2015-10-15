@@ -505,7 +505,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         MONTH = month of year, e.g. 2 (February)
         SPLIT = Split look directions in binning [default = False]
         SITELLA = Lat, Lon, Alt for HWM [default = nan's]
-        DLIST = list of doys in year  [default = [] - all doys in MONTH,YEAR used]
+        DLIST = list of doys in year  [default = [] - all doys in MONTH,YEAR used], or [doy,spread] for storms
         YLIST = list of years in year [default = [] - only YEAR used]
         KP = limits of kp for filtering days [default = [0,10] - all kp used]
         CV = use CV modes [default = True]
@@ -518,6 +518,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
 
     History:
         3/20/13 -- Written by DJF (dfisher2@illinois.edu)
+        10/14/15-- Added 2 unit DLIST input, (doy,spread) to allow doy+/-spread averages.
 
     '''
     # Define Outputs...
@@ -528,7 +529,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     dimset = 3  # Require x days in each month for an variability set
     d = _BinnedData(dn,SITE)
     d.t = times
-    d.key = '{0:%B}'.format(dn, "month")
+    d.key = '{0:%B} {0:%Y}'.format(dn)
     
     # Get Empty 
     dim = 31*5*10
@@ -570,8 +571,17 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         doyend = doystart + _cal.monthrange(YEAR,MONTH)[1]
         dl = range(doystart,doyend)
         yl = list(_np.array(dl)/_np.array(dl)*YEAR)
+    elif len(DLIST) == 2:
+        # Use listed DOY +/- SPREAD disregarding month.
+        dl = []; yl = []
+        d.key = str(DLIST[0])+'-'+str(YEAR)+' +/-'+str(DLIST[1])
+        dn0 = _dt.datetime(YEAR,1,1)+_dt.timedelta(days=DLIST[0]-1)
+        for x in range(-DLIST[1],DLIST[1]+1):
+            dn = dn0 + _dt.timedelta(days=x)
+            dl.append((dn-_dt.datetime(dn.year,1,1)).days+1)
+            yl.append(dn.year)
     else:
-        # make sure doys actually exist in the month
+        # Use listed DOYS and make sure doys actually exist in the month
         dl = []; yl = []
         for doy,yr in zip(DLIST,YLIST):
             doystart = (_dt.datetime(yr,MONTH,1) - _dt.datetime(yr,1,1)).days+1
@@ -584,7 +594,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
 
     for doy,yr in zip(dl,yl):
         #print doy
-        
+
         if SITE in ['renoir','peru','nation']:
             nets = _fpiinfo.get_network_info(SITE).keys()
             tots = _fpiinfo.get_all_sites_info()
