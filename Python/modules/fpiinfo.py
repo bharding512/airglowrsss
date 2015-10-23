@@ -688,7 +688,7 @@ _sites['bdr'] = {
         'scpUser':      None,
         'scpPort':      None,
         'Network':      'ethiopia',
-        'sql_id':       None, # ID on the airglow SQL database
+        'sql_id':       29, # ID on the airglow SQL database
         'share':        False, # whether or not to save a copy of the npz file in a separate folder
         'borders':      True,
         'Directions':   {
@@ -1150,9 +1150,9 @@ _instruments['minime94'] = {
                                'b2': 6.961e-01, 
                            'center':  (254.94, 253.00),
                           },
-        'sql_winds_id'          : None,           # ID for SQL database
-        'sql_temperatures_id'   : None,           # ID for SQL database
-        'sql_diagnostics_id'    : None,           # ID for SQL database
+        'sql_winds_id'          : 107,           # ID for SQL database
+        'sql_temperatures_id'   : 108,           # ID for SQL database
+        'sql_diagnostics_id'    : 109,           # ID for SQL database
         'many_fringes'          : True,         # indicates whether radial falloff terms should be used
         'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
