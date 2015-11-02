@@ -83,6 +83,10 @@ _dates['minime94'] = {}
 _dates['minime94']['bdr'] = { 'start': datetime.datetime(2015, 4, 1),
                               'stop' : None, }
 
+_dates['minime95'] = {}
+_dates['minime95']['sjs'] = { 'start': datetime.datetime(2015, 10, 1),
+                              'stop' : None, }
+
 _dates['noto01'] = {}
 _dates['noto01']['mh'] = { 'start': datetime.datetime(1900,1,1), # TODO, if it matters
                             'stop' : None, }
@@ -541,6 +545,38 @@ _sites['caj'] = {
                 },
     }
 
+
+
+_sites['sjs'] = {
+        'Location':     (-23.2, -45.9, 0), # JUST A GUESS (BJH)
+        'Name':         'SJSP',
+        'Abbreviation': 'sjs',
+        'Timezone':     'America/Recife', # JUST A GUESS
+        'BufferTime':   45,
+        'CloudThresh':  -25.0,
+        'scpUser':      None,
+        'scpPort':      None,
+        'Network':      None,
+        'sql_id':       None, # ID on the airglow SQL database
+        'share':        False, # whether or not to save a copy of the npz file in a separate folder
+        'borders':      True,
+        'Directions':   {
+                'Laser': {'ze': 178, 'az': -102, 'exptime': 30, 
+	                'n_exp': 0, 'last_exp': None, 'delay': 600,}, 
+                'Zenith': {'ze': 0, 'az': 0, 'exptime': 210, 
+	                'n_exp': 0, 'last_exp': None, 'delay':1500,}, 
+                'North': {'ze': 45, 'az': 0, 'exptime': 210, 
+	                'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+                'South': {'ze': -45, 'az': 0, 'exptime': 210, 
+	                'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+                'East': {'ze': -45, 'az': -90, 'exptime': 210, 
+	                'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+                'West': {'ze': -45, 'az': 90, 'exptime': 210, 
+	                'n_exp': 0, 'last_exp': None, 'delay':0,},
+                },
+    }
+
+
 # TODO: If we ever end up controlling these peruvian sites, make sure
 # this stuff is correct.
 _sites['mrh'] = {
@@ -706,6 +742,8 @@ _sites['bdr'] = {
 		            'n_exp': 0, 'last_exp': None, 'delay':0,},
                 },
     }
+
+
 _sites['ao'] = {
         'Location':     (18.3442, -66.7528, 0),
         'Name':         'Arecibo Observatory',
@@ -1159,6 +1197,41 @@ _instruments['minime94'] = {
         'send_to_madrigal'      : True, # whether or not we should send this instrument's data to Madrigal
         'skyI_quality_thresh'   : -np.inf, # The brightness [counts/sec] below which we raise the quality flag
     }
+
+
+# TODO: default instrument parameters, if we end up analyzing this instrument regularly
+_instruments['minime95'] = {
+        'name'          : 'minime95',
+        'N'             : 500,          # Number of annuli
+        'N0'            : 0,            # First annulus to use
+        'N1'            : 500,          # Last annulus to use
+        'focal_length'  : 300e-3,       # focal length of lens in m
+        'pix_size'      : 13e-6,        # pixel size on CCD in m
+        'lam_laser'     : 632.8e-9,     # laser wavelength in m
+        'lam0'          : 630.0e-9,     # nominal line center wavelength in m
+        'nominal_t'     : 1.5e-2,       # approximate etalon gap in m
+        'default_params': {# instrument params to be used if the laser fails (i.e., zenith reference)
+                                'R': 0.77,
+                            'alpha': 7.7e-5,
+                                'I': 1.0,
+                                'B': 0.0,
+                               'a1': -8.6e-1,
+                               'a2': -4.0e-1,
+                               'b0': 1.3,
+                               'b1': 2.7e-1,
+                               'b2': -3.8e-1, 
+                           'center':  (262.4, 259.5),
+                          },
+        'sql_winds_id'          : None,           # ID for SQL database
+        'sql_temperatures_id'   : None,           # ID for SQL database
+        'sql_diagnostics_id'    : None,           # ID for SQL database
+        'many_fringes'          : True,         # indicates whether radial falloff terms should be used
+        'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
+        'skyI_quality_thresh'   : -np.inf, # The brightness [counts/sec] below which we raise the quality flag
+    }
+            
 
 _instruments['noto01'] = {} # TODO (if we need to)
 
