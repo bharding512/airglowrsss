@@ -1,9 +1,12 @@
 #import pdb
-from datetime import datetime
+from datetime import datetime,timedelta
 import numpy as np
 import fpiinfo
+import pytz
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.dates as md
+matplotlib.rcParams['savefig.bbox']='tight'
 
 def cosd(arg):
     return np.cos(arg*np.pi/180.)
@@ -1538,6 +1541,118 @@ def CVFinder(dn, instr1, instr2):
 
     return ds
 
+
+def TempFinder(dn, instr1):
+    '''
+    Summary
+    -------
+
+    data = TempFinder(dn, instr1)
+    
+    Returns temp data for non-card/CV mode points,
+
+    Inputs
+    ------
+        dn = datetime day
+
+    Outputs
+    -------
+
+
+    History
+    -------
+    10/19/15 -- Written by DJF (dfisher2@illionis.edu)
+
+    '''
+    import os, sys
+    import copy
+    from datetime import timedelta
+
+    # Ouput variable is an instances of class Data()
+    d = Level2(dn)
+    site1 = fpiinfo.get_site_of(instr1, dn)
+    d.key = site1.upper()
+    d.instr = instr1
+    d.log += "%-24s" % "[TempFinder]" \
+            + "created on %s.\n" % str(datetime.now().strftime('%m/%d/%Y %H:%M:%S %p'))
+    d.log += "%-24s" % "" \
+            + "input: TempFinder(%s, '%s')\n" % (dn.strftime('datetime(%Y,%m,%d)'),instr1)
+
+    l1 = GetLevel1(dn, instr1)
+
+    d.moonup = l1.moonup
+    d.log += l1.log
+    if l1.error:
+        # sometimes the file may not have anything in it:
+        d.log += l1.log
+        d.error = True
+        d.errorT = True
+        return([])
+
+    # log the parent Level 1 object:
+    d.parent = [l1]
+    d.allt = l1.allt
+
+    # For Temp Only files (ADD MORE!!!)
+    looks = list(set([val for val in l1.directions if val in ['MTM_Search','MTM_Search_1','MTM_Search_2']])) 
+
+    # ------------------------------------------------
+    # loop thru for different temp directions
+    # ------------------------------------------------
+    ds = []
+    for look in looks:
+        
+        # copy the data instance with 
+        # information we have so far:
+        d_loop = copy.deepcopy(d)
+
+        
+        # Record look times
+        t1 = l1.t[look]
+
+        # get temperatures
+        d_loop.T  = l1.T [look]
+        d_loop.Te = l1.Te[look]
+        
+        # get intensity and background
+        d_loop.i  = l1.i [look]
+        d_loop.ie = l1.ie[look]
+        d_loop.b  = l1.b [look]
+        d_loop.be = l1.be[look]
+
+        # Save out interpolated wind
+        wi  = l1.iw [look]
+        wie = l1.iwe[look]
+
+        # record parent Level 1 LOS wind info:
+        d_loop.los_wind1 = l1.los_wind[look]
+        d_loop.los_sigma1 = l1.los_sigma[look]
+        d_loop.los_fit1 = l1.los_fit[look]
+        d_loop.los_cal1 = l1.los_cal[look]
+
+        # fill in cloud information
+        d_loop.flag_wind = l1.flag_wind[look]
+        d_loop.flag_T    = l1.flag_T   [look]
+    
+        d_loop.notes += 'TEMPS ONLY'
+
+        # Save information
+        d_loop.key = "%s_%s" % (site1.upper(), look)
+        d_loop.instr = instr1
+        d_loop.lla = GetLocation(d_loop.parent[0].site,d_loop.key)
+
+        d_loop.wi = wi 
+        d_loop.wie = wie
+        d_loop.t1 = t1
+        d_loop.length = len(t1)
+
+        ds.append(d_loop)
+        d_loop.log += "%-24s" % "[TempFinder]" \
+                + "%03d data for %s.\n" % (len(t1), d_loop.key)
+
+    return ds
+
+
 '''
 def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
    
@@ -1828,6 +1943,7 @@ def GetLevel2(project,dn,dnstart='noon',dnend='noon'):
         for combo in instrs:
             if combo not in pairs:
                 cvs += CVFinder(dn, instr, combo)
+        cvs += TempFinder(dn,instr)
                 
     # remove error parts in cvs:
     #cvs = [cv for cv in cvs if cv.errorT is False]
@@ -1842,6 +1958,137 @@ def GetLevel2(project,dn,dnstart='noon',dnend='noon'):
         cv.cut(dnstart, dnend)
     
     return cvs
+
+def PlotLevel2(site,dn,ut=True):
+    '''
+    Summary
+    -------
+    Plots u,v,w,T from Level 2 data for a site for a single night.
+
+    Inputs
+    ------
+    site = name o fsite to collect data from, e.g.: 'car'
+    dn = datetime of data desired, e.g.: datetime(2013,2,23)
+    UTC = plot time in UTC? [default = True]
+
+    History
+    -------
+    11/02/15 -- Written by DJF (dfisher2@illionis.edu)
+    '''
+
+    project = fpiinfo.get_site_info(site,dn)['Network']
+    slt_shift = 0.
+    utc = pytz.UTC
+    slt_shift = 24 - fpiinfo.get_site_info(site,dn)['Location'][1]%360/360.*24
+
+    if ut:
+        tunit = 'UTC'
+        tlim = [dn+timedelta(hours=18+slt_shift),dn+timedelta(hours=30+slt_shift)]
+        slt_shift = 0
+    else:
+        tunit = 'SLT'
+        tlim = [dn+timedelta(hours=18),dn+timedelta(hours=30)]
+    D = GetLevel2(project,dn) 
+    
+    # Set colors for different flags
+    lalpha = 0.1
+    ascale = 2.3
+    ax={}
+    f,(ax[0],ax[1],ax[2],ax[3]) = plt.subplots(4,sharex=True,sharey=False,figsize=(14,10))
+    for d in D:
+        for flag in [2,1,0]:
+            indw = [x for x in range(len(d.t1)) if d.flag_wind[x] <= flag]
+            indt = [x for x in range(len(d.t1)) if d.flag_T[x] <= flag]
+            if flag == 2:
+                line = '-'
+                alpha = 0.2
+            elif flag == 1:
+                alpha = 0.45
+                line = ''
+            else:
+                alpha = 1
+                line = ''
+                
+            # Time Travel Math
+            timew = [x.astimezone(utc).replace(tzinfo=None) for x in d.t1[indw]-timedelta(hours=slt_shift)]
+            timet = [x.astimezone(utc).replace(tzinfo=None) for x in d.t1[indt]-timedelta(hours=slt_shift)]
+
+            # Zonal
+            if ('East' in d.key and site in d.key.lower()):
+                ax[0].errorbar(timew,d.u[indw],yerr=d.ue[indw],fmt='g.'+line,alpha=alpha)
+                if flag==0:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='g.'+line,alpha=alpha,label=d.key)
+                else:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='g.'+line,alpha=alpha)
+            # Zonal
+            if ('West' in d.key and site in d.key.lower()):
+                ax[0].errorbar(timew,d.u[indw],yerr=d.ue[indw],fmt='y.'+line,alpha=alpha)
+                if flag==0:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='y.'+line,alpha=alpha,label=d.key)
+                else:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='y.'+line,alpha=alpha)
+            # Meridional
+            if ('North' in d.key and site in d.key.lower()):
+                ax[1].errorbar(timew,d.v[indw],yerr=d.ve[indw],fmt='b.'+line,alpha=alpha)
+                if flag==0:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='b.'+line,alpha=alpha,label=d.key)
+                else:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='b.'+line,alpha=alpha)
+            # Meridional
+            if ('South' in d.key and site in d.key.lower()):
+                ax[1].errorbar(timew,d.v[indw],yerr=d.ve[indw],fmt='r.'+line,alpha=alpha)
+                if flag==0:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='r.'+line,alpha=alpha,label=d.key)
+                else:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='r.'+line,alpha=alpha)
+            # CV
+            if ('CV1' in d.key and site in d.key.lower()):
+                ax[0].errorbar(timew,d.u[indw],yerr=d.ue[indw],fmt='m.'+line,alpha=alpha)
+                ax[1].errorbar(timew,d.v[indw],yerr=d.ve[indw],fmt='m.'+line,alpha=alpha)
+                if flag==0:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='m.'+line,alpha=alpha,label='CV1')
+                else:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='m.'+line,alpha=alpha)
+            # CV
+            if ('CV2' in d.key and site in d.key.lower()):
+                ax[0].errorbar(timew,d.u[indw],yerr=d.ue[indw],fmt='c.'+line,alpha=alpha)
+                ax[1].errorbar(timew,d.v[indw],yerr=d.ve[indw],fmt='c.'+line,alpha=alpha)
+                if flag==0:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='c.'+line,alpha=alpha,label='CV2')
+                else:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='c.'+line,alpha=alpha)
+            # Vertical
+            if ('Zenith' in d.key and site in d.key.lower()):
+                ax[2].errorbar(timew,d.w[indw],yerr=d.we[indw],fmt='ko'+line,alpha=alpha)
+                if flag==0:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='ko'+line,alpha=alpha,label=d.key)
+                else:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='ko'+line,alpha=alpha)
+            # Inline
+            if ('IN' in d.key and site in d.key.lower()):
+                ax[2].errorbar(timew,d.w[indw],yerr=d.we[indw],fmt='k.'+line,alpha=alpha)
+                if flag==0:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='k.'+line,alpha=alpha,label=d.key)
+                else:
+                    ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='k.'+line,alpha=alpha)
+    
+    for k in range(3):
+        ax[k].plot([dn,dn+timedelta(hours=48)],[0,0],'k--')
+    ax[3].set_xlim(tlim)
+    ax[3].xaxis.set_major_formatter(md.DateFormatter('%H'))
+    ax[0].set_ylim(-175,175)
+    ax[1].set_ylim(-150,150)
+    ax[2].set_ylim(-75,75)
+    ax[3].set_ylim(600,1200)
+    ax[0].set_ylabel('u [m/s]')
+    ax[1].set_ylabel('v [m/s]')
+    ax[2].set_ylabel('w [m/s]')
+    ax[3].set_ylabel('T [K]')
+    ax[0].set_title('%s Level2 Data for %02i-%02i-%4i in %s'%(site.upper(),dn.month,dn.day,dn.year,tunit))
+    ax[3].legend(bbox_to_anchor=(0,-.45,1,.3),ncol=5,loc=8,mode="expand",borderaxespad=0.)
+    f.subplots_adjust(hspace=0.001)
+    f.subplots_adjust(wspace=0.003)
+    f.show()
 
 
 def FindKey(cvs, key):

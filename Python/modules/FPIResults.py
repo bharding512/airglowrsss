@@ -2143,6 +2143,9 @@ def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1):
 		        line = ""
 		    elif('Unknown' in x.key):
 		        line = ""
+                    # Code to add MTM Temps (REMOVE SOON)
+		    elif('MTM_Search' in x.key):
+		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  -------  ------  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
                     elif('CV' in x.key):
 		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
 		    #line = "%14s  %19s  %3.1f  %3.1f  %4.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %1.3f  %1.3f  %5s  %30s" % (x.key, utctime, lat, lon, x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.w[i], x.we[i], x.I[i], x.Ie[i], x.cloudy[i], x.notes)
