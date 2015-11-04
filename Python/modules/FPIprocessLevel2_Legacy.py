@@ -918,7 +918,7 @@ def CardFinder(dn, instr1):
     import copy
     from datetime import timedelta
 
-    #print "CardFinder: dn=",dn,"site1=",site1
+    #print "CardFinder: dn=",dn,"instr1=",instr1
 
     # Ouput variable is an instances of class Data()
     d = Level2(dn)
@@ -958,7 +958,8 @@ def CardFinder(dn, instr1):
     d.allt = l1.allt
 
     # keep cardinal looks only and make it unique:
-    looks = list(set([val for val in l1.directions if val in ['Zenith','North', 'East', 'West', 'South']])) 
+    dirs = ['Zenith', 'North', 'East', 'West', 'South']
+    looks = list(set([l for x in dirs for l in l1.directions if x in l])) 
 
     # ------------------------------------------------
     # loop thru for different cardinal directions
@@ -1181,11 +1182,8 @@ def CVFinder(dn, instr1, instr2):
         d.error = True
         d.log += l1_1.log
         # just use l1_2 temps then:
-        common_pair = \
-                list(set(\
-                [val for val in l1_2.directions if site1 in val if val not in \
-                ['Zenith','North','East','South','West','None']\
-                ]))
+        dirs = ['CV_', 'IN_']
+        common_pair = list(set([l for x in dirs for l in l1_2.directions if x in l])) 
         ds = []
         for cv in common_pair:
             d_loop = copy.deepcopy(d)
@@ -1208,6 +1206,8 @@ def CVFinder(dn, instr1, instr2):
             d_loop.we = 999.*np.ones(len(l1_2.t[cv]))
             d_loop.wef= 999.*np.ones(len(l1_2.t[cv]))
             d_loop.wec= 999.*np.ones(len(l1_2.t[cv]))
+            d_loop.flag_wind = 3*np.ones(len(l1_2.t[cv]))
+            d_loop.flag_T = l1_2.flag_T[cv]
             d_loop.key = cv
             ds.append(d_loop)
         return ds
@@ -1215,12 +1215,9 @@ def CVFinder(dn, instr1, instr2):
     if l1_2.error:
         d.error = True
         d.log += l1_2.log
-        # just use l1_1 temps then:
-        common_pair = \
-                list(set(\
-                [val for val in l1_1.directions if site2 in val if val not in \
-                ['Zenith','North','East','South','West','None']\
-                ]))
+        # just use l1_1 temps then:# just use l1_2 temps then:
+        dirs = ['CV_', 'IN_']
+        common_pair = list(set([l for x in dirs for l in l1_1.directions if x in l])) 
         ds = []
         for cv in common_pair:
 	    d_loop = copy.deepcopy(d)
@@ -1243,6 +1240,8 @@ def CVFinder(dn, instr1, instr2):
             d_loop.we = 999.*np.ones(len(l1_1.t[cv]))
             d_loop.wef= 999.*np.ones(len(l1_1.t[cv]))
             d_loop.wec= 999.*np.ones(len(l1_1.t[cv]))
+            d_loop.flag_wind = 3*np.ones(len(l1_1.t[cv]))
+            d_loop.flag_T = l1_1.flag_T[cv]
             d_loop.key = cv
             ds.append(d_loop)
         return ds
@@ -1262,10 +1261,9 @@ def CVFinder(dn, instr1, instr2):
     
     # get common value locations between the 2 sites:
     common_pair = [val for val in l1_1.directions if val in l1_2.directions]
-    
-    # get rid of cardinal modes in our list, and make it unique:
-    common_pair = list(set([val for val in common_pair if val not in \
-            ['Zenith','North','East','South','West','None','Laser','Unknown']]))
+    # Keep CV and make unique pairs
+    dirs = ['CV_', 'IN_']
+    common_pair = list(set([l for x in dirs for l in common_pair if x in l]))
     #print "CV =", common_pair
 
     # check to make sure we have some common pairs. 
@@ -1593,8 +1591,9 @@ def TempFinder(dn, instr1):
     d.parent = [l1]
     d.allt = l1.allt
 
-    # For Temp Only files (ADD MORE!!!)
-    looks = list(set([val for val in l1.directions if val in ['MTM_Search','MTM_Search_1','MTM_Search_2']])) 
+    # For Temp Only files (ADD MORE and make unique pairs
+    dirs = ['MTM_Search', 'Windfield', 'Along_B', 'Aux']
+    looks = list(set([l for x in dirs for l in l1.directions if x in l]))
 
     # ------------------------------------------------
     # loop thru for different temp directions
