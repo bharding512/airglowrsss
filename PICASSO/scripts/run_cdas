@@ -1,0 +1,13 @@
+#!/bin/bash
+
+run_count=`ps eax | grep cdas | grep -v grep | grep -v run_cdas | wc -l`
+
+echo $run_count
+
+if [ $run_count -gt 0 ]; then
+    echo CDAS already running.  Use fltkclient, or the CDAS control icon to make changes.
+    read -p "Press any key to continue..."
+
+else
+   cd /home/airglow && ./startcdas.sh
+fi

@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<configuration>
+<logger>
+<errorfilename>error.txt</errorfilename>
+<systemlogfilename>CDAS.log</systemlogfilename>
+<doerrorlog>1</doerrorlog>
+<dosystemlog>1</dosystemlog>
+</logger>
+<directories>
+<datapath></datapath>
+<pngpath></pngpath>
+<moviespath></moviespath>
+<quicklookpath></quicklookpath>
+<dopng>0</dopng>
+<domovies> 0</domovies>
+<doquicklook>0</doquicklook>
+</directories>
+<site>
+<sitename></sitename>
+<siteabbreviation> XXX</siteabbreviation>
+<latitude>0</latitude>
+<longitude>0</longitude>
+<height>0</height>
+</site>
+<user>
+<useremail></useremail>
+<username></username>
+<useremaildaily>0</useremaildaily>
+<useremailonerror>0</useremailonerror>
+</user>
+<camera>
+<ccdsettemp>0</ccdsettemp>
+<cameratype>0</cameratype>
+<binx>0</binx>
+<biny>0</biny>
+<imageheight>0</imageheight>
+<imagewidth>0</imagewidth>
+<imagetop>0</imagetop>
+<imageleft>0</imageleft>
+<exposuretime> 0</exposuretime>
+<dark>0</dark>
+<usbgain>0</usbgain>
+<regulation>0</regulation>
+</camera>
+<schedule>
+<moonangle>0</moonangle>
+<sunangle>18</sunangle>
+<moonset>1</moonset>
+<schedulemode>1</schedulemode>
+<sunrisetime>Mon Aug 02 23:50:35 2010</sunrisetime>
+<sunsettime>Mon Aug 02 14:21:56 2010</sunsettime>
+<moonrisetime>Mon Aug 02 18:27:39 2010</moonrisetime>
+<moonsettime>Mon Aug 02 06:08:45 2010</moonsettime>
+<starttime>Mon Aug 02 14:21:56 2010</starttime>
+<stoptime>Mon Aug 02 18:27:39 2010</stoptime>
+</schedule>
+<systemrunning>0</systemrunning>
+</configuration>

@@ -1,0 +1,2818 @@
+# data file for the Fltk User Interface Designer (fluid)
+version 1.0300 
+header_name {.h} 
+code_name {.cxx}
+decl {\#include <iostream>} {private local
+} 
+
+decl {\#include <stdlib.h>} {private local
+} 
+
+decl {\#include <sstream>} {private local
+} 
+
+decl {\#include "ServerCommands.h"} {private local
+} 
+
+decl {\#include "schedule.h"} {private local
+} 
+
+decl {\#include <time.h>} {private local
+} 
+
+class fltkClientUI {open
+} {
+  decl {using namespace std;} {private local
+  }
+  decl {\#include "client.h"} {private local
+  }
+  Function {fltkClientUI()} {open
+  } {
+    Fl_Window CDASClient {
+      label {CDAS Client} open
+      private xywh {66 413 700 310} type Double
+      code0 {\#include "client.h"} visible
+    } {
+      Fl_Tabs Tabs {open
+        private xywh {0 0 695 307}
+      } {
+        Fl_Group Command {
+          label Command open
+          xywh {8 25 437 275}
+        } {
+          Fl_Group ServerInfo {
+            label {Server Information} open
+            xywh {8 46 427 62} box BORDER_BOX align 5
+          } {
+            Fl_Input Address {
+              label {Address:}
+              tooltip {IP address for the server (use "localhost" if on local machine)} xywh {74 50 350 25}
+            }
+            Fl_Input Port {
+              label {Port:} selected
+              tooltip {Default port is 30000} xywh {74 79 100 25}
+            }
+            Fl_Button Connect {
+              label Connect
+              callback {// Read the address and port info
+myClient.myServerAddress = Address->value();
+string temp_string;
+temp_string = Port->value();
+myClient.myServerPort = atoi(temp_string.c_str());
+
+// Get the current values from the server
+ostringstream sout;
+char *temp;
+
+sout << GET_STARTTIME;
+myClient.SendCommand(sout.str());
+myStartTime = atoi(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_STOPTIME;
+myClient.SendCommand(sout.str());
+myStopTime = atoi(myClient.myLastReply.c_str());
+
+char time_string[64];
+strftime(time_string, 64, "%m/%d/%Y %H:%M:%S", localtime(&myStartTime));
+Start->value(time_string);
+strftime(time_string, 64, "%m/%d/%Y %H:%M:%S", localtime(&myStopTime));
+Stop->value(time_string);
+
+sout.str("");
+sout << GET_SCHEDULE_MODE;
+myClient.SendCommand(sout.str());
+
+myScheduleMode = atoi(myClient.myLastReply.c_str());
+
+switch(myScheduleMode)
+{
+  case SCHEDULE_OFF:
+    Off->value(1);
+    Auto->value(0);
+    Manual->value(0);
+    Start->deactivate();
+    Stop->deactivate();
+    break;
+  case SCHEDULE_AUTO:
+    Auto->value(1);
+    Off->value(0);
+    Manual->value(0);
+    Start->deactivate();
+    Stop->deactivate();
+    break;
+  case SCHEDULE_MANUAL:
+    Manual->value(1);
+    Off->value(0);
+    Auto->value(0);
+    Start->activate();
+    Stop->activate();
+    break;
+}
+
+sout.str("");
+sout << GET_SUNANGLE;
+myClient.SendCommand(sout.str());
+
+mySunAngle = atof(myClient.myLastReply.c_str());
+SunAngle->value(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_MOONANGLE;
+myClient.SendCommand(sout.str());
+
+myMoonAngle = atof(myClient.myLastReply.c_str());
+MoonAngle->value(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_DOMOONSET;
+myClient.SendCommand(sout.str());
+
+myMoonSet = (bool) atoi(myClient.myLastReply.c_str());
+DoMoonAngle->value(myMoonSet);
+if(myMoonSet)
+  MoonAngle->activate();
+else
+  MoonAngle->deactivate();
+
+sout.str("");
+sout << GET_SITENAME;
+myClient.SendCommand(sout.str());
+
+mySiteName = myClient.myLastReply;
+SiteName->value(mySiteName.c_str());
+
+sout.str("");
+sout << GET_SITEABBR;
+myClient.SendCommand(sout.str());
+
+mySiteAbbreviation = myClient.myLastReply;
+SiteAbbreviation->value(mySiteAbbreviation.c_str());
+
+sout.str("");
+sout << GET_LATITUDE;
+myClient.SendCommand(sout.str());
+
+myLatitude = atof(myClient.myLastReply.c_str());
+Latitude->value(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_LONGITUDE;
+myClient.SendCommand(sout.str());
+
+myLongitude = atof(myClient.myLastReply.c_str());
+Longitude->value(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_ALTITUDE;
+myClient.SendCommand(sout.str());
+
+myAltitude = atof(myClient.myLastReply.c_str());
+Altitude->value(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_XBIN;
+myClient.SendCommand(sout.str());
+
+myCCDBinning = atoi(myClient.myLastReply.c_str());
+if(myCCDBinning == 1) 
+{
+  CCDHigh->value(1);
+  CCDMed->value(0);
+  CCDLow->value(0);
+}
+if(myCCDBinning == 2) 
+{
+  CCDHigh->value(0);
+  CCDMed->value(1);
+  CCDLow->value(0);
+}
+if(myCCDBinning == 3) 
+{
+  CCDHigh->value(0);
+  CCDMed->value(0);
+  CCDLow->value(1);
+}
+
+sout.str("");
+sout << GET_TOP;
+myClient.SendCommand(sout.str());
+
+myCCDTop = atoi(myClient.myLastReply.c_str());
+CCDTop->value(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_LEFT;
+myClient.SendCommand(sout.str());
+
+myCCDLeft = atoi(myClient.myLastReply.c_str());
+CCDLeft->value(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_HEIGHT;
+myClient.SendCommand(sout.str());
+
+myCCDHeight = atoi(myClient.myLastReply.c_str());
+CCDHeight->value(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_WIDTH;
+myClient.SendCommand(sout.str());
+
+myCCDWidth = atoi(myClient.myLastReply.c_str());
+CCDWidth->value(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_TEMP;
+myClient.SendCommand(sout.str());
+
+myCCDTemp = atof(myClient.myLastReply.c_str());
+CCDTemp->value(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_GAIN;
+myClient.SendCommand(sout.str());
+
+myCCDGain = atof(myClient.myLastReply.c_str());
+CCDGain->value(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_CCD_AUTO_TEMP;
+myClient.SendCommand(sout.str());
+
+myDoAutoTemperature = atoi(myClient.myLastReply.c_str());
+DoAutoTemperature->value(myDoAutoTemperature);
+
+sout.str("");
+sout << GET_CAMERATYPE;
+myClient.SendCommand(sout.str());
+
+myCameraType = atoi(myClient.myLastReply.c_str());
+CameraType->value(myCameraType);
+
+sout.str("");
+sout << GET_FILTERWHEELTYPE;
+myClient.SendCommand(sout.str());
+
+myFilterWheelType = atoi(myClient.myLastReply.c_str());
+FilterWheelType->value(myFilterWheelType);
+
+sout.str("");
+sout << GET_DATA_DIR;
+myClient.SendCommand(sout.str());
+
+myDataDir = myClient.myLastReply;
+DataDir->value(myDataDir.c_str());
+
+sout.str("");
+sout << GET_PNG_DIR;
+myClient.SendCommand(sout.str());
+
+myPNGDir = myClient.myLastReply;
+PNGDir->value(myPNGDir.c_str());
+
+sout.str("");
+sout << GET_MPG_DIR;
+myClient.SendCommand(sout.str());
+
+myMPGDir = myClient.myLastReply;
+MPGDir->value(myMPGDir.c_str());
+
+sout.str("");
+sout << GET_QL_DIR;
+myClient.SendCommand(sout.str());
+
+myQLDir = myClient.myLastReply;
+QLDir->value(myQLDir.c_str());
+
+sout.str("");
+sout << GET_DO_PNG;
+myClient.SendCommand(sout.str());
+
+myDoPNG = atoi(myClient.myLastReply.c_str());
+DoPNG->value(myDoPNG);
+
+sout.str("");
+sout << GET_DO_MPG;
+myClient.SendCommand(sout.str());
+
+myDoMPG = atoi(myClient.myLastReply.c_str());
+DoMPG->value(myDoMPG);
+
+sout.str("");
+sout << GET_DO_QL;
+myClient.SendCommand(sout.str());
+
+myDoQL = atoi(myClient.myLastReply.c_str());
+DoQL->value(myDoQL);
+
+// Read the filter information
+
+sout.str("");
+sout << GET_NUMFILTERS;
+myClient.SendCommand(sout.str());
+
+myNumFilters = atoi(myClient.myLastReply.c_str());
+NumFilters->value(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_FILTERINFO << ":1";
+myClient.SendCommand(sout.str());
+char tstr[256];
+strcpy(tstr,myClient.myLastReply.c_str());
+temp = strtok(tstr, ":");
+Name1->value(temp);
+temp = strtok(NULL, ":");
+Height1->value(temp);
+temp = strtok(NULL, ":");
+Exp1->value(temp);
+temp = strtok(NULL, ":");
+Shutter1->value(atoi(temp));
+
+sout.str("");
+sout << GET_FILTERINFO << ":2";
+myClient.SendCommand(sout.str());
+strcpy(tstr,myClient.myLastReply.c_str());
+temp = strtok(tstr, ":");
+Name2->value(temp);
+temp = strtok(NULL, ":");
+Height2->value(temp);
+temp = strtok(NULL, ":");
+Exp2->value(temp);
+temp = strtok(NULL, ":");
+Shutter2->value(atoi(temp));
+
+sout.str("");
+sout << GET_FILTERINFO << ":3";
+myClient.SendCommand(sout.str());
+strcpy(tstr,myClient.myLastReply.c_str());
+temp = strtok(tstr, ":");
+Name3->value(temp);
+temp = strtok(NULL, ":");
+Height3->value(temp);
+temp = strtok(NULL, ":");
+Exp3->value(temp);
+temp = strtok(NULL, ":");
+Shutter3->value(atoi(temp));
+
+sout.str("");
+sout << GET_FILTERINFO << ":4";
+myClient.SendCommand(sout.str());
+strcpy(tstr,myClient.myLastReply.c_str());
+temp = strtok(tstr, ":");
+Name4->value(temp);
+temp = strtok(NULL, ":");
+Height4->value(temp);
+temp = strtok(NULL, ":");
+Exp4->value(temp);
+temp = strtok(NULL, ":");
+Shutter4->value(atoi(temp));
+
+sout.str("");
+sout << GET_FILTERINFO << ":5";
+myClient.SendCommand(sout.str());
+strcpy(tstr,myClient.myLastReply.c_str());
+temp = strtok(tstr, ":");
+Name5->value(temp);
+temp = strtok(NULL, ":");
+Height5->value(temp);
+temp = strtok(NULL, ":");
+Exp5->value(temp);
+temp = strtok(NULL, ":");
+Shutter5->value(atoi(temp));
+
+sout.str("");
+sout << GET_FILTERINFO << ":6";
+myClient.SendCommand(sout.str());
+strcpy(tstr,myClient.myLastReply.c_str());
+temp = strtok(tstr, ":");
+Name6->value(temp);
+temp = strtok(NULL, ":");
+Height6->value(temp);
+temp = strtok(NULL, ":");
+Exp6->value(temp);
+temp = strtok(NULL, ":");
+Shutter6->value(atoi(temp));
+
+// Get the subsequence strings
+int num;
+sout.str("");
+sout << GET_SUBSEQUENCE << ":1";
+myClient.SendCommand(sout.str());
+strcpy(tstr,myClient.myLastReply.c_str());
+temp = strtok(tstr, ":");
+num = atoi(temp);
+if(num >= 1)
+{
+   temp = strtok(NULL, ":");
+   Seq1_1->value(temp);
+}
+if(num >= 2)
+{
+   temp = strtok(NULL, ":");
+   Seq1_2->value(temp);
+}
+if(num >= 3)
+{
+   temp = strtok(NULL, ":");
+   Seq1_3->value(temp);
+}
+if(num >= 4)
+{
+   temp = strtok(NULL, ":");
+   Seq1_4->value(temp);
+}
+if(num >= 5)
+{
+   temp = strtok(NULL, ":");
+   Seq1_5->value(temp);
+}
+if(num >= 6)
+{
+   temp = strtok(NULL, ":");
+   Seq1_6->value(temp);
+}
+if(num >= 7)
+{
+   temp = strtok(NULL, ":");
+   Seq1_7->value(temp);
+}
+if(num >= 8)
+{
+   temp = strtok(NULL, ":");
+   Seq1_8->value(temp);
+}
+if(num >= 9)
+{
+   temp = strtok(NULL, ":");
+   Seq1_9->value(temp);
+}
+if(num >= 10)
+{
+   temp = strtok(NULL, ":");
+   Seq1_10->value(temp);
+}
+
+sout.str("");
+sout << GET_SUBSEQUENCE << ":2";
+myClient.SendCommand(sout.str());
+strcpy(tstr,myClient.myLastReply.c_str());
+temp = strtok(tstr, ":");
+num = atoi(temp);
+if(num >= 1)
+{
+   temp = strtok(NULL, ":");
+   Seq2_1->value(temp);
+}
+if(num >= 2)
+{
+   temp = strtok(NULL, ":");
+   Seq2_2->value(temp);
+}
+if(num >= 3)
+{
+   temp = strtok(NULL, ":");
+   Seq2_3->value(temp);
+}
+if(num >= 4)
+{
+   temp = strtok(NULL, ":");
+   Seq2_4->value(temp);
+}
+if(num >= 5)
+{
+   temp = strtok(NULL, ":");
+   Seq2_5->value(temp);
+}
+if(num >= 6)
+{
+   temp = strtok(NULL, ":");
+   Seq2_6->value(temp);
+}
+if(num >= 7)
+{
+   temp = strtok(NULL, ":");
+   Seq2_7->value(temp);
+}
+if(num >= 8)
+{
+   temp = strtok(NULL, ":");
+   Seq2_8->value(temp);
+}
+if(num >= 9)
+{
+   temp = strtok(NULL, ":");
+   Seq2_9->value(temp);
+}
+if(num >= 10)
+{
+   temp = strtok(NULL, ":");
+   Seq2_10->value(temp);
+}
+
+sout.str("");
+sout << GET_SUBSEQUENCE << ":3";
+myClient.SendCommand(sout.str());
+strcpy(tstr,myClient.myLastReply.c_str());
+temp = strtok(tstr, ":");
+num = atoi(temp);
+if(num >= 1)
+{
+   temp = strtok(NULL, ":");
+   Seq3_1->value(temp);
+}
+if(num >= 2)
+{
+   temp = strtok(NULL, ":");
+   Seq3_2->value(temp);
+}
+if(num >= 3)
+{
+   temp = strtok(NULL, ":");
+   Seq3_3->value(temp);
+}
+if(num >= 4)
+{
+   temp = strtok(NULL, ":");
+   Seq3_4->value(temp);
+}
+if(num >= 5)
+{
+   temp = strtok(NULL, ":");
+   Seq3_5->value(temp);
+}
+if(num >= 6)
+{
+   temp = strtok(NULL, ":");
+   Seq3_6->value(temp);
+}
+if(num >= 7)
+{
+   temp = strtok(NULL, ":");
+   Seq3_7->value(temp);
+}
+if(num >= 8)
+{
+   temp = strtok(NULL, ":");
+   Seq3_8->value(temp);
+}
+if(num >= 9)
+{
+   temp = strtok(NULL, ":");
+   Seq3_9->value(temp);
+}
+if(num >= 10)
+{
+   temp = strtok(NULL, ":");
+   Seq3_10->value(temp);
+}
+
+sout.str("");
+sout << GET_SUBSEQUENCE << ":4";
+myClient.SendCommand(sout.str());
+strcpy(tstr,myClient.myLastReply.c_str());
+temp = strtok(tstr, ":");
+num = atoi(temp);
+if(num >= 1)
+{
+   temp = strtok(NULL, ":");
+   Seq4_1->value(temp);
+}
+if(num >= 2)
+{
+   temp = strtok(NULL, ":");
+   Seq4_2->value(temp);
+}
+if(num >= 3)
+{
+   temp = strtok(NULL, ":");
+   Seq4_3->value(temp);
+}
+if(num >= 4)
+{
+   temp = strtok(NULL, ":");
+   Seq4_4->value(temp);
+}
+if(num >= 5)
+{
+   temp = strtok(NULL, ":");
+   Seq4_5->value(temp);
+}
+if(num >= 6)
+{
+   temp = strtok(NULL, ":");
+   Seq4_6->value(temp);
+}
+if(num >= 7)
+{
+   temp = strtok(NULL, ":");
+   Seq4_7->value(temp);
+}
+if(num >= 8)
+{
+   temp = strtok(NULL, ":");
+   Seq4_8->value(temp);
+}
+if(num >= 9)
+{
+   temp = strtok(NULL, ":");
+   Seq4_9->value(temp);
+}
+if(num >= 10)
+{
+   temp = strtok(NULL, ":");
+   Seq4_10->value(temp);
+}
+
+sout.str("");
+sout << GET_SUBSEQUENCEORDER;
+myClient.SendCommand(sout.str());
+strcpy(tstr,myClient.myLastReply.c_str());
+temp = strtok(tstr, ":");
+num = atoi(temp);
+if(num >= 1)
+{
+   temp = strtok(NULL, ":");
+   Seq1->value(temp);
+}
+if(num >= 2)
+{
+   temp = strtok(NULL, ":");
+   Seq2->value(temp);
+}
+if(num >= 3)
+{
+   temp = strtok(NULL, ":");
+   Seq3->value(temp);
+}
+if(num >= 4)
+{
+   temp = strtok(NULL, ":");
+   Seq4->value(temp);
+}
+if(num >= 5)
+{
+   temp = strtok(NULL, ":");
+   Seq5->value(temp);
+}
+
+// Get the dark sequencing info
+sout.str("");
+sout << GET_DARKSEQUENCE;
+myClient.SendCommand(sout.str());
+strcpy(tstr,myClient.myLastReply.c_str());
+temp = strtok(tstr, ":");
+if((bool) atoi(temp))
+{
+   DoDark->value(1);
+   DarkFrequency->activate();
+   DarkExpTime->activate();
+} else
+{
+   DoDark->value(0);
+   DarkFrequency->deactivate();
+   DarkExpTime->deactivate();
+}
+
+temp = strtok(NULL, ":");
+DarkFrequency->value(temp);
+temp = strtok(NULL, ":");
+DarkExpTime->value(temp);
+
+// Get the periodicty info
+sout.str("");
+sout << GET_PERIODICITY;
+myClient.SendCommand(sout.str());
+strcpy(tstr,myClient.myLastReply.c_str());
+temp = strtok(tstr, ":");
+if((bool) atoi(temp))
+{
+   DoPeriodicity->value(1);
+   PeriodicityFrequency->activate();
+} else
+{
+   DoPeriodicity->value(0);
+   PeriodicityFrequency->deactivate();
+}
+
+temp = strtok(NULL, ":");
+PeriodicityFrequency->value(temp);
+
+// Get the alternate site lat/lon info for scheduling
+sout.str("");
+sout << GET_SCHEDULELATITUDE;
+myClient.SendCommand(sout.str());
+
+myAlternateLatitude = atof(myClient.myLastReply.c_str());
+AlternateLatitude->value(myClient.myLastReply.c_str());
+
+sout.str("");
+sout << GET_SCHEDULELONGITUDE;
+myClient.SendCommand(sout.str());
+
+myAlternateLongitude = atof(myClient.myLastReply.c_str());
+AlternateLongitude->value(myClient.myLastReply.c_str());
+
+if((myAlternateLongitude == myLongitude) && (myAlternateLatitude == myLatitude))
+{
+   // We are not synching to a different site
+   AlternateSite->value(0);
+   AlternateLatitude->deactivate();
+   AlternateLongitude->deactivate();
+}
+else
+{
+   // We are synching to a different site
+   AlternateSite->value(1);
+   AlternateLatitude->activate();
+   AlternateLongitude->activate();
+}}
+              tooltip {Connect to the CDAS server} xywh {349 79 75 25}
+            }
+          }
+          Fl_Button KillServer {
+            label {Kill Server}
+            callback {ostringstream sout;
+string cmd;
+
+// Send the kill command
+{
+   sout << SERVER_STOP << ":";
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SchdOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+   }
+   else
+   {
+      SchdOutput->value("ERROR sending command");
+   }
+}}
+            tooltip {Shutdown the CDAS server (must have already connected to it)} xywh {330 265 100 25}
+          }
+        }
+        Fl_Group Camera {
+          label Camera open
+          xywh {8 25 612 275} hide
+        } {
+          Fl_Return_Button SendCamera {
+            label Send
+            callback {ostringstream sout;
+string cmd;
+
+// Check the CCD top parameter
+if(CCDTop->value() && myCCDTop != atoi(CCDTop->value()))
+{
+   sout.str("");
+   sout << SET_TOP << ":" << CCDTop->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myCCDTop = atoi(CCDTop->value());
+   }
+   else
+   {
+      CameraOutput->value("ERROR sending command");
+   }
+}
+
+// Check the CCD left parameter
+if(CCDLeft->value() && myCCDLeft != atoi(CCDLeft->value()))
+{
+   sout.str("");
+   sout << SET_LEFT << ":" << CCDLeft->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myCCDLeft = atoi(CCDLeft->value());
+   }
+   else
+   {
+      CameraOutput->value("ERROR sending command");
+   }
+}
+
+// Check the CCD height parameter
+if(CCDHeight->value() && myCCDHeight != atoi(CCDHeight->value()))
+{
+   sout.str("");
+   sout << SET_HEIGHT << ":" << CCDHeight->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myCCDHeight = atoi(CCDHeight->value());
+   }
+   else
+   {
+      CameraOutput->value("ERROR sending command");
+   }
+}
+
+// Check the CCD width parameter
+if(CCDWidth->value() && myCCDWidth != atoi(CCDWidth->value()))
+{
+   sout.str("");
+   sout << SET_WIDTH << ":" << CCDWidth->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myCCDWidth = atoi(CCDWidth->value());
+   }
+   else
+   {
+      CameraOutput->value("ERROR sending command");
+   }
+}
+
+// Check the CCD temperature parameter
+if(CCDTemp->value() && myCCDTemp != atof(CCDTemp->value()))
+{
+   sout.str("");
+   sout << SET_TEMP << ":" << CCDTemp->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myCCDTemp = atof(CCDTemp->value());
+   }
+   else
+   {
+      CameraOutput->value("ERROR sending command");
+   }
+}
+
+// Check the CCD temperature parameter
+if(CCDGain->value() && myCCDGain != atof(CCDGain->value()))
+{
+   sout.str("");
+   sout << SET_GAIN << ":" << CCDGain->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myCCDGain = atof(CCDGain->value());
+   }
+   else
+   {
+      CameraOutput->value("ERROR sending command");
+   }
+}
+
+// Check the CameraType parameter
+if(myCameraType != CameraType->value())
+{
+   sout.str("");
+   sout << SET_CAMERATYPE << ":" << CameraType->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myCameraType = CameraType->value();
+   }
+   else
+   {
+      CameraOutput->value("ERROR sending command");
+   }
+}
+
+// Check the High resolution button
+if(CCDHigh->value() && myCCDBinning != 1)
+{
+   sout.str("");
+   sout << SET_XBIN << ":" << 1;
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myCCDBinning = 1;
+   }
+   else
+   {
+      CameraOutput->value("ERROR sending command");
+   }
+
+   sout.str("");
+   sout << SET_YBIN << ":" << 1;
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myCCDBinning = 1;
+   }
+   else
+   {
+      CameraOutput->value("ERROR sending command");
+   }
+}
+
+// Check the Medium resolution button
+if(CCDMed->value() && myCCDBinning != 2)
+{
+   sout.str("");
+   sout << SET_XBIN << ":" << 2;
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myCCDBinning = 2;
+   }
+   else
+   {
+      CameraOutput->value("ERROR sending command");
+   }
+
+   sout.str("");
+   sout << SET_YBIN << ":" << 2;
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myCCDBinning = 2;
+   }
+   else
+   {
+      CameraOutput->value("ERROR sending command");
+   }
+}
+
+// Check the Low resolution button
+if(CCDLow->value() && myCCDBinning != 3)
+{
+   sout.str("");
+   sout << SET_XBIN << ":" << 3;
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myCCDBinning = 3;
+   }
+   else
+   {
+      CameraOutput->value("ERROR sending command");
+   }
+
+   sout.str("");
+   sout << SET_YBIN << ":" << 3;
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myCCDBinning = 3;
+   }
+   else
+   {
+      CameraOutput->value("ERROR sending command");
+   }
+}
+
+// Check if we want auto temperature regulation
+if((bool) DoAutoTemperature->value() != myDoAutoTemperature)
+{
+   sout.str("");
+   sout << SET_CCD_AUTO_TEMP << ":" << (bool) DoAutoTemperature->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      CameraOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myDoAutoTemperature = (bool) DoAutoTemperature->value();
+    }
+    else
+    {
+      CameraOutput->value("ERROR sending command");
+    }
+}}
+            tooltip {Send changes to CDAS server} xywh {360 265 75 25}
+          }
+          Fl_Output CameraOutput {
+            xywh {8 265 350 25}
+          }
+          Fl_Group CCDSize {
+            label {CCD Size} open
+            xywh {10 50 450 125} box BORDER_BOX align 5
+          } {
+            Fl_Input CCDTop {
+              label {CCD Top:}
+              tooltip {Coordinate of the top-most pixel (in full-resolution pixels)} xywh {105 55 50 25}
+            }
+            Fl_Input CCDLeft {
+              label {CCD Left:}
+              tooltip {Coordinate of the left-most pixel (in full-resolution pixels)} xywh {105 85 50 25}
+            }
+            Fl_Input CCDHeight {
+              label {CCD Height:}
+              tooltip {Number of pixels in the vertical direction (in full-resolution pixels)} xywh {105 115 50 25}
+            }
+            Fl_Input CCDWidth {
+              label {CCD Width:}
+              tooltip {Number of pixels in the horizontal direction (in full-resolution pixels)} xywh {105 145 50 25}
+            }
+            Fl_Round_Button CCDHigh {
+              label {High Resolution}
+              callback {CCDMed->value(0);
+CCDLow->value(0);}
+              xywh {201 85 25 25} down_box ROUND_DOWN_BOX
+            }
+            Fl_Round_Button CCDMed {
+              label {Medium Resolution (2x2 Binning)}
+              callback {CCDHigh->value(0);
+CCDLow->value(0);}
+              xywh {201 115 25 25} down_box ROUND_DOWN_BOX
+            }
+            Fl_Round_Button CCDLow {
+              label {Low Resolution (3x3 Binning)}
+              callback {CCDHigh->value(0);
+CCDMed->value(0);}
+              xywh {201 145 25 25} down_box ROUND_DOWN_BOX
+            }
+          }
+          Fl_Choice CameraType {
+            label CameraType open
+            xywh {115 220 190 25} down_box BORDER_BOX
+          } {}
+          Fl_Input CCDTemp {
+            label {CCD Temperature Setpoint (C):}
+            tooltip {Temperature to cool CCD to during data collection} xywh {232 190 75 25}
+          }
+          Fl_Input CCDGain {
+            label {CCD gain (1-6):}
+            tooltip {CCD gain (not used by all CCD models)} xywh {435 190 75 25}
+          }
+          Fl_Check_Button DoAutoTemperature {
+            label {Auto Temperature Regularization}
+            tooltip {If checked, turn CCD cooling off during the daytime} xywh {330 220 25 25} down_box DOWN_BOX
+          }
+        }
+        Fl_Group {} {
+          label FilterWheel open
+          xywh {8 25 677 280} hide
+        } {
+          Fl_Choice FilterWheelType {
+            label {Filter wheel type} open
+            xywh {130 45 180 25} down_box BORDER_BOX
+          } {}
+          Fl_Return_Button SendFilterWheel {
+            label Send
+            callback {ostringstream sout;
+string cmd;
+
+// Check the CameraType parameter
+if(myFilterWheelType != FilterWheelType->value())
+{
+   sout.str("");
+   sout << SET_FILTERWHEELTYPE << ":" << FilterWheelType->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      FilterWheelOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myFilterWheelType = FilterWheelType->value();
+   }
+   else
+   {
+      FilterWheelOutput->value("ERROR sending command");
+   }
+}
+
+
+if(NumFilters->value() && myNumFilters != atoi(NumFilters->value()))
+{
+   sout.str("");
+   sout << SET_NUMFILTERS << ":" << NumFilters->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      FilterWheelOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myNumFilters = atoi(NumFilters->value());
+   }
+   else
+   {
+      FilterWheelOutput->value("ERROR sending command");
+   }
+}
+
+// Send all five filter positions
+sout.str("");
+int Shutter;
+if(Shutter1->value())
+   Shutter = 1;
+else
+   Shutter = 0;
+sout << SET_FILTERINFO << ":1:" << Name1->value() << ":" << Height1->value() << ":" << Exp1->value() << ":" << Shutter;
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+   // Command was successful
+   FilterWheelOutput->value(myClient.myLastReply.c_str());
+   sout.str("");
+}
+else
+{
+   FilterWheelOutput->value("ERROR sending command");
+}
+
+sout.str("");
+if(Shutter2->value())
+   Shutter = 1;
+else
+   Shutter = 0;
+sout << SET_FILTERINFO << ":2:" << Name2->value() << ":" << Height2->value() << ":" << Exp2->value() << ":" << Shutter;
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+   // Command was successful
+   FilterWheelOutput->value(myClient.myLastReply.c_str());
+   sout.str("");
+}
+else
+{
+   FilterWheelOutput->value("ERROR sending command");
+}
+
+sout.str("");
+if(Shutter3->value())
+   Shutter = 1;
+else
+   Shutter = 0;
+sout << SET_FILTERINFO << ":3:" << Name3->value() << ":" << Height3->value() << ":" << Exp3->value() << ":" << Shutter;
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+   // Command was successful
+   FilterWheelOutput->value(myClient.myLastReply.c_str());
+   sout.str("");
+}
+else
+{
+   FilterWheelOutput->value("ERROR sending command");
+}
+
+sout.str("");
+if(Shutter4->value())
+   Shutter = 1;
+else
+   Shutter = 0;
+sout << SET_FILTERINFO << ":4:" << Name4->value() << ":" << Height4->value() << ":" << Exp4->value() << ":" << Shutter;
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+   // Command was successful
+   FilterWheelOutput->value(myClient.myLastReply.c_str());
+   sout.str("");
+}
+else
+{
+   FilterWheelOutput->value("ERROR sending command");
+}
+
+sout.str("");
+if(Shutter5->value())
+   Shutter = 1;
+else
+   Shutter = 0;
+sout << SET_FILTERINFO << ":5:" << Name5->value() << ":" << Height5->value() << ":" << Exp5->value() << ":" << Shutter;
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+   // Command was successful
+   FilterWheelOutput->value(myClient.myLastReply.c_str());
+   sout.str("");
+}
+else
+{
+   FilterWheelOutput->value("ERROR sending command");
+}
+
+sout.str("");
+if(Shutter6->value())
+   Shutter = 1;
+else
+   Shutter = 0;
+sout << SET_FILTERINFO << ":6:" << Name6->value() << ":" << Height6->value() << ":" << Exp6->value() << ":" << Shutter;
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+   // Command was successful
+   FilterWheelOutput->value(myClient.myLastReply.c_str());
+   sout.str("");
+}
+else
+{
+   FilterWheelOutput->value("ERROR sending command");
+}}
+            tooltip {Send changes to CDAS server} xywh {360 265 75 25}
+          }
+          Fl_Output FilterWheelOutput {
+            xywh {8 265 350 25}
+          }
+          Fl_Group {} {
+            label {Filter Information} open
+            xywh {10 94 675 144} box BORDER_BOX align 5
+          } {
+            Fl_Output {} {
+              label {Position:}
+              xywh {85 120 0 0} align 9
+            }
+            Fl_Output {} {
+              label 1
+              xywh {137 120 0 0} align 1
+            }
+            Fl_Output {} {
+              label 2
+              xywh {237 120 0 0} align 1
+            }
+            Fl_Output {} {
+              label 3
+              xywh {337 120 0 0} align 1
+            }
+            Fl_Output {} {
+              label 4
+              xywh {437 120 0 0} align 1
+            }
+            Fl_Output {} {
+              label 5
+              xywh {537 120 0 0} align 1
+            }
+            Fl_Output {} {
+              label 6
+              xywh {637 120 0 0} align 1
+            }
+            Fl_Output {} {
+              label {Name:}
+              xywh {85 140 0 0} align 9
+            }
+            Fl_Input Name1 {
+              tooltip {Filter name (e.g., "6300")} xywh {97 120 80 25} align 9
+            }
+            Fl_Input Name2 {
+              tooltip {Filter name (e.g., "6300")} xywh {197 120 80 25} align 9
+            }
+            Fl_Input Name3 {
+              tooltip {Filter name (e.g., "6300")} xywh {297 120 80 25} align 9
+            }
+            Fl_Input Name4 {
+              tooltip {Filter name (e.g., "6300")} xywh {397 120 80 25} align 9
+            }
+            Fl_Input Name5 {
+              tooltip {Filter name (e.g., "6300")} xywh {497 120 80 25} align 9
+            }
+            Fl_Input Name6 {
+              tooltip {Filter name (e.g., "6300")} xywh {597 120 80 25} align 9
+            }
+            Fl_Output {} {
+              label {Height:}
+              xywh {85 170 0 0} align 9
+            }
+            Fl_Input Height1 {
+              tooltip {Assume altitude of emission layer} xywh {97 150 80 25} align 9
+            }
+            Fl_Input Height2 {
+              tooltip {Assumed altitude of emission layer} xywh {197 150 80 25} align 9
+            }
+            Fl_Input Height3 {
+              tooltip {Assumed altitude of emission layer} xywh {297 150 80 25}
+            }
+            Fl_Input Height4 {
+              tooltip {Assummed altitude of emission layer} xywh {397 150 80 25}
+            }
+            Fl_Input Height5 {
+              tooltip {Assumed altitude of emission layer} xywh {497 150 80 25}
+            }
+            Fl_Input Height6 {
+              tooltip {Assumed altitude of emission layer} xywh {597 150 80 25}
+            }
+            Fl_Output {} {
+              label {Exp Time:}
+              xywh {85 200 0 0} align 9
+            }
+            Fl_Input Exp1 {
+              tooltip {Exposure time (seconds)} xywh {97 180 80 25} align 9
+            }
+            Fl_Input Exp2 {
+              tooltip {Exposure time (seconds)} xywh {197 180 80 25} align 9
+            }
+            Fl_Input Exp3 {
+              tooltip {Exposure time (seconds)} xywh {297 180 80 25}
+            }
+            Fl_Input Exp4 {
+              tooltip {Exposure time (seconds)} xywh {397 180 80 25}
+            }
+            Fl_Input Exp5 {
+              tooltip {Exposure time (seconds)} xywh {497 180 80 25}
+            }
+            Fl_Input Exp6 {
+              tooltip {Exposure time (seconds)} xywh {597 180 80 25}
+            }
+            Fl_Output {} {
+              label {Shutter?:}
+              xywh {85 230 0 0} align 9
+            }
+            Fl_Round_Button Shutter1 {
+              callback {Shutter2->value(0);
+Shutter3->value(0);
+Shutter4->value(0);
+Shutter5->value(0);
+Shutter6->value(0);}
+              tooltip {Is this the shutter position? (not used in systems with an external shutter)} xywh {134 210 25 25} down_box ROUND_DOWN_BOX
+            }
+            Fl_Round_Button Shutter2 {
+              callback {Shutter1->value(0);
+Shutter3->value(0);
+Shutter4->value(0);
+Shutter5->value(0);
+Shutter6->value(0);}
+              tooltip {Is this the shutter position? (not used in systems with an external shutter)} xywh {234 210 25 25} down_box ROUND_DOWN_BOX
+            }
+            Fl_Round_Button Shutter3 {
+              callback {Shutter1->value(0);
+Shutter2->value(0);
+Shutter4->value(0);
+Shutter5->value(0);
+Shutter6->value(0);}
+              tooltip {Is this the shutter position? (not used in systems with an external shutter)} xywh {334 210 25 25} down_box ROUND_DOWN_BOX
+            }
+            Fl_Round_Button Shutter4 {
+              callback {Shutter1->value(0);
+Shutter2->value(0);
+Shutter3->value(0);
+Shutter5->value(0);
+Shutter6->value(0);}
+              tooltip {Is this the shutter position? (not used in systems with an external shutter)} xywh {434 210 25 25} down_box ROUND_DOWN_BOX
+            }
+            Fl_Round_Button Shutter5 {
+              callback {Shutter1->value(0);
+Shutter2->value(0);
+Shutter3->value(0);
+Shutter4->value(0);
+Shutter6->value(0);}
+              tooltip {Is this the shutter position? (not used in systems with an external shutter)} xywh {534 210 25 25} down_box ROUND_DOWN_BOX
+            }
+            Fl_Round_Button Shutter6 {
+              callback {Shutter1->value(0);
+Shutter2->value(0);
+Shutter3->value(0);
+Shutter4->value(0);
+Shutter5->value(0);}
+              tooltip {Is this the shutter position? (not used in systems with an external shutter)} xywh {634 210 25 25} down_box ROUND_DOWN_BOX
+            }
+          }
+          Fl_Input NumFilters {
+            label {Number of filter positions:}
+            tooltip {Number of filter positions in filter wheel (usually 5 or 6)} xywh {500 45 40 25}
+          }
+        }
+        Fl_Group {} {
+          label Sequence open
+          xywh {5 25 640 280} hide
+        } {
+          Fl_Check_Button DoDark {
+            label {Dark Image Every}
+            callback {if(DoDark->value() == 0)
+{
+   DarkFrequency->deactivate();
+   DarkExpTime->deactivate();
+}
+else
+{
+   DarkFrequency->activate();
+   DarkExpTime->activate();
+}}
+            tooltip {Check to take a dark image during data taking} xywh {5 230 25 25} down_box DOWN_BOX
+          }
+          Fl_Input DarkFrequency {
+            tooltip {How many sky images between dark images?} xywh {155 230 40 25}
+          }
+          Fl_Output {} {
+            label {images w/ exp. (s):}
+            xywh {335 230 0 25}
+          }
+          Fl_Input DarkExpTime {
+            tooltip {Exposure time for dark images (seconds)} xywh {335 230 25 25}
+          }
+          Fl_Return_Button SendSequence {
+            label Send
+            callback {ostringstream sout;
+string cmd;
+ostringstream subsout;
+int count;
+
+// Read in the four sub-sequences (long and ugly code... I know)
+sout.str("");
+subsout.str("");
+count = 0;
+
+if(atoi(Seq1_1->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq1_1->value();
+}
+if(atoi(Seq1_2->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq1_2->value();
+}
+if(atoi(Seq1_3->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq1_3->value();
+}
+if(atoi(Seq1_4->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq1_4->value();
+}
+if(atoi(Seq1_5->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq1_5->value();
+}
+if(atoi(Seq1_6->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq1_6->value();
+}
+if(atoi(Seq1_7->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq1_7->value();
+}
+if(atoi(Seq1_8->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq1_8->value();
+}
+if(atoi(Seq1_9->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq1_9->value();
+}
+if(atoi(Seq1_10->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq1_10->value();
+}
+
+sout << SET_SUBSEQUENCE << ":1:" << count << subsout.str();
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+   // Command was successful
+   SequenceOutput->value(myClient.myLastReply.c_str());
+   sout.str("");
+}
+else
+{
+   SequenceOutput->value("ERROR sending command");
+}
+
+sout.str("");
+subsout.str("");
+count = 0;
+
+if(atoi(Seq2_1->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq2_1->value();
+}
+if(atoi(Seq2_2->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq2_2->value();
+}
+if(atoi(Seq2_3->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq2_3->value();
+}
+if(atoi(Seq2_4->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq2_4->value();
+}
+if(atoi(Seq2_5->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq2_5->value();
+}
+if(atoi(Seq2_6->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq2_6->value();
+}
+if(atoi(Seq2_7->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq2_7->value();
+}
+if(atoi(Seq2_8->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq2_8->value();
+}
+if(atoi(Seq2_9->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq2_9->value();
+}
+if(atoi(Seq2_10->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq2_10->value();
+}
+
+sout << SET_SUBSEQUENCE << ":2:" << count << subsout.str();
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+   // Command was successful
+   SequenceOutput->value(myClient.myLastReply.c_str());
+   sout.str("");
+}
+else
+{
+   SequenceOutput->value("ERROR sending command");
+}
+
+sout.str("");
+subsout.str("");
+count = 0;
+
+if(atoi(Seq3_1->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq3_1->value();
+}
+if(atoi(Seq3_2->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq3_2->value();
+}
+if(atoi(Seq3_3->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq3_3->value();
+}
+if(atoi(Seq3_4->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq3_4->value();
+}
+if(atoi(Seq3_5->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq3_5->value();
+}
+if(atoi(Seq3_6->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq3_6->value();
+}
+if(atoi(Seq3_7->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq3_7->value();
+}
+if(atoi(Seq3_8->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq3_8->value();
+}
+if(atoi(Seq3_9->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq3_9->value();
+}
+if(atoi(Seq3_10->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq3_10->value();
+}
+
+sout << SET_SUBSEQUENCE << ":3:" << count << subsout.str();
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+   // Command was successful
+   SequenceOutput->value(myClient.myLastReply.c_str());
+   sout.str("");
+}
+else
+{
+   SequenceOutput->value("ERROR sending command");
+}
+
+sout.str("");
+subsout.str("");
+count = 0;
+
+if(atoi(Seq4_1->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq4_1->value();
+}
+if(atoi(Seq4_2->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq4_2->value();
+}
+if(atoi(Seq4_3->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq4_3->value();
+}
+if(atoi(Seq4_4->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq4_4->value();
+}
+if(atoi(Seq4_5->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq4_5->value();
+}
+if(atoi(Seq4_6->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq4_6->value();
+}
+if(atoi(Seq4_7->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq4_7->value();
+}
+if(atoi(Seq4_8->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq4_8->value();
+}
+if(atoi(Seq4_9->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq4_9->value();
+}
+if(atoi(Seq4_10->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq4_10->value();
+}
+
+sout << SET_SUBSEQUENCE << ":4:" << count << subsout.str();
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+   // Command was successful
+   SequenceOutput->value(myClient.myLastReply.c_str());
+   sout.str("");
+}
+else
+{
+   SequenceOutput->value("ERROR sending command");
+}
+
+// Read in the five sub-sequence orders (long and ugly code... I know)
+sout.str("");
+subsout.str("");
+count = 0;
+
+if(atoi(Seq1->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq1->value();
+}
+if(atoi(Seq2->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq2->value();
+}
+if(atoi(Seq3->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq3->value();
+}
+if(atoi(Seq4->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq4->value();
+}
+if(atoi(Seq5->value()))
+{
+   // a valid entry
+   count++;
+   subsout << ":" << Seq5->value();
+}
+
+sout << SET_SUBSEQUENCEORDER << ":" << count << subsout.str();
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+   // Command was successful
+   SequenceOutput->value(myClient.myLastReply.c_str());
+   sout.str("");
+}
+else
+{
+   SequenceOutput->value("ERROR sending command");
+}
+
+sout.str("");
+if(DoDark->value() == 0)
+{
+   sout << SET_DARKSEQUENCE << ":0:0:0";
+} else
+{
+   sout << SET_DARKSEQUENCE << ":1:" << DarkFrequency->value() << ":" << DarkExpTime->value();
+}
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+   // Command was successful
+   SequenceOutput->value(myClient.myLastReply.c_str());
+   sout.str("");
+}
+else
+{
+   SequenceOutput->value("ERROR sending command");
+}
+
+sout.str("");
+if(DoPeriodicity->value() == 0)
+{
+   sout << SET_PERIODICITY << ":0:0";
+} else
+{
+   sout << SET_PERIODICITY << ":1:" << PeriodicityFrequency->value();
+}
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+   // Command was successful
+   SequenceOutput->value(myClient.myLastReply.c_str());
+   sout.str("");
+}
+else
+{
+   SequenceOutput->value("ERROR sending command");
+}}
+            tooltip {Send changes to CDAS server} xywh {360 265 75 25}
+          }
+          Fl_Output SequenceOutput {
+            xywh {8 265 350 25}
+          }
+          Fl_Check_Button DoPeriodicity {
+            label Wait
+            callback {if(DoPeriodicity->value() == 0)
+   PeriodicityFrequency->deactivate();
+else
+   PeriodicityFrequency->activate();}
+            tooltip {Check if an image is desired at a set periodicity (rather than as fast as possible)} xywh {365 230 25 25} down_box DOWN_BOX
+          }
+          Fl_Input PeriodicityFrequency {
+            tooltip {Time between consecutive images (seconds)} xywh {420 230 40 25}
+          }
+          Fl_Output {} {
+            label {seconds between images}
+            xywh {645 230 0 25}
+          }
+          Fl_Group {} {
+            label {Sub-sequences} open
+            xywh {15 50 387 135} box BORDER_BOX align 5
+          } {
+            Fl_Output {} {
+              label {Seq. 1:}
+              tooltip {First filter sequence (enter the filter numbers to cycle through)} xywh {70 80 0 0} align 9
+            }
+            Fl_Input Seq1_1 {
+              xywh {90 60 25 25} align 0
+            }
+            Fl_Input Seq1_2 {
+              xywh {120 60 25 25} align 0
+            }
+            Fl_Input Seq1_3 {
+              xywh {150 60 25 25} align 0
+            }
+            Fl_Input Seq1_4 {
+              xywh {180 60 25 25} align 0
+            }
+            Fl_Input Seq1_5 {
+              xywh {210 60 25 25} align 0
+            }
+            Fl_Input Seq1_6 {
+              xywh {240 60 25 25} align 0
+            }
+            Fl_Input Seq1_7 {
+              xywh {270 60 25 25} align 0
+            }
+            Fl_Input Seq1_8 {
+              xywh {300 60 25 25} align 0
+            }
+            Fl_Input Seq1_9 {
+              xywh {330 60 25 25} align 0
+            }
+            Fl_Input Seq1_10 {
+              xywh {360 60 25 25} align 0
+            }
+            Fl_Output {} {
+              label {Seq. 2:}
+              tooltip {Second filter sequence (enter the filter numbers to cycle through)} xywh {70 110 0 0} align 9
+            }
+            Fl_Input Seq2_1 {
+              xywh {90 90 25 25} align 0
+            }
+            Fl_Input Seq2_2 {
+              xywh {120 90 25 25} align 0
+            }
+            Fl_Input Seq2_3 {
+              xywh {150 90 25 25} align 0
+            }
+            Fl_Input Seq2_4 {
+              xywh {180 90 25 25} align 0
+            }
+            Fl_Input Seq2_5 {
+              xywh {210 90 25 25} align 0
+            }
+            Fl_Input Seq2_6 {
+              xywh {240 90 25 25} align 0
+            }
+            Fl_Input Seq2_7 {
+              xywh {270 90 25 25} align 0
+            }
+            Fl_Input Seq2_8 {
+              xywh {300 90 25 25} align 0
+            }
+            Fl_Input Seq2_9 {
+              xywh {330 90 25 25} align 0
+            }
+            Fl_Input Seq2_10 {
+              xywh {360 90 25 25} align 0
+            }
+            Fl_Output {} {
+              label {Seq. 3:}
+              tooltip {Third filter sequence (enter the filter numbers to cycle through)} xywh {70 140 0 0} align 9
+            }
+            Fl_Input Seq3_1 {
+              xywh {90 120 25 25} align 0
+            }
+            Fl_Input Seq3_2 {
+              xywh {120 120 25 25} align 0
+            }
+            Fl_Input Seq3_3 {
+              xywh {150 120 25 25} align 0
+            }
+            Fl_Input Seq3_4 {
+              xywh {180 120 25 25} align 0
+            }
+            Fl_Input Seq3_5 {
+              xywh {210 120 25 25} align 0
+            }
+            Fl_Input Seq3_6 {
+              xywh {240 120 25 25} align 0
+            }
+            Fl_Input Seq3_7 {
+              xywh {270 120 25 25} align 0
+            }
+            Fl_Input Seq3_8 {
+              xywh {300 120 25 25} align 0
+            }
+            Fl_Input Seq3_9 {
+              xywh {330 120 25 25} align 0
+            }
+            Fl_Input Seq3_10 {
+              xywh {360 120 25 25} align 0
+            }
+            Fl_Output {} {
+              label {Seq. 4:}
+              tooltip {Fourth filter sequence (enter the filter numbers to cycle through)} xywh {70 170 0 0} align 9
+            }
+            Fl_Input Seq4_1 {
+              xywh {90 150 25 25} align 0
+            }
+            Fl_Input Seq4_2 {
+              xywh {120 150 25 25} align 0
+            }
+            Fl_Input Seq4_3 {
+              xywh {150 150 25 25} align 0
+            }
+            Fl_Input Seq4_4 {
+              xywh {180 150 25 25} align 0
+            }
+            Fl_Input Seq4_5 {
+              xywh {210 150 25 25} align 0
+            }
+            Fl_Input Seq4_6 {
+              xywh {240 150 25 25} align 0
+            }
+            Fl_Input Seq4_7 {
+              xywh {270 150 25 25} align 0
+            }
+            Fl_Input Seq4_8 {
+              xywh {300 150 25 25} align 0
+            }
+            Fl_Input Seq4_9 {
+              xywh {330 150 25 25} align 0
+            }
+            Fl_Input Seq4_10 {
+              xywh {360 150 25 25} align 0
+            }
+          }
+          Fl_Output {} {
+            label {Sequence:}
+            tooltip {Sequence (enter the sequence numbers to cycle through)} xywh {85 220 0 0} align 9
+          }
+          Fl_Input Seq1 {
+            xywh {105 200 25 25} align 0
+          }
+          Fl_Input Seq2 {
+            xywh {135 200 25 25} align 0
+          }
+          Fl_Input Seq3 {
+            xywh {165 200 25 25} align 0
+          }
+          Fl_Input Seq4 {
+            xywh {195 200 25 25} align 0
+          }
+          Fl_Input Seq5 {
+            xywh {225 200 25 25} align 0
+          }
+        }
+        Fl_Group {} {
+          label Directories open
+          xywh {8 25 437 275} hide
+        } {
+          Fl_Input DataDir {
+            label {Data Directory: }
+            tooltip {Full path to data directory} xywh {153 45 210 25}
+          }
+          Fl_Input PNGDir {
+            label {PNG Directory: }
+            tooltip {Full path to location to save PNG files} xywh {153 75 210 25}
+          }
+          Fl_Check_Button DoPNG {
+            label {Save PNG}
+            tooltip {Check to save PNG images (in addition to raw TIF images)} xywh {158 105 25 25} down_box DOWN_BOX
+          }
+          Fl_Input MPGDir {
+            label {Movie Directory: }
+            tooltip {Full path to location to save daily summary movies} xywh {153 135 210 25}
+          }
+          Fl_Check_Button DoMPG {
+            label {Save Movies}
+            tooltip {Check to save daily summary movies} xywh {158 165 25 25} down_box DOWN_BOX deactivate
+          }
+          Fl_Input QLDir {
+            label {Quicklook Directory: }
+            tooltip {Full path to location to save quicklook summary images} xywh {153 195 210 25}
+          }
+          Fl_Check_Button DoQL {
+            label {Save Quicklooks}
+            tooltip {Check to save quicklook summary images} xywh {158 225 25 25} down_box DOWN_BOX deactivate
+          }
+          Fl_Input DirectoryOutput {
+            xywh {8 265 350 25}
+          }
+          Fl_Return_Button SendDirectory {
+            label Send
+            callback {ostringstream sout;
+string cmd;
+
+// Check the data directory
+if(DataDir->value() && myDataDir != DataDir->value())
+{
+   sout.str("");
+   sout << SET_DATA_DIR << ":" << DataDir->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      DirectoryOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myDataDir = DataDir->value();
+   }
+   else
+   {
+      DirectoryOutput->value("ERROR sending command");
+   }
+}
+
+// Check the png directory
+if(PNGDir->value() && myPNGDir != PNGDir->value())
+{
+   sout.str("");
+   sout << SET_PNG_DIR << ":" << PNGDir->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      DirectoryOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myPNGDir = PNGDir->value();
+   }
+   else
+   {
+      DirectoryOutput->value("ERROR sending command");
+   }
+}
+
+// Check the mpg directory
+if(MPGDir->value() && myMPGDir != MPGDir->value())
+{
+   sout.str("");
+   sout << SET_MPG_DIR << ":" << MPGDir->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      DirectoryOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myMPGDir = MPGDir->value();
+   }
+   else
+   {
+      DirectoryOutput->value("ERROR sending command");
+   }
+}
+
+// Check the quicklook directory
+if(QLDir->value() && myQLDir != QLDir->value())
+{
+   sout.str("");
+   sout << SET_QL_DIR << ":" << QLDir->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      DirectoryOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myQLDir = QLDir->value();
+   }
+   else
+   {
+      DirectoryOutput->value("ERROR sending command");
+   }
+}
+
+// Check the doPNG
+if((bool) DoPNG->value() != myDoPNG)
+{
+   sout.str("");
+   sout << SET_DO_PNG << ":" << (bool) DoPNG->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      DirectoryOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myDoPNG = (bool) DoPNG->value();
+   }
+   else
+   {
+      DirectoryOutput->value("ERROR sending command");
+   }
+}
+
+// Check the doPNG
+if((bool) DoMPG->value() != myDoMPG)
+{
+   sout.str("");
+   sout << SET_DO_MPG << ":" << (bool) DoMPG->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      DirectoryOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myDoMPG = (bool) DoMPG->value();
+   }
+   else
+   {
+      DirectoryOutput->value("ERROR sending command");
+   }
+}
+
+// Check the doPNG
+if((bool) DoQL->value() != myDoQL)
+{
+   sout.str("");
+   sout << SET_DO_QL << ":" << (bool) DoQL->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      DirectoryOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myDoQL = (bool) DoQL->value();
+   }
+   else
+   {
+      DirectoryOutput->value("ERROR sending command");
+   }
+}}
+            tooltip {Send changes to CDAS server} xywh {360 265 75 25}
+          }
+        }
+        Fl_Group Site {
+          label Site open
+          xywh {8 25 437 275} hide
+        } {
+          Fl_Input SiteName {
+            label {Site Name:}
+            tooltip {Site name} xywh {135 45 200 25}
+          }
+          Fl_Input SiteAbbreviation {
+            label {Site Abbreviation:}
+            tooltip {Site abbreviation (used in forming image filename)} xywh {135 75 50 25}
+          }
+          Fl_Return_Button SendSite {
+            label Send
+            callback {ostringstream sout;
+string cmd;
+
+// Check the site name
+if(SiteName->value() && mySiteName != SiteName->value())
+{
+   sout.str("");
+   sout << SET_SITENAME << ":" << SiteName->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SiteOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      mySiteName = SiteName->value();
+   }
+   else
+   {
+      SiteOutput->value("ERROR sending command");
+   }
+}
+
+
+// Check the site abbreviation
+if(SiteAbbreviation->value() && mySiteAbbreviation != SiteAbbreviation->value())
+{
+   sout.str("");
+   sout << SET_SITEABBR << ":" << SiteAbbreviation->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SiteOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      mySiteAbbreviation = SiteAbbreviation->value();
+   }
+   else
+   {
+      SiteOutput->value("ERROR sending command");
+   }
+}
+
+
+// Check the site latitude
+if(Latitude->value() && myLatitude != atof(Latitude->value()))
+{
+   sout.str("");
+   sout << SET_LATITUDE << ":" << Latitude->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SiteOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myLatitude = atof(Latitude->value());
+   }
+   else
+   {
+      SiteOutput->value("ERROR sending command");
+   }
+}
+
+// Check the site longitude
+if(Longitude->value() && myLongitude != atof(Longitude->value()))
+{
+   sout.str("");
+   sout << SET_LONGITUDE << ":" << Longitude->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SiteOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myLongitude = atof(Longitude->value());
+   }
+   else
+   {
+      SiteOutput->value("ERROR sending command");
+   }
+}
+
+// Check the site altitude
+if(Altitude->value() && myAltitude != atof(Altitude->value()))
+{
+   sout.str("");
+   sout << SET_ALTITUDE << ":" << Altitude->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SiteOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myAltitude = atof(Altitude->value());
+   }
+   else
+   {
+      SiteOutput->value("ERROR sending command");
+   }
+}}
+            tooltip {Send changes to CDAS server} xywh {360 265 75 25}
+          }
+          Fl_Group {} {
+            label {Location Info} open
+            xywh {10 130 425 105} box BORDER_BOX align 5
+          } {
+            Fl_Input Latitude {
+              label {Latitude (Deg. N):}
+              xywh {155 139 75 25}
+            }
+            Fl_Input Longitude {
+              label {Longitude (Deg. E):}
+              xywh {155 171 75 25}
+            }
+            Fl_Input Altitude {
+              label {Altitude (km):}
+              xywh {155 203 75 25}
+            }
+          }
+          Fl_Output SiteOutput {
+            xywh {8 265 350 25}
+          }
+        }
+        Fl_Group Schedule {
+          label Schedule open
+          xywh {8 25 622 275} hide
+        } {
+          Fl_Group Modes {
+            label Modes open
+            xywh {8 46 427 119} box BORDER_BOX align 5
+          } {
+            Fl_Round_Button Off {
+              label Off
+              callback {Start->deactivate();
+Stop->deactivate();}
+              tooltip {Turn off the automatic scheduler} xywh {20 48 100 25} type Radio down_box ROUND_DOWN_BOX
+            }
+            Fl_Round_Button Auto {
+              label Automatic
+              callback {Start->deactivate();
+Stop->deactivate();}
+              tooltip {Turn on the automatic scheduler (set parameters for sun and moon angles below)} xywh {20 68 100 25} type Radio down_box ROUND_DOWN_BOX
+            }
+            Fl_Round_Button Manual {
+              label Manual
+              callback {Start->activate();
+Stop->activate();}
+              tooltip {Manual scheduling (set start and stop time below)} xywh {20 87 100 25} type Radio down_box ROUND_DOWN_BOX
+            }
+            Fl_Input Start {
+              label {Start:}
+              tooltip {Start time (e.g., "05/18/2014 22:00:00")} xywh {70 110 300 25}
+            }
+            Fl_Input Stop {
+              label {Stop:}
+              tooltip {Stop time (e.g., "05/19/2014 04:00:00")} xywh {70 137 300 25}
+            }
+          }
+          Fl_Group Horizon {
+            label {Horizon Angles} open
+            xywh {8 193 427 60} box BORDER_BOX align 5
+          } {
+            Fl_Input SunAngle {
+              label {Sun Angle (Degrees):}
+              tooltip {Solar depression angle to start/stop data collection at when in "Automatic" mode (e.g., "12" for nautical twilight)} xywh {191 197 100 25}
+            }
+            Fl_Input MoonAngle {
+              xywh {191 225 100 25}
+            }
+            Fl_Round_Button DoMoonAngle {
+              label {Moon Angle (Degrees):}
+              callback {if(DoMoonAngle->value() == 0)
+   MoonAngle->deactivate();
+else
+   MoonAngle->activate();}
+              tooltip {Set to restrict data taking to when the moon is below the horizon.  Used when in "Automatic" mode (e.g., "0" to have the moon be below the horizon)} xywh {20 225 170 25} down_box ROUND_DOWN_BOX
+            }
+          }
+          Fl_Return_Button SendSchd {
+            label Send
+            callback {ostringstream sout;
+string cmd;
+
+// Check what Mode is selected
+if(Off->value() && myScheduleMode != SCHEDULE_OFF)
+{
+   sout << SCHEDULE_MODE << ":" << SCHEDULE_OFF;
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SchdOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myScheduleMode = SCHEDULE_OFF;
+   }
+   else
+   {
+      SchdOutput->value("ERROR sending command");
+   }
+}
+else if(Auto->value() && myScheduleMode != SCHEDULE_AUTO)
+{
+   sout << SCHEDULE_MODE << ":" << SCHEDULE_AUTO;
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SchdOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myScheduleMode = SCHEDULE_AUTO;
+   }
+   else
+   {
+      SchdOutput->value("ERROR sending command");
+   }
+}
+else if(Manual->value())
+{
+   string temp_string;
+   int month, day, year, hour, min, sec;
+   time_t temp_start_time, temp_stop_time;
+   struct tm temp_tm;
+
+   // Read the start time into a time_t structure
+   localtime_r(&myStartTime, &temp_tm);
+
+   // Get and parse the start time
+   temp_string = Start->value();
+   if(sscanf(temp_string.c_str(), "%d/%d/%d %d:%d:%d", &month, &day, &year, &hour, &min, &sec) == 6)
+   {
+      temp_tm.tm_sec = sec;
+      temp_tm.tm_min = min;
+      temp_tm.tm_hour = hour;
+      temp_tm.tm_mday = day;
+      temp_tm.tm_mon = month-1;
+      temp_tm.tm_year = year - 1900;
+   }
+   temp_start_time = mktime(&temp_tm);
+
+   // Now that we have the proper daylight savings, read again
+   if(sscanf(temp_string.c_str(), "%d/%d/%d %d:%d:%d", &month, &day, &year, &hour, &min, &sec) == 6)
+   {
+      temp_tm.tm_sec = sec;
+      temp_tm.tm_min = min;
+      temp_tm.tm_hour = hour;
+      temp_tm.tm_mday = day;
+      temp_tm.tm_mon = month-1;
+      temp_tm.tm_year = year - 1900;
+   }
+   temp_start_time = mktime(&temp_tm);
+
+   // Read the stop time into a time_t structure
+   localtime_r(&myStopTime, &temp_tm);
+
+   // Get and parse the stop time
+   temp_string = Stop->value();
+   if(sscanf(temp_string.c_str(), "%d/%d/%d %d:%d:%d", &month, &day, &year, &hour, &min, &sec) == 6)
+   {
+      temp_tm.tm_sec = sec;
+      temp_tm.tm_min = min;
+      temp_tm.tm_hour = hour;
+      temp_tm.tm_mday = day;
+      temp_tm.tm_mon = month-1;
+      temp_tm.tm_year = year - 1900;
+   }
+   temp_stop_time = mktime(&temp_tm);
+
+   // Now that we have the proper daylight savings, read again
+   if(sscanf(temp_string.c_str(), "%d/%d/%d %d:%d:%d", &month, &day, &year, &hour, &min, &sec) == 6)
+   {
+      temp_tm.tm_sec = sec;
+      temp_tm.tm_min = min;
+      temp_tm.tm_hour = hour;
+      temp_tm.tm_mday = day;
+      temp_tm.tm_mon = month-1;
+      temp_tm.tm_year = year - 1900;
+   }
+   temp_stop_time = mktime(&temp_tm);
+
+   if(temp_stop_time != myStopTime || temp_start_time != myStartTime || myScheduleMode != SCHEDULE_MANUAL)
+   {
+      // At least one has changed
+      sout << SCHEDULE_MODE << ":" << SCHEDULE_MANUAL << ":" << temp_start_time << ":" << temp_stop_time;
+      cmd = sout.str();
+      if(myClient.SendCommand(cmd))
+      {
+         // Command was successful
+         SchdOutput->value(myClient.myLastReply.c_str());
+         sout.str("");
+         myScheduleMode = SCHEDULE_MANUAL;
+         myStartTime = temp_start_time;
+         myStopTime = temp_stop_time;
+      }
+      else
+      {
+         SchdOutput->value("ERROR sending command");
+      }
+   }
+}
+
+// Check the angles
+if(SunAngle->value() && mySunAngle != atof(SunAngle->value()))
+{
+   sout << ANGLES_SET << ":" << ANGLE_SUN << ":" << SunAngle->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SchdOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      mySunAngle = atof(SunAngle->value());
+   }
+   else
+   {
+      SchdOutput->value("ERROR sending command");
+   }
+}
+
+if(myMoonSet != DoMoonAngle->value())
+{
+   // The moonset flag
+   sout << ANGLES_SET << ":" << ANGLE_DOMOON << ":" << (bool) DoMoonAngle->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SchdOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myMoonSet = DoMoonAngle->value();
+   }
+   else
+   {
+      SchdOutput->value("ERROR sending command");
+   }
+}
+
+if(MoonAngle->value() && myMoonAngle != atof(MoonAngle->value()))
+{
+   sout << ANGLES_SET << ":" << ANGLE_MOON << ":" << MoonAngle->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SchdOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myMoonAngle = atof(MoonAngle->value());
+   }
+   else
+   {
+      SchdOutput->value("ERROR sending command");
+   }
+}
+
+// Check the synchronization flag
+if(AlternateSite->value() == 0)
+{
+   // Send site latitude
+   sout.str("");
+   sout << SET_SCHEDULELATITUDE << ":" << Latitude->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SchdOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myAlternateLatitude = atof(Latitude->value());
+   }
+   else
+   {
+      SchdOutput->value("ERROR sending command");
+   }
+   
+   // Send site longitude
+   sout.str("");
+   sout << SET_SCHEDULELONGITUDE << ":" << Longitude->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SchdOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myAlternateLongitude = atof(Longitude->value());
+   }
+   else
+   {
+      SchdOutput->value("ERROR sending command");
+   }
+}
+else
+{
+   // Send alternate site latitude
+   sout.str("");
+   sout << SET_SCHEDULELATITUDE << ":" << AlternateLatitude->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SchdOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myAlternateLatitude = atof(AlternateLatitude->value());
+   }
+   else
+   {
+      SchdOutput->value("ERROR sending command");
+   }
+   
+   // Send alternate site longitude
+   sout.str("");
+   sout << SET_SCHEDULELONGITUDE << ":" << AlternateLongitude->value();
+   cmd = sout.str();
+   if(myClient.SendCommand(cmd))
+   {
+      // Command was successful
+      SchdOutput->value(myClient.myLastReply.c_str());
+      sout.str("");
+      myAlternateLongitude = atof(AlternateLongitude->value());
+   }
+   else
+   {
+      SchdOutput->value("ERROR sending command");
+   }
+}}
+            tooltip {Send changes to CDAS server} xywh {360 265 75 25}
+          }
+          Fl_Output SchdOutput {
+            xywh {8 265 350 25}
+          }
+          Fl_Check_Button AlternateSite {
+            label {Synchronize Site}
+            callback {if(AlternateSite->value() == 0)
+{
+   AlternateLatitude->deactivate();
+   AlternateLongitude->deactivate();
+}
+else
+{
+   AlternateLatitude->activate();
+   AlternateLongitude->activate();
+}}
+            tooltip {Check if the Automatic start/stop time should be determined based on an alternate location} xywh {450 48 25 25} down_box DOWN_BOX
+          }
+          Fl_Input AlternateLatitude {
+            label {Latitude (Deg. N):}
+            tooltip {Latitude for site synchronization} xywh {595 70 75 25}
+          }
+          Fl_Input AlternateLongitude {
+            label {Longitude (Deg. E):}
+            tooltip {Longitude for site synchronization} xywh {595 95 75 25}
+          }
+        }
+        Fl_Group Capture {
+          label Capture open
+          xywh {5 25 437 280} hide
+        } {
+          Fl_Input ExpTime {
+            label {Exposure Time (s):}
+            tooltip {Exposure time (seconds)} xywh {140 50 51 25}
+          }
+          Fl_Check_Button Dark {
+            label {Dark Image}
+            tooltip {Check to take a dark image} xywh {7 135 25 25} down_box DOWN_BOX
+          }
+          Fl_Input Stub {
+            label {Filename Stub:}
+            tooltip {Filename to use (data will be saved in the "Data" directory} xywh {115 80 163 25}
+          }
+          Fl_Return_Button CaptureNow {
+            label {Capture Image...}
+            callback {ostringstream sout;
+string cmd;
+
+bool myDark;
+bool mySavePNG;
+string myFileStub;
+double myExpTime;
+int myFilter;
+
+myDark = Dark->value();
+myFileStub = Stub->value();
+myFilter = atoi(Filter->value());
+myExpTime = atof(ExpTime->value());
+mySavePNG = SavePNG->value();
+
+sout << CAPTURE_IMAGE << ":" << myExpTime << ":" << myDark << ":" << myFilter << ":" << myFileStub << ":" << mySavePNG;
+cmd = sout.str();
+if(myClient.SendCommand(cmd))
+{
+  // Command was successful
+  CaptureOutput->value(myClient.myLastReply.c_str());
+}
+else
+{
+  CaptureOutput->value("ERROR taking image");
+}}
+            tooltip {Capture image with specified parameters} xywh {292 265 140 25}
+          }
+          Fl_Output CaptureOutput {
+            xywh {5 265 285 25}
+          }
+          Fl_Check_Button SavePNG {
+            label {Save PNG}
+            tooltip {Check to save a PNG file (in addition to a TIF image)} xywh {7 155 25 25} down_box DOWN_BOX
+          }
+          Fl_Input Filter {
+            label {Filter:}
+            tooltip {Filter number to use} xywh {115 110 33 25}
+          }
+        }
+        Fl_Group Advanced {
+          label Advanced open
+          xywh {25 25 415 255} hide
+        } {
+          Fl_Input InputText {
+            label {Input:}
+            tooltip {Command to send to the CDAS server} xywh {60 50 350 25}
+          }
+          Fl_Return_Button SendCmd {
+            label Send
+            callback {string cmd;
+string reply;
+cmd = InputText->value();
+cout << cmd << endl;
+if(myClient.SendCommand(cmd))
+{
+  OutputText->value(myClient.myLastReply.c_str());
+}}
+            tooltip {Send command to CDAS server} xywh {335 83 75 25}
+          }
+          Fl_Output OutputText {
+            label {Output:}
+            xywh {60 115 350 25}
+          }
+        }
+      }
+    }
+  }
+  Function {show(int argc, char **argv)} {open
+  } {
+    code {Address->value("localhost");
+Port->value("30000");
+CameraType->add("SBIG USB",0,0,0,0);
+CameraType->add("PVCAM",0,0,0,0);
+CameraType->add("ANDOR",0,0,0,0);
+CameraType->add("FLI PROLINE", 0,0,0,0);
+FilterWheelType->add("SBIG CFW-L",0,0,0,0);
+FilterWheelType->add("FLI CFW-1",0,0,0,0);
+FilterWheelType->add("KEO FW",0,0,0,0);
+CDASClient->show(argc, argv);} {}
+  }
+  decl {Client myClient;} {private local
+  }
+  decl {bool myMoonSet} {private local
+  }
+  decl {int myScheduleMode;} {private local
+  }
+  decl {double myMoonAngle;} {private local
+  }
+  decl {double mySunAngle;} {private local
+  }
+  decl {time_t myStartTime;} {private local
+  }
+  decl {time_t myStopTime;} {private local
+  }
+  decl {string mySiteName;} {private local
+  }
+  decl {string mySiteAbbreviation;} {private local
+  }
+  decl {double myLatitude;} {private local
+  }
+  decl {double myLongitude;} {private local
+  }
+  decl {double myAltitude;} {private local
+  }
+  decl {int myCCDBinning;} {private local
+  }
+  decl {int myCCDTop;} {private local
+  }
+  decl {int myCCDLeft;} {private local
+  }
+  decl {int myCCDHeight;} {private local
+  }
+  decl {int myCCDWidth;} {private local
+  }
+  decl {double myCCDTemp;} {private local
+  }
+  decl {int myCameraType;} {private local
+  }
+  decl {string myDataDir;} {private local
+  }
+  decl {string myPNGDir;} {private local
+  }
+  decl {string myMPGDir;} {private local
+  }
+  decl {string myQLDir;} {private local
+  }
+  decl {bool myDoPNG;} {private local
+  }
+  decl {bool myDoMPG;} {private local
+  }
+  decl {bool myDoQL;} {private local
+  }
+  decl {int myFilterWheelType;} {private local
+  }
+  decl {int myCCDGain;} {private local
+  }
+  decl {bool myDoAutoTemperature;} {private local
+  }
+  decl {double myAlternateLatitude;} {private local
+  }
+  decl {double myAlternateLongitude;} {private local
+  }
+  decl {int myNumFilters;} {private local
+  }
+} 

@@ -1,0 +1,8 @@
+#!/bin/sh
+# force firmware load for SBIG USB cameras
+
+# 17 March 2009 
+# esmiller@illinois.edu
+
+fxload -D `./sbigfindccd` -I /usr/share/usb/sbigucam.hex
+

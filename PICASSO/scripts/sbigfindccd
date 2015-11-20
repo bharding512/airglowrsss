@@ -1,0 +1,19 @@
+#!/usr/bin/perl
+# force firmware load for SBIG USB cameras
+
+# 17 March 2009 
+# esmiller@illinois.edu
+
+@usbdevs = `lsusb`;
+
+foreach $usbdev (@usbdevs) {
+    # look for SBIG USB camera 
+    if ($usbdev =~ m/0d97\:0001/) {
+	@fields = split/\s+/,$usbdev;
+	$bus = @fields[1];
+	$bus =~ s/\D//,gs;
+	$dev = @fields[3];
+	$dev =~ s/\D//,gs;
+	print "/dev/bus/usb/$bus/$dev";
+    }
+}

@@ -1,0 +1,35 @@
+# Name: 	50-picasso.rules
+# Version:	1.0
+# Author: 	Ethan S Miller () esmiller@illinois.edu
+# Author: 	Jan Soldan (JS) jsoldan@asu.cas.cz
+# Author:	Matt Longmire (ml) matto@sbig.com
+# Description:	Upload firmware to SBIG USB CCD cameras.
+# History:
+# 2005-11-24: The version 1.0 released.
+# 2008-11-18: Added support for ST-7/8/9 Pro cameras w/ external Guide Head
+# 2009-03-17: Modified specifically for use on the University of Illinois
+#             PICASSO3 imaging system.
+
+# 1. Pre-renumeration device IDs
+#=============================
+
+# SBIG ST-7/8/9/10/2K cameras
+BUS=="usb", ACTION=="add", SYSFS{idVendor}=="0d97", SYSFS{idProduct}=="0001", ENV{DEVICE}!="", RUN+="/sbin/fxload -D $env{DEVICE} -I /usr/share/usb/sbigucam.hex"
+
+
+# 2. Post-renumeration device IDs:
+#==============================
+
+# note that these do not utilize the SBIG Python script to change modes
+
+# change permissions on SBIG camera when added
+BUS=="usb", ACTION=="add", SYSFS{idVendor}=="0d97", SYSFS{idProduct}=="0101", MODE="0666"
+
+# dummy rule for removal (this should help when the device is re-plugged)
+BUS=="usb", ACTION=="remove", SYSFS{idVendor}=="0d97", SYSFS{idProduct}=="0101", MODE="0600"
+
+# change permissions on FLI CFW filterwheel(s)
+BUS=="usb", SYSFS{idVendor}=="0f18", MODE="0666"
+
+
+

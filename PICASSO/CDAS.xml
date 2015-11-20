@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<configuration>
+<logger>
+<errorfilename></errorfilename>
+<systemlogfilename></systemlogfilename>
+<doerrorlog>0</doerrorlog>
+<dosystemlog>0</dosystemlog>
+</logger>
+<directories>
+<datapath></datapath>
+<pngpath></pngpath>
+<moviespath></moviespath>
+<quicklookpath></quicklookpath>
+<dopng>0</dopng>
+<domovies> 0</domovies>
+<doquicklook>0</doquicklook>
+</directories>
+<site>
+<sitename></sitename>
+<siteabbreviation> XXX</siteabbreviation>
+<latitude>0</latitude>
+<longitude>0</longitude>
+<height>0</height>
+</site>
+<user>
+<useremail></useremail>
+<username></username>
+<useremaildaily>0</useremaildaily>
+<useremailonerror>0</useremailonerror>
+</user>
+<camera>
+<ccdsettemp>-3.08529e-44</ccdsettemp>
+<cameratype>0</cameratype>
+<binx>0</binx>
+<biny>149938216</biny>
+<imageheight>17</imageheight>
+<imagewidth>0</imagewidth>
+<imagetop>0</imagetop>
+<imageleft>0</imageleft>
+<exposuretime> -6.85505e-06</exposuretime>
+<dark>120</dark>
+<usbgain>-2.44333e-38</usbgain>
+<regulation>49</regulation>
+</camera>
+<schedule>
+<moonangle>0</moonangle>
+<sunangle>18</sunangle>
+<moonset>1</moonset>
+<schedulemode>0</schedulemode>
+<sunrisetime>Sun Jan 00 00:00:00 1900</sunrisetime>
+<sunsettime>Sun Jan 00 00:00:00 1900</sunsettime>
+<moonrisetime>Sun Jan 00 00:00:00 1900</moonrisetime>
+<moonsettime>Sun Jan 00 00:00:00 1900</moonsettime>
+<starttime>Sun Jan 00 00:00:00 1900</starttime>
+<stoptime>Sun Jan 00 00:00:00 1900</stoptime>
+</schedule>
+<systemrunning>1</systemrunning>
+</configuration>

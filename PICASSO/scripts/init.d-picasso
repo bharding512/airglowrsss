@@ -1,0 +1,57 @@
+#!/bin/sh
+#
+# picasso:	PICASSO - Portable Ionospheric Camera And Small-Scale \ 
+#		Observatory.
+#
+# chkconfig:	-	
+# description:	Load drivers for FLI, etc.	
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+start() 
+{
+        echo -n $"Starting picasso: "
+# 	Run Andor Technology Startup Script
+	sh /etc/andordrvlx_load
+
+	insmod /lib/modules/PICASSO/fliusb.ko	
+	sleep 5 
+	chmod 777 /dev/fli*	
+#	restart filterwheel power supply here?
+
+	touch /var/lock/subsys/picasso
+	echo_success
+        echo
+}
+
+stop() 
+{
+        echo -n $"Shutting down picasso: "
+	rmmod fliusb
+	rm -f  /var/lock/subsys/picasso
+      	echo_success 
+	echo
+}
+
+# See how we were called.
+case "$1" in
+  start)
+	start
+        ;;
+  stop)
+	stop
+        ;;
+  restart|reload)
+	stop
+	start
+	;;
+  condrestart)
+	[ -e /var/lock/subsys/picasso ] && (stop; start)
+	;;
+  *)
+        echo $"Usage: $0 {start|stop|restart|reload|condrestart}"
+        exit 1
+esac
+
+exit 0

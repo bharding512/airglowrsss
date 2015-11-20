@@ -1,0 +1,373 @@
+PICASSO3 installation notes:
+
+System Information
+
+IBM/Lenovo ThinkPad R60
+NovAtel GPStation G2 / GPS Silicon Valley GSV4004B on USB serial
+SBIG ST10MXEI CCD on USB
+Finger Lakes Instruments CFW-5-1 filterwheel on USB
+DLI Web Power Switch
+Western Digital MyPassport Essential 250 gB miniature USB hard drives
+
+Introduction
+
+This system was originally running Fedora Core 1 GNU/Linux with a 2.4.37 
+kernel custom-built to utilize the USB-to-RS232 converter.  However, in 
+addition to being obsolete, it did not support the small USB hard drives.  
+We elected to upgrade to a more modern Linux 2.6-based system.  These 
+notes chronicle that installation.
+
+I will begin by covering the operating system installation.  Then, I will 
+discuss the USB configuration using udev.  Next, I will cover building and 
+installing the PICASSO/GPS-SCINDA software.  Finally, I will discuss the 
+configuration of the web power switch and the scheduled operation for 
+lower energy consumption.  At the end, there is a short section on 
+troubleshooting.
+
+
+Preparation (OS Installation)
+
+Xubuntu 8.04 LTS was selected as the GNU/Linux distribution because it is 
+widely deployed and supported, plus I am very familiar with it.  Here is 
+the synopsis of how to set it up.
+
+1. Do the default installation of Xubuntu.
+
+2. Boot Xubuntu and use synaptic to install the following packages (and 
+   their dependencies):
+
+   a. libfltk and libfltk-dev (for FLTKclient and ptiff)
+   b. fxload (for udev/SBIG camera)
+   c. gcc-3.4 and g++-3.4 (for FLTKclient and CDAS)
+   d. libpng-dev (for CDAS and ptiff)
+   e. openssh-server (for remote access)
+   f. linux-headers (for filterwheel driver module)
+   g. libjpeg-dev, xserver-xorg-dev (for ptiff)
+
+3. Connect to the network and update Xubuntu.
+
+4. Verify that everything works in the operating system at this point.  Now
+   is a good time to check your external storage, etc.
+
+5. Create a user (Applications->System->Users and Groups) called "airglow" 
+   with administrative (sudo) privileges.  
+
+6. Log in as airglow.  
+
+7. I add a terminal button to the "panel" ("dock" for Mac users, "task bar" 
+   for Windows users) at the top.  Right-click the panel and choose Add 
+   New Item.  Choose Launcher.  The command is xfce4-terminal.
+
+8. Enable timed-login for user airglow:
+
+   a. Applications->Settings->Login Window
+   b. Security tab
+   c. Enable timed login of airglow for 30 seconds.
+
+Configuring USB devices with udev
+
+This part of the installation is both the biggest headache when it doesn't
+work and the most rewarding when it does.  udev handles events that occur 
+when pluggable devices are added or removed from the system.  This serves
+several purposes for us:
+
+1. The SBIG CCD requires firmware to be loaded when it starts up.
+
+2. Both the CCD and the filterwheel need to be accessible to the user 
+   (usually airglow) running CDAS.
+
+I have written a rules script (sbig/kernel_2r6_stuff/50-picasso.rules) to 
+handle these cases.  Copy this script to /etc/udev/rules.d thusly:
+
+sudo cp sbig/kernel_2r6_stuff/50-picasso.rules /etc/udev/rules.d/
+
+Next, we need to put the firmware where udev can find it:
+
+sudo cp sbig/firmware_files/*.* /usr/share/usb/
+
+Now, restart udev:
+
+sudo /etc/init.d/udev restart
+
+When the CCD is plugged-in and powered ON, it should pause for a few 
+seconds and then the cooling fan will come on.  The cooling fan is usually
+(but, not always) a good indicator that the firmware has been loaded and 
+the camera is ready to use.
+
+
+Installing the Filterwheel kernel module and libraries
+
+Change directory to libfli source:
+
+cd ~/src/fli-esm-1.71/libfli/
+
+Build it:
+
+make clean; make
+
+Install it:
+
+sudo cp libfli.a /usr/local/lib/
+sudo cp libfli.h /usr/local/include/
+
+Build kernel module for the running version of the kernel:
+
+cd ../fliusb/
+make clean; make
+
+Install it (it might be good to verify that this directory exists before 
+blithely copying):
+
+sudo cp fliusb.ko /lib/modules/`uname -r`/kernel/drivers/misc/
+
+Register the new module with modprobe:
+
+cd /lib/modules/`uname -r`/kernel/drivers/misc/
+sudo depmod fliusb.ko
+
+Try loading the module:
+
+sudo modprobe fliusb
+
+If you get the prompt back without any errors, it probably loaded OK.  You
+can check to see that it's loaded by:
+
+lsmod | grep fliusb
+
+Now, build flifilter:
+
+cd ../libfli/flifilter
+make clean; make
+
+Try it out:
+
+./flifilter 0
+
+You might have to have root privileges to access the filterwheel still:
+
+sudo ./flifilter 0
+
+The filterwheel should move and a lot of verbiage will spit out on the 
+console.  Symlink flifilter to the home directory:
+
+ln -s ~/src/fli-esm-1.71/libfli/flifilter/flifilter ~/
+
+If modprobe worked, add fliusb to the list of modules that are 
+automatically loaded on boot:
+
+sudo vi /etc/modules
+
+Try rebooting to see if this loads correctly.  Sometimes running depmod 
+screws up the X11 system.  See the Troubleshooting section at the end for 
+hints on how to fix that.
+
+
+Installing GPS-SCINDA
+
+This is easy.  Create a subdirectory in airglow's home directory:
+
+mkdir ~/gps-scinda
+
+Copy the gps-scinda archive to the new directory:
+
+cp gps-scinda-1.75.tar.gz ~/gps-scinda/
+
+Change directory and unpack:
+
+cd ~/gps-scinda/ ; tar xvzf gps-scinda-1.75.tar.gz
+
+Plug the GPS receiver into a USB port (connect the RS-232 cable to COM1 
+on the receiver).  Resize a terminal window to at least 80x25 and run 
+gps-scinda:
+
+./gps-scinda -r novd -p /dev/ttyUSB0
+
+It may take a minute or two for the receiver to connect.  But, it will say
+"Status: Normal" when it is connected.
+
+
+Notes on installing PICASSO software
+
+The next few sections describe the installation of PICASSO software: CDAS,
+fltkclient, ptiff, and pth.  Although the entire build process is outlined, 
+it may be sufficient to use the precompiled binaries that came with this 
+archive.  
+
+
+Installing CDAS software
+
+Enter the ~/src/cdas/trunk/ directory and type:
+
+make clean
+
+We want to force the old version of GCC/G++; so, set the CXX environment 
+variable:
+
+export CXX=g++-3.4
+
+Also, just for good measure, tell the linker that we put some stuff (libfli)
+in /usr/local/lib:
+
+export LD_LIBRARY_PATH=/usr/local/lib
+
+Now, run the autoconf script and make:
+
+./configure
+make
+
+Copy CDAS.conf to the home directory:
+
+cp cdas/CDAS.conf ~/
+
+And symlink cdas executable to the home directory:
+
+ln -s cdas/cdas ~/
+
+
+Installing FLTKclient
+
+Enter the ~/src/fltkclient/trunk/ directory and type:
+
+make clean
+
+If you're still in the same Terminal that you used to build CDAS, there's 
+no need to export CXX and LD_LIBRARY_PATH again, otherwise, repeat those 
+steps.
+
+Now, run the autoconf script (tell autoconf that FLTK is installed in /usr,
+not /usr/local) and make:
+
+./configure --prefix=/usr
+make
+
+Symlink fltkclient to the home directory:
+
+ln -s fltkclient/fltkclient ~/
+
+
+Installing PTIFF
+
+cd ~/src/ptiff
+make clean; make
+ln -s ptiff ~/
+
+
+Installing pth
+
+cd ~/src/pth
+gcc -o pth pth.c
+sudo cp pth /usr/local/bin
+
+
+Installing other PICASSO tools (scripts)
+
+The cdasdown script shuts CDAS down gracefully (like connecting with 
+FLTKclient and pressing "Kill Server").  Symlink it to the home directory:
+
+ln -s ~/src/scripts/cdasdown ~/
+
+The CDAS_monitor.pl script ensures that CDAS is running at the appointed 
+time in the evening by running as a scheduled task (cron job).  Symlink it
+to the home directory as well:
+
+ln -s ~/src/scripts/CDAS_monitor.pl ~/
+
+
+Installing the DLI web power switch and cron jobs
+
+By default, the web power switch operates a web server at 192.168.0.100:80
+and has username "admin" with password "1234".  I set the laptop's IP 
+address to 192.168.0.2 for an off-line configuration.  The computer is 
+connected to the power switch using a CAT5 cable wired for crossover 
+operation.
+
+Symlink the lpcperl.pl script to the home directory:
+
+ln -s ~/src/scripts/lpcperl.pl ~/
+
+I also added a ~/.bash_aliases file (and uncommented the lines in ~/.bashrc
+to source it) with the following line in it:
+
+alias webps="$HOME/lpcperl.pl 192.168.0.100 admin:1234 "
+
+This allows users to turn on ports 1 and 5 much more compactly, for example:
+
+webps 1on 5on
+
+The following ports are used on the PICASSO3 power switch:
+
+1 - CCD, 2 - GPS receiver, 5 - filterwheel,
+(unswitched) USB hub and notebook PC
+
+We have a series of scheduled tasks that start the camera and CDAS in the 
+evening and shut them down in the morning.  These are installed by running:
+
+crontab ~/src/scripts/crontab.airglow
+
+
+Configuring Autostart in Xfce4
+
+This is a pain in the neck.  The best thing to do is to use my pre-built 
+items.  But, here's how it works:
+
+CDAS:
+
+1. Add a launcher to the panel for CDAS (I used the hard hat icon).
+2. For the command: xfce4-terminal -x "/home/airglow/cdas"
+3. Leave the Run in Terminal UNCHECKED (yes, I'm aware that this makes no 
+sense; but, it works)
+4. Symlink it to the autostart folder, where xxxx is whatever Xfce4 named 
+   it:  ln -s ~/.config/xfce4/panel/launcher.xxxx.rc ~/.config/autostart/CDAS.desktop
+
+GPS-SCINDA:
+
+1. Add a launcher to the panel for CDAS (I used the blue ball icon).
+2. For the command: xfce4-terminal --geometry 80x25 --command "/home/airglow/gps-scinda/gps-scinda -r novd -p /dev/ttyUSB0"
+3. Set Run in Terminal to CHECKED (yes, I'm aware that this makes less 
+sense than CDAS; but, again it *does* work.)
+4. Symlink it to the autostart folder, where xxxx is whatever Xfce4 named 
+   it:  ln -s ~/.config/xfce4/panel/launcher.xxxx.rc ~/.config/autostart/GPS-SCINDA.desktop
+
+Alternatively, you can copy my launchers from ~/src/xfce4 to 
+~/.config/xfce4/panel and ~/.config/xfce4/autostart.  Only autostart 
+gps-scinda and cdas. Or, at least DON'T autostart cdasdown!  There is an 
+autostart manager in the Xfce4 settings (Applications->Settings->Settings 
+Manager) but it doesn't give you access to the run-in-terminal options, etc.
+
+
+Troubleshooting
+
+udev/USB/CCD/filterwheel problems:
+
+1. Verify that the filterwheel works: ~/flifilter 0
+   a. Check kernel module:  lsmod | grep fliusb
+   b. Check registration: lsusb | grep 0f18
+   c. Check permissions, where {Bus} and {Device} are reported by 
+      lsusb: ls -l /dev/bus/usb/{Bus}/{Device}
+
+2. Verify that CCD works:
+   a. Check registration: lsusb | grep 0d97
+   b. Check permissions, where {Bus} and {Device} are reported by 
+      lsusb: ls -l /dev/bus/usb/{Bus}/{Device}
+   c. Reload udev:  sudo /etc/init.d/udev restart
+   d. Force firmware reload:  sudo fxload -D /dev/bus/usb/{Bus}/{Device}
+      -I /usr/share/usb/sbigucam.hex
+
+3. When verifying CDAS operation, always start CDAS in this order:
+   a. Ensure cdas isn't already running:  ps ax | grep cdas
+   b. If it is, kill it:  kill -9 {pid}
+   c. Make sure it died: ps ax | grep cdas
+   d. Connect with fltkclient
+   e. Make sure that the correct camera is selected in the Camera tab and 
+      push the Send button.  CDAS will fail to set the camera size if 
+      there is a problem.
+   f. Take a picture (Capture tab) with exposure 0.12 seconds, filter 1 
+      (the aluminum blank), name TEST1.
+   g. The button will depress visibly for a second or two before coming 
+      back if the picture was taken successfully.  
+   h. If everything works, use the Kill Server button the Command tab.
+
+
+
+
+
