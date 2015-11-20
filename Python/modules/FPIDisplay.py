@@ -40,14 +40,13 @@ def MonthlySummary(site_name, year, month):
 
     # Reduce the font size for the x-axis and set the output to be standard paper size
     matplotlib.rc('xtick', labelsize=8) 
-    matplotlib.rcParams['figure.figsize']= 8.5,11
 
-    # Get information for the requested site
     site = fpiinfo.get_site_info(site_name)
+
     sitetz = timezone(site['Timezone'])
+
     instrument = fpiinfo.get_instr_at(site_name,datetime.datetime(year,month,1))[0]
 
-    # Set up an observer so that we will be able to calculate sun/moon rise/set times
     obs = ephem.Observer()
     obs.pressure = 0
     obs.horizon = '0'
@@ -61,54 +60,56 @@ def MonthlySummary(site_name, year, month):
     d = npzfile['FPI_Results'].ravel()[0]
     del npzfile.f
     npzfile.close()
-
     psst = ephem.Date(obs.previous_setting(ephem.Sun(), start=d['sky_times'][0].astimezone(pytz.utc))).datetime()
     nsrt = ephem.Date(obs.next_rising(ephem.Sun(), start=d['sky_times'][0].astimezone(pytz.utc))).datetime()
     
-    # Set up the bins to be used in the monthly averages.  These are in UT
-    t0 = psst.hour - 1
-    t1 = nsrt.hour + 1
+#    t0 = psst.hour - 1
+#    t1 = nsrt.hour + 1
+    t0 = psst.replace(tzinfo=pytz.utc).astimezone(sitetz).hour - 1
+    t1= nsrt.replace(tzinfo=pytz.utc).astimezone(sitetz).hour + 1
+
+
     if t0 > t1:
         t1 = t1+24
+    
     bins = np.arange(t0,t1,0.5)
     if bins[0] < 12:
         bins = bins+24.
     
-    # Average all of the data from the requested month
     center_time, (bin_T, bin_eT), (bin_U, bin_eU), (bin_U2, bin_eU2), (bin_V, bin_eV), (bin_V2, bin_eV2) = FPI.average_data(f, bins=bins)
 
-    # The start date in UT
-    base = pytz.utc.localize(datetime.datetime(year,month,1))
+    rcParams['figure.figsize']= 8.5,11
 
-    # The output file (TODO: GENERALIZE THE PATH!)
+    # The start date
+#    base = sitetz.localize(datetime.datetime(2014,month,1))
+    base = pytz.utc.localize(datetime.datetime(year,month,1))
     pdf_pages = PdfPages('/home/jmakela/%s_%s_%04d%02d.pdf' % (instrument,site_name,year,month))
 
     # Number of dates to consider per page
     span = 7
-    grid_size = (8,4)
 
     # Find the number of days in the requested month
     cal = Calendar(SUNDAY)
     days_in_month = max(cal.itermonthdays(year,month))
     dateList = [base + datetime.timedelta(days = x) for x in range(0,days_in_month,1)]
 
-    # Loop through each day in the month
+    grid_size = (8, 4)
+
     for dn in dateList:
-        # Every seventh day represents a new page and we need to create the Kp plot
-        if np.mod(dn.day-1,span) == 0:
+        if mod(dn.day-1,span) == 0:
             # Create a new page
-            fig = plt.figure()
- 	    agraph = plt.subplot2grid(grid_size, (0,0), rowspan=1, colspan=4)
+            fig = figure()
 
             # Files read in
             files = []
 
+            agraph = subplot2grid(grid_size, (0,0), rowspan=1, colspan=4)
             # Plot Kp over the time period
             colors = ['k|-','b|-','r|-','g|-','c|-']
             kpc = ['green','green','green','green','yellow','red','red','red','red']
             dn_end = dn + datetime.timedelta(days = span)
             thrs = (dn_end-dn+datetime.timedelta(days=1)).total_seconds()/3600.
-            for hrs in np.linspace(0,thrs,thrs/3+1):
+            for hrs in linspace(0,thrs,thrs/3+1):
                 t = (dn+datetime.timedelta(hours=hrs)).astimezone(pytz.utc)
                 try:
                     kpi = pyglow.Point(t,0,0,250).kp
@@ -117,137 +118,131 @@ def MonthlySummary(site_name, year, month):
                 agraph.fill([t,t,t+datetime.timedelta(hours=3),t+datetime.timedelta(hours=3)],[0,kpi,kpi,0],color=kpc[int(kpi)],alpha=0.3,linewidth=1.0)
 
             agraph.set_ylim([0,9])
-            agraph.xaxis.set_major_formatter(dates.DateFormatter('%b %d'))
+            agraph.xaxis.set_major_formatter(DateFormatter('%b %d'))
             agraph.set_yticks([0,3,6,9])
             agraph.set_title('%s %s %d' % (instrument, site_name, year))
 
         # Append the next file
         files.append('/rdata/airglow/fpi/results/%s_%s_%s.npz' % (instrument, site_name, dn.strftime('%Y%m%d')))
 
-        # Set up the subplots for this day
-        ugraph = plt.subplot2grid(grid_size, (np.mod(dn.day-1,span)+1, 0), rowspan=1, colspan=1)            
-        vgraph = plt.subplot2grid(grid_size, (np.mod(dn.day-1,span)+1, 1), rowspan=1, colspan=1)
-        wgraph = plt.subplot2grid(grid_size, (np.mod(dn.day-1,span)+1, 2), rowspan=1, colspan=1)
-        bgraph = plt.subplot2grid(grid_size, (np.mod(dn.day-1,span)+1, 3), rowspan=1, colspan=1)
+        ugraph = subplot2grid(grid_size, (mod(dn.day-1,span)+1, 0), rowspan=1, colspan=1)            
+        vgraph = subplot2grid(grid_size, (mod(dn.day-1,span)+1, 1), rowspan=1, colspan=1)
+        wgraph = subplot2grid(grid_size, (mod(dn.day-1,span)+1, 2), rowspan=1, colspan=1)
+        bgraph = subplot2grid(grid_size, (mod(dn.day-1,span)+1, 3), rowspan=1, colspan=1)
 
-	# Work with the requested file
         if os.path.isfile(files[-1]):
 
             try:
-                # Calculate sunrise and sunset time in UT
+                # Calculate sunrise and sunset time
                 npzfile = np.load(files[-1])
                 d = npzfile['FPI_Results'].ravel()[0]
                 del npzfile.f
-		npzfile.close()
+                npzfile.close()
+        #        psst = ephem.Date(obs.previous_setting(ephem.Sun(), start=dn+datetime.timedelta(days=1))).datetime()
+        #        nsrt = ephem.Date(obs.next_rising(ephem.Sun(), start=dn+datetime.timedelta(days=1))).datetime()
                 psst = ephem.Date(obs.previous_setting(ephem.Sun(), start=d['sky_times'][0].astimezone(pytz.utc))).datetime()
                 nsrt = ephem.Date(obs.next_rising(ephem.Sun(), start=d['sky_times'][0].astimezone(pytz.utc))).datetime()
 
-		# Calculate the moon set time
                 obs.date = psst
                 moonset = ephem.Moon()
                 moonset.compute(obs)
 
+            #    print psst, 'Moon: ', moonset.alt, moonset.alt < obs.horizon
+            #    print 'Previous moonrise: ', ephem.Date(obs.previous_rising(ephem.Moon(), start=psst)).datetime()
+            #    print 'Next moonrise: ', ephem.Date(obs.next_rising(ephem.Moon(), start=psst)).datetime()
+
                 if moonset.alt < obs.horizon:
                     # moon is not yet up
+            #        print 'down at sunset'
                     rt = ephem.Date(obs.next_rising(ephem.Moon(), start=psst)).datetime()
                 else:
                     # moon is up
+            #        print 'up at sunset'
                     rt = ephem.Date(obs.previous_rising(ephem.Moon(), start=psst)).datetime()
 
-		# Calculate the moon rise time
                 obs.date = nsrt
                 moonrise = ephem.Moon()
                 moonrise.compute(obs)
-
                 if moonrise.alt > obs.horizon:
                     # moon is up at sunrise
+            #        print 'up at sunrise'
                     st = ephem.Date(obs.next_setting(ephem.Moon(), start=nsrt)).datetime()
                 else:
+            #        print 'down at sunrise'
                     st = ephem.Date(obs.previous_setting(ephem.Moon(), start=nsrt)).datetime()
 
                 if st < rt:
                     st = ephem.Date(obs.next_setting(ephem.Moon(), start=nsrt)).datetime()
 
-		# Plot the day's zonal winds.  Send in references to the various graphs.
-                PlotDay(files[-1],directions=['East','West'],Doppler_Fig = fig, Doppler_Graph = ugraph, Temperature_Fig = fig, Temperature_Graph = bgraph, cull=True);
+                FPIDisplay.PlotDay(files[-1],directions=['East','West'],Doppler_Fig = fig, Doppler_Graph = ugraph, Temperature_Fig = fig, Temperature_Graph = bgraph, cull=True);
                 ugraph.legend().set_visible(False)
                 ugraph.set_ylabel('')
-                if np.mod(dn.day-1,span) == 0:
-		    # This is the top graph.  Label it
+                if mod(dn.day-1,span) == 0:
                     ugraph.set_title('Zonal')
                 else:
                     ugraph.set_title('')
                 ugraph.set_xlabel('')
-                ugraph.set_yticks(np.arange(-200,201,100))
-                plt.setp(ugraph.get_lines(),markersize=4)
+                ugraph.set_yticks(arange(-200,201,100))
+                setp(ugraph.get_lines(),markersize=4)
                 ugraph.fill_between([rt,st],[-200,-200],[200,200],alpha=0.1,linewidth=0,facecolor='k')
                 ugraph.set_xlim([psst,nsrt])
 
-		# Plot the monthly averages
-                ind = np.isfinite(bin_U)
-                center_dn = np.array([dn+datetime.timedelta(hours = x) for x in center_time])
-		center_dn = np.array([x.replace(tzinfo=pytz.utc) for x in center_dn])
+                ind = isfinite(bin_U)
+                center_dn = np.array([dn.astimezone(pytz.utc)+datetime.timedelta(hours = x) for x in center_time])
+                center_dn = np.array([x.replace(tzinfo=sitetz) for x in center_dn])
                 ugraph.fill_between(center_dn[ind],bin_U[ind]-bin_eU[ind],bin_U[ind]+bin_eU[ind],alpha=0.5,linewidth=0,facecolor='k')
                 ugraph.set_xlim([psst, nsrt])
 
-		# Plot the day's meridional winds.  Send in references to the various graphs.
-                PlotDay(files[-1],directions=['North','South'],Doppler_Fig = fig, Doppler_Graph = vgraph, Temperature_Fig = fig, Temperature_Graph = bgraph, cull=True);
+                FPIDisplay.PlotDay(files[-1],directions=['North','South'],Doppler_Fig = fig, Doppler_Graph = vgraph, Temperature_Fig = fig, Temperature_Graph = bgraph, cull=True);
                 vgraph.legend().set_visible(False)
                 vgraph.set_ylabel('')
-                if np.mod(dn.day-1,span) == 0:
-		    # This is the top graph.  Label it
+                if mod(dn.day-1,span) == 0:
                     vgraph.set_title('Meridional')
                 else:
                     vgraph.set_title('')
                 vgraph.set_xlabel('')
-                vgraph.set_yticks(np.arange(-200,201,100))
-                plt.setp(vgraph.get_lines(),markersize=4)
+                vgraph.set_yticks(arange(-200,201,100))
+                setp(vgraph.get_lines(),markersize=4)
                 vgraph.fill_between([rt,st],[-200,-200],[200,200],alpha=0.1,linewidth=0,facecolor='k')
                 vgraph.set_xlim([psst,nsrt])
 
-		# Plot the monthly averages
-                ind = np.isfinite(bin_V)
-                center_dn = np.array([dn+datetime.timedelta(hours = x) for x in center_time])
+                ind = isfinite(bin_V)
+                center_dn = np.array([dn.astimezone(pytz.utc)+datetime.timedelta(hours = x) for x in center_time])
                 center_dn = np.array([x.replace(tzinfo=sitetz) for x in center_dn])
-		vgraph.fill_between(center_dn[ind],bin_V[ind]-bin_eV[ind],bin_V[ind]+bin_eV[ind],alpha=0.5,linewidth=0,facecolor='k')
+                vgraph.fill_between(center_dn[ind],bin_V[ind]-bin_eV[ind],bin_V[ind]+bin_eV[ind],alpha=0.5,linewidth=0,facecolor='k')
                 vgraph.set_xlim([psst, nsrt])
 
-		# Plot the day's vertical winds.  Send in references to the various graphs.
-                PlotDay(files[-1],directions=['Zenith'],Doppler_Fig = fig, Doppler_Graph = wgraph, Temperature_Fig = fig, Temperature_Graph = bgraph, cull=True);
+                FPIDisplay.PlotDay(files[-1],directions=['Zenith'],Doppler_Fig = fig, Doppler_Graph = wgraph, Temperature_Fig = fig, Temperature_Graph = bgraph, cull=True);
                 wgraph.legend().set_visible(False)
                 wgraph.set_ylabel('')
-                if np.mod(dn.day-1,span) == 0:
-		    # This is the top plot.  Label it.
+                if mod(dn.day-1,span) == 0:
                     wgraph.set_title('Vertical')
                 else:
                     wgraph.set_title('')
                 wgraph.set_xlabel('')
-                wgraph.set_yticks(np.arange(-200,201,100))
-                plt.setp(wgraph.get_lines(),markersize=4)
+                wgraph.set_yticks(arange(-200,201,100))
+                setp(wgraph.get_lines(),markersize=4)
                 wgraph.fill_between([rt,st],[-200,-200],[200,200],alpha=0.1,linewidth=0,facecolor='k')
                 wgraph.set_xlim([psst, nsrt])
 
-		# Work the temperature plot
+
                 bgraph.legend().set_visible(False)
                 bgraph.set_ylabel('')
-                if np.mod(dn.day-1,span) == 0:
-		    # This is the top plot. Label it.
+                if mod(dn.day-1,span) == 0:
                     bgraph.set_title('Temperature')
                 else:
                     bgraph.set_title('')
                 bgraph.set_xlabel('')
-                bgraph.set_yticks(np.arange(500,1501,250))
-                plt.setp(bgraph.get_lines(),markersize=4)
+                bgraph.set_yticks(arange(500,1501,250))
+                setp(bgraph.get_lines(),markersize=4)
                 bgraph.fill_between([rt,st],[500,500],[1500,1500],alpha=0.1,linewidth=0,facecolor='k')
                 bgraph.set_xlim([psst, nsrt])
 
-		# Monthly averages
-                ind = np.isfinite(bin_T)
-                center_dn = np.array([dn+datetime.timedelta(hours = x) for x in center_time])
-		center_dn = np.array([x.replace(tzinfo=sitetz) for x in center_dn])
+                ind = isfinite(bin_T)
+                center_dn = np.array([dn.astimezone(pytz.utc)+datetime.timedelta(hours = x) for x in center_time])
+                center_dn = np.array([x.replace(tzinfo=sitetz) for x in center_dn])
                 bgraph.fill_between(center_dn[ind],bin_T[ind]-bin_eT[ind],bin_T[ind]+bin_eT[ind],alpha=0.5,linewidth=0,facecolor='k')
 
-		# Label the row on the right-most axis
                 bgraph2 = bgraph.twinx()
                 if center_dn[0].astimezone(pytz.utc).day == center_dn[-1].astimezone(pytz.utc).day:
                     bgraph2.set_ylabel(dn.astimezone(pytz.utc).strftime('%b %d %Y'))
@@ -255,17 +250,15 @@ def MonthlySummary(site_name, year, month):
                     bgraph2.set_ylabel('%s-%s' % (center_dn[0].astimezone(pytz.utc).strftime('%b %d'), center_dn[-1].astimezone(pytz.utc).strftime('%d %Y')))
                 bgraph2.set_yticks([])
 
-            except Exception,e:
-		print str(e) 
+            except:
                 error = 'Error'
                 # No files, still create graphs, and label them if they are the top.
-                if np.mod(dn.day-1,span) == 0:
+                if mod(dn.day-1,span) == 0:
                         ugraph.set_title('Zonal')
                         vgraph.set_title('Meridional')
                         wgraph.set_title('Vertical')
                         bgraph.set_title('Temperature')
 
-		# But, remove the axis from the graphs.
                 ugraph.yaxis.set_visible(False)
                 vgraph.yaxis.set_visible(False)
                 wgraph.yaxis.set_visible(False)
@@ -276,13 +269,12 @@ def MonthlySummary(site_name, year, month):
                 bgraph.xaxis.set_visible(False)
         else:
             # No files, still create graphs, and label them if they are the top.
-            if np.mod(dn.day-1,span) == 0:
+            if mod(dn.day-1,span) == 0:
                     ugraph.set_title('Zonal')
                     vgraph.set_title('Meridional')
                     wgraph.set_title('Vertical')
                     bgraph.set_title('Temperature')
 
-	    # But, remove the axis from the graphs.
             ugraph.yaxis.set_visible(False)
             vgraph.yaxis.set_visible(False)
             wgraph.yaxis.set_visible(False)
@@ -299,7 +291,6 @@ def MonthlySummary(site_name, year, month):
         temperrorlimit = 100.
         k_inst = 6
 
-	# Loop through the available files
         for f in files:
             if os.path.isfile(f):
                 npzfile = np.load(f)
@@ -317,7 +308,6 @@ def MonthlySummary(site_name, year, month):
                 # Error Check
                 ind += list(np.where(d['sigma_LOSwind'] > winderrorlimit)[0])
                 ind += list(np.where(d['sigma_T'] > temperrorlimit)[0])
-
                 # Direction Check
                 ind += [x for x in range(len(d['direction'])) if 'Unknown' in d['direction'][x]]
                 ind += [x for x in range(len(d['direction'])) if 'None' in d['direction'][x]]
@@ -334,12 +324,12 @@ def MonthlySummary(site_name, year, month):
                 agraph.plot(times,len(times)*[k_inst], 'b|')
 
         # If this is the last plot on the page, save it
-        if np.mod(dn.day-1,span) == span-1:
-            plt.tight_layout()
+        if mod(dn.day-1,span) == span-1:
+            tight_layout()
             pdf_pages.savefig(fig)
 
     # Save the last page
-    plt.tight_layout()
+    tight_layout()
     pdf_pages.savefig(fig)        
     pdf_pages.close()
 
