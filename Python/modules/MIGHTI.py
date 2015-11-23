@@ -200,7 +200,7 @@ def get_instrument_constants():
     instrument = {    #'nx': 512,  # number of superpixels per slice of the interferogram (horizontal)
                       'nx': 512,  # number of superpixels per slice of the interferogram (horizontal)
                       'ny': 1456/16,  # number of superpixels in vertical (altitude) direction on CCD.
-                    'startpath': 4.52e-2, # optical path difference at start of interferometer [m]
+                    'startpath': 4.62e-2, # optical path difference at start of interferometer [m]
                       'endpath': 5.50e-2, # optical path difference at end of interferometer [m]
                 'aperture_area': 3.078e-2*3.078e-2, # cm^2
                    'coneangle1': 3.22, # fov of instrument in horizontal direction, [deg]
