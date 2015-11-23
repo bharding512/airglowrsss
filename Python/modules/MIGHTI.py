@@ -182,11 +182,11 @@ def interferogram(params):
 
 def get_emission_constants():
 
-    emissions = {'green': {'frq': 40.2, # fringe frequency across array [cycles/pixel]
+    emissions = {'green': {'frq': 19.6, # fringe frequency across array [cycles/pixel]
                            'mass': 16., # atomic mass of emitting specie [amu]
                            'lam': 557.7e-9, # center wavelength of emission [m]
                            }, 
-                 'red':   {'frq': 85.7, # fringe frequency across array [total cycles]
+                 'red':   {'frq': 45.3, # fringe frequency across array [total cycles]
                            'mass': 16.,# atomic mass of emitting specie [amu]
                            'lam': 630.0e-9, # center wavelength of emission [m]
                            }
