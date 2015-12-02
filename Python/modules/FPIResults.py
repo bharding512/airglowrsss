@@ -494,7 +494,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis'):
         
         
 
-def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan],DLIST=[],YLIST=[],KP=[0,10],CV=True,QF=1):
+def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan],DLIST=[],YLIST=[],KP=[0,10],CV=True,QF=1,VERBOSE=True):
     '''
     Summary:
         Returns filted and binned data over one month.
@@ -510,6 +510,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         KP = limits of kp for filtering days [default = [0,10] - all kp used]
         CV = use CV modes [default = True]
         QF = Quality Flag Limit Allowed [default = 1]
+        VERBOSE = Print information to stdout [default = True]
 
     Outputs:
         DATA = dictionary of data whose keys are Zonal, Meridional, or Temp 
@@ -519,6 +520,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     History:
         3/20/13 -- Written by DJF (dfisher2@illinois.edu)
         10/14/15-- Added 2 unit DLIST input, (doy,spread) to allow doy+/-spread averages.
+        12/02/15-- Added VERBOSE optional input (BJH)
 
     '''
     # Define Outputs...
@@ -860,17 +862,18 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
     d.doabarrelroll()
 
     #print '%s %s %04d'%(SITE, mon,YEAR),'Days used:',len(d.daysused),' Ave pts/time: %02.2f'%(_np.nanmin(_np.array([_np.ma.masked_array(ucount,_np.isnan(ucount)).mean(), _np.ma.masked_array(vcount,_np.isnan(vcount)).mean(), _np.ma.masked_array(Tcount,_np.isnan(Tcount)).mean()])))
-    print '%s %s %04d'%(SITE, mon,YEAR),' Days used:',len(d.daysused)
-    if SPLIT and not(mflag):
-        print 'Ave pts/bin: u-%02.2f  u2-%02.2f  v-%02.2f  v2-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uCount),_np.nanmean(u2Count),_np.nanmean(vCount),_np.nanmean(v2Count),_np.nanmean(wCount),_np.nanmean(TCount))
-        print 'Ave day/bin: u-%02.2f  u2-%02.2f  v-%02.2f  v2-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uDays),_np.nanmean(u2Days),_np.nanmean(vDays),_np.nanmean(v2Days),_np.nanmean(wDays),_np.nanmean(TDays))
+    if VERBOSE:
+        print '%s %s %04d'%(SITE, mon,YEAR),' Days used:',len(d.daysused)
+        if SPLIT and not(mflag):
+            print 'Ave pts/bin: u-%02.2f  u2-%02.2f  v-%02.2f  v2-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uCount),_np.nanmean(u2Count),_np.nanmean(vCount),_np.nanmean(v2Count),_np.nanmean(wCount),_np.nanmean(TCount))
+            print 'Ave day/bin: u-%02.2f  u2-%02.2f  v-%02.2f  v2-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uDays),_np.nanmean(u2Days),_np.nanmean(vDays),_np.nanmean(v2Days),_np.nanmean(wDays),_np.nanmean(TDays))
 
-    else:
-        print 'Ave pts/bin: u-%02.2f  v-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uCount),_np.nanmean(vCount),_np.nanmean(wCount),_np.nanmean(TCount))
-        print 'Ave day/bin: u-%02.2f  v-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uDays),_np.nanmean(vDays),_np.nanmean(wDays),_np.nanmean(TDays))
-    print 'Cards:',cards,' CVs:',cvs,' %%CV: %02.2f'%(100.*cvs/(cvs+cards+.000001))
-    print 'Bads:',bads, ' %%Good: %02.2f'%(100.*(cards+cvs)/(cards+cvs+bads+.000001))
-    print 'Days:',d.daysused,'\n'
+        else:
+            print 'Ave pts/bin: u-%02.2f  v-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uCount),_np.nanmean(vCount),_np.nanmean(wCount),_np.nanmean(TCount))
+            print 'Ave day/bin: u-%02.2f  v-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uDays),_np.nanmean(vDays),_np.nanmean(wDays),_np.nanmean(TDays))
+        print 'Cards:',cards,' CVs:',cvs,' %%CV: %02.2f'%(100.*cvs/(cvs+cards+.000001))
+        print 'Bads:',bads, ' %%Good: %02.2f'%(100.*(cards+cvs)/(cards+cvs+bads+.000001))
+        print 'Days:',d.daysused,'\n'
 
     return d
 
