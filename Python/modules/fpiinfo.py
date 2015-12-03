@@ -130,7 +130,7 @@ _networks['peru'] = {
 _sites = {}
 
 _sites['uao'] = {
-        'Location':     (40.133, -88.2, 200),
+        'Location':     (40.167, -88.159, 200),
         'Name':         'Urbana Atmospheric Observatory',
         'Abbreviation': 'uao',
         'Timezone':     'US/Central',
