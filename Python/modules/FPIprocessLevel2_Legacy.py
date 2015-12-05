@@ -110,7 +110,7 @@ def GetLocation(SITE,DIRECTION,ALT=250.):
     
     return latlonalt
 
-def GetLevel1(dn, instr_name):
+def GetLevel1(instr_name, dn):
     stub = '/rdata/airglow/fpi/results'
     site_name = fpiinfo.get_site_of(instr_name, dn)
     f = '%s/%s_%s_%4i%02d%02d.npz' \
@@ -930,11 +930,7 @@ def CardFinder(dn, instr1):
     d.log += "%-24s" % "" \
             + "input: CardFinder(%s, '%s')\n" % (dn.strftime('datetime(%Y,%m,%d)'),instr1)
 
-    l1 = GetLevel1(dn, instr1)
-    '''l1 =    GetLevel1(dn + timedelta(days=-1), instr1) +\
-            GetLevel1(dn + timedelta(days= 0), instr1) +\
-            GetLevel1(dn + timedelta(days= 1), instr1)
-    '''
+    l1 = GetLevel1(instr1, dn)
     d.moonup = l1.moonup
     d.log += l1.log
     if l1.error:
@@ -1162,8 +1158,8 @@ def CVFinder(dn, instr1, instr2):
         return [d]
 
     # load in data:
-    l1_1 = GetLevel1(dn, instr1)
-    l1_2 = GetLevel1(dn, instr2)
+    l1_1 = GetLevel1(instr1, dn)
+    l1_2 = GetLevel1(instr2, dn)
 
     d.log += l1_1.log
     d.log += l1_2.log
@@ -1576,7 +1572,7 @@ def TempFinder(dn, instr1):
     d.log += "%-24s" % "" \
             + "input: TempFinder(%s, '%s')\n" % (dn.strftime('datetime(%Y,%m,%d)'),instr1)
 
-    l1 = GetLevel1(dn, instr1)
+    l1 = GetLevel1(instr1, dn)
 
     d.moonup = l1.moonup
     d.log += l1.log

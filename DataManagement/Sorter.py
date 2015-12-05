@@ -292,6 +292,7 @@ def sorter(san,pgm):
                     dir_data = dir_local + 'templogs/' + code[code[instrument]] + '/' + site + '/'
                     os.rename(f, dir_data + f)
                     os.system('chmod 744 ' + dir_data + f)
+                    #os.system('chown airglow.airglow ' + dir_data + r)
                     print "!!! Success Sorting"
                     
                 elif instr in ['bwc', 'x3t']:
@@ -435,7 +436,7 @@ def sorter(san,pgm):
                         # TODO: Mimic FPIprocess warnings
                         msg = ASIprocess.process_instr(code[instr] + inum,year,doy)
                         if msg:
-                            subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+                            subject = "!!! Processing Issue (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
                             print subject
                             Emailer.emailerror(subject, msg)
                         print "!!! End Processing"

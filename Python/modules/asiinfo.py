@@ -168,6 +168,7 @@ _instruments['casi01'] = {
         'cal_file':         '/rdata/airglow/imaging/calibrations/CASIelaz_0482002.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
+        'ccd_temp_set':     -35,
     }
 
 _instruments['cnfi01'] = {
@@ -181,6 +182,7 @@ _instruments['cnfi01'] = {
         'cal_file':         '/rdata/airglow/imaging/calibrations/CNFIelaz_0022002.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
+        'ccd_temp_set':     -40,
     }
 
 _instruments['picasso01'] = {
@@ -194,6 +196,7 @@ _instruments['picasso01'] = {
         'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO1elaz_1342010.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
+        'ccd_temp_set':     -30,
     }
 
 _instruments['picasso02'] = {
@@ -207,6 +210,7 @@ _instruments['picasso02'] = {
         'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO2elaz_2342006.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
+        'ccd_temp_set':     -40,
     }
 
 _instruments['picasso03'] = {
@@ -220,6 +224,7 @@ _instruments['picasso03'] = {
         'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO3_0852009_approximate.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
+        'ccd_temp_set':     -60,
     }
 '''
 _instruments['picasso04'] = {
@@ -246,6 +251,7 @@ _instruments['picasso04'] = {
         'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO4elaz_3122013.npz',
         'kernel_size':      3,
         'ignore_dark':      True,
+        'ccd_temp_set':     -30,  # UNSURE
     }
 
 _instruments['picasso05'] = {
@@ -259,6 +265,7 @@ _instruments['picasso05'] = {
         'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO5elaz_2122009.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
+        'ccd_temp_set':     -30,
     }
 
 _instruments['picasso06'] = { # TODO: check all of these
@@ -273,6 +280,7 @@ _instruments['picasso06'] = { # TODO: check all of these
 	'cal_file':	    '/rdata/airglow/imaging/calibrations/picasso06_tht_20140130.npz',
         'kernel_size':      5,
         'ignore_dark':      False,
+        'ccd_temp_set':     -69,
     }
 
 _instruments['swenson01'] = {
@@ -286,6 +294,7 @@ _instruments['swenson01'] = {
         'cal_file':         '/rdata/airglow/imaging/calibrations/SWENSON01_1322010.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
+        'ccd_temp_set':     -30,
     }
 
 ################## Site information functions ####################
