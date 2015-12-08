@@ -153,7 +153,7 @@ def process_instr(inst,year,doy,do_DB=True):
                 cool_point = asiinfo.get_instr_info(inst,process_dn)['ccd_temp_set']
                 over_limit = sum(np.array(temps) >= cool_point+3)
                 if over_limit > 0:
-                    warnings = warnings + 'CCD OVERHEATING: %s- %03i of %03i images over set limit'%(fils,over_limit,len(files))
+                    warnings = warnings + 'CCD OVERHEATING: %s- %03i of %03i images over set limit\n'%(fils,over_limit,len(files))
 
                 # Output names
                 movie_name = inst + '_' + site + '_' + datestr + '_' + fils + 'movie.avi'

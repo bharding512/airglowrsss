@@ -2069,6 +2069,8 @@ def PlotLevel2(site,dn,ut=True):
     
     for k in range(3):
         ax[k].plot([dn,dn+timedelta(hours=48)],[0,0],'k--')
+        ax[k].grid()
+    ax[3].grid()
     ax[3].set_xlim(tlim)
     ax[3].xaxis.set_major_formatter(md.DateFormatter('%H'))
     ax[0].set_ylim(-175,175)
