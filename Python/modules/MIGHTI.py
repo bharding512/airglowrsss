@@ -286,6 +286,8 @@ def get_redline_airglow(pt):
     Nighttime model from Link and Cogger 1989 using MSIS concentrations.
     TODO: smoothly interpolate between twilight and nighttime somehow.
     Valid below 60 degrees latitude.
+    NOTE: I had to change the twilight cutoff from 104.5 deg to 104.47
+    deg since their expression isn't valid above 104.47
     '''
     
     # Calculate SZA to determine if it is daytime, twilight, or nighttime.
@@ -302,7 +304,7 @@ def get_redline_airglow(pt):
         W = 8.03*cossza + 0.079*F107 + 34
         V_6300 = Vp*np.exp(-(pt.alt - hp)**2/(2*W**2))
         
-    elif szadeg < 104.5: ############# twilight
+    elif szadeg < 104.47: ############# twilight
         # Model from Zhang and Shepherd 2005 doi:10.1117/12.627150
         cossza = np.cos(sza)
         F107 = pt.f107
