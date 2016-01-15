@@ -11,9 +11,12 @@ sh
 import sys
 import os
 import logging
+import time
+import subprocess
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from collections import namedtuple
 from datetime import datetime, timedelta
+from StringIO import StringIO
 
 import ephem
 import psutil
@@ -46,6 +49,27 @@ DELTA_SUNRISE = 1.
 Default period (in hours) prior to sunset to turn on system.
 """
 DELTA_SUNSET = 1.
+
+"""
+Peripherals on script.
+"""
+PERIPHERALS_ON_SCRIPT = os.path.expanduser('~/scripts/peripherals_on.sh')
+
+"""
+Peripherals off script.
+"""
+PERIPHERALS_OFF_SCRIPT = os.path.expanduser('~/scripts/peripherals_off.sh')
+
+"""
+Location of cdas program.
+"""
+CDAS = '/usr/local/bin/cdas'
+
+"""
+Location of cdas kill script.
+"""
+CDAS_DOWN_SCRIPT = os.path.expanduser('~/scripts/cdasdown.pl')
+
 
 """
 Container for ASI location information.
@@ -146,23 +170,70 @@ def is_nighttime(utc_dt,
         return utc_dt >= sunset - delta_sunset or utc_dt <= sunrise + delta_sunrise
 
 
-def system_on():
+def do_system_on(peripherals_on=PERIPHERALS_ON_SCRIPT,
+                 peripherals_off=PERIPHERALS_OFF_SCRIPT,
+                 cdas=CDAS,
+                 no_wps=False):
     """
-    Turn the camera system on.
+    Turn the camera system on (mimics startcdas.sh script).
     """
-    pass
+    LOGGER.info('Turning system ON.')
+    if not no_wps:
+        # turn off peripherals via the web power switch
+        LOGGER.info('Turning off peripherals')
+        peripherals_off_cmd = sh.Command(peripherals_off)
+        log_string = StringIO()
+        peripherals_off_cmd(_out=log_string,
+                            _err_to_out=True)
+        LOGGER.debug(log_string.getvalue())
+        time.sleep(1)
+        # turn on peripherals via the web power switch
+        LOGGER.info('Turning on peripherals')
+        peripherals_on_cmd = sh.Command(peripherals_on)
+        peripherals_on_cmd(_out=log_string,
+                           _err_to_out=True)
+        LOGGER.debug(log_string.getvalue())
+        time.sleep(10)
+    # run cdas program in the background
+    LOGGER.info('Running {} in background'.format(cdas))
+    subprocess.Popen(['nohup', cdas],
+                     stdout=open('/dev/null', 'w'),
+                     stderr=open('/dev/null', 'w'),
+                     preexec_fn=os.setpgrp)
 
 
-def system_off():
+def do_system_off(peripherals_off=PERIPHERALS_OFF_SCRIPT,
+                  cdas_down=CDAS_DOWN_SCRIPT,
+                  no_wps=False):
     """
     Turn the camera system off.
     """
-    pass
+    LOGGER.info('Turning system OFF.')
+    # cleanly kill the cdas program
+    LOGGER.info('Cleanly stopping cdas with {}'.format(cdas_down))
+    log_string = StringIO()
+    cdas_down_cmd = sh.Command(cdas_down)
+    cdas_down_cmd(_out=log_string,
+                  _err_to_out=True)
+    LOGGER.debug(log_string.getvalue())
+    if not no_wps:
+        # turn off peripherals via the web power switch
+        LOGGER.info('Turning off peripherals')
+        peripherals_off_cmd = sh.Command(peripherals_off)
+        peripherals_off_cmd(_out=log_string,
+                            _err_to_out=True)
+        LOGGER.debug(log_string.getvalue())
+        time.sleep(1)
 
 
 def atnight(config_fname,
             delta_sunrise=DELTA_SUNRISE,
-            delta_sunset=DELTA_SUNSET):
+            delta_sunset=DELTA_SUNSET,
+            peripherals_on=PERIPHERALS_ON_SCRIPT,
+            peripherals_off=PERIPHERALS_OFF_SCRIPT,
+            cdas=CDAS,
+            cdas_down=CDAS_DOWN_SCRIPT,
+            no_wps=False):
     """
     Given the PICASSO system configuration file *config_fname*
     determine if it is nighttime (sunset - *delta_sunset* [hours] <=
@@ -170,6 +241,19 @@ def atnight(config_fname,
     system location. Then, take action if the system needs to be
     turned on or off. Return `True` if the system is running at the
     completion of the function and `False` if it is off.
+
+    Additional parameters:
+
+    *peripherals_on*: script to turn on power to the system.
+
+    *peripherals_off*: script to turn off power to the system.
+
+    *cdas*: location of the cdas program.
+
+    *cdas_down*: script to shutdown the cdas process.
+
+    *no_wps*: indicate that there is no web power switch (and system
+              power need not be turned on/off)
     """
     # get system location from configuration file
     site_info = get_site_info(config_fname)
@@ -199,13 +283,16 @@ def atnight(config_fname,
     # take action depending on daytime/nighttime and system running/not running
     if nighttime and not system_on:
         # turn on the camera
-        LOGGER.info('Turning system ON')
-        system_on()
+        do_system_on(peripherals_on=peripherals_on,
+                     peripherals_off=peripherals_off,
+                     cdas=cdas,
+                     no_wps=no_wps)
         system_on = True
     elif not nighttime and system_on:
         # turn camera off
-        LOGGER.info('Turning system OFF')
-        system_off()
+        do_system_off(peripherals_off=peripherals_off,
+                      cdas_down=cdas_down,
+                      no_wps=no_wps)
         system_on = False
     else:
         LOGGER.info('No action required')
@@ -228,10 +315,25 @@ def main(args):
                         type=float,
                         default=DELTA_SUNSET,
                         help='Period (in hours) prior to sunset to turn on system.')
+    parser.add_argument('--peripherals-on',
+                        type=str,
+                        default=PERIPHERALS_ON_SCRIPT,
+                        help='Script to turn on web power switch outlets.')
+    parser.add_argument('--peripherals-off',
+                        type=str,
+                        default=PERIPHERALS_OFF_SCRIPT,
+                        help='Script to turn on web power switch outlets.')
     parser.add_argument('--cdas',
                         type=str,
-                        default=CDAS_PROCESS_NAME,
-                        help='Process name for PICASSO system (used to determine if the system is on or off)')
+                        default=CDAS,
+                        help='Location of cdas program.')
+    parser.add_argument('--cdas_down',
+                        type=str,
+                        default=CDAS_DOWN_SCRIPT,
+                        help='Location of script to turn off cdas.')
+    parser.add_argument('--no-wps',
+                        action='store_true',
+                        help='Do not send on/off to web power switch (i.e., do not run peripherals on/off scripts).')
     parser.add_argument('--log',
                         type=str,
                         default=LOG_FNAME,
@@ -245,7 +347,12 @@ def main(args):
 
     atnight(args.config,
             delta_sunrise=args.delta_sunrise,
-            delta_sunset=args.delta_sunset)
+            delta_sunset=args.delta_sunset,
+            peripherals_on=args.peripherals_on,
+            peripherals_off=args.peripherals_off,
+            cdas=args.cdas,
+            cdas_down=args.cdas_down,
+            no_wps=args.no_wps)
 
 
 if __name__ == '__main__':
