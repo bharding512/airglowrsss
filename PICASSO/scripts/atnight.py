@@ -12,7 +12,6 @@ import sys
 import os
 import logging
 import time
-import subprocess
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from collections import namedtuple
 from datetime import datetime, timedelta
@@ -173,6 +172,7 @@ def is_nighttime(utc_dt,
 def do_system_on(peripherals_on=PERIPHERALS_ON_SCRIPT,
                  peripherals_off=PERIPHERALS_OFF_SCRIPT,
                  cdas=CDAS,
+                 config_fname=CONFIG_FNAME,
                  no_wps=False):
     """
     Turn the camera system on (mimics startcdas.sh script).
@@ -196,10 +196,9 @@ def do_system_on(peripherals_on=PERIPHERALS_ON_SCRIPT,
         time.sleep(10)
     # run cdas program in the background
     LOGGER.info('Running {} in background'.format(cdas))
-    subprocess.Popen(['nohup', cdas],
-                     stdout=open('/dev/null', 'w'),
-                     stderr=open('/dev/null', 'w'),
-                     preexec_fn=os.setpgrp)
+    cdas_cmd = sh.Command(cdas)
+    cdas_cmd(_bg=True,
+             _cwd=os.path.dirname(config_fname))
 
 
 def do_system_off(peripherals_off=PERIPHERALS_OFF_SCRIPT,
@@ -286,6 +285,7 @@ def atnight(config_fname,
         do_system_on(peripherals_on=peripherals_on,
                      peripherals_off=peripherals_off,
                      cdas=cdas,
+                     config_fname=config_fname,
                      no_wps=no_wps)
         system_on = True
     elif not nighttime and system_on:
@@ -327,7 +327,7 @@ def main(args):
                         type=str,
                         default=CDAS,
                         help='Location of cdas program.')
-    parser.add_argument('--cdas_down',
+    parser.add_argument('--cdas-down',
                         type=str,
                         default=CDAS_DOWN_SCRIPT,
                         help='Location of script to turn off cdas.')
