@@ -214,6 +214,7 @@ def do_system_off(peripherals_off=PERIPHERALS_OFF_SCRIPT,
     cdas_down_cmd = sh.Command(cdas_down)
     cdas_down_cmd(_out=log_string,
                   _err_to_out=True)
+    time.sleep(10)
     LOGGER.debug(log_string.getvalue())
     if not no_wps:
         # turn off peripherals via the web power switch
