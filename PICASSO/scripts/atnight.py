@@ -344,6 +344,8 @@ def main(args):
                         level=logging.INFO,
                         format='%(asctime)s %(levelname)-8s %(message)s',
                         datefmt='%Y-%m-%d %H:%M:%S')
+    # squelch sh module output
+    logging.getLogger('sh').setLevel(logging.WARNING)
 
     atnight(args.config,
             delta_sunrise=args.delta_sunrise,
