@@ -12,7 +12,7 @@ from scipy import interpolate
 import os as os
 import FPIprocessLevel2
 
-from pyglow import pyglow
+
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib
 import pytz
@@ -38,6 +38,8 @@ def MonthlySummary(site_name, year, month):
 # HISTORY:
 #	Written on 29 January 2015 by Jonathan J. Makela (jmakela@illinois.edu)
 
+    from pyglow import pyglow
+    
     # Reduce the font size for the x-axis and set the output to be standard paper size
     matplotlib.rc('xtick', labelsize=8) 
 
