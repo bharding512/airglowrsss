@@ -196,9 +196,12 @@ def do_system_on(peripherals_on=PERIPHERALS_ON_SCRIPT,
         time.sleep(10)
     # run cdas program in the background
     LOGGER.info('Running {} in background'.format(cdas))
-    cdas_cmd = sh.Command(cdas)
-    cdas_cmd(_bg=True,
-             _cwd=os.path.dirname(config_fname))
+    sh.nohup(cdas,
+             _bg=True,
+             _cwd=os.path.dirname(config_fname),
+             _in=os.devnull,
+             _out=os.devnull,
+             _err=os.devnull)
 
 
 def do_system_off(peripherals_off=PERIPHERALS_OFF_SCRIPT,
@@ -214,9 +217,9 @@ def do_system_off(peripherals_off=PERIPHERALS_OFF_SCRIPT,
     cdas_down_cmd = sh.Command(cdas_down)
     cdas_down_cmd(_out=log_string,
                   _err_to_out=True)
-    time.sleep(10)
     LOGGER.debug(log_string.getvalue())
     if not no_wps:
+   	time.sleep(10 * 60)  # required 10 minute sleep
         # turn off peripherals via the web power switch
         LOGGER.info('Turning off peripherals')
         peripherals_off_cmd = sh.Command(peripherals_off)
@@ -335,6 +338,13 @@ def main(args):
     parser.add_argument('--no-wps',
                         action='store_true',
                         help='Do not send on/off to web power switch (i.e., do not run peripherals on/off scripts).')
+    test_group = parser.add_mutually_exclusive_group()
+    test_group.add_argument('--test-on',
+                            action='store_true',
+                            help='Test the power on sequence and exit.')
+    test_group.add_argument('--test-off',
+                            action='store_true',
+                            help='Test the power off sequence and exit.')
     parser.add_argument('--log',
                         type=str,
                         default=LOG_FNAME,
@@ -347,6 +357,23 @@ def main(args):
                         datefmt='%Y-%m-%d %H:%M:%S')
     # squelch sh module output
     logging.getLogger('sh').setLevel(logging.WARNING)
+
+
+    if args.test_on:
+        # test power on sequence and exit
+        do_system_on(peripherals_on=args.peripherals_on,
+                     peripherals_off=args.peripherals_off,
+                     cdas=args.cdas,
+                     config_fname=args.config,
+                     no_wps=args.no_wps)
+        sys.exit(0)
+
+    if args.test_off:
+        # test power on sequence and exit
+        do_system_off(peripherals_off=args.peripherals_off,
+                      cdas_down=args.cdas_down,
+                      no_wps=args.no_wps)
+        sys.exit(0)
 
     atnight(args.config,
             delta_sunrise=args.delta_sunrise,
