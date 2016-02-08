@@ -176,7 +176,7 @@ _instruments['cnfi01'] = {
         'filters':          ['6300','5577','7774','BGND','NONE'],
         'filter_names':     ['630.0 nm','557.7 nm', '777.4 nm', 'Background', 'none'],
         'unwarp_ht':        [250., 97., 350., 250., 250.],
-        'sql_inst_id':      [9,10,11,12,13],
+        'sql_inst_id':      [9,10,11,12,19],
         't_lat':            [8.0, 12.0, 8.0, 8.0, 8.0],
         't_lon':            [203.74, 203.74, 203.74, 203.74, 203.74],
         'cal_file':         '/rdata/airglow/imaging/calibrations/CNFIelaz_0022002.npz',
