@@ -754,7 +754,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         # Zonal2 - West
         u2D,u2De,u2V,u2Ve,u2V2,u2U,u216,u225,u250,u275,u284 = WeightedAverage(u2Data,u2eData,u2Days,test=True)
         # Meridional2 - South
-        v2D,v2De,v2V,u2Ve,v2V2,v2U,v216,v225,v250,v275,v284 = WeightedAverage(v2Data,v2eData,v2Days,test=True)
+        v2D,v2De,v2V,v2Ve,v2V2,v2U,v216,v225,v250,v275,v284 = WeightedAverage(v2Data,v2eData,v2Days,test=True)
     # F107
     if 'hwm' in SITE:
         d.f107 = _np.nanmean(F107)
@@ -836,7 +836,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         d.u2ve= u2Ve
         d.u2v2= u2V2
         d.u2u = u2U
-        d.u2c = u2count
+        d.u2c = u2Count
         d.u2d = u2Days
         d.u216= u216
         d.u225= u225
@@ -849,7 +849,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         d.v2ve= v2Ve
         d.v2v2= v2V2
         d.v2u = v2U
-        d.v2c = v2count
+        d.v2c = v2Count
         d.v2d = v2Days
         d.v216= v216
         d.v225= v225
@@ -958,8 +958,11 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         MD.t2 = MD.t + _dt.timedelta(minutes=3)
         gflag = 'on'
  
-	tstart = _np.where(_np.isnan(MD.T[:-1])*_np.isfinite(MD.T[1:]))[0][0]-1
-    	tend   = _np.where(_np.isfinite(MD.T[:-1])*_np.isnan(MD.T[1:]))[0][0]+1
+        try:
+	    tstart = _np.where(_np.isnan(MD.T[:-1])*_np.isfinite(MD.T[1:]))[0][0]-1
+    	    tend   = _np.where(_np.isfinite(MD.T[:-1])*_np.isnan(MD.T[1:]))[0][0]+1
+        except:
+            continue
        
         ## Subplot data
         tits = ['Zonal Wind','Meridional Wind','Veritcal Wind','Temperature']

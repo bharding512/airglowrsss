@@ -253,7 +253,7 @@ class Level1:
             self.Te[direction].append( Te )
             self.zenith[direction].append( zenith )
             self.azimuth[direction].append( azimuth )
-            self.i[direction].append( i / it )
+            self.i[direction].append( i )
             self.ie[direction].append( ie )
             self.b[direction].append( b )
             self.be[direction].append( be )
@@ -2007,6 +2007,9 @@ def PlotLevel2(site,dn,ut=True):
             # Time Travel Math
             timew = [x.astimezone(utc).replace(tzinfo=None) for x in d.t1[indw]-timedelta(hours=slt_shift)]
             timet = [x.astimezone(utc).replace(tzinfo=None) for x in d.t1[indt]-timedelta(hours=slt_shift)]
+
+            if not(timew) or not(timet):
+                continue
 
             # Zonal
             if ('East' in d.key and site in d.key.lower()):
