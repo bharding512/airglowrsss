@@ -725,7 +725,7 @@ class WindField:
         lam0v.append(wn)
         gradcostv.append(yn)
         if printstuffouter:
-            self.message += 'BISEC: lam1 endpoints: %e - %e. Desired gradcost: %e\ ' % (x0, x1, y_desired)
+            self.message += 'BISEC: lam1 endpoints: %e - %e. Desired gradcost: %e\n' % (x0, x1, y_desired)
 
 
         numIters = 0
