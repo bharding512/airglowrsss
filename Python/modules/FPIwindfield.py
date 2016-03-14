@@ -1219,6 +1219,12 @@ class WindField:
                     self.Dc = Dc
                     self.Dg = Dg
 
+                #Store matrices for debugging
+                self.A = A
+                self.W = W
+                self.z = z
+                
+                 
                 lam0 = nan
                 lam1 = nan
                 uvwest = nan*zeros(shape(A)[1])
@@ -1380,7 +1386,7 @@ class WindField:
     
     
     
-    def make_quicklook(self, timestep = None, save = True, show_vert_wind=False):
+    def make_quicklook(self, timestep = None, save = True, show_vert_wind=False, scale=250.):
         '''
         Make a summary figure with many subplots, each showing the wind field at different 
         times throughout the night, plotted using quiver.
@@ -1389,6 +1395,7 @@ class WindField:
                      (default None)
             save:     bool. If True, save the resulting figure to self.save_dir
             show_vert_wind: bool. If True, plot the vertical wind as a color.
+            scale:    float, m/s. An arrow 1/10th of the figure width refers to this velocity
         RETURNS:
             figure, saved_filename
         '''
@@ -1432,7 +1439,7 @@ class WindField:
              
         spny = int(ceil(1.0*len(timestepvec)/spnx))
         figsize=(3.5*spnx+0.1, 4*spny+0.1)
-        sc = figsize[0]/spnx/(10.*250) # 1/10th of the plot width <==> 250 m/s, for quiver
+        sc = figsize[0]/spnx/(10.*scale) # 1/10th of the plot width <==> 250 m/s, for quiver
 
         fig = figure(figsize=figsize, dpi=150)
         for timeindex in range(len(timestepvec)):
@@ -1487,7 +1494,7 @@ class WindField:
                           pivot=pivot, headwidth=headwidth, headlength=headlength,
                           minshaft=minshaft, headaxislength=headaxislength, color=qcolor)
             xq,yq = m(lons.min(),lats.min()-1.5)
-            qk1 = plt.quiverkey(Q1, xq, yq, sc*200, r'$200\,\frac{m}{s}$', color='k', coordinates='data')
+            qk1 = plt.quiverkey(Q1, xq, yq, sc*scale, r'$%i\,\frac{m}{s}$'%scale, color='k', coordinates='data')
 
             #xpt,ypt = m(xm, ym)
             #m.scatter(xpt,ypt, c='w', s= 20, edgecolor='none')
