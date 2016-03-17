@@ -2023,7 +2023,7 @@ def CreateL1ASCII(NPZ,OUT):
         for a_tw, a_az, a_ze, a_t, a_e_t, a_w, a_e_w, a_ef, a_ec, a_i, a_e_i, a_b, a_e_b, a_it, a_cs, a_dt,a_tf,a_wf in zip(timeywimey, az, ze, temps, e_temps, winds, e_winds, e_fit, e_cal, i, e_i, b, e_b, inttime, chisqr, sky_temp,temp_flag,wind_flag):
             dn = a_tw.astimezone(_utc)
             utctime = dn.strftime("%Y-%m-%d %H:%M:%S")
-            line = "{:19s}  {:6.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.2f}  {:6.2f}  {:6.1f}  {:4.2f}  -999.00  -999  {:3.0f}  {:6.2f}  {:6.1f}  {:1.0f}  {:1.0f}  {:6s}  {:7.1e}  {:5s}\n".format(utctime, a_az, a_ze, a_t, a_e_t, a_w, a_e_w, a_ef, a_ec, a_i, a_e_i, a_it, a_cs, a_dt, a_tf, a_wf, reference, wavelength, version)
+            line = "{:19s}  {:6.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.2f}  {:6.2f}  {:6.4f}  {:6.4f}  -999.00  -999  {:3.0f}  {:6.2f}  {:6.1f}  {:1.0f}  {:1.0f}  {:6s}  {:7.1e}  {:5s}\n".format(utctime, a_az, a_ze, a_t, a_e_t, a_w, a_e_w, a_ef, a_ec, a_i, a_e_i, a_it, a_cs, a_dt, a_tf, a_wf, reference, wavelength, version)
             #line = "{:19s}  {:6.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:3.0f}  {:6.2f}  {:6.1f}  {:1d}  {:1d}  {:6s}  {:7.1e}  {:5s}\n".format(utctime, a_az, a_ze, a_t, a_e_t, a_w, aax.xaxis_date()_e_w, a_i, a_e_i, a_b, a_e_b, a_it, a_cs, a_dt, t_flag, w_flag, reference, wavelength, version)
             note.write(line)
 	        
@@ -2140,20 +2140,20 @@ def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1):
 		    dn = x.t1[i].astimezone(_utc)
 		    utctime = dn.strftime("%Y-%m-%d %H:%M:%S")
 		    if('Zenith' in x.key or 'IN' in x.key):
-		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.w[i], x.we[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.w[i], x.we[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
 		    elif('North' in x.key or 'South' in x.key):
-		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
 		    elif('East' in x.key or 'West' in x.key):
-		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
 		    elif('CV_VTI_EKU_PAR' in x.key):
 		        line = ""
 		    elif('Unknown' in x.key):
 		        line = ""
                     # Code to add MTM Temps (REMOVE SOON)
 		    elif('MTM_Search' in x.key):
-		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  -------  ------  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  -------  ------  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
                     elif('CV' in x.key):
-		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:30s}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
 		    #line = "%14s  %19s  %3.1f  %3.1f  %4.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %1.3f  %1.3f  %5s  %30s" % (x.key, utctime, lat, lon, x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.w[i], x.we[i], x.I[i], x.Ie[i], x.cloudy[i], x.notes)
 		    note.write(line)
 		    

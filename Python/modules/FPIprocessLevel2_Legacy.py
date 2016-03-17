@@ -1913,7 +1913,7 @@ def GetLevel2(project,dn,dnstart='noon',dnend='noon'):
 
     History
     -------
-    05/23/13 -- Written by DJF (dfisher2@illionis.edu)
+    05/23/13 -- Written by DJF (dfisher2@illinois.edu)
     08/07/13 -- Updated to be instrument-based (Timothy Duly, duly2@illinois.edu)
     '''
     from datetime import timedelta

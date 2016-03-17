@@ -506,6 +506,14 @@ _sites['car'] = {
 		            'n_exp': 0, 'last_exp': None, 'delay':0,},
 	            'IN_CAJ_CAR': {'ze': 25.8, 'az': -78.8, 'exptime': 210, 
 		            'n_exp': 0, 'last_exp': None, 'delay':0,},
+                    'West_60': {'ze': -60, 'az':-90, 'exptime':210,
+                            'n_exp': 0, 'last_exp': None, 'delay':0,},
+                    'West_20': {'ze': -20, 'az':-90, 'exptime':210,
+                            'n_exp': 0, 'last_exp': None, 'delay':0,},
+                    'East_60': {'ze': -60, 'az':90, 'exptime':210,
+                            'n_exp': 0, 'last_exp': None, 'delay':0,},
+                    'East_20': {'ze': -20, 'az':90, 'exptime':210,
+                            'n_exp': 0, 'last_exp': None, 'delay':0,},
                 },
     }
 
