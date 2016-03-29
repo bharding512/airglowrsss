@@ -191,6 +191,7 @@ def FindCenter(img,  circle_fit_method = 'geometric', thresh=None, max_r=None):
     # Threshold, mask and label the image
     imgth = (img > thresh) & mask
     labels1, numlabels1 = ndimage.label(imgth)
+    labels1 = labels1.astype('int32') # added 2016-03-29 per Fasil Tesema's suggestion
 
     # Get rid of labels that only have a few points
     labels2 = np.zeros(np.shape(labels1)) # new, processed labels image
