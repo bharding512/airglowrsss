@@ -19,8 +19,7 @@ Included functions are:
     PlotSpaghetti
     SetBinTime
     WeightedAverage
-    laser_is_drifting
-    
+        
 History
 -------
 3/20/13 -- Written by DJF (dfisher2@illinois.edu)
@@ -35,7 +34,6 @@ import numpy as _np
 from scipy import stats as _stats
 import pytz as _pytz
 import FPIprocessLevel2_Legacy as L2
-import FPIprocessLevel2_Legacy as _L2L
 import fpiinfo as _fpiinfo
 
 def SetBinTime(MIN):
@@ -71,7 +69,7 @@ SetBinTime(30)
 def FilterData(DATA,QF=1):
     '''
     Summary:
-        Returns filters single input day.
+        Returns filtered single input day.
 
     Inputs:
         DATA = The data object
@@ -94,6 +92,7 @@ def FilterData(DATA,QF=1):
         temperrorlimit = 50.
     calerrorlimit = 300.  # TODO is this incorperated in QF yet???
 
+    # Hardcode physical limits for data
     lim = {'Tmax':1400.,'Tmin':600.,'Te':temperrorlimit, \
            'umax':250.,'umin':-250.,'uef':winderrorlimit, 'uec':calerrorlimit,\
            'vmax':250.,'vmin':-250.,'vef':winderrorlimit, 'vec':calerrorlimit,\
@@ -398,7 +397,7 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
     
     
     
-def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis'):
+def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.):
     '''
     Summary:
         Returns HWMfor a single instrument over one night.
@@ -409,6 +408,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis'):
         DOY = doy of year, e.g. 47
         WMODEL = name of wind model, e.g. hwm93
         TMODEL = name of temp model, e.g. msis
+        ALT = altitude of desired profile [km]
 
     Outputs:
         DATA = Object with winds, Temps, and more
@@ -444,7 +444,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis'):
     
     # Fill Data
     for tind,t in enumerate(times):
-        pt = _pyglow.Point(t.replace(year=dn.year,month=dn.month,day=dn.day),SITELLA[0],SITELLA[1],SITELLA[2])
+        pt = _pyglow.Point(t.replace(year=dn.year,month=dn.month,day=dn.day),SITELLA[0],SITELLA[1],ALT)
         # Wind
         if WMODEL.lower() == 'hwm93':
             pt.run_hwm93()
@@ -494,7 +494,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis'):
         
         
 
-def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan],DLIST=[],YLIST=[],KP=[0,10],CV=True,QF=1,VERBOSE=True):
+def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,DLIST=[],YLIST=[],KP=[0,10],CV=True,QF=1,VERBOSE=True):
     '''
     Summary:
         Returns filted and binned data over one month.
@@ -504,7 +504,6 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
         YEAR = year, e.g. 2013
         MONTH = month of year, e.g. 2 (February)
         SPLIT = Split look directions in binning [default = False]
-        SITELLA = Lat, Lon, Alt for HWM [default = nan's]
         DLIST = list of doys in year  [default = [] - all doys in MONTH,YEAR used], or [doy,spread] for storms
         YLIST = list of years in year [default = [] - only YEAR used]
         KP = limits of kp for filtering days [default = [0,10] - all kp used]
@@ -605,8 +604,9 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,SITELLA=[_np.nan,_np.nan,_np.nan]
             sites = [SITE]
 
         for s in sites:
+            sitella = _fpiinfo.get_site_info(s,dn)
             if 'hwm' in s:
-                DD = GetModels(SITELLA,YEAR,doy,s)
+                DD = GetModels(sitella,YEAR,doy,s)
                 mflag = True
 
                 # get F107 weighted at midnight of data (assume constant for night)
@@ -2018,7 +2018,7 @@ def CreateL1ASCII(NPZ,OUT):
         
         note.write('\n---------------------\nData:\n')
         '''
-        note.write('UTCTime  Az  Ze  Temp  Temp_Sig  LOS_Wind  LOS_Wind_Sig  Fit_Sig  Cal_Sig  I  I_Sig  Bkgd  Bkgd_Sig  Int_Time  Chisqr  Cld_Ind  T_Flag  W_Flag  Ref  Wl  Vers\n')
+        note.write('UTCTime____________  ____Az  ___Ze  ______T  _T_Sig  ___Wind  _W_Sig  FitSig  CalSig  _____I  _I_Sig  ___Bkgd B_Sig  Sec  Chisqr  CldInd TF WF  __Ref  ______Wl  Vers\n')
 
         for a_tw, a_az, a_ze, a_t, a_e_t, a_w, a_e_w, a_ef, a_ec, a_i, a_e_i, a_b, a_e_b, a_it, a_cs, a_dt,a_tf,a_wf in zip(timeywimey, az, ze, temps, e_temps, winds, e_winds, e_fit, e_cal, i, e_i, b, e_b, inttime, chisqr, sky_temp,temp_flag,wind_flag):
             dn = a_tw.astimezone(_utc)
@@ -2034,7 +2034,7 @@ def CreateL1ASCII(NPZ,OUT):
 def CreateL2ASCII(PROJECT,YEAR,DOY):
     '''
     Summary:
-        Script to save out ASCII of all L2 date for a Project.  Filtered, w=0 assumed.
+        Script to save out ASCII of all L2 winds for a Project.  Filtered, w=0 assumed.
     
     Inputs:
         PROJECT - Name of project for sites, ex: 'NATION'
@@ -2074,16 +2074,16 @@ def CreateL2ASCII(PROJECT,YEAR,DOY):
 	            dn = x.t1[i].astimezone(_utc)
 	            utctime = dn.strftime("%Y-%m-%d %H:%M:%S")
 	            if('North' in x.key or 'South' in x.key):
-	                line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  -999.00  -999.00  {:7.2f}  {:7.2f}  {:7.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.v[i], x.ve[i], x.cloudy[i])
+	                line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  -999.00  -999.00  {:7.2f}  {:7.2f}  {:1.0f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.v[i], x.ve[i], x.flag_wind[i])
 	            elif('East' in x.key or 'West' in x.key):
-	                line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  {:7.2f}  {:7.2f}  -999.00  -999.00  {:7.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.u[i], x.ue[i], x.cloudy[i])
+	                line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  {:7.2f}  {:7.2f}  -999.00  -999.00  {:1.0f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.u[i], x.ue[i], x.flag_wind[i])
 	            elif('CV_VTI_EKU_PAR' in x.key):
 	                line = ""
 	            elif('CV' in x.key):
-	                line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  {:7.2f}  {:7.2f}  {:7.2f}  {:7.2f}  {:7.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.u[i], x.ue[i], x.v[i], x.ve[i], x.cloudy[i])
+	                line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  {:7.2f}  {:7.2f}  {:7.2f}  {:7.2f}  {:1.0f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.u[i], x.ue[i], x.v[i], x.ve[i], x.flag_wind[i])
 	            # For debugg
 	            elif('Zenith' in x.key or 'IN' in x.key):
-	                line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  VERTICAL  {:7.2f}  {:7.2f}  {:7.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.w[i], x.we[i], x.cloudy[i])
+	                line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  VERTICAL  {:7.2f}  {:7.2f}  {:1.0f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.w[i], x.we[i], x.flag_wind[i])
 	            else:
 	                line = ""
 	            note.write(line)
@@ -2098,7 +2098,7 @@ def CreateL2ASCII(PROJECT,YEAR,DOY):
 def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1):
     '''
     Summary:
-        Script to save out Legacy ASCII of all L2 date for a Project.
+        Script to save out Legacy ASCII of all L2 date for a Project. [for Meriwether]
     
     Inputs:
         PROJECT - Name of project for sites, ex: 'NATION'
@@ -2123,7 +2123,7 @@ def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1):
     # Create Folder/file labels
     results_stub = '/rdata/airglow/database/L2/'
     notename = results_stub + PROJECT + '_' + date + 'L.txt'
-    D = _L2L.GetLevel2(PROJECT,process_dn)
+    D = L2.GetLevel2(PROJECT,process_dn)
     FilterData(D,QF)
 
     # Write out ASCII
@@ -2135,27 +2135,27 @@ def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1):
     note.write('Direction  Time[UTC]  Lat  Lon  T[K]  TError[K]  u[m/s]  uError[m/s]  v[m/s]  vError[m/s]  w[m/s]  wError[m/s]  Intensity  Intensity_Error  Background  Background_Error  Note\n')
     
     for x in D:
-	    for i in range(len(x.t1)):
-	        if not(x.error): # Remove bad look combo
-		    dn = x.t1[i].astimezone(_utc)
-		    utctime = dn.strftime("%Y-%m-%d %H:%M:%S")
-		    if('Zenith' in x.key or 'IN' in x.key):
-		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.w[i], x.we[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
-		    elif('North' in x.key or 'South' in x.key):
-		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
-		    elif('East' in x.key or 'West' in x.key):
-		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
-		    elif('CV_VTI_EKU_PAR' in x.key):
-		        line = ""
-		    elif('Unknown' in x.key):
-		        line = ""
-                    # Code to add MTM Temps (REMOVE SOON)
-		    elif('MTM_Search' in x.key):
-		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  -------  ------  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
-                    elif('CV' in x.key):
-		        line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
-		    #line = "%14s  %19s  %3.1f  %3.1f  %4.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %1.3f  %1.3f  %5s  %30s" % (x.key, utctime, lat, lon, x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.w[i], x.we[i], x.I[i], x.Ie[i], x.cloudy[i], x.notes)
-		    note.write(line)
+        for i in range(len(x.t1)):
+            if not(x.error): # Remove bad look combo
+		        dn = x.t1[i].astimezone(_utc)
+		        utctime = dn.strftime("%Y-%m-%d %H:%M:%S")
+		        if('Zenith' in x.key or 'IN' in x.key):
+		            line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.w[i], x.we[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		        elif('North' in x.key or 'South' in x.key):
+		            line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		        elif('East' in x.key or 'West' in x.key):
+		            line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		        elif('CV_VTI_EKU_PAR' in x.key):
+		            line = ""
+		        elif('Unknown' in x.key):
+		            line = ""
+                        # Code to add MTM Temps (REMOVE SOON)
+		        elif('MTM_Search' in x.key):
+		            line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  -------  ------  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+                        elif('CV' in x.key):
+		            line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		        #line = "%14s  %19s  %3.1f  %3.1f  %4.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %1.3f  %1.3f  %5s  %30s" % (x.key, utctime, lat, lon, x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.w[i], x.we[i], x.I[i], x.Ie[i], x.cloudy[i], x.notes)
+		        note.write(line)
 		    
     note.close()
     
@@ -2531,47 +2531,6 @@ class _BinnedData:
             self.v284 = _np.roll(self.v284,roll)
 
         self.barrelroll = not(self.barrelroll)
-
-
-
-def laser_is_drifting(instr_name, year, doy):
-    '''
-    Return True if the laser is suspected to be drifting.
-    Return False if zenith reference was used.
-    Raise an exception if there is no data.
-    
-    The laser is "suspected to be drifting" if the following 2 criteria are satisfied:
-    1) The vertical wind at the beginning of the night and the end of the night are different by > 30 m/s.
-    2) The laser intensity varies by more than 10% from the median across the night.
-    '''
-    import FPIprocess as _FPIprocess
-
-    try:
-        r = _FPIprocess.load_level0(instr_name, year, doy)
-    except:
-        raise Exception('No data found: No npz file for %s_%i_%i' % (instr_name, year, doy))
-    
-    fpir  = r['FPI_Results']
-    if fpir['reference']=='zenith':
-        return False
-    
-    direction = fpir['direction']
-    LOSwind = fpir['LOSwind']
-        
-    direc = 'Zenith'
-    w = _np.array([si for (si,d) in zip(LOSwind, direction) if d == direc])
-
-    lasI = fpir['laser_value']['I']
-    lasIe = fpir['laser_stderr']['I']
-
-    # Check if laser varies by more than 10 %
-    las_flag = sum(abs(lasI - _np.median(lasI))/_np.median(lasI) > 0.2) > 2
-    # Check if vertical wind drifts by more than 30 m/s
-    wstart = _np.median(w[:5])
-    wend   = _np.median(w[-5:])
-    w_flag = abs(wend-wstart) > 30.
-    
-    return w_flag and las_flag
 
 
 
