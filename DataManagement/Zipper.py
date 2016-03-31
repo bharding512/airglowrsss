@@ -11,6 +11,7 @@ Script to Zip, Split and Move recent data to Sending Folder
 History: 2 Oct 2012 - initial script written
         17 Jul 2012 - new server update
         12 Feb 2014 - Updated to v3.0 - txtcheck
+        31 Mar 2016 - Added email addresses so emails can be sent directly
 
 Written by Daniel J. Fisher (dfisher2@illinois.edu)
 '''
@@ -21,7 +22,6 @@ import sys
 from glob import glob
 import datetime as dt
 import urllib
-#import urllib2
 import tarfile
 import shutil
 from optparse import OptionParser
@@ -31,108 +31,117 @@ import Emailer
 
 def activeinstruments():
     '''
-    Summary
-    -------
+    Summary:
         code = activeinstruments()
-        Is the dictionary of all active instruments (site-instr-num) with directory info:
-            send_dir: Sending Directory
+        Is the dictionary for use in DATAMANAGEMENT ONLY of all active instruments (site-instr-num) with:
+            send_dir:  Sending Directory
             local_dir: Data Directory
-            split: Location of split command
-            space: disc data is stored on (optional)
+            email:     Email list who wants warnings
+            split:     Location of split command [for FPI and ASI]
+            url:       Address of temp logs [for X3T]
+            space:     Disc data is stored on (optional)
     
-    Outputs
-    ------
+    Outputs:
         code =  dictionary of all active site/instrument/num info
 
-    History
-    -------
+    History:
         2/25/14 -- Written by DJF (dfisher2@illinois.edu)
+        3/31/16 -- Added emails DJF
     '''
     
     # Set up site dictionary: Comment out or delete non-active instrument/sites
-    # TODO: Move to fpiinfo.py?  Change 3 letter instr code to full name???
+    # This dictionary has 2 functions:
+    # 1. for data-taking computer list the path to the data directories and special functions
+    # 2. for remote2 server for emailing person of interest.
+
+    # Email list
+    UIemail = ['bharding512@gmail.com','fishnchips1624+status@gmail.com']
+    BZemail = ['rburiti.ufcg@gmail.com']
+    AKemail = []
+    MOemail = ['zouhair@uca.ac.ma']
     
+    # The dictionary!
     code = defaultdict(lambda: defaultdict(dict))
-    code['uao']['fpi']['05'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split'}
-    #code['uao']['sky']['01'] = {'send_dir':'D:/Sending/', 'local_dir':'D:/Data/', 'split':'C:/cygwin/bin/split'}
-    code['uao']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/MiniME/My Documents/ClarityII/'}
-    code['uao']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.0.2/log.txt'}
+    code['uao']['fpi']['05'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+    #code['uao']['sky']['01'] = {'send_dir':'D:/Sending/', 'local_dir':'D:/Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+    code['uao']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/MiniME/My Documents/ClarityII/','email':UIemail}
+    code['uao']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.0.2/log.txt','email':UIemail}
 
     # EKU is being moved as of 2-17-2016
-    #code['eku']['fpi']['07'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split'}
-    #code['eku']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/meriwej/My Documents/ClarityII/'}
-    #code['eku']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://157.89.43.12/log.txt'}
+    #code['eku']['fpi']['07'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+    #code['eku']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/meriwej/My Documents/ClarityII/','email':UIemail}
+    #code['eku']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://157.89.43.12/log.txt','email':UIemail}
 
-    code['ann']['fpi']['08'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split'}
-    code['ann']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/fpi/My Documents/ClarityII/'}
-    code['ann']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.0.102/log.txt'}
+    code['ann']['fpi']['08'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+    code['ann']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/fpi/My Documents/ClarityII/','email':UIemail}
+    code['ann']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.0.102/log.txt','email':UIemail}
 
-    code['par']['fpi']['06'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split'}
-    code['par']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/meriwej/My Documents/ClarityII/'}
-    code['par']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://10.20.1.2/log.txt'}
-    #code['par']['fpi']['09'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split'}
+    code['par']['fpi']['06'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+    code['par']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/meriwej/My Documents/ClarityII/','email':UIemail}
+    code['par']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://10.20.1.2/log.txt','email':UIemail}
+    #code['par']['fpi']['09'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
 
-    code['vti']['fpi']['09'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split'}
-    code['vti']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/meriwej/My Documents/ClarityII/'}
-#    code['vti']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://10.20.1.2/log.txt'}
+    code['vti']['fpi']['09'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+    code['vti']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/meriwej/My Documents/ClarityII/','email':UIemail}
+#    code['vti']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://10.20.1.2/log.txt','email':UIemail}
     
-#    code['caj']['fpi']['02'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split'}
-#    code['caj']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/MiniME/My Documents/ClarityII/'}
-#    code['caj']['pic']['05'] = {'send_dir':'/data/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split'}
-#    code['caj']['scn']['0U'] = {'send_dir':'/home/scintmon/Sending/', 'local_dir':'/home/scintmon/cascade-1.62/', 'split':'/usr/bin/split'}
-#    code['caj']['tec']['02'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps/data/', 'split':'/usr/bin/split'}
-#    code['caj']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.2/log.txt'}
+#    code['caj']['fpi']['02'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail+BZemail}
+#    code['caj']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/MiniME/My Documents/ClarityII/','email':UIemail+BZemail}
+#    code['caj']['pic']['05'] = {'send_dir':'/data/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail+BZemail}
+#    code['caj']['scn']['0U'] = {'send_dir':'/home/scintmon/Sending/', 'local_dir':'/home/scintmon/cascade-1.62/', 'split':'/usr/bin/split','email':UIemail+BZemail}
+#    code['caj']['tec']['02'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps/data/', 'split':'/usr/bin/split','email':UIemail+BZemail}
+#    code['caj']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.2/log.txt','email':UIemail+BZemail}
 
-    code['car']['fpi']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split'}
-    code['car']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/win7/Documents/ClarityII/'}
-    #code['car']['scn']['0S'] = {'send_dir':'F:/Sending/', 'local_dir':'F:/Data/ScintmonS/', 'split':'/usr/bin/split'}
-    #code['car']['scn']['0T'] = {'send_dir':'F:/Sending/', 'local_dir':'F:/Data/ScintmonT/', 'split':'/usr/bin/split'}
-    #code['car']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.2/log.txt'}
+    code['car']['fpi']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail+BZemail}
+    code['car']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/win7/Documents/ClarityII/','email':UIemail+BZemail}
+    #code['car']['scn']['0S'] = {'send_dir':'F:/Sending/', 'local_dir':'F:/Data/ScintmonS/', 'split':'/usr/bin/split','email':UIemail+BZemail}
+    #code['car']['scn']['0T'] = {'send_dir':'F:/Sending/', 'local_dir':'F:/Data/ScintmonT/', 'split':'/usr/bin/split','email':UIemail+BZemail}
+    #code['car']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.2/log.txt','email':UIemail+BZemail}
 
-    code['mor']['fpi']['03'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split'}
-    code['mor']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/MiniME/My Documents/ClarityII/'}
-    code['mor']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.204/log.txt'}
-    # MOR PIC currently being fixed
-    #code['mor']['pic']['04'] = {'send_dir':'/data/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split'}
+    code['mor']['fpi']['03'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+    code['mor']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/MiniME/My Documents/ClarityII/','email':UIemail}
+    code['mor']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.204/log.txt','email':UIemail}
+    code['mor']['pic']['04'] = {'send_dir':'/data/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
 
-    #code['bog']['scn']['0O'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps/cascade/', 'split':'usr/bin/split'}
+    #code['bog']['scn']['0O'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps/cascade/', 'split':'usr/bin/split','email':UIemail}
 
     # CTO is broken, CCD overheats and Filterwheel does not work
-    #code['cto']['pic']['02'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split'}
-    #code['cto']['scn']['0L'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps/cascade/', 'split':'/usr/bin/split'}
-    #code['cto']['scn']['0M'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps2/cascade/', 'split':'/usr/bin/split'}
+    #code['cto']['pic']['02'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
+    #code['cto']['scn']['0L'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps/cascade/', 'split':'/usr/bin/split','email':UIemail}
+    #code['cto']['scn']['0M'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps2/cascade/', 'split':'/usr/bin/split','email':UIemail}
 
-    code['hka']['asi']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Data/', 'split':'C:/cygwin/bin/split'}
-    code['hka']['nfi']['01'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split'}
-    #code['hka']['scn']['0K'] = {'send_dir':'/home/gps/Sending', 'local_dir':'/home/gps/cascade', 'split':'/usr/bin/split'}
-    code['hka']['cas']['01'] = {'send_dir':'/mnt/data/Sending/', 'local_dir':'mnt/data/','split':'/usr/bin/split'}
+    code['hka']['asi']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+    code['hka']['nfi']['01'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
+    #code['hka']['scn']['0K'] = {'send_dir':'/home/gps/Sending', 'local_dir':'/home/gps/cascade', 'split':'/usr/bin/split','email':UIemail}
+    code['hka']['cas']['01'] = {'send_dir':'/mnt/data/Sending/', 'local_dir':'mnt/data/','split':'/usr/bin/split','email':UIemail}
 
-    code['tht']['pic']['06'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split'}
+    code['tht']['pic']['06'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
     
-    #code['kaf']['fpi']['04'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split'}
-    #code['kaf']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/???/My Documents/ClarityII/'}
+    #code['kaf']['fpi']['04'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+    #code['kaf']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/???/My Documents/ClarityII/','email':UIemail}
     
-    code['bdr']['fpi']['94'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/FPIData/', 'split':'/usr/bin/split'}
-    code['bdr']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/User/My Documents/ClarityII/'}
-    #code['bdr']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.204/log.txt'}
+    code['bdr']['fpi']['94'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/FPIData/', 'split':'/usr/bin/split','email':UIemail}
+    code['bdr']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/User/My Documents/ClarityII/','email':UIemail}
+    #code['bdr']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.204/log.txt','email':UIemail}
  
-#    code['arg']['fpi']['93'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/FPIData/', 'split':'/usr/bin/split'}
-#    code['arg']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/meriwej/Documents/ClarityII/'}
-    #code['arg']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.204/log.txt'}
-    #code['xxx']['xxx']['00'] = {'local_dir':'.'}
+#    code['arg']['fpi']['93'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/FPIData/', 'split':'/usr/bin/split','email':UIemail}
+#    code['arg']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/meriwej/Documents/ClarityII/','email':UIemail}
+    #code['arg']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.204/log.txt','email':UIemail}
+    #code['xxx']['xxx']['00'] = {'local_dir':'.','email':UIemail}
     
+    # Last index is for remote2 admin related issues (not site based)
+    code['ADMIN']={'email':'fishnchips1624+status@gmail.com'}
+
     return(code)
 
 
 def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
     '''
-    Summary
-    -------
+    Summary:
         doer(site,instr,num,prior,pyear,pdoy)
         Zips, splits, and moves all data to Sending Folder
     
-    Inputs
-    ------
+    Inputs:
         site =  XXX - location name
         instr = XXX - instrument name
         num =   ##  - instrument number or letter
@@ -140,8 +149,7 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
         pyear = ### - Year to send back (optional)
         pdoy =  ### - DOY to send back (optional)
 
-    History
-    -------
+    History:
         7/17/13 -- Written by DJF (dfisher2@illinois.edu)
     '''
     
@@ -316,18 +324,15 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
 
 def zipper(name,filename):
     '''
-    Summary
-    -------
+    Summary:
         zipper(name,filename)
         Zips up all data
     
-    Inputs
-    ------
+    Inputs:
         name    = X     - name* of files to be zipped up
         filename    = XXX##_XXX_########.tar.gz - tarball filename
         
-    History
-    -------
+    History:
         7/17/13 -- Written by DJF (dfisher2@illinois.edu)
     '''
     
@@ -344,13 +349,11 @@ def zipper(name,filename):
 
 def splitter(site,instr,num,code,filename,checkname,mfs):
     '''
-    Summary
-    -------
+    Summary:
         splitter(site,instr,num,code,filename,checkname,mfs)
         Splits and moves all data to Sending Folder + checkfile
     
-    Inputs
-    ------
+    Inputs:
         site    = XXX   - location name
         instr   = XXX   - instrument name
         num     = ##    - instrument number or letter
@@ -359,8 +362,7 @@ def splitter(site,instr,num,code,filename,checkname,mfs):
         checkname   = XXX##_XXX_########.txt    - checksum filename
         mfs     = #     - minimum file size
 
-    History
-    -------
+    History:
         7/17/13 -- Written by DJF (dfisher2@illinois.edu)
     '''
 
@@ -391,6 +393,8 @@ def splitter(site,instr,num,code,filename,checkname,mfs):
     
     
 if __name__=="__main__":
+
+    # Main module allows zipper to be run via command line
 
     # Parse the command line
     usage = "usage: Zipper -s SITE -i INSTRUMENT -n NUMBER -p DAYSPRIOR -y YEAR -d DOY"

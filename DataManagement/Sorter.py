@@ -21,6 +21,7 @@ import pytz
 from optparse import OptionParser
 from collections import defaultdict
 import Emailer
+from Zipper import activeinstruments
 import matplotlib
 matplotlib.use('AGG')
 import fpiinfo
@@ -36,18 +37,15 @@ import GPSprocess
 
 def instrumentcode():
     '''
-    Summary
-    -------
+    Summary:
         code = instrumentcode()
         Is the dictionary of all full instruments names given the 3 letter abbreviation.
             Contains pointers for cloud & templ data.
     
-    Outputs
-    ------
+    Outputs:
         code =  dictionary of all full names from abbr
 
-    History
-    -------
+    History:
         2/25/14 -- Written by DJF (dfisher2@illinois.edu)
     '''
 
@@ -102,18 +100,28 @@ def sortinghat(dir_data,f):
     tsize = int(info.readline())
     time = dt.datetime.strptime(info.readline()[:19],'%Y-%m-%d %H:%M:%S')
     info.close()
+
+    # Parse Name
+    site = zelda[6:9]
+    instr= zelda[0:3]
+    inum = zelda[3:5]
+    year = zelda[12:14]
+    mon  = zelda[14:16]
+    day  = zelda[16:18]
+    emails = activeinstruments()[site][instr][inum]['emails']
+
     # Check all parts present
     print 'Parts:',len(glob(zelda + '*')),'/',parts
     ## Case 1 - no data created last night
     if(tsize ==0 and parts == 0):
         ## Emails Warning that system is down!
         print '!!! No Data Collected'
-        if '' == code[zelda[0:3]]:
-            msg = "%s down at %s!\nInternet & Sortinghat are working, instrument issue." %(zelda[0:5],zelda[6:9])
+        if instr in ['asi','nfi','pic','sky','swe']:
+            msg = "%s%s down at %s!\nIs it a full moon?\nInternet & Sortinghat are working, is it an instrument/PC issue." %(code[instr],inum,site)
         else:
-            msg = "%s%s down at %s!\nIs it a full moon?\nInternet & Sortinghat are working, instrument issue." %(code[zelda[0:3]],zelda[3:5],zelda[6:9])
-        subject = "!!! No data collected on %02s-%02s-%02s" %(zelda[14:16],zelda[16:18],zelda[12:14])
-        Emailer.emailerror(subject,msg)
+            msg = "%s%s down at %s!\nInternet & Sortinghat are working, this is an instrument/PC issue." %(code[instr],inum,site)
+        subject = "!!! No data collected on %02s-%02s-%02s" %(mon,day,year)
+        Emailer.emailerror(emails,subject,msg)
         # Move info file to tracking folder
         os.system('mv ' + f + ' ./tracking')
     ## Case 2 - all parts sent over in rx
@@ -143,10 +151,10 @@ def sortinghat(dir_data,f):
                 os.system('mv ' + f + ' ./tracking')
             except:
                 age = (dt.datetime.utcnow()-time).total_seconds()/3600.0
-                subject = "!!! Extract Error on %02s-%02s-%02s" %(zelda[14:16],zelda[16:18],zelda[12:14])
+                subject = "!!! Extract Error on %02s-%02s-%02s" %(mon,day,year)
                 print subject
-                msg = "%s%s issue at %s!\nThis file will not untar.\nBad Zip? Try -p %i" %(code[zelda[0:3]],zelda[3:5],zelda[6:9],age/24)
-                Emailer.emailerror(subject,msg)
+                msg = "%s%s issue at %s!\nThis file will not untar.\nBad Zip? Try -p %i" %(code[instr],inum,site,age/24)
+                Emailer.emailerror(emails,subject,msg)
                 result = []
             tar.close()
         else:
@@ -273,6 +281,7 @@ def sorter(san,pgm):
                     day = int(f[16:18])         # day          = DD
                     dn = dt.datetime(year,month,day)
                     doy = dn.timetuple().tm_yday
+                emails = activeinstruments()[site][instr][inum]['emails']
                 print "\n!!! For", name
                 # Fix inum for Letters
                 if inum[1].isalpha():
@@ -332,11 +341,11 @@ def sorter(san,pgm):
                             if warning:
                                 subject = "!!! Manually inspect (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
                                 print subject
-                                Emailer.emailerror(subject, warning)
+                                Emailer.emailerror(emails, subject, warning)
                         except:
                             subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
                             print subject
-                            Emailer.emailerror(subject, traceback.format_exc())
+                            Emailer.emailerror(emails, subject, traceback.format_exc())
                         # Run CV processing for project
                         # ?????
                         print "!!! End Processing"
@@ -373,7 +382,7 @@ def sorter(san,pgm):
                         except:
                             subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
                             print subject
-                            Emailer.emailerror(subject, traceback.format_exc())
+                            Emailer.emailerror(emails, subject, traceback.format_exc())
                         print "!!! End Processing"
 
 
@@ -438,20 +447,22 @@ def sorter(san,pgm):
                         if msg:
                             subject = "!!! Processing Issue (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
                             print subject
-                            Emailer.emailerror(subject, msg)
+                            Emailer.emailerror(emails, subject, msg)
                         print "!!! End Processing"
                         
                         
                 ##### BAD INSTR CATCH #####
                 else:
+                    emails = activeinstruments()['ADMIN']['emails'] 
                     subject = "!!! Badly named files: " + name
                     print subject
-                    Emailer.emailerror(subject, 'Name is not real instrument...')
+                    Emailer.emailerror(emails, subject, 'Name is not real instrument...')
 
     except:
+        emails = activeinstruments()['ADMIN']['emails'] 
         subject = "!!! Something is wrong..."
         print subject
-        Emailer.emailerror(subject, traceback.format_exc())
+        Emailer.emailerror(emails, subject, traceback.format_exc())
         
     finally:
         print "\n!!! Unpack Complete!"

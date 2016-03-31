@@ -43,6 +43,10 @@ if __name__=="__main__":
         for instr in code[site].keys():
             for num in code[site][instr].keys():
                 name = instr+num+'_'+site
+                
+                # Email list
+                emails = code[site][instr][num]['email']
+
                 # Sort files (newest on bottom)
                 os.chdir(tracking)
                 files = glob(name+'*')
@@ -57,11 +61,13 @@ if __name__=="__main__":
                 os.chdir(rx)
                 files = files + glob(name+'*.txt')
                 files.sort()
+
                 # Send email if no files exist
                 if files == []:
                     subject = "!!! No data received:" + name
                     print subject
-                    Emailer.emailerror(subject, 'There are no checkfiles for this site/instrument.\nIs it active? Did you set up the scripts?')
+                    Emailer.emailerror(emails,subject,'There are no checkfiles for this site/instrument.\nIs it active? Did you set up the scripts properly?')
+
                 else:
                     # Check file stats
                     try:
@@ -74,20 +80,22 @@ if __name__=="__main__":
                     time = dt.datetime.strptime(info.readline()[:19],'%Y-%m-%d %H:%M:%S')
                     df = float(info.readline())
                     info.close()
+
                     # Send email if file is too old
                     age = (now - time).total_seconds()/3600.0
                     if age > hoursback:
                         subject = "!!! No data received:" + site
                         print subject
-                        Emailer.emailerror(subject, '%s: this file is %i hours old.\nIs the internet connected?  Is the computer down?\nBad Zip? Try -p %i' % (name,age,age/24))
+                        Emailer.emailerror(emails,subject,'%s: this file is %i hours old.\nIs the internet connected?  Is the computer down?\nIf missing zip files, try -p %i' % (name,age,age/24))
+
                     # Check disk space
                     if df < diskfree:
                         subject = "!!! Disk space low:" + name
                         print subject
                         try:
                             os.system('sh %slist_%s.sh' % (scripts,name))
-                            Emailer.emailerror(subject, 'There are %3.2f GB remaining on the drive. You may want to free some space soon...\nRun sync on remote computer.' % df)
+                            Emailer.emailerror(emails,subject,'There are %3.2f GB remaining on the drive. You may want to free some space soon...\nRun sync on remote computer.' % df)
                         except:
-                            Emailer.emailerror(subject, 'There are %3.2f GB remaining on the drive. You may want to free some space soon...\nCreate list script first.' % df)
+                            Emailer.emailerror(emails,subject,'There are %3.2f GB remaining on the drive. You may want to free some space soon...\nCreate list script first.' % df)
                     
                 
