@@ -130,7 +130,7 @@ def activeinstruments():
     #code['xxx']['xxx']['00'] = {'local_dir':'.','email':UIemail}
     
     # Last index is for remote2 admin related issues (not site based)
-    code['ADMIN']={'email':'fishnchips1624+status@gmail.com'}
+    code['ADMIN']={'email':['fishnchips1624+status@gmail.com']}
 
     return(code)
 

@@ -108,7 +108,8 @@ def sortinghat(dir_data,f):
     year = zelda[12:14]
     mon  = zelda[14:16]
     day  = zelda[16:18]
-    emails = activeinstruments()[site][instr][inum]['emails']
+    print 'shit'
+    emails = activeinstruments()[site][instr][inum]['email']
 
     # Check all parts present
     print 'Parts:',len(glob(zelda + '*')),'/',parts
@@ -281,11 +282,12 @@ def sorter(san,pgm):
                     day = int(f[16:18])         # day          = DD
                     dn = dt.datetime(year,month,day)
                     doy = dn.timetuple().tm_yday
-                emails = activeinstruments()[site][instr][inum]['emails']
                 print "\n!!! For", name
                 # Fix inum for Letters
                 if inum[1].isalpha():
                     inum = inum[1]
+                else:
+                    emails = activeinstruments()[site][instr][inum]['email']
 
 
                 ##### TEMPLOG CASE: #####
@@ -453,13 +455,13 @@ def sorter(san,pgm):
                         
                 ##### BAD INSTR CATCH #####
                 else:
-                    emails = activeinstruments()['ADMIN']['emails'] 
+                    emails = activeinstruments()['ADMIN']['email'] 
                     subject = "!!! Badly named files: " + name
                     print subject
                     Emailer.emailerror(emails, subject, 'Name is not real instrument...')
 
     except:
-        emails = activeinstruments()['ADMIN']['emails'] 
+        emails = activeinstruments()['ADMIN']['email'] 
         subject = "!!! Something is wrong..."
         print subject
         Emailer.emailerror(emails, subject, traceback.format_exc())
