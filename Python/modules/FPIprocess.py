@@ -210,19 +210,19 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
     
 
     # Determine the times between which files will be accepted.
-    # Use local-time noon on doy to local-time noon on doy+1
-    local = pytz.timezone(site['Timezone'])
-    start_dt = datetime.datetime(year,1,1) + datetime.timedelta(days = doy-1, hours = 12)
-    stop_dt  = datetime.datetime(year,1,1) + datetime.timedelta(days = doy-1, hours = 36)
-    start_dt = local.localize(start_dt)
-    stop_dt  = local.localize(stop_dt)
-
+    # Define start and stop times as solar noon on doy, and on doy+1
+    site_lon = np.mod(site['Location'][1]+180,360)-180
+    start_dt = datetime.datetime(year,1,1) + datetime.timedelta(days = doy-1, hours = 12-24*site_lon/360.)
+    stop_dt = start_dt + datetime.timedelta(hours=24)
+    start_dt = pytz.utc.localize(start_dt)
+    stop_dt = pytz.utc.localize(stop_dt)
     
     # Create a list of relevant filenames by searching in adjacent
     # days' directories also, since we might have problems with UT/LT,
     # time zones, etc.
     laser_fns = []
     sky_fns = []
+    local = pytz.timezone(site['Timezone'])
     for day_offset in [-1, 0, 1]: # search folders around the day of interest
         dir_dt = nominal_dt + datetime.timedelta(days = day_offset)
         # Create the YYYYMMDD date format
