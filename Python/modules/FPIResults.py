@@ -1075,7 +1075,7 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         #fig.savefig("%s%s-%4.0f-%s.eps" % (dirout,title[i],YEAR,SITE))
         
 
-def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,F_VAL=[50,100,150,200,250]):
+def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,QF=1,F_VAL=[50,100,150,200,250]):
     '''
     Summary:
         Plots monthly averages in a 2x6 month plot binning by average F10.7
@@ -1087,6 +1087,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,F_VAL=[
         SPLIT = Split look directions in binning [default = False]
         KP = Filter days by KP [default = [0,10] - all kp]
         UT = Plot in UT [default = True]
+        QF = Quality Flags [default = 1]
         F_VALS = List of F10.7 Cutoff values
 
     Outputs:
@@ -1147,7 +1148,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,F_VAL=[
         nsp = ((nsp*2)%24 - 11*((nsp*2)%24>11))%12
         for k,(f_doy,f_yr) in enumerate(zip(f_doy_index,f_yr_index)):
             print mon,'-',F_VAL[k]
-            MD = BinMonthlyData(SITE,arbdate.year,mon,SPLIT=SPLIT,KP=KP,DLIST=f_doy,YLIST=f_yr)
+            MD = BinMonthlyData(SITE,arbdate.year,mon,SPLIT=SPLIT,KP=KP,DLIST=f_doy,QF=QF,YLIST=f_yr)
             #print '|_ F107b:',MD.f107,'\n\n'
             MD.t2 = MD.t + _dt.timedelta(minutes=3)
             '''
