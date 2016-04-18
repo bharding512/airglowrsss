@@ -18,11 +18,9 @@ Included functions are:
     PlotGridMonth
     PlotSpaghetti
     SetBinTime
+    SetFilter
     WeightedAverage
         
-History
--------
-3/20/13 -- Written by DJF (dfisher2@illinois.edu)
 '''
 import matplotlib as _mpl
 import matplotlib.dates as _md
@@ -54,6 +52,43 @@ def SetBinTime(MIN):
     btime = _np.array([(arbdate + _dt.timedelta(minutes=_x)).time() for _x in range(0,b_len*MIN,MIN)])
     times = _np.array([(arbdate + _dt.timedelta(minutes=_x)) for _x in range(0,b_len*MIN,MIN)])
 
+    print 'Bin length is set to %i minutes.'%MIN
+
+
+def SetFilter(UMIN=-250.,UMAX=250.,VMIN=-250.,VMAX=250.,WMIN=-75.,WMAX=75.,TMIN=600.,TMAX=1400., \
+        TERR=50.,WERR=25.,CERR=300.):
+    '''
+    Summary:
+        Returns filter limits for averages. This is used because the Level0 automated processing \
+            quality flags don't always capture 100%. 
+
+    Inputs:
+        UMIN = Zonal wind minimum
+        UMAX = Zonal wind maximum
+        VMIN = Meridional wind minimum
+        VMAX = Meridional wind maximum
+        WMIN = Vertical wind minimum
+        WMAX = Vertical wind maximum
+        TMIN = Temperature minimum
+        TMAX = Temperature maximum
+        TERR = Temperature uncertainity (error) limit
+        WERR = Wind uncertainty (error) limit
+        CERR = Calibration error limit
+
+    History:
+        4/18/16 -- Written by DJF (dfisher2@illinois.edu)
+    '''
+
+    # physical limits for data
+    global lim
+    lim = {'Tmax':TMAX,'Tmin':TMIN,'Te':TERR, \
+           'umax':UMAX,'umin':UMIN,'uef':WERR, 'uec':CERR,\
+           'vmax':VMAX,'vmin':VMIN,'vef':WERR, 'vec':CERR,\
+           'wmax':WMAX,'wmin':WMIN,'wef':WERR, 'wec':CERR}
+
+    print 'The following limits are set:'
+    print lim
+
 
 # Set up default parameters
 _mpl.rcParams.update({'font.size': 11})
@@ -63,7 +98,7 @@ dirout = '/rdata/airglow/database/L2/plots/'
 arbdate = _dt.datetime(1970,1,1)
 _utc = _pytz.UTC
 SetBinTime(30)
-
+SetFilter()
 
 
 def FilterData(DATA,QF=1):
@@ -73,36 +108,14 @@ def FilterData(DATA,QF=1):
 
     Inputs:
         DATA = The data object
-        QF = Quality Flags [default = 1], can pass vector of flag,wind_uncertainty_limit,temp_uncertainty_limit, or just single digit for flag 
+        QF = Quality Flag max [default = 1] 
 
     History:
         3/20/13 -- Written by DJF (dfisher2@illinois.edu)
-
+        4/18/16 -- Modified by DJF
     '''
-    try:
-        # Check for 3 vector of flags
-        if len(QF) == 3:
-            qualitylimit   = QF[0]+1 
-            winderrorlimit = QF[1]
-            temperrorlimit = QF[2]
-    except:
-        # Set default flag limits
-        qualitylimit = QF+1 
-        winderrorlimit = 25.
-        temperrorlimit = 50.
-    calerrorlimit = 300.  # TODO is this incorperated in QF yet???
-
-    # Hardcode physical limits for data
-    lim = {'Tmax':1400.,'Tmin':600.,'Te':temperrorlimit, \
-           'umax':250.,'umin':-250.,'uef':winderrorlimit, 'uec':calerrorlimit,\
-           'vmax':250.,'vmin':-250.,'vef':winderrorlimit, 'vec':calerrorlimit,\
-           'wmax':75., 'wmin':-75., 'wef':winderrorlimit, 'wec':calerrorlimit}
-    '''
-    lim = {'Tmax':1250.,'Tmin':600.,'Te':temperrorlimit, \
-           'umax':200.,'umin':-100.,'uef':winderrorlimit,'uec':calerrorlimit, \
-           'vmax':150.,'vmin':-150.,'vef':winderrorlimit,'vec':calerrorlimit, \
-           'wmax':75., 'wmin':-75., 'wef':winderrorlimit,'wec':calerrorlimit}
-    '''
+    # Set default flag limits
+    qualitylimit = QF+1 
     bcnt = 0
     
     # For each direction in DATA
@@ -397,7 +410,7 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
     
     
     
-def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.):
+def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,QUIET=False):
     '''
     Summary:
         Returns HWMfor a single instrument over one night.
@@ -406,9 +419,10 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.):
         SITELLA = site latitude, longitude, altitude
         YEAR = year, e.g. 2013
         DOY = doy of year, e.g. 47
-        WMODEL = name of wind model, e.g. hwm93
-        TMODEL = name of temp model, e.g. msis
-        ALT = altitude of desired profile [km]
+        WMODEL = name of wind model, e.g. 'hwm93'
+        TMODEL = name of temp model [default = 'msis']
+        ALT = altitude of desired profile in km [default = 250]
+        QUIET = flag to set Kp=0 and Ap=Ap_daily [default = False]
 
     Outputs:
         DATA = Object with winds, Temps, and more
@@ -445,6 +459,9 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.):
     # Fill Data
     for tind,t in enumerate(times):
         pt = _pyglow.Point(t.replace(year=dn.year,month=dn.month,day=dn.day),SITELLA[0],SITELLA[1],ALT)
+        if QUIET:
+            pt.kp = 0.0
+            pt.ap = pt.ap_daily
         # Wind
         if WMODEL.lower() == 'hwm93':
             pt.run_hwm93()
@@ -892,7 +909,7 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         SPLIT = Split look directions in binning [default = False]
         KP = Filter days by KP [default = [0,10] - all kp]
         UT = Plot in UT or SLT [default = True]
-        QF = Quality Flags [default = True]
+        QF = Quality Flags [default = 1]
 
     Outputs:
 
@@ -1166,7 +1183,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,F_VAL=[
                     sltoffset = _dt.timedelta(minutes=0)
                     print 'No UT/LT conversion... in UT'
             else:
-                sltoffset = 0
+                sltoffset = _dt.timedelta(minutes=0)
             MD.t = MD.t + sltoffset
             #tlim = [MD.t[len(MD.t)/5] + sltoffset,MD.t[-len(MD.t)/5] + sltoffset]
             tlim = [arbdate - _dt.timedelta(hours=7),arbdate + _dt.timedelta(hours=7)]
@@ -2244,6 +2261,7 @@ class _BinnedData:
         self.T  = _np.array([])
         self.Te = _np.array([])
         self.t = _np.array([])
+        self.ut_time = _np.array([])
         self.log = ""
         self.notes = ""
         self.rev = "??"
@@ -2427,6 +2445,7 @@ class _BinnedData:
         self.t  = _np.roll(self.t,roll)
         for ti in range(roll):
             self.t[ti] = self.t[ti]-_dt.timedelta(days=1)
+        self.ut_time = self.dn + (self.t-arbdate)
         self.T   = _np.roll(self.T ,roll)
         self.Te  = _np.roll(self.Te,roll)
         self.u   = _np.roll(self.u ,roll)
