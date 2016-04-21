@@ -327,7 +327,7 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
                     pt = _pyglow.Point(r1.t1[zelda],0,0,0)
                     kpi = pt.kp
                     if KP[0]<= kpi <=KP[1] or _np.isnan(kpi):
-                        bin = _np.floor(_np.mod((r1.t1[zelda].astimezone(_utc).replace(tzinfo=None)-arbdate).total_seconds(),60*60*24)/(60*24*60/b_len))
+                        bin = int(_np.floor(_np.mod((r1.t1[zelda].astimezone(_utc).replace(tzinfo=None)-arbdate).total_seconds(),60*60*24)/(60*24*60/b_len)))
                         # If the data exists
                         if len(r1.u) > 0:
                             if SPLIT and ('west' in r1.key.lower() or '_2' in r1.key.lower()):
@@ -497,21 +497,26 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,QUIET=False):
     # Save Averages
     d.u = uData[:,0]
     d.ue = ueData[:,0]
+    d.uc = _np.ones([len(times)])
     d.v = vData[:,0]
     d.ve = veData[:,0]
+    d.vc = _np.ones([len(times)])
     d.w = wData[:,0]
     d.we = weData[:,0]
+    d.wc = _np.zeros([len(times)])
     d.T = TData[:,0]
     d.Te = TeData[:,0]
+    d.Tc = _np.ones([len(times)])
     d.i = iData[:,0]
     d.ie = ieData[:,0]
+    d.ic = _np.ones([len(times)])
     d.doabarrelroll()
     
     return d
         
         
 
-def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,DLIST=[],YLIST=[],KP=[0,10],CV=True,QF=1,VERBOSE=True):
+def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[0,10],CV=True,QF=1,VERBOSE=True):
     '''
     Summary:
         Returns filted and binned data over one month.
@@ -520,6 +525,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,DLIST=[],YLIST=[],KP=[0,10],CV=Tr
         SITE = site of interest, e.g. 'UAO'
         YEAR = year, e.g. 2013
         MONTH = month of year, e.g. 2 (February)
+        SITELLA = site location array for model run [lat,lon,alt_km]
         SPLIT = Split look directions in binning [default = False]
         DLIST = list of doys in year  [default = [] - all doys in MONTH,YEAR used], or [doy,spread] for storms
         YLIST = list of years in year [default = [] - only YEAR used]
@@ -621,9 +627,10 @@ def BinMonthlyData(SITE,YEAR,MONTH,SPLIT=False,DLIST=[],YLIST=[],KP=[0,10],CV=Tr
             sites = [SITE]
 
         for s in sites:
-            sitella = _fpiinfo.get_site_info(s,dn)
             if 'hwm' in s:
-                DD = GetModels(sitella,YEAR,doy,s)
+                if len(SITELLA) == 0:
+                    raise ValueError('Need location for model')
+                DD = GetModels(SITELLA,YEAR,doy,s)
                 mflag = True
 
                 # get F107 weighted at midnight of data (assume constant for night)
@@ -2227,6 +2234,7 @@ def CreateMonthlyASCII(PROJECT,YEAR,MONTH,QF=1):
 
 class _BinnedData:
     '''
+    This class holds all variables containing binned date.
     Note: BinnedData has T,u,v,w (u2,v2) data
         Each also has c-count of data points per time, e-weighted std, v-monthly variablility
     '''
