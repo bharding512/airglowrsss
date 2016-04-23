@@ -108,7 +108,6 @@ def sortinghat(dir_data,f):
     year = zelda[12:14]
     mon  = zelda[14:16]
     day  = zelda[16:18]
-    print 'shit'
     emails = activeinstruments()[site][instr][inum]['email']
 
     # Check all parts present
@@ -219,9 +218,6 @@ def sorter(san,pgm):
     #python = '/usr/local/python/'
     dir_share = '/rdata/airglow/share/'
     
-    print "\n!!!!!!!!!!!!!!!!!!!!"
-    print '!!! BEGIN TIMESTAMP:',dt.datetime.now()
-
     # Close Program if already running (just in case...)
     pid = str(os.getpid())
     pidfile = "/tmp/Sorter_%s.pid"%pgm
@@ -234,6 +230,10 @@ def sorter(san,pgm):
     else:
         file(pidfile, 'w').write(pid)
         
+    # Start Write to Log File
+    print "\n!!!!!!!!!!!!!!!!!!!!"
+    print '!!! BEGIN TIMESTAMP:',dt.datetime.now()
+
     # Load instrument dictionary
     code = instrumentcode()
     # Set order so bwc & x3t process first
@@ -286,7 +286,7 @@ def sorter(san,pgm):
                 # Fix inum for Letters
                 if inum[1].isalpha():
                     inum = inum[1]
-                else:
+                if not(inum[0].isalpha()):
                     emails = activeinstruments()[site][instr][inum]['email']
 
 
