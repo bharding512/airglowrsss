@@ -92,7 +92,6 @@ def sortinghat(dir_data,f):
     
     result = 0
     code = instrumentcode()
-    print "!!! Begin Sorting..."
     # Read info file
     info = open(f, 'r')
     zelda = info.readline().rstrip().split('.tar.gz',1)[0]+'.tar.gz'
@@ -102,12 +101,12 @@ def sortinghat(dir_data,f):
     info.close()
 
     # Parse Name
-    site = zelda[6:9]
-    instr= zelda[0:3]
-    inum = zelda[3:5]
-    year = zelda[12:14]
-    mon  = zelda[14:16]
-    day  = zelda[16:18]
+    site = f[6:9]
+    instr= f[0:3]
+    inum = f[3:5]
+    year = f[12:14]
+    mon  = f[14:16]
+    day  = f[16:18]
     emails = activeinstruments()[site][instr][inum]['email']
 
     # Check all parts present
