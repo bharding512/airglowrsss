@@ -463,7 +463,7 @@ def sorter(san,pgm):
         emails = activeinstruments()['ADMIN']['email'] 
         subject = "!!! Something is wrong..."
         print subject
-        Emailer.emailerror(emails, subject, traceback.format_exc())
+        Emailer.emailerror(emails, subject+f, traceback.format_exc())
         
     finally:
         print "\n!!! Unpack Complete!"
