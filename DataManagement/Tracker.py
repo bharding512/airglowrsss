@@ -40,6 +40,8 @@ if __name__=="__main__":
     
     # Loop through each instrument to find most recent file.
     for site in code.keys():
+        if site == 'ADMIN': # remove admin tracker
+            continue
         for instr in code[site].keys():
             for num in code[site][instr].keys():
                 name = instr+num+'_'+site
