@@ -109,6 +109,103 @@ def quality_hack(instr_name, year, doy, FPI_Results, logfile):
 
     
     
+def createL1ASCII(NPZ,OUT):
+    '''
+    Summary:
+        Function to read in processed FPI npz file and output a text file of level 1 results.
+        Level 1 results are line-of-sight winds and temperatures for each look direction.
+    
+    Inputs:
+        NPZ = full file name and path of npz file 
+        OUT = full file name and path of ASCII results output
+
+    History:
+        2/21/13 -- Written by Daniel J. Fisher (dfisher2@illinois.edu)
+        2/16/15 -- Modified for complete npz file
+    '''
+
+    # Load in FPI processed Data
+    data = np.load(NPZ)
+    FPI_Results = data['FPI_Results'].ravel()[0]
+    reference = data['FPI_Results'].ravel()[0]['reference']
+    instr = data['instrument'].ravel()[0]['Abbreviation']
+    direction = data['FPI_Results'].ravel()[0]['direction']
+    temps = data['FPI_Results'].ravel()[0]['T']
+    e_temps = data['FPI_Results'].ravel()[0]['sigma_T']
+    winds = data['FPI_Results'].ravel()[0]['LOSwind']
+    e_winds = data['FPI_Results'].ravel()[0]['sigma_LOSwind']
+    e_fit = data['FPI_Results'].ravel()[0]['sigma_fit_LOSwind']
+    e_cal = data['FPI_Results'].ravel()[0]['sigma_cal_LOSwind']
+    i = data['FPI_Results'].ravel()[0]['skyI']
+    e_i = data['FPI_Results'].ravel()[0]['sigma_skyI']
+    b = data['FPI_Results'].ravel()[0]['ccdB']
+    e_b = data['FPI_Results'].ravel()[0]['sigma_ccdB']
+    az = data['FPI_Results'].ravel()[0]['az']
+    ze = data['FPI_Results'].ravel()[0]['ze']
+    #laser_t = data['FPI_Results'].ravel()[0]['laser_times']
+    #laser_v = data['FPI_Results'].ravel()[0]['laser_value']
+    #laser_chi = data['FPI_Results'].ravel()[0]['laser_chisqr']
+    chisqr = data['FPI_Results'].ravel()[0]['sky_chisqr']
+    wavelength = data['FPI_Results'].ravel()[0]['lam0']
+    version = data['FPI_Results'].ravel()[0]['SVNRevision']
+    inttime = data['FPI_Results'].ravel()[0]['sky_intT']
+    timeywimey = data['FPI_Results'].ravel()[0]['sky_times']
+    if(data['FPI_Results'].ravel()[0]['Clouds']):
+        sky_temp = data['FPI_Results'].ravel()[0]['Clouds']['mean']
+    else:
+        sky_temp = np.ones(len(timeywimey))*-999.
+    wind_flag = data['FPI_Results'].ravel()[0]['wind_quality_flag']
+    temp_flag = data['FPI_Results'].ravel()[0]['temp_quality_flag']
+
+    del data.f # http://stackoverflow.com/questions/9244397/memory-overflow-when-using-numpy-load-in-a-loop
+    data.close()
+
+    # Write out ASCII
+    with open(OUT,'w') as note:
+
+        note.write('LEVEL 1 DATA PRODUCT:\n---------------------\n')
+        '''
+        note.write('VARIABLES:\n
+            UTCTime - Start time of image in UTC
+            Az - Azimuth angle in degrees (compass coordinates)
+            Ze - Zenith angle in degrees (0 is zenith)
+            Temp - Estimated temperature of neutral layer in K. Biases in temperature may exist for different instruments
+            Temp_Sig - Estimated uncertainty of temperature estimate in K
+            LOS_Wind - Estimated line-of-sight winds of measurement in m/s (+ away from instrument). This is NOT projected
+            LOS_Wind_Sig - Estimated uncertainty of wind estimate in m/s
+            Fit_Sig - Estimated uncertainty of wind due to LM fit of sky data in m/s
+            Cal_Sig - Estimated uncertainty of wind due to laser calibration accuracy in m/s
+            I - Estimated airglow intensity in arbitrary units
+            I_Sig - Estimated uncertainty of intensity estimate
+            Bkgd - Estimated Background intensity of CCD 
+            Bkgd_Sig - Estimated uncertainty of background estimate
+            Int_Time - Length of exposure for the measurement in s
+            Chisqr - Chi-squared of the model fit
+            Cld_Ind - Cloudiness indicator: ambient minus sky/cloud temperature in C. If less than -25 skies are assumed clear (cloudy skies are warmer than clear skies).  -999.9 indicates no data available and thus assumes good skies
+            T_Flag - Temperature error flag: 2 is bad, 1 known issues/ iffy data, 0 is good
+            W_Flag - Wind error flag: 2 is bad, 1 known issues/ iffy data, 0 is good
+            Ref - How Doppler reference was calculated: Laser uses laser images to calibrate the doppler offset assuming that on average nighttime veritcal winds are zero, Zenith assumes zenith winds are zero and uses this as a Doppler zero
+            Wl - Wavelength of measured emission line in m
+            Vers - Current version of python analysis code (to verify up-to-date product)\n')
+        note.write('NOTES:\nAssumed emission altitude of 250 km\n')
+        
+        note.write('\n---------------------\nData:\n')
+        '''
+        note.write('UTCTime____________  ____Az  ___Ze  ______T  _T_Sig  ___Wind  _W_Sig  FitSig  CalSig  _____I  _I_Sig  ___Bkgd B_Sig  Sec  Chisqr  CldInd TF WF  __Ref  ______Wl  Vers\n')
+
+        for a_tw, a_az, a_ze, a_t, a_e_t, a_w, a_e_w, a_ef, a_ec, a_i, a_e_i, a_b, a_e_b, a_it, a_cs, a_dt,a_tf,a_wf in zip(timeywimey, az, ze, temps, e_temps, winds, e_winds, e_fit, e_cal, i, e_i, b, e_b, inttime, chisqr, sky_temp,temp_flag,wind_flag):
+            dn = a_tw.astimezone(pytz.utc)
+            utctime = dn.strftime("%Y-%m-%d %H:%M:%S")
+            line = "{:19s}  {:6.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.2f}  {:6.2f}  {:6.4f}  {:6.4f}  -999.00  -999  {:3.0f}  {:6.2f}  {:6.1f}  {:1.0f}  {:1.0f}  {:6s}  {:7.1e}  {:5s}\n".format(utctime, a_az, a_ze, a_t, a_e_t, a_w, a_e_w, a_ef, a_ec, a_i, a_e_i, a_it, a_cs, a_dt, a_tf, a_wf, reference, wavelength, version)
+            #line = "{:19s}  {:6.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.1f}  {:4.2f}  {:6.1f}  {:4.2f}  {:3.0f}  {:6.2f}  {:6.1f}  {:1d}  {:1d}  {:6s}  {:7.1e}  {:5s}\n".format(utctime, a_az, a_ze, a_t, a_e_t, a_w, aax.xaxis_date()_e_w, a_i, a_e_i, a_b, a_e_b, a_it, a_cs, a_dt, t_flag, w_flag, reference, wavelength, version)
+            note.write(line)
+	        
+    note.closed
+
+
+    
+    
+    
 def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zenith_times=[17.,7.],
                   wind_err_thresh=100., temp_err_thresh=100., cloud_thresh = [-22.,-10.],
                   send_to_website=True, enable_share=True, send_to_madrigal=True, 
@@ -524,9 +621,8 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
         np.savez(npznameshare, FPI_Results=FPI_Results, site=site, instrument=instrument)
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Results also saved to %s\n' % npznameshare)
     if send_to_madrigal and instrument['send_to_madrigal']: # save the summary ASCII file to send to the Madrigal database
-        import FPIResults
         asciiname = madrigal_stub + instrsitedate + '.txt'
-        FPIResults.CreateL1ASCII(npzname, asciiname)
+        createL1ASCII(npzname, asciiname)
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'ASCII results saved to %s\n' % asciiname)
 
     # Load the results
