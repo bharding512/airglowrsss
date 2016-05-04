@@ -7,7 +7,6 @@ This script is meant to contain Level3 routines such as data averaging and plott
 Included functions are:
     BinDailyData
     BinMonthlyData
-    *CreateL1ASCII
     **CreateL2ASCII
     **CreateL2ASCII_Legacy
     CreateMonthlyASCII
@@ -90,7 +89,7 @@ def SetFilter(UMIN=-250.,UMAX=250.,VMIN=-250.,VMAX=250.,WMIN=-75.,WMAX=75.,TMIN=
            'wmax':WMAX,'wmin':WMIN,'wef':WERR, 'wec':CERR}
 
     print 'The following limits are set:'
-    print lim
+    print sorted(lim.items())
 
 
 # Set up default parameters
@@ -110,7 +109,7 @@ print 'FPIResults Ready\n'
 def FilterData(DATA,QF=1):
     '''
     Summary:
-        Returns filtered single input day.
+        Returns filtered single input day. This is because automated filtering is not perfect.
 
     Inputs:
         DATA = The data object
@@ -501,7 +500,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIE
 
     else:
         # Faux model
-        #ag6300 = Fmodel('high') #high 
+        #ag6300 = Fmodel('low') #high 
         
         # Fill Data
         for tind,t in enumerate(times):
@@ -730,7 +729,6 @@ def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[
     ieData  = _np.empty((b_len,dim))*_np.nan
     iCount  = _np.zeros((b_len))
     F107    = _np.empty((dim))*_np.nan
-    count = 0
     mflag = False
     oscar = []
     lat = []
@@ -746,7 +744,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[
         doyend = doystart + _cal.monthrange(YEAR,MONTH)[1]
         dl = range(doystart,doyend)
         yl = list(_np.array(dl)/_np.array(dl)*YEAR)
-    elif len(DLIST) == 2:
+    elif len(DLIST) == 2 and len(YLIST) == 0:
         # Use listed DOY +/- SPREAD disregarding month.
         dl = []; yl = []
         d.key = str(DLIST[0])+'-'+str(YEAR)+' +/-'+str(DLIST[1])
@@ -757,11 +755,12 @@ def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[
             yl.append(dn.year)
     else:
         # Use listed DOYS and make sure doys actually exist in the month
+        d.key = "Listed days in {0:%B}".format(dn)
         dl = []; yl = []
         for doy,yr in zip(DLIST,YLIST):
             doystart = (_dt.datetime(yr,MONTH,1) - _dt.datetime(yr,1,1)).days+1
             doyend = doystart + _cal.monthrange(yr,MONTH)[1]
-            if doystart <= doy and doy <=doyend:
+            if doystart <= doy and doy <doyend:
                 dl.append(doy)
                 yl.append(yr)
         if not(dl):
@@ -785,7 +784,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[
     # Process all days using multicores
     singleday = _partial(_MPsingleday,SPLIT=SPLIT,KP=KP,CV=CV,QF=QF, \
             SITELLA=SITELLA,TMODEL=TMODEL,ALT=ALT,WEIGHTED=WEIGHTED,QUIET=QUIET)
-    pool = _Pool(processes=_n_cores)
+    pool = _pool(processes=_n_cores)
     results = pool.map(singleday,zip(s_arg,yr_arg,doy_arg))
 
     # Unwrap results
@@ -812,32 +811,32 @@ def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[
             alt.append(DD.lla[2])
         # Add data
         if len(DD.u) > 0:
-            uData[:,count] = DD.u
-            ueData[:,count] = DD.ue
+            uData[:,ind] = DD.u
+            ueData[:,ind] = DD.ue
             uCount += DD.uc
         if len(DD.v) > 0:
-            vData[:,count] = DD.v
-            veData[:,count] = DD.ve
+            vData[:,ind] = DD.v
+            veData[:,ind] = DD.ve
             vCount += DD.vc
         if len(DD.w) > 0:
-            wData[:,count] = DD.w
-            weData[:,count] = DD.we
+            wData[:,ind] = DD.w
+            weData[:,ind] = DD.we
             wCount += DD.wc
         if len(DD.T) > 0:
-            TData[:,count] = DD.T
-            TeData[:,count] = DD.Te
+            TData[:,ind] = DD.T
+            TeData[:,ind] = DD.Te
             TCount += DD.Tc
         if len(DD.i) > 0:
-            iData[:,count] = DD.i
-            ieData[:,count] = DD.ie
+            iData[:,ind] = DD.i
+            ieData[:,ind] = DD.ie
             iCount += DD.ic
         if SPLIT and not(mflag) and len(DD.u2) > 0:
-            u2Data[:,count] = DD.u2
-            u2eData[:,count] = DD.u2e
+            u2Data[:,ind] = DD.u2
+            u2eData[:,ind] = DD.u2e
             u2Count += DD.u2c
         if SPLIT and not(mflag) and len(DD.v2) > 0:
-            v2Data[:,count] = DD.v2
-            v2eData[:,count] = DD.v2e
+            v2Data[:,ind] = DD.v2
+            v2eData[:,ind] = DD.v2e
             v2Count += DD.v2c
     pool.close()
     pool.join()
@@ -2622,32 +2621,18 @@ class _BinnedData:
 
 def Fmodel(alt):
     if alt == 'low':
-        I = _np.array([  5.06418555e-03,   7.62262367e-02,   2.14749952e-01,
-         7.10616738e-01,   4.24115694e+00,   1.21130929e+01,
-         2.33331242e+01,   3.66930898e+01,   4.96704125e+01,
-         6.03619918e+01,   6.76137501e+01,   6.99566064e+01,
-         6.75471181e+01,   6.08025617e+01,   5.09384481e+01,
-         3.97066263e+01,   2.90465369e+01,   2.02525010e+01,
-         1.35646248e+01,   8.79761558e+00,   5.56633141e+00,
-         3.45744137e+00,   2.11893554e+00,   1.28634246e+00,
-         7.75816903e-01,   4.65893631e-01,   2.79036067e-01,
-         1.66887886e-01,   9.97671079e-02,   5.96550439e-02,
-         3.56951975e-02,   2.13787319e-02,   1.28162554e-02,
-         7.68889240e-03,   4.61638986e-03])
+        I = _np.array([  5.06418555e-03,   3.79121460e-01,   1.21130929e+01,
+         4.33707174e+01,   6.76137501e+01,   6.46582112e+01,
+         3.97066263e+01,   1.66496603e+01,   5.56633141e+00,
+         1.65258386e+00,   4.65893631e-01,   1.29035828e-01,
+         3.56951975e-02,   9.92605253e-03])
     
     else:
-        I = _np.array([  1.44081159e-05,   8.83926779e-05,   1.27263641e-04,
-         7.36075573e-05,   9.90717128e-05,   3.63936919e-04,
-         1.98858524e-03,   9.39907652e-03,   2.28516541e-02,
-         5.42699454e-02,   1.24256301e-01,   2.67943707e-01,
-         5.32377200e-01,   9.91877921e-01,   1.86133711e+00,
-         2.92154760e+00,   3.94768407e+00,   4.74275538e+00,
-         5.14625962e+00,   5.09574669e+00,   4.64812608e+00,
-         3.94232931e+00,   3.13760163e+00,   2.36386464e+00,
-         1.70026491e+00,   1.17773166e+00,   7.93875516e-01,
-         5.26460626e-01,   3.44716146e-01,   2.23383810e-01,
-         1.43556192e-01,   9.16578054e-02,   5.82416262e-02,
-         3.68875799e-02,   2.33177794e-02])
+        I = _np.array([  1.44081159e-05,   9.37163934e-05,   3.63936919e-04,
+         1.46931147e-02,   1.24256301e-01,   7.29099119e-01,
+         2.92154760e+00,   5.00024489e+00,   4.64812608e+00,
+         2.74066378e+00,   1.17773166e+00,   4.26615701e-01,
+         1.43556192e-01,   4.63650114e-02])
         
     return(I)
 
