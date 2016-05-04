@@ -2,13 +2,14 @@
 Summary
 -------
 FPIResults contains functions to do both CV and binning/filtering daily/monthly/yearly analysis
+This script is meant to contain Level3 routines such as data averaging and plotting.
 
 Included functions are:
     BinDailyData
     BinMonthlyData
-    CreateL1ASCII
-    CreateL2ASCII
-    CreateL2ASCII_Legacy
+    *CreateL1ASCII
+    **CreateL2ASCII
+    **CreateL2ASCII_Legacy
     CreateMonthlyASCII
     FilterData
     GetModels
@@ -33,6 +34,8 @@ from scipy import stats as _stats
 import pytz as _pytz
 import FPIprocessLevel2_Legacy as L2
 import fpiinfo as _fpiinfo
+from multiprocessing import Pool as _pool
+from functools import partial as _partial
 
 def SetBinTime(MIN):
     '''
@@ -93,12 +96,15 @@ def SetFilter(UMIN=-250.,UMAX=250.,VMIN=-250.,VMAX=250.,WMIN=-75.,WMAX=75.,TMIN=
 # Set up default parameters
 _mpl.rcParams.update({'font.size': 11})
 dirout = '/rdata/airglow/database/L2/plots/'
+_n_cores = 16 
 
 # Binning Time
 arbdate = _dt.datetime(1970,1,1)
 _utc = _pytz.UTC
 SetBinTime(30)
 SetFilter()
+loader = _pyglow.Point(arbdate,0,0,250.) # First run is slow, so get it out of the way now
+print 'FPIResults Ready\n'
 
 
 def FilterData(DATA,QF=1):
@@ -289,7 +295,7 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
     TeData  = _np.empty((b_len,count_len))*_np.nan
     iData   = _np.empty((b_len,count_len))*_np.nan
     ieData  = _np.empty((b_len,count_len))*_np.nan
-    count   = _np.zeros((b_len))
+    count   = b_len*[0]
     lat = []
     lon = []
     alt = []
@@ -409,8 +415,7 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
     return d
     
     
-    
-def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,QUIET=False):
+def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIET=False,MULTICORE=True):
     '''
     Summary:
         Returns HWMfor a single instrument over one night.
@@ -422,30 +427,35 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,QUIET=False):
         WMODEL = name of wind model, e.g. 'hwm93'
         TMODEL = name of temp model [default = 'msis']
         ALT = altitude of desired profile in km [default = 250]
+        WEIGHTED = flag to intensity weight winds [default = True]
         QUIET = flag to set Kp=0 and Ap=Ap_daily [default = False]
+        MULTICORE = flag to allow multicore processing [default = True]
 
     Outputs:
         DATA = Object with winds, Temps, and more
 
     History:
         3/20/13 -- Written by DJF (dfisher2@illinois.edu)
+        4/21/16 -- Mods by DJF (QUIET & REDLINE)
     '''
-    
+
     # Create the YYYYMMDD date format
     dn = _dt.datetime(YEAR,1,1) + _dt.timedelta(days = DOY-1)
     year = dn.strftime('%Y')
     date = dn.strftime('%Y%m%d')
     
-    uData = _np.empty((b_len,1))*_np.nan
-    ueData = _np.empty((b_len,1))*_np.nan
-    vData = _np.empty((b_len,1))*_np.nan
-    veData = _np.empty((b_len,1))*_np.nan
-    wData = _np.empty((b_len,1))*_np.nan
-    weData = _np.empty((b_len,1))*_np.nan
-    TData = _np.empty((b_len,1))*_np.nan
-    TeData = _np.empty((b_len,1))*_np.nan
-    iData = _np.empty((b_len,1))*_np.nan
-    ieData = _np.empty((b_len,1))*_np.nan
+    # allocate Arrays
+    uData  = _np.zeros((b_len,1))
+    ueData = _np.zeros((b_len,1))
+    vData  = _np.zeros((b_len,1))
+    veData = _np.zeros((b_len,1))
+    wData  = _np.zeros((b_len,1))
+    weData = _np.zeros((b_len,1))
+    TData  = _np.zeros((b_len,1))
+    TeData = _np.zeros((b_len,1))
+    iData  = _np.zeros((b_len,1))
+    ieData = _np.zeros((b_len,1))
+    aData  = _np.zeros((b_len,1))
     
     # Get Empty
     d = _BinnedData(dn,WMODEL)
@@ -455,44 +465,94 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,QUIET=False):
     if _np.nan in SITELLA:
         print 'Bad LLA'
         return
-    
-    # Fill Data
-    for tind,t in enumerate(times):
-        pt = _pyglow.Point(t.replace(year=dn.year,month=dn.month,day=dn.day),SITELLA[0],SITELLA[1],ALT)
-        if QUIET:
-            pt.kp = 0.0
-            pt.ap = pt.ap_daily
-        # Wind
-        if WMODEL.lower() == 'hwm93':
-            pt.run_hwm93()
-        elif WMODEL.lower() == 'hwm07':
-            pt.run_hwm07()
-        elif WMODEL.lower() == 'hwm14':
-            pt.run_hwm14()
-        else:
-            print 'Bad Wind Model'
-        uData[tind] = pt.u
-        ueData[tind] = 1.
-        vData[tind] = pt.v
-        veData[tind] = 1.
-        #wData[tind] = pt.w
-        #weData[tind] = 1.
+
+    # Altitudes
+    if WEIGHTED:
+        alts = range(100,450,25) # This has been tested and shows it is accurate as 1 km spacing
+    else:
+        alts = [ALT]
+        d.notes+= 'AG peak is set to '+ str(ALT) +'km'
+
+    # Lets see if we can use multicores:
+    if WEIGHTED and MULTICORE:
+        # Loop through all times
+        t_list = [t.replace(year=dn.year,month=dn.month,day=dn.day) for t in times]
+
+        # Prep multicores
+        singlemodel = _partial(_MPsinglemodel,ALTS=alts,SITELLA=SITELLA, \
+                WMODEL=WMODEL,TMODEL=TMODEL,QUIET=QUIET)
+        pool = _pool(processes=_n_cores)
+        results = pool.map(singlemodel,t_list)
+
+        # Unwrap results
+        for tind in range(b_len):
+            uData[tind]  = results[tind][0]
+            ueData[tind] = results[tind][1]
+            vData[tind]  = results[tind][2]
+            veData[tind] = results[tind][3]
+            TData[tind]  = results[tind][4]
+            TeData[tind] = results[tind][5]
+            iData[tind]  = results[tind][6]
+            ieData[tind] = results[tind][7]
+            aData[tind]  = results[tind][8]
+
+        pool.close()
+        pool.join()
+
+    else:
+        # Faux model
+        #ag6300 = Fmodel('high') #high 
         
-        # Temp
-        if TMODEL.lower() == 'msis':
-            pt.run_msis()
-            TData[tind] = pt.Tn_msis
-        elif WMODEL.lower() == 'iri':
-            pt.run_iri()
-            TData[tind] = pt.Tn_iri
-        else:
-            print 'Bad Temp Model'
-        TeData[tind] = 1.
-    
-        # Intensity
-        pt.run_airglow()
-        iData[tind] = pt.ag6300
-        ieData[tind] = 1.
+        # Fill Data
+        for tind,t in enumerate(times):
+            for aind,alt in enumerate(alts):
+                pt = _pyglow.Point(t.replace(year=dn.year,month=dn.month,day=dn.day),SITELLA[0],SITELLA[1],alt)
+                if QUIET:
+                    pt.kp = 0.0
+                    pt.ap = pt.ap_daily
+        
+                # Intensity
+                pt.run_airglow() #FIX THIS AFTER ANALYSIS
+                #pt.ag6300 = ag6300[aind]
+                iData[tind] += pt.ag6300
+                ieData[tind] += 1.
+
+                # Wind
+                if WMODEL.lower() == 'hwm93':
+                    pt.run_hwm93()
+                elif WMODEL.lower() == 'hwm07':
+                    pt.run_hwm07()
+                elif WMODEL.lower() == 'hwm14':
+                    pt.run_hwm14()
+                else:
+                    print 'Bad Wind Model'
+                uData[tind] += pt.u*pt.ag6300
+                ueData[tind] += 1.
+                vData[tind] += pt.v*pt.ag6300
+                veData[tind] += 1.
+                #wData[tind] += pt.w*pt.ag6300
+                #weData[tind] += 1.
+                
+                # Temp
+                if TMODEL.lower() == 'msis':
+                    pt.run_msis()
+                    TData[tind] += pt.Tn_msis*pt.ag6300
+                elif WMODEL.lower() == 'iri':
+                    pt.run_iri()
+                    TData[tind] += pt.Tn_iri*pt.ag6300
+                else:
+                    print 'Bad Temp Model'
+                TeData[tind] += 1.
+                
+                # Altitude
+                aData[tind] += alt*pt.ag6300
+
+            # Get profile-weighted average
+            uData[tind] = uData[tind]/iData[tind]
+            vData[tind] = vData[tind]/iData[tind]
+            #wData[tind] = wData[tind]/iData[tind]
+            TData[tind] = TData[tind]/iData[tind]
+            aData[tind] = aData[tind]/iData[tind]
 
     # Save Averages
     d.u = uData[:,0]
@@ -510,13 +570,100 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,QUIET=False):
     d.i = iData[:,0]
     d.ie = ieData[:,0]
     d.ic = _np.ones([len(times)])
+    d.alts = aData[:,0]
     d.doabarrelroll()
     
     return d
         
         
+def _MPsinglemodel(T,ALTS,SITELLA,WMODEL,TMODEL,QUIET):
+    '''
+    Summary:
+        Returns Model results for a single time. (Multicore Code)
 
-def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[0,10],CV=True,QF=1,VERBOSE=True):
+    Inputs:
+        T = datetime to use
+        ALTS = list of altitudes to use
+        SITELLA = site latitude, longitude, altitude
+        WMODEL = name of wind model, e.g. 'hwm93'
+        TMODEL = name of temp model [default = 'msis']
+        QUIET = flag to set Kp=0 and Ap=Ap_daily [default = False]
+
+    Outputs:
+        uData,ueData,vData,veData,TData,TeData,iData,ieData,aData
+            = u,v,T,i,and alt values and uncertainty
+
+    History:
+        5/03/16 -- Created by DJF (dfisher2@illinois.edu)
+    '''
+    # allocate incrementers
+    uData  = 0
+    ueData = 0
+    vData  = 0
+    veData = 0
+    wData  = 0
+    weData = 0
+    TData  = 0
+    TeData = 0
+    iData  = 0
+    ieData = 0
+    aData  = 0
+
+    for aind,alt in enumerate(ALTS):
+        pt = _pyglow.Point(T,SITELLA[0],SITELLA[1],alt)
+        if QUIET:
+            pt.kp = 0.0
+            pt.ap = pt.ap_daily
+    
+        # Intensity
+        pt.run_airglow() #FIX THIS AFTER ANALYSIS
+        #pt.ag6300 = ag6300[aind]
+        iData += pt.ag6300
+        ieData += 1.
+
+        # Wind
+        if WMODEL.lower() == 'hwm93':
+            pt.run_hwm93()
+        elif WMODEL.lower() == 'hwm07':
+            pt.run_hwm07()
+        elif WMODEL.lower() == 'hwm14':
+            pt.run_hwm14()
+        else:
+            print 'Bad Wind Model'
+        uData  += pt.u*pt.ag6300
+        ueData += 1.
+        vData  += pt.v*pt.ag6300
+        veData += 1.
+        #wData  += pt.w*pt.ag6300
+        #weData += 1.
+        
+        # Temp
+        if TMODEL.lower() == 'msis':
+            pt.run_msis()
+            TData += pt.Tn_msis*pt.ag6300
+        elif WMODEL.lower() == 'iri':
+            pt.run_iri()
+            TData += pt.Tn_iri*pt.ag6300
+        else:
+            print 'Bad Temp Model'
+        TeData += 1.
+        
+        # alt
+        aData += alt*pt.ag6300
+
+    # Get profile-weighted average
+    uData = uData/iData
+    vData = vData/iData
+    #wData = wData/iData
+    TData = TData/iData
+    aData = aData/iData
+
+    return(uData,ueData,vData,veData,TData,TeData,iData,ieData,aData)
+    
+    
+
+def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[0,10],CV=True,QF=1, \
+        VERBOSE=True,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIET=False):
     '''
     Summary:
         Returns filted and binned data over one month.
@@ -533,6 +680,10 @@ def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[
         CV = use CV modes [default = True]
         QF = Quality Flag Limit Allowed [default = 1]
         VERBOSE = Print information to stdout [default = True]
+        TMODEL = name of temp model [default = 'msis']
+        ALT = altitude of desired profile in km [default = 250]
+        WEIGHTED = flag to intensity weight winds [default = False]
+        QUIET = flag to set Kp=0 and Ap=Ap_daily [default = False]
 
     Outputs:
         DATA = dictionary of data whose keys are Zonal, Meridional, or Temp 
@@ -616,83 +767,81 @@ def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[
         if not(dl):
             print 'Doy List contains no days in desired month.'
 
-    for doy,yr in zip(dl,yl):
-        #print doy
+    # Make a site list
+    if SITE in ['renoir','peru','nation']:
+        nets = _fpiinfo.get_network_info(SITE).keys()
+        tots = _fpiinfo.get_all_sites_info()
+        sites = [x for x in nets if x in tots]
+    else:
+        sites = [SITE]
+    if 'hwm' in SITE:
+        mflag = True   
 
-        if SITE in ['renoir','peru','nation']:
-            nets = _fpiinfo.get_network_info(SITE).keys()
-            tots = _fpiinfo.get_all_sites_info()
-            sites = [x for x in nets if x in tots]
-        else:
-            sites = [SITE]
+    # Get inputs for multicores
+    doy_arg = [a for s in sites for a in dl]
+    yr_arg = [y for s in sites for y in yl]
+    s_arg = [s for s in sites for a in dl]
 
-        for s in sites:
-            if 'hwm' in s:
-                if len(SITELLA) == 0:
-                    raise ValueError('Need location for model')
-                DD = GetModels(SITELLA,YEAR,doy,s)
-                mflag = True
+    # Process all days using multicores
+    singleday = _partial(_MPsingleday,SPLIT=SPLIT,KP=KP,CV=CV,QF=QF, \
+            SITELLA=SITELLA,TMODEL=TMODEL,ALT=ALT,WEIGHTED=WEIGHTED,QUIET=QUIET)
+    pool = _Pool(processes=_n_cores)
+    results = pool.map(singleday,zip(s_arg,yr_arg,doy_arg))
 
-                # get F107 weighted at midnight of data (assume constant for night)
-                point = _pyglow.Point(DD.dn,0,0,250)
-                F107[count] = (point.f107 + point.f107a)/2.
+    # Unwrap results
+    for ind,doy in enumerate(doy_arg):
+        DD = results[ind][0]
+        F107[ind] = results[ind][1]
 
-            else:
-                DD = BinDailyData(s,yr,doy,SPLIT=SPLIT,KP=KP,CV=CV,QF=QF)
-                mflag = False
-                cards += DD.cards
-                cvs += DD.cvs
-                bads += DD.bads
+        # for printing stats
+        if not(mflag):
+            cards += DD.cards
+            cvs += DD.cvs
+            bads += DD.bads
 
-                # get F107 weighted at midnight of data (assume constant for night)
-                point = _pyglow.Point(DD.dn,0,0,250)
-                F107[count] = (point.f107 + point.f107a)/2.*(DD.cards+DD.cvs)
-
-            # Undo shift for easy averaging
-            DD.doabarrelroll()
-            # Debug, Overplot all Horizontal winds.
-            #_plt.plot(DD.t,DD.u)
-            
-            # Count days total used
-            if sum(_np.isfinite(DD.T)):
-                oscar.append(doy)
-            
-            if len(DD.lla) == 3:
-                lat.append(DD.lla[0])
-                lon.append(DD.lla[1])
-                alt.append(DD.lla[2])
-            # Add data
-            if len(DD.u) > 0:
-                uData[:,count] = DD.u
-                ueData[:,count] = DD.ue
-                uCount += DD.uc
-            if len(DD.v) > 0:
-                vData[:,count] = DD.v
-                veData[:,count] = DD.ve
-                vCount += DD.vc
-            if len(DD.w) > 0:
-                wData[:,count] = DD.w
-                weData[:,count] = DD.we
-                wCount += DD.wc
-            if len(DD.T) > 0:
-                TData[:,count] = DD.T
-                TeData[:,count] = DD.Te
-                TCount += DD.Tc
-            if len(DD.i) > 0:
-                iData[:,count] = DD.i
-                ieData[:,count] = DD.ie
-                iCount += DD.ic
-            if SPLIT and not(mflag) and len(DD.u2) > 0:
-                u2Data[:,count] = DD.u2
-                u2eData[:,count] = DD.u2e
-                u2Count += DD.u2c
-            if SPLIT and not(mflag) and len(DD.v2) > 0:
-                v2Data[:,count] = DD.v2
-                v2eData[:,count] = DD.v2e
-                v2Count += DD.v2c
-
-            count += 1
-    
+        # Undo shift for easy averaging
+        DD.doabarrelroll()
+        
+        # Count days total used
+        if sum(_np.isfinite(DD.T)):
+            oscar.append(doy)
+        # Average Location 
+        if len(DD.lla) == 3:
+            lat.append(DD.lla[0])
+            lon.append(DD.lla[1])
+            alt.append(DD.lla[2])
+        # Add data
+        if len(DD.u) > 0:
+            uData[:,count] = DD.u
+            ueData[:,count] = DD.ue
+            uCount += DD.uc
+        if len(DD.v) > 0:
+            vData[:,count] = DD.v
+            veData[:,count] = DD.ve
+            vCount += DD.vc
+        if len(DD.w) > 0:
+            wData[:,count] = DD.w
+            weData[:,count] = DD.we
+            wCount += DD.wc
+        if len(DD.T) > 0:
+            TData[:,count] = DD.T
+            TeData[:,count] = DD.Te
+            TCount += DD.Tc
+        if len(DD.i) > 0:
+            iData[:,count] = DD.i
+            ieData[:,count] = DD.ie
+            iCount += DD.ic
+        if SPLIT and not(mflag) and len(DD.u2) > 0:
+            u2Data[:,count] = DD.u2
+            u2eData[:,count] = DD.u2e
+            u2Count += DD.u2c
+        if SPLIT and not(mflag) and len(DD.v2) > 0:
+            v2Data[:,count] = DD.v2
+            v2eData[:,count] = DD.v2e
+            v2Count += DD.v2c
+    pool.close()
+    pool.join()
+        
     # Get count of days used in each bin
     uDays = dim - sum(_np.isnan(uData.T))
     uDays = [_np.nan if x<dimset else x for x in uDays]
@@ -709,60 +858,6 @@ def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[
         u2Days = [_np.nan if x<dimset else x for x in u2Days]
         v2Days = dim - sum(_np.isnan(v2Data.T))
         v2Days = [_np.nan if x<dimset else x for x in v2Days]
-    '''
-    ## Weighted Mean & Statistical Variance of Winds
-    #### UPDATE PLEASE OR REMOVE dfj ####
-    # Zonal
-    uD,uDe,uV,uVe = WeightedAverage(uData,ueData,uDays)
-    # Meridional
-    vD,vDe,vV,vVe = WeightedAverage(vData,veData,vDays)
-    # Vert            
-    wD,wDe,wV,wVe = WeightedAverage(wData,weData,wDays)
-    #  Temps
-    TD,TDe,TV,TVe = WeightedAverage(TData,TeData,TDays)
-    if SPLIT and not(mflag):
-        # Zonal2 - West
-        u2D,u2De,u2V,u2Ve = WeightedAverage(u2Data,u2eData,u2Days)
-        # Meridional2 - South
-        v2D,v2De,v2V,v2Ve = WeightedAverage(v2Data,v2eData,v2Days)
-        
-    # Save Averages
-    d.lla = _np.array([_np.nanmean(lat),_np.nanmean(lon),_np.nanmean(alt)])
-    d.u  = uD
-    d.ue = uDe
-    d.uv = uV
-    d.uve= uVe
-    d.uc = ucount
-    d.v  = vD
-    d.ve = vDe
-    d.vv = vV
-    d.vve= vVe
-    d.vc = vcount
-    d.w  = wD
-    d.we = wDe
-    d.wv = wV
-    d.wve= wVe
-    d.wc = wcount
-    d.T  = TDdoabarr
-    d.Te = TDe
-    d.Tv = TV
-    d.Tve= TVe
-    d.Tc = Tcount
-    if SPLIT and not(mflag):
-        d.u2  = u2D
-        d.u2e = u2De
-        d.u2v = u2V
-        d.u2ve= u2Ve
-        d.u2c = u2count
-        d.v2  = v2D
-        d.v2e = v2De
-        d.v2v = v2V
-        d.v2ve= v2Ve
-        d.v2c = v2count
-    d.cards = cards
-    d.cvs = cvs
-    d.daysused = _np.unique(oscar)
-    '''
     
     # Zonal
     uD,uDe,uV,uVe,uV2,uU,u16,u25,u50,u75,u84 = WeightedAverage(uData,ueData,uDays,test=True)
@@ -780,7 +875,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[
         # Meridional2 - South
         v2D,v2De,v2V,v2Ve,v2V2,v2U,v216,v225,v250,v275,v284 = WeightedAverage(v2Data,v2eData,v2Days,test=True)
     # F107
-    if 'hwm' in SITE:
+    if mflag:
         d.f107 = _np.nanmean(F107)
     else:
         d.f107 = _np.nansum(F107)/(cards+cvs)
@@ -901,6 +996,57 @@ def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[
 
     return d
 
+
+def _MPsingleday(SITE_YEAR_DOY,SPLIT,KP,CV,QF,SITELLA,TMODEL,ALT,WEIGHTED,QUIET):
+    '''
+    Summary:
+        Returns Daily results for a single time. (Multicore Code)
+
+    Inputs:
+        SITE_YEAR_DOY = tuple of the following variable inputs:
+            SITE = sites of interest, e.g. 'UAO'
+            YEAR = year, e.g. 2013
+            DOY = day of year, e.g. 47 
+        SPLIT = Split look directions in binning [default = False]
+        KP = Filter days by KP [default = [0,10] - all kp]
+        CV = use CV modes [default = True]
+        QF = Quality Flag Limit Allowed [default = 1]
+        SITELLA = site location array for model run [lat,lon,alt_km]
+        TMODEL = name of temp model [default = 'msis']
+        ALT = altitude of desired profile in km [default = 250]
+        WEIGHTED = flag to intensity weight winds [default = True]
+        QUIET = flag to set Kp=0 and Ap=Ap_daily [default = False]
+
+    Outputs:
+        DD = Daily Data binned object
+        F107 = Weighted average F107 value
+
+    History:
+        5/03/16 -- Written by DJF (dfisher2@illinois.edu)
+    '''
+    
+    site = SITE_YEAR_DOY[0]
+    year = SITE_YEAR_DOY[1]
+    doy  = SITE_YEAR_DOY[2]
+
+    if 'hwm' in site:
+        if len(SITELLA) == 0:
+            raise ValueError('Need location for model')
+        DD = GetModels(SITELLA,year,doy,site,TMODEL=TMODEL,ALT=ALT, \
+                WEIGHTED=WEIGHTED,QUIET=QUIET,MULTICORE=False)
+
+        # get F107 weighted at midnight of data (assume constant for night)
+        point = _pyglow.Point(DD.dn,0,0,250)
+        F107  = (point.f107 + point.f107a)/2.
+
+    else:
+        DD = BinDailyData(site,year,doy,SPLIT=SPLIT,KP=KP,CV=CV,QF=QF)
+
+        # get F107 weighted at midnight of data (assume constant for night)
+        point = _pyglow.Point(DD.dn,0,0,250)
+        F107 = (point.f107 + point.f107a)/2.*(DD.cards+DD.cvs)
+
+    return(DD,F107)
 
 
 def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=True,QF=1):
@@ -2256,6 +2402,7 @@ class _BinnedData:
         self.we = _np.array([])
         self.cards = _np.array([])
         self.cvs = _np.array([])
+        self.alts = _np.array([])
         self.barrelroll = False
         try:
             self.project = _fpiinfo.get_site_info(site)['Network']
@@ -2338,6 +2485,8 @@ class _BinnedData:
         if len(self.we) > 0:
             self.we = self.we[inds]
 
+        if len(self.alts) > 0:
+            self.alts = self.alts[inds]
         return
 
     def plot(self, ):
@@ -2557,9 +2706,42 @@ class _BinnedData:
             self.v250 = _np.roll(self.v250,roll)
             self.v275 = _np.roll(self.v275,roll)
             self.v284 = _np.roll(self.v284,roll)
+        if 'alts' in ship:
+            self.alts = _np.roll(self.alts,roll)
 
         self.barrelroll = not(self.barrelroll)
 
+
+def Fmodel(alt):
+    if alt == 'low':
+        I = _np.array([  5.06418555e-03,   7.62262367e-02,   2.14749952e-01,
+         7.10616738e-01,   4.24115694e+00,   1.21130929e+01,
+         2.33331242e+01,   3.66930898e+01,   4.96704125e+01,
+         6.03619918e+01,   6.76137501e+01,   6.99566064e+01,
+         6.75471181e+01,   6.08025617e+01,   5.09384481e+01,
+         3.97066263e+01,   2.90465369e+01,   2.02525010e+01,
+         1.35646248e+01,   8.79761558e+00,   5.56633141e+00,
+         3.45744137e+00,   2.11893554e+00,   1.28634246e+00,
+         7.75816903e-01,   4.65893631e-01,   2.79036067e-01,
+         1.66887886e-01,   9.97671079e-02,   5.96550439e-02,
+         3.56951975e-02,   2.13787319e-02,   1.28162554e-02,
+         7.68889240e-03,   4.61638986e-03])
+    
+    else:
+        I = _np.array([  1.44081159e-05,   8.83926779e-05,   1.27263641e-04,
+         7.36075573e-05,   9.90717128e-05,   3.63936919e-04,
+         1.98858524e-03,   9.39907652e-03,   2.28516541e-02,
+         5.42699454e-02,   1.24256301e-01,   2.67943707e-01,
+         5.32377200e-01,   9.91877921e-01,   1.86133711e+00,
+         2.92154760e+00,   3.94768407e+00,   4.74275538e+00,
+         5.14625962e+00,   5.09574669e+00,   4.64812608e+00,
+         3.94232931e+00,   3.13760163e+00,   2.36386464e+00,
+         1.70026491e+00,   1.17773166e+00,   7.93875516e-01,
+         5.26460626e-01,   3.44716146e-01,   2.23383810e-01,
+         1.43556192e-01,   9.16578054e-02,   5.82416262e-02,
+         3.68875799e-02,   2.33177794e-02])
+        
+    return(I)
 
 
 if __name__=="__main__":
