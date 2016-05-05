@@ -71,6 +71,7 @@ def calc_1356_nighttime(lat,lon,alt,dn,Ne_scaling = 1.,testing=0):
         12-Dec-2014: Written by Dimitrios Iliou (iliou2@illinois.edu)
         13-Jul-2015: Add O as return value
         02-Sep-2015: Add testing input
+        14-Sep-2015: Assumed Ne==Op or testing reasons.
     CALLS:
         Pyglow: IRI-MSIS
     '''
@@ -81,7 +82,7 @@ def calc_1356_nighttime(lat,lon,alt,dn,Ne_scaling = 1.,testing=0):
     k1 = 1.3e-15    # radiative attachment rate (cm^3/s)
     k2 = 1e-7       # ion-ion neutralization rate (cm^3/s)
     k3 = 1.4e-10    # ion-atom neutralization rate (cm^3/2)
-    
+
     if testing==0:
         # Run pyglow at the requested location and time.  IRI and MSIS calls are needed to generate
         # model outputs of needed constituents
@@ -96,10 +97,12 @@ def calc_1356_nighttime(lat,lon,alt,dn,Ne_scaling = 1.,testing=0):
         Ne = Ne*Ne_scaling # scale Ne
 
         # Calcualte radiative recombination (equation 17) and mutual neutralization (equation 18)
-        RR = a1356*Ne*O_p  # radiatvie recombination (1/cm^3/s)
-        MN  = (b1356*(k1*k2)) *((Ne*O*O_p)/(k2*O_p + k3*O)) # mutual neutralization (1/cm^3/s)
+        #RR = a1356*Ne*O_p  # radiatvie recombination (1/cm^3/s)
+        #MN  = (b1356*(k1*k2)) *((Ne*O*O_p)/(k2*O_p + k3*O)) # mutual neutralization (1/cm^3/s)
+        RR = a1356*Ne**2  # radiatvie recombination (1/cm^3/s)
+        MN  = (b1356*(k1*k2)) *((Ne**2*O)/(k2*Ne + k3*O)) # mutual neutralization (1/cm^3/s)
     else:
-        Ne = 10**6*np.exp(-(alt-350)**2/100**2)
+        Ne = 1.6657129144319999*10**6*np.exp(-(alt-350)**2/100**2)
         # Calcualte radiative recombination (equation 17) and mutual neutralization (equation 18)
         RR = a1356*Ne**2  # radiatvie recombination (1/cm^3/s)
         MN = 0
@@ -107,7 +110,7 @@ def calc_1356_nighttime(lat,lon,alt,dn,Ne_scaling = 1.,testing=0):
         
     return RR,MN,Ne,O
 
-def calculate_VER_1356_nighttime(satlat,satlon,satalt,dn,Ne_scaling = 1.,testing = 0):
+def calculate_VER_1356_nighttime(satlat,satlon,satalt,dn,Ne_scaling = 1.,testing = 0,cont =2):
     '''
     Step along a desired look direction from a given observing location and
     calculate the 135.6-nm intensity. Lines-of-sight are calculated using a spherical earth.
@@ -118,6 +121,7 @@ def calculate_VER_1356_nighttime(satlat,satlon,satalt,dn,Ne_scaling = 1.,testing
         dn          - UT date and time to be run (datetime)
         Ne_scaling  - Scaling factor for Ne [default 1 => No scaling]
         Testing     - Flag indicate using a Gaussian Ne instead of IRI [0: Pyglow, 1: Gaussian]
+        cont        - contribution factors, cont=1 -> RR+MN, 2-> RR
     OUTPUTS:
         VER         - A VER altitude profile for given lat/lon coords
         Ne          - A Electron density altitude profile for given lat/lon coords
@@ -128,6 +132,7 @@ def calculate_VER_1356_nighttime(satlat,satlon,satalt,dn,Ne_scaling = 1.,testing
         08-Jul-2015: Added check for satalt scalar values (Dimitrios Iliou)
         13-Jul-2015: Add O to calc_1356_nighttime to have O tanget altitude profile
         02-Sep-2015: Add testing input - Gaussian Ne instead of IRI
+        10-Sep-2015: Add the contribution parameter as an input.
     CALLS:
         - calc_1356_nighttime
     '''
@@ -144,7 +149,10 @@ def calculate_VER_1356_nighttime(satlat,satlon,satalt,dn,Ne_scaling = 1.,testing
         for i in range(0,np.size(satalt)):
             VER[i],MN[i],NE[i],O[i]= calc_1356_nighttime(satlat,satlon,satalt[i],dn,Ne_scaling,testing)
 
-    VER_true = VER + MN
+    if cont == 1:
+        VER_true = VER + MN
+    else:
+        VER_true = VER
 
     return VER_true, VER,MN, NE, O
 
@@ -499,6 +507,7 @@ def add_noise_to_photon_and_brightness(photons,exposure=0.,TE=0.,stripes_used = 
     HISTORY:
         12-Dec-2015: Written by Dimitrios Iliou (iliou2@illinois.edu) 
         01-Apr-2015: pixels_per_rescell -> stripes used 
+        08-Oct-2015: changed the svs.poisson. removed the second argument
     '''
     
      # Load default FUV parameters in case are not given in the input
@@ -524,13 +533,14 @@ def add_noise_to_photon_and_brightness(photons,exposure=0.,TE=0.,stripes_used = 
                 shot_noise[rep,i]
                 print 'add_noise_to_photon_and_brighntess: zero value in signal'
             else:
-                shot_noise[rep,i] = stats.poisson.rvs(photons[i],1)
+                #shot_noise[rep,i] = stats.poisson.rvs(photons[i],1)
+                shot_noise[rep,i] = stats.poisson.rvs(photons[i])
 
         Rayl_[rep,:] = shot_noise[rep,:]/(TE*exposure*stripes_used)
     
     return Rayl_,shot_noise
 
-def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=1, exp=12,reps=1000,sens=0,cont=2,testing = 0,Ne_sc=1.,step=10,total_distance = 5000.,stripes_used=0,proc=16):
+def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=1, exp=12,reps=1000,sens=0,cont=2,testing = 0,Ne_sc=1.,step=10,total_distance = 6000.,stripes_used=0,proc=16,low_ta = 150.):
     '''
     Top forward model modules. Creates brightness profile and adds noise returning the noisy Brighntess profile(s) to 
     be used for the inversion process. 
@@ -550,7 +560,8 @@ def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=
         step         - resolution of the integration along the line of sight (km, default = 10 km)
         total_distance - length of the projected line for each raypath(km).
         stripes_used - number of stripes used of the CCD [default 1] [if zero on input loads default value]
-        proc         - Number of cores used for multiprocessing [default 16 cores]        
+        proc         - Number of cores used for multiprocessing [default 16 cores]  
+        low_ta       - Lower tangent altitude that we need to consider for our measurements (km)[default = 150 km :limb, for sublimb we can put -500 to cover all zenith]      
     OUTPUT:
         NE           - Electron Density profile corresponding the the specified datetime and tangent altitude (cm^-3)
         Bright       - Brightness profile (Rayleigh)
@@ -581,6 +592,7 @@ def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=
         02-Sep-2015: Add testing input - Gaussian Ne instead of IRI
         03-Sep-2015: Added find_mid_cell function and fixed outputs to contain mid, bot vectors for both Spherical and Ellipsoid earth.
         04-Sep-2015: Add total_distance input - goes to the WGS84 raypath calculations
+        25-Jan-2016: Add low_ta
     CALLS:
         -angle2tanht
         -ICON.tangent_point
@@ -653,67 +665,75 @@ def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=
     az_v = az_v[0:disk]
     
     '''
-    
-    h,rbot,_,h_loc_bot,h_loc = find_mid_cell(satlatlonalt,ze,az,shperical,130.)
-    
-    ze = ze[0:len(h)]
-    az = az[0:len(h)]
-    
-    ze_v = ze_v[0:len(h)]
-    az_v = az_v[0:len(h)]
+    try:
+        h,rbot,_,h_loc_bot,h_loc = find_mid_cell(satlatlonalt,ze,az,shperical,low_ta)
+        #h,rbot,_,h_loc_bot,h_loc = find_mid_cell(satlatlonalt,ze,az,shperical,150.)
         
-    # Initialize vectors
-    photons = np.zeros(np.size(ze_v)) # Number of Counts without Noise
-    Bright = np.zeros(np.size(ze_v))
-    #Bright_n = np.zeros(np.size(ze_v))
-    Counts = np.zeros(np.size(ze_v)) # Number of Counts with Noise    
+        ze = ze[0:len(h)]
+        az = az[0:len(h)]
+        
+        ze_v = ze_v[0:len(h)]
+        az_v = az_v[0:len(h)]
+            
+        # Initialize vectors
+        photons = np.zeros(np.size(ze_v)) # Number of Counts without Noise
+        Bright = np.zeros(np.size(ze_v))
+        #Bright_n = np.zeros(np.size(ze_v))
+        Counts = np.zeros(np.size(ze_v)) # Number of Counts with Noise    
 
-    '''
-    Multicore Processing for Calculate Brighness
-    '''
-    ### ___ I NEED TO ADD THE SPHERICAL THING HERE
+        '''
+        Multicore Processing for Calculate Brighness
+        '''
+        ### ___ I NEED TO ADD THE SPHERICAL THING HERE
 
-    # Takes s/c coordinates as input for poing location to calculate the brightness profile. This must change to tan. point
-    if (shperical==0):
-        Bright,photons = get_Photons_from_Brightness_Profile_1356_nighttime(ze_v,az_v,satlat,satlon,satalt,date,symmetry,shperical,exp,testing,cont,sens,Ne_sc,step,total_distance,stripes_used,proc)
-    else:
-        Bright,photons = get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satalt,date,symmetry,shperical,exp,testing,cont,sens,Ne_sc,step,total_distance,stripes_used,proc)
-    
-    '''
-    Calculate Noisy Counts
-    reps determines the number of noise profiles that the function will produce
-    '''
-    Bright_n= np.zeros((reps,np.size(ze_v)))
-    Bright_n,Counts = add_noise_to_photon_and_brightness(photons,exp,sens,stripes_used,reps)
-    Bright_n = np.transpose(Bright_n)
-
-    Sigma = np.diag(1/np.sqrt(photons))
-    
-    '''
-    Caclulate VER 
-    '''    
-    VER_true = np.zeros(np.size(h,0))
-    MN = np.zeros(np.size(h,0))
-    VER = np.zeros(np.size(h,0))
-    NE = np.zeros(np.size(h,0))
-    O = np.zeros(np.size(h,0))
-
-    '''
-    Calculates fixed NE for location 0,0 (S/C location)-> Needs to be changed for the WGS84 case where each tangent
-    point has different lat and lon.
-    '''
-    if (shperical==0):
-        VER_true,VER,MN,NE,O = calculate_VER_1356_nighttime(satlat,satlon,h,date,1,1)
-        h_coord = 0
-    else:
-        if symmetry == 0:
-            VER_true,_,_,NE,O = calculate_VER_1356_nighttime(satlat,satlon,h,date,1,1)
+        # Takes s/c coordinates as input for poing location to calculate the brightness profile. This must change to tan. point
+        if (shperical==0):
+            Bright,photons = get_Photons_from_Brightness_Profile_1356_nighttime(ze_v,az_v,satlat,satlon,satalt,date,symmetry,shperical,exp,testing,cont,sens,Ne_sc,step,total_distance,stripes_used,proc)
         else:
-            for i in range(0,len(h)):
-                VER_true[i],_,_,NE[i],O[i] = calculate_VER_1356_nighttime(h_loc[0,i,0],h_loc[0,i,1],h_loc[0,i,2],date,1,1)
+            Bright,photons = get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satalt,date,symmetry,shperical,exp,testing,cont,sens,Ne_sc,step,total_distance,stripes_used,proc)
+        
+        '''
+        Calculate Noisy Counts
+        reps determines the number of noise profiles that the function will produce
+        '''
+        Bright_n= np.zeros((reps,np.size(ze_v)))
+        Bright_n,Counts = add_noise_to_photon_and_brightness(photons,exp,sens,stripes_used,reps)
+        Bright_n = np.transpose(Bright_n)
 
+        Sigma = np.diag(1/np.sqrt(photons))
+        
+        '''
+        Caclulate VER 
+        '''    
+        VER_true = np.zeros(np.size(h,0))
+        MN = np.zeros(np.size(h,0))
+        VER = np.zeros(np.size(h,0))
+        NE = np.zeros(np.size(h,0))
+        O = np.zeros(np.size(h,0))
+
+        '''
+        Calculates fixed NE for location 0,0 (S/C location)-> Needs to be changed for the WGS84 case where each tangent
+        point has different lat and lon.
+        '''
+        if (shperical==0):
+            VER_true,VER,MN,NE,O = calculate_VER_1356_nighttime(satlat,satlon,h,date,Ne_sc,testing,cont)
+            h_coord = 0
+        else:
+            if symmetry == 0:
+                VER_true,_,_,NE,O = calculate_VER_1356_nighttime(satlat,satlon,h,date,Ne_sc,testing,cont)
+            else:
+                for i in range(0,len(h)):
+                    VER_true[i],_,_,NE[i],O[i] = calculate_VER_1356_nighttime(h_loc[i,0],h_loc[i,1],h_loc[i,2],date,Ne_sc,testing,cont)
+
+        
+    except Exception:
+        print "Something Happened :("
+        print type(inst)
+        print inst
+        exit(1) 
     return NE,Bright,Bright_n,h,rbot,O,VER_true,h_loc,h_loc_bot,Sigma
-
+    
+    
 def get_azze_default():
     '''
     Load the default fov parameters for FUV and calculates ze and az by evenly distributing the FOV over the size
@@ -752,7 +772,7 @@ def get_azze_default():
 
 def decs(x, pos, sc = 1e-5):
     'The two args are the value and tick position'
-    return '%1.f' % (x*sc)
+    return '%2.1f' % (x*sc)
 
 def find_mid_cell(satlatlonalt,ze,az,spherical,limb = 130.):
     '''
@@ -786,7 +806,7 @@ def find_mid_cell(satlatlonalt,ze,az,spherical,limb = 130.):
         h_loc_bot = 0
         h_loc_mid = 0
     else:
-        # Tangent_poing function returns coordinates [lat-lon-lat] for the tangent point
+        # Tangent_poing function returns coordinates [lat-lon-alt] for the tangent point
         h_coord = np.zeros((len(ze),3))
        
         for i in range(0,len(ze)):
