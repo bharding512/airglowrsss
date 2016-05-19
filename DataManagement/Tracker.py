@@ -5,6 +5,7 @@ Email if lacking checkfile for a day or two...
 Email if disc space on a computer is low...
 
 History: 26 Feb 2014 - initial script written
+         17 May 2015 - added log for internet
 
 Written by Daniel J. Fisher (dfisher2@illinois.edu)
 '''
@@ -28,11 +29,17 @@ if __name__=="__main__":
     # Set warning limits
     hoursback = 27  # Must be slightly longer than 24 hrs - allows transfer time to be sluggish. Probably less than 30 hrs so warnings don't come after we've left work.
     diskfree = 5    # GB remaining. Some drives are 1TB, others are 20GB. Some systems use 100MB a day, others 1GB. So 5 seems acceptable.  Currently you must manually run code to get space.
-    
+ 
     #locations
     tracking = '/rdata/airglow/rx/tracking/'
     rx = '/rdata/airglow/rx/'
     scripts = '/home/airglow/DataManagementRO/'
+
+    # Setup log file
+    logfile = '/home/airglow/public_html/Tracker.log'
+    log = open(logfile,'r+')
+    log.seek(0)
+
     os.chdir(tracking)
     os.system('chmod 770 *')
     os.chdir(rx)
@@ -45,7 +52,7 @@ if __name__=="__main__":
         for instr in code[site].keys():
             for num in code[site][instr].keys():
                 name = instr+num+'_'+site
-                
+
                 # Email list
                 emails = code[site][instr][num]['email']
 
@@ -78,7 +85,7 @@ if __name__=="__main__":
                         info = open(rx+files[-1], 'r')
                     info.readline()
                     info.readline()
-                    info.readline()
+                    sz = float(info.readline())
                     time = dt.datetime.strptime(info.readline()[:19],'%Y-%m-%d %H:%M:%S')
                     df = float(info.readline())
                     info.close()
@@ -100,4 +107,8 @@ if __name__=="__main__":
                         except:
                             Emailer.emailerror(emails,subject,'There are %3.2f GB remaining on the drive. You may want to free some space soon...\nCreate list script first.' % df)
                     
-                
+                    # Log site, instrument, number, Size last file, spacefree, and hours since last data
+                    log.write("%s,%s,%s,%i,%i,%3.2f\n"%(site.upper(),instr.upper(),num,sz,df,age))
+
+    log.truncate()
+    log.close()                
