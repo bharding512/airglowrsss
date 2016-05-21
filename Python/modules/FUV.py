@@ -1,6 +1,7 @@
 import ICON as ic
 from datetime import datetime, timedelta
 from scipy import optimize
+from scipy.linalg import sqrtm
 import numpy as np
 import math
 from scipy.io import netcdf
@@ -500,7 +501,7 @@ def MAP_Estimation(S,Bright,VER_mean=0.,VER_reshape=0.):
     #maxvar = max(W_var)*10
     #W_var[:] = maxvar
     
-    # Create Diagonal matrix of the VER variances.
+    # Create Diagonal matrix of the Brightness variances.
     Rw = np.diag(W_var)
 
      # Load VER priors
@@ -517,19 +518,31 @@ def MAP_Estimation(S,Bright,VER_mean=0.,VER_reshape=0.):
     VER_var = np.cov(VER_reshape);
     Rx_ver = VER_var
     
+    
+    covd12=sqrtm(np.linalg.inv(Rw));
+    covm12=sqrtm(np.linalg.inv(Rx_ver));
+
+    A = np.concatenate((covd12.dot(S), covm12), axis=0)
+
+    rhs= np.concatenate((covd12.dot(Bright), covm12.dot(VER_mean)), axis=0)
+
+    VER = np.linalg.pinv(A).dot(rhs)
+    # Check if the values of the VER are negative. 
+
+    
     # Close the data
     #data.close()
     
     # Calculations for the MAP Estimation
     #Rx_map = np.linalg.inv(np.linalg.inv(Rx_ver) +np.dot(np.transpose(S), np.dot(np.linalg.inv(Rw),S)))
-    Rx_map = np.linalg.inv(np.linalg.inv(Rx_ver) +np.dot(np.transpose(S), np.dot(np.linalg.inv(Rw),S)))
+    #Rx_map = np.linalg.inv(np.linalg.inv(Rx_ver) +np.dot(np.transpose(S), np.dot(np.linalg.inv(Rw),S)))
 
 
     #b = np.dot(np.dot(np.transpose(S),np.linalg.inv(Rw)),Bright)
     #b = np.dot(np.transpose(S),np.dot(np.linalg.inv(Rw),Bright))
-    b = np.dot(np.transpose(S),np.dot(np.linalg.inv(Rw),(Bright-np.dot(S,VER_mean))))
+    #b = np.dot(np.transpose(S),np.dot(np.linalg.inv(Rw),(Bright-np.dot(S,VER_mean))))
 
-    VER = np.dot(Rx_map,b)+VER_mean
+    #VER = np.dot(Rx_map,b)+VER_mean
     
     # Check if the values of the VER are negative. 
     for i in range(0,np.size(VER)):
