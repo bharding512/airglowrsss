@@ -1432,8 +1432,19 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
                                    'b2': 7.130e-02, 
                                'center':  (266.3, 265.7),
                               }
-
-    
+    # On Aug 4, 2015, the CAR FPI was rebuilt with parts from the CAJ FPI.
+    if instr_name=='minime01' and dn > datetime.datetime(2015,8,4):
+        instrument['default_params'] = {# instrument params to be used if the laser fails (i.e., zenith reference)
+                            'R': 6.959e-01,
+                        'alpha': 8.671e-05,
+                            'I': 1.0,
+                            'B': 0.0,
+                           'a1': -1.804e-02,
+                           'a2': -1.504e-02,
+                           'b0': 5.965e-01,
+                           'b1': 1.238e-02,
+                           'b2': 6.030e-02, 
+                       'center':  (275.05, 261.21),
     return instrument
 
 def get_all_instr_names():
