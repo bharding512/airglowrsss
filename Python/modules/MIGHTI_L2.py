@@ -11,7 +11,12 @@ from scipy import integrate
 
 def get_emission_constants():
     '''
-    The physical emission constants needed for the MIGHTI L2.1 analysis
+    The physical emission constants needed for the MIGHTI L2.1 analysis.
+    INPUTS:
+        none
+    OUTPUTS:
+        emissions --TYPE:dict, dictionary of red and green emission
+                         parameters. (see below)
     '''
 
     emissions = {'green': {'mass': 16., # atomic mass of emitting specie [amu]
@@ -42,10 +47,10 @@ def get_instrument_constants(emission_color):
     
     # Set phase offset and zero phase depending on the color.
     # Zero phase:    The phase measurement which corresponds to a wind of zero.
-    #                This needs to be found empirically.
+    #                This needs to be found empirically.  ### JJM in rad?
     # Phase offset:  This constant is added to all phases so that there is no chance of a pi/-pi crossover.
     #                In practice, we'll have to see how the interferometer turns out before deciding on this.
-    #                Changing this will require an equal change in zero_phase (already implemented below).
+    #                Changing this will require an equal change in zero_phase (already implemented below). ### JJM in rad?
     # TODO: How will this be done in practice, and what's the best way to hand off from NRL to Illinois?
     if emission_color == 'red':
         phase_offset = 2.309731
@@ -64,8 +69,8 @@ def get_instrument_constants(emission_color):
     # column-dependent values in some cases, such as satellite velocity removal.   
     c         = 299792458.0 # m/s, speed of light
     sigma     = 1.0/emission['lam']
-    meanopd   = (start_path + end_path) / 2
-    phase_to_wind_factor = c / (2*np.pi*sigma) * 1/meanopd
+    meanopd   = (start_path + end_path) / 2     ### JJM 2->2.?
+    phase_to_wind_factor = c / (2*np.pi*sigma) * 1/meanopd   ### JJM 2->2., 1->1.?  This appears to be v/dphi, yes?  Why is meanopd treated outside of the second term?
 
     instr_params = { 'start_path': start_path,
                        'end_path': end_path,
@@ -95,7 +100,7 @@ def unwrap(x):
     xnew = np.zeros(len(x))
     xnew[0] = x[0]
     idx = dx < 0
-    dx[idx] = dx[idx] + 2*np.pi
+    dx[idx] = dx[idx] + 2*np.pi   ### JJM 2->2.?
     xnew[1:] = xnew[0] + np.cumsum(dx)
     return xnew
 
@@ -113,7 +118,7 @@ def circular_mean(angle0,angle1):
         angle   -- TYPE:float or array, UNITS:deg. The circular mean of the two
                    input angles.
     '''
-    return 180/np.pi*np.angle((np.exp(1j*angle0*np.pi/180.) + np.exp(1j*angle1*np.pi/180.))/2)
+    return 180/np.pi*np.angle((np.exp(1j*angle0*np.pi/180.) + np.exp(1j*angle1*np.pi/180.))/2) ### JJM 180->180., 2->2., use np.deg2rad instead of manually converting?
 
 
 
@@ -124,7 +129,7 @@ def tang_alt_to_ze(tang_alt, sat_alt, RE):
     altitude(s). Uses spherical Earth approximation.
     INPUTS:
         tang_alt -- TYPE:array or float, UNITS:km. Tangent altitude(s) of the ray(s)
-        sat_alt  -- TYPE:float,          UNITS:km. Satellite altitude (H > h)
+        sat_alt  -- TYPE:float,          UNITS:km. Satellite altitude (sat_alt > tang_alt)
         RE       -- TYPE:float,          UNITS:km. Effective radius of Earth
     OUTPUT:
         ze       -- TYPE:array or float, UNITS:deg. Zenith angle(s) of the ray(s)
@@ -136,7 +141,7 @@ def tang_alt_to_ze(tang_alt, sat_alt, RE):
     elif sat_alt <= tang_alt:
         raise Exception('Tangent altitude must be below satellite altitude')
         
-    ze = 180 - 180/np.pi*np.arcsin( (tang_alt+RE)/(sat_alt+RE) )
+    ze = 180 - 180/np.pi*np.arcsin( (tang_alt+RE)/(sat_alt+RE) )  ### JJM 180->180.?
     return ze
 
 
@@ -159,7 +164,7 @@ def ze_to_tang_alt(ze, sat_alt, RE):
             raise Exception('Angle must be between 90 and 180, exclusive.')
     elif ( ze < 90 ) or ( ze > 180):
         raise Exception('Angle must be between 90 and 180, exclusive.')
-    tang_alt = (sat_alt+RE)*np.sin(ze*np.pi/180.) - RE
+    tang_alt = (sat_alt+RE)*np.sin(ze*np.pi/180.) - RE    ### JJM use np.deg2rad?
     return tang_alt
 
 
@@ -187,12 +192,13 @@ def remove_satellite_velocity(I, sat_velocity, sat_velocity_vector, mighti_ecef_
     I2 = I.copy() # make a copy so that the input isn't overwritten
     
     # Create a column vector with projected satellite velocity. 
-    # Remember, we are ignoring horizontal extent for now.
+    # Remember, we are ignoring horizontal extent for now.  ### Is this in plans for improvements?  Should it be a TODO?
     proj_sat_vel = np.zeros(ny)
     for i in range(ny):
         look_ecef = mighti_ecef_vectors[i,:] # look direction of this pixel in ECEF
         proj_sat_vel[i] = sat_velocity * np.dot(sat_velocity_vector, look_ecef)
 
+    ### JJM The comment below is not terribly clear to me.  The v/dphi factor seems to be passed in, so giving its equation here confused me.
     # Transform velocity to phase 
     # dphi = 2*pi*OPD*sigma*v/c (Eqn 1 of Englert et al 2007 Appl Opt.)
     # Use constant phase-to-wind factor for now, but eventually may need to use
@@ -200,7 +206,7 @@ def remove_satellite_velocity(I, sat_velocity, sat_velocity_vector, mighti_ecef_
     # the velocity correction. Is average satellite velocity enough?
     icon_vel_phase = proj_sat_vel/phase_to_wind_factor
 
-    # Subtract phase from the interferogram (Change this when horizontal extent is included)
+    # Subtract phase from the interferogram (Change this when horizontal extent is included)  ### JJM What would this change look like?
     corr = np.exp(-1j*icon_vel_phase)
     for jj in range(nx):
         I2[:,jj] = I2[:,jj]*corr
@@ -229,7 +235,8 @@ def find_phase_discontinuity(I, min_amp, Nignore):
                       distortion from the filtering.
     OUTPUTS:
         None
-    For now, warnings will be printed to stdout. In the future we may want to change that.
+    TODO:
+        For now, warnings will be printed to stdout. In the future we may want to change that.
 
     '''
     
@@ -266,7 +273,7 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='thin'):
         tang_alt   -- TYPE:array(ny),    UNITS:km.   Tangent altitudes of each row of interferogram.
         icon_alt   -- TYPE:float,        UNITS:km.   Altitude of the satellite.
     OPTIONAL INPUTS:
-        top_layer  -- TYPE:str,                      'thin': model top layer as a thin shell of constant emission
+        top_layer  -- TYPE:str,                      'thin': model top layer as a thin shell of constant emission (default)
                                                      'exp':  model top layer as an exponential falloff in altitude
     OUTPUTS:
         D          -- TYPE:array(ny,ny), UNITS:km.   Observation matrix. Also called the "path matrix"
@@ -279,15 +286,14 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='thin'):
             # from photochemical model fed by IRI/MSIS. (See MIGHTI SSR paper for details on
             # airglow models).
     
-    def q(x,rm,r):
-        return 0.5*x*np.sqrt(rm**2 + x**2) + 0.5*rm**2 * np.log(2*(np.sqrt(rm**2 + x**2)+x)) - r*x
+    def q(x,rm,r): ### JJM What does this function do?
+        return 0.5*x*np.sqrt(rm**2 + x**2) + 0.5*rm**2 * np.log(2*(np.sqrt(rm**2 + x**2)+x)) - r*x ### JJM 2->2. in log?
     
-    M = len(tang_alt)
+    M = len(tang_alt)   ### JJM What is M?
 
-    # Assume the Earth is locally spherical with an effective radius RE.
-    # (The estimated winds are barely sensitive to the choice of RE. This
-    #  approximation introduces an error < 1mm/s)
-    RE = 6371.
+    RE = 6371. # km, assume the Earth is locally spherical with an effective radius RE.
+               # (The estimated winds are barely sensitive to the choice of RE. This
+               #  approximation introduces an error < 1mm/s)
     
     D = np.zeros((M,M))
     for m in range(M):
@@ -297,10 +303,10 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='thin'):
             # Region k is between nodes (i.e., tangent altitudes) k and k+1
             rk   = RE + tang_alt[k]
             rkp1 = RE + tang_alt[k+1]
-            # Note that to use formulas from notes, I have to swap rk and rkp1
+            # Note that to use formulas from notes, I have to swap rk and rkp1  ### JJM What notes?
             # Contribution to node k
-            wkkp1 = 2/(rk-rkp1) * ( q(np.sqrt(rk**2  -rm**2),rm,rk)   - q(np.sqrt(rkp1**2-rm**2),rm,rk  ) )
-            wkk   = 2/(rk-rkp1) * ( q(np.sqrt(rkp1**2-rm**2),rm,rkp1) - q(np.sqrt(rk**2  -rm**2),rm,rkp1)  )
+            wkkp1 = 2/(rk-rkp1) * ( q(np.sqrt(rk**2  -rm**2),rm,rk)   - q(np.sqrt(rkp1**2-rm**2),rm,rk  ) )   ### JJM 2->2.?
+            wkk   = 2/(rk-rkp1) * ( q(np.sqrt(rkp1**2-rm**2),rm,rkp1) - q(np.sqrt(rk**2  -rm**2),rm,rkp1)  )  ### JJM 2->2.?
 
             D[m,k] += wkk
             D[m,k+1] += wkkp1
@@ -311,18 +317,18 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='thin'):
             # (Assuming thin shell: zero above a certain altitude)
             rk   = RE + tang_alt[M-1]
             rkp1 = RE + tang_alt[M-1] + (tang_alt[M-1]-tang_alt[M-2])
-            wkk = 2/(rk-rkp1) * ( q(np.sqrt(rkp1**2-rm**2),rm,rkp1) - q(np.sqrt(rk**2  -rm**2),rm,rkp1)  )
+            wkk = 2/(rk-rkp1) * ( q(np.sqrt(rkp1**2-rm**2),rm,rkp1) - q(np.sqrt(rk**2  -rm**2),rm,rkp1)  )  ### JJM 2->2.?
             D[m,M-1] += wkk            
             
         elif top_layer == 'exp': # Use exponential falloff model
             rt = tang_alt[m] + RE 
             r0 = tang_alt[-1] + RE
             
-            def func(x, rt):
-                return np.exp(-1/H*(np.sqrt(x**2 + rt**2) - r0))
+            def func(x, rt):  ### JJM Describe function
+                return np.exp(-1/H*(np.sqrt(x**2 + rt**2) - r0))   ### JJM 1->1.?
             
             x0 = np.sqrt(r0**2- rt**2)
-            D[m,M-1] += 2*integrate.quad(func, x0, np.inf, args=(rt))[0]
+            D[m,M-1] += 2*integrate.quad(func, x0, np.inf, args=(rt))[0]   ### JJM 2->2.?
     
     return D
 
@@ -408,7 +414,7 @@ def perform_inversion(I, tang_alt, icon_alt, account_for_local_projection=False,
         tang_alt    -- TYPE:array(ny),    UNITS:km.   Tangent altitudes of each row of interferogram.
         icon_alt    -- TYPE:float,        UNITS:km.   Altitude of the satellite.
     OPTIONAL INPUTS:
-        account_for_local_projection -- TYPE:bool.   If False, a simple inversion is used.
+        account_for_local_projection -- TYPE:bool.   If False, a simple inversion is used. (default)
                                         If True, the inversion accounts for the fact that the ray is not 
                                         perfectly tangent to each shell at each point along the ray. If True,
                                         the following variables are needed:
@@ -418,7 +424,7 @@ def perform_inversion(I, tang_alt, icon_alt, account_for_local_projection=False,
         Nignore     -- TYPE:int,        UNITS:pixel. The number of columns at the
                                         beginning and end of the interferogram to ignore due to phase
                                         distortion from the filtering.
-        top_layer   -- TYPE:str,        'thin': model top layer as a thin shell of constant emission
+        top_layer   -- TYPE:str,        'thin': model top layer as a thin shell of constant emission (default)
                                         'exp':  model top layer as an exponential falloff in altitude
     OUTPUTS:
         Ip          -- TYPE:array(ny,nx), UNITS:arb.  The complex-valued, onion-peeled interferogram.
@@ -528,16 +534,16 @@ def fix_longitudes(lons, lon_target):
     lons_new = np.array(lons).copy()
     
     # Find the index with value closest to lon_target (mod 360)
-    diff_vec = np.mod(lons_new - lon_target + 180, 360) - 180
+    diff_vec = np.mod(lons_new - lon_target + 180, 360) - 180  ### JJM int->float?
     k = np.argmin(abs(diff_vec))
     # Change the entire array up or down by 360 (or a multiple) if necessary, keying off of target_lon.
     n = round((lons_new[k] - lon_target)/360.)
-    lons_new = lons_new - n*360
+    lons_new = lons_new - n*360 ### JJM 360->360.?
         
     # Define function to remove jumps
     def fix_jump(jump, val):
         n = round(jump/360.)
-        return val - n*360
+        return val - n*360 ### JJM 360->360.?
     # Traverse right, removing jumps > +/- 180
     for i in range(k+1,len(lons_new)):
         jump = lons_new[i] - lons_new[i-1]
@@ -589,7 +595,7 @@ def attribute_measurement_location(tang_lat, tang_lon, tang_alt):
         calculations.
         '''
         # First, unwrap angles so there are no 360-deg jumps
-        vec_new = fix_longitudes(vec, vec[0])
+        vec_new = fix_longitudes(vec, vec[0])   ### JJM Is this variable used anywhere?
         bottom = vec
         top = bottom.copy()
         top[:-1] = top[1:]
@@ -598,7 +604,7 @@ def attribute_measurement_location(tang_lat, tang_lon, tang_alt):
         for i in range(len(mid)):
             mid[i] = circular_mean(top[i],bottom[i])
         # Un-unwrap angles, so that they are all in (-180,180)
-        mid = np.mod(mid+180, 360) - 180
+        mid = np.mod(mid+180, 360) - 180  # JJM int->float?
         return mid
         
     lat = tang_lat
@@ -664,8 +670,8 @@ def remove_Earth_rotation(v_inertial, az, lat, lon, alt):
         meas_latlonalt = np.array([lat[i], lon[i], alt[i]]) # where the measurement is attributed to
         meas_xyz = ICON.wgs84_to_ecef(meas_latlonalt)
         rho = np.sqrt(meas_xyz[0]**2 + meas_xyz[1]**2)
-        sidereal_day_length = 23*60*60 + 56*60 + 4 # sidereal day is 23 hrs 56 min 4 sec
-        corot_vel = 2*np.pi*rho/sidereal_day_length*1e3
+        sidereal_day_length = 23*60*60 + 56*60 + 4 # sidereal day is 23 hrs 56 min 4 sec ### JJM int->float?
+        corot_vel = 2*np.pi*rho/sidereal_day_length*1e3 ### JJM 2->2.
         # Compute component along LoS
         corot_contribution[i] = corot_vel * np.sin(np.pi/180*az[i])
     v = v_inertial - corot_contribution
