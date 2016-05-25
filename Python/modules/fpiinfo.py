@@ -1445,6 +1445,7 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
                            'b1': 1.238e-02,
                            'b2': 6.030e-02, 
                        'center':  (275.05, 261.21),
+                       }
     return instrument
 
 def get_all_instr_names():
