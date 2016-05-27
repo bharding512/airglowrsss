@@ -4,81 +4,65 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import ICON
-import bisect # for quicker interpolation
+import bisect
 from scipy import integrate
-
-
-
-def get_emission_constants():
-    '''
-    The physical emission constants needed for the MIGHTI L2.1 analysis.
-    INPUTS:
-        none
-    OUTPUTS:
-        emissions --TYPE:dict, dictionary of red and green emission
-                         parameters. (see below)
-    '''
-
-    emissions = {'green': {'mass': 16., # atomic mass of emitting specie [amu]
-                           'lam': 557.7e-9, # center wavelength of emission [m]
-                           }, 
-                 'red':   {'mass': 16.,# atomic mass of emitting specie [amu]
-                           'lam': 630.0e-9, # center wavelength of emission [m]
-                           }
-                 }
-
-    return emissions
+from datetime import datetime, timedelta
 
 
 
 
-def get_instrument_constants(emission_color):
+def get_instrument_constants(emission_color, start_path, end_path):
     '''
     The instrument constants needed for the MIGHTI L2.1 analysis.
     INPUTS:
         emission_color --TYPE:str, 'green' or 'red'
+        start_path     --TYPE:float, UNITS:m. optical path difference at left edge of interferogram
+        end_path       --TYPE:float, UNITS:m. optical path difference at right edge of interferogram
     OUTPUTS:
         instr_params   --TYPE:dict, dictionary of instrument parameters. (see below)
+    TODO:
+        - What's the best way to store, maintain, and update these values, which may
+          be time-dependent? (e.g., zero phase)
     '''
-    emission = get_emission_constants()[emission_color]
     
-    start_path = 4.62e-2 # optical path difference at start of interferometer [m]
-    end_path   = 5.50e-2 # optical path difference at end of interferometer [m]
     
     # Set phase offset and zero phase depending on the color.
-    # Zero phase:    The phase measurement which corresponds to a wind of zero.
-    #                This needs to be found empirically.  ### JJM in rad?
-    # Phase offset:  This constant is added to all phases so that there is no chance of a pi/-pi crossover.
-    #                In practice, we'll have to see how the interferometer turns out before deciding on this.
-    #                Changing this will require an equal change in zero_phase (already implemented below). ### JJM in rad?
-    # TODO: How will this be done in practice, and what's the best way to hand off from NRL to Illinois?
+    # Zero phase:    radians. The phase measurement which corresponds to a wind of zero.
+    #                In practice, this needs to be found empirically, and will change with time. 
+    #                Most likely, this value will be drawn from a calibration database.
+    #                For analyzing simulated data, we can determine exactly what it should be.
+    # Phase offset:  radians. This constant is added to all phases so that there is no chance 
+    #                of a pi/-pi crossover. In practice, we'll have to see how the interferometer 
+    #                turns out before deciding on this. (TODO)
+
     if emission_color == 'red':
-        phase_offset = 2.309731
-        zero_phase = 128.648466754 # updated 2015-11-24 using my sim
+        lam          = 630.0304e-9   # center wavelength of emission [m] (Osterbrock et al. 1996)
+        phase_offset = -2.515976     # updated 2016-05-26 using my instrument model
+        zero_phase   = 128.648464318 # updated 2016-05-26 using my instrument model
                                                        # (MIGHTI_Zero_wind_issues.ipynb)
     elif emission_color == 'green':
-        phase_offset = 1.920212
-        zero_phase = 54.66333601873041 # updated 2015-11-24 using my sim
+        lam          = 557.7338e-9     # center wavelength of emission [m]
+        phase_offset = -1.808653     # updated 2016-05-26 using my instrument model
+        zero_phase = 54.6633360579   # updated 2016-05-26 using my instrument model
                                                       # (MIGHTI_Zero_wind_issues.ipynb)
     else:
         raise Exception('emission_color = %s not understood' % emission_color)
 
     # Calculate phase-to-wind conversion factor
-    # dphi = 2*pi*OPD*sigma*v/c (Eqn 1 of Englert et al 2007 Appl Opt.)
+    # dphi = 2*pi*OPD*sigma*v/c (Eq 1 of Englert et al 2007 Appl Opt., 
+    #                           and Eq 2 of Harding et al. 2016 SSR)
     # Use constant phase-to-wind factor for now, but we may eventually need to use
     # column-dependent values in some cases, such as satellite velocity removal.   
     c         = 299792458.0 # m/s, speed of light
-    sigma     = 1.0/emission['lam']
-    meanopd   = (start_path + end_path) / 2     ### JJM 2->2.?
-    phase_to_wind_factor = c / (2*np.pi*sigma) * 1/meanopd   ### JJM 2->2., 1->1.?  This appears to be v/dphi, yes?  Why is meanopd treated outside of the second term?
+    sigma     = 1.0/lam
+    meanopd   = (start_path + end_path) / 2.
+    phase_to_wind_factor = c / (2.*np.pi*sigma*meanopd)
 
-    instr_params = { 'start_path': start_path,
-                       'end_path': end_path,
-                        'Nignore': 20, # The number of columns at the beginning and end of the interferogram
+    instr_params = {    'Nignore': 20, # The number of columns at the beginning and end of the interferogram
                                        # to ignore due to phase distortion from the filtering.
                    'phase_offset': phase_offset,
                      'zero_phase': zero_phase,
-                        'min_amp': 0.0, # TODO. Is this the best way to implement this?
+                        'min_amp': 0.0, # TODO. What's the best way to implement this? For now, do nothing.
            'phase_to_wind_factor': phase_to_wind_factor,
                     
                  }
@@ -91,6 +75,7 @@ def get_instrument_constants(emission_color):
 def unwrap(x):
     '''
     Unwrap a monotonically increasing phase signal to remove -2*pi jumps.
+    This is very similar to np.unwrap, but only unwraps negative jumps. 
     INPUTS:
         x     -- TYPE:array, UNITS:rad. Signal that has -2*pi jumps to remove
     OUTPUTS:
@@ -100,7 +85,7 @@ def unwrap(x):
     xnew = np.zeros(len(x))
     xnew[0] = x[0]
     idx = dx < 0
-    dx[idx] = dx[idx] + 2*np.pi   ### JJM 2->2.?
+    dx[idx] = dx[idx] + 2.*np.pi
     xnew[1:] = xnew[0] + np.cumsum(dx)
     return xnew
 
@@ -118,7 +103,7 @@ def circular_mean(angle0,angle1):
         angle   -- TYPE:float or array, UNITS:deg. The circular mean of the two
                    input angles.
     '''
-    return 180/np.pi*np.angle((np.exp(1j*angle0*np.pi/180.) + np.exp(1j*angle1*np.pi/180.))/2) ### JJM 180->180., 2->2., use np.deg2rad instead of manually converting?
+    return np.rad2deg(np.angle((np.exp(1j*np.deg2rad(angle0)) + np.exp(1j*np.deg2rad(angle1)))/2.))
 
 
 
@@ -141,7 +126,7 @@ def tang_alt_to_ze(tang_alt, sat_alt, RE):
     elif sat_alt <= tang_alt:
         raise Exception('Tangent altitude must be below satellite altitude')
         
-    ze = 180 - 180/np.pi*np.arcsin( (tang_alt+RE)/(sat_alt+RE) )  ### JJM 180->180.?
+    ze = 180. - np.rad2deg(np.arcsin( (tang_alt+RE)/(sat_alt+RE) ))
     return ze
 
 
@@ -164,14 +149,13 @@ def ze_to_tang_alt(ze, sat_alt, RE):
             raise Exception('Angle must be between 90 and 180, exclusive.')
     elif ( ze < 90 ) or ( ze > 180):
         raise Exception('Angle must be between 90 and 180, exclusive.')
-    tang_alt = (sat_alt+RE)*np.sin(ze*np.pi/180.) - RE    ### JJM use np.deg2rad?
+    tang_alt = (sat_alt+RE)*np.sin(np.deg2rad(ze)) - RE  
     return tang_alt
 
 
 
 
-def remove_satellite_velocity(I, sat_velocity, sat_velocity_vector, mighti_ecef_vectors, phase_to_wind_factor,
-                              show_plot = False):
+def remove_satellite_velocity(I, sat_velocity, sat_velocity_vector, mighti_ecef_vectors, phase_to_wind_factor):
     '''
     Modify the interferogram to remove the effect of satellite velocity upon the phase. 
     INPUTS:
@@ -183,98 +167,53 @@ def remove_satellite_velocity(I, sat_velocity, sat_velocity_vector, mighti_ecef_
                                ECEF coordinates defining the look direction of each measurement.
         phase_to_wind_factor-- TYPE:float,        UNITS:m/s/rad. The factor to multiply by a phase
                                change to get a wind change.
-        show_plot           -- TYPE:bool,         UNITS:none. If True, display a plot
     OUTPUTS:
         I                   -- TYPE:array(ny,nx), UNITS:arb.  The MIGHTI interferogram, corrected
                                for the effects of satellite motion on the phase.
     '''
+    # TODO: Perhaps, remove on a column-by-column basis to account for the varying 
+    # velocity projection (and maybe also the varying phase_to_wind_factor) with x.
+    
     ny,nx = np.shape(I)
     I2 = I.copy() # make a copy so that the input isn't overwritten
     
     # Create a column vector with projected satellite velocity. 
-    # Remember, we are ignoring horizontal extent for now.  ### Is this in plans for improvements?  Should it be a TODO?
+    # Remember, we are ignoring horizontal extent for now. 
     proj_sat_vel = np.zeros(ny)
     for i in range(ny):
         look_ecef = mighti_ecef_vectors[i,:] # look direction of this pixel in ECEF
         proj_sat_vel[i] = sat_velocity * np.dot(sat_velocity_vector, look_ecef)
 
-    ### JJM The comment below is not terribly clear to me.  The v/dphi factor seems to be passed in, so giving its equation here confused me.
-    # Transform velocity to phase 
-    # dphi = 2*pi*OPD*sigma*v/c (Eqn 1 of Englert et al 2007 Appl Opt.)
-    # Use constant phase-to-wind factor for now, but eventually may need to use
-    # actual OPD if we include horizontal extent of
-    # the velocity correction. Is average satellite velocity enough?
+
+    # Convert the projected satellite velocity to a phase
     icon_vel_phase = proj_sat_vel/phase_to_wind_factor
 
-    # Subtract phase from the interferogram (Change this when horizontal extent is included)  ### JJM What would this change look like?
+    # Subtract phase from the interferogram
     corr = np.exp(-1j*icon_vel_phase)
     for jj in range(nx):
         I2[:,jj] = I2[:,jj]*corr
-        
-    # Show a plot of satellite velocity, if requested.
-    if show_plot:
-        plt.plot(proj_sat_vel, range(ny), 'k')
-        plt.xlabel('Projected Satellite Velocity [m/s]')
-        plt.ylabel('Row Number')
         
     return I2
 
 
 
 
-def find_phase_discontinuity(I, min_amp, Nignore):
-    '''
-    Raise a warning if a phase discontinuity is expected. A phase discontinuity 
-    could cause large non-physical jumps in the reported wind.
-    INPUTS:
-        I          -- TYPE:array(ny,nx), UNITS:arb.  The complex-valued, MIGHTI interferogram.
-        min_amp    -- TYPE:float,        UNITS:arb.  Rows of the interferogram with 
-                      an amplitude less than this will not be analyzed.
-        Nignore    -- TYPE:int,          UNITS:pixel. The number of columns at the
-                      beginning and end of the interferogram to ignore due to phase
-                      distortion from the filtering.
-    OUTPUTS:
-        None
-    TODO:
-        For now, warnings will be printed to stdout. In the future we may want to change that.
-
-    '''
-    
-    ny = np.shape(I)[0]
-    init_phase = np.zeros((ny))
-    for j in range(ny):
-        irow = I[j,:]
-        phase = np.angle(irow)
-        phaseu = unwrap(phase[Nignore:-Nignore])
-        init_phase[j] = phaseu[0]
-        ampl = abs(irow)
-        if max(ampl) < min_amp:
-            init_phase[j] = nan
-    if any(abs(init_phase) > 0.8*np.pi):
-        print 'WARNING: phase near pi/-pi crossover. Consider changing phase_offset'
-    if any(np.diff(init_phase) > 0.8*2*np.pi):
-        print 'WARNING: phase pi/-pi crossover detected. Recommend changing phase_offset'
-
-
-
-
-
-
-def create_observation_matrix(tang_alt, icon_alt, top_layer='thin'):
+def create_observation_matrix(tang_alt, icon_alt, top_layer='exp'):
     '''
     Define the matrix D whose inversion is known as "onion-peeling." The forward model is:
         I = D * Ip
-    where I is the measured interferogram, D is the observation matrix (alternatively known
-    as the distance matrix or path length matrix), and Ip is the onion-peeled interferogram.
-    The matrix is created by approximating the line of sight integration as a summation using
-    the trapezoidal rule, and collecting the weights for each node.
+    where I is the measured interferogram, D is the observation matrix, and Ip is the 
+    onion-peeled interferogram. The observation matrix is created by assuming the spectrum
+    (and thus the interferogram) is a piecewise linear function of altitude, treating the 
+    values of the interferogram at the tangent locations as the unknowns, and writing the 
+    measurements as a linear function of the unknowns.
     
     INPUTS:
         tang_alt   -- TYPE:array(ny),    UNITS:km.   Tangent altitudes of each row of interferogram.
         icon_alt   -- TYPE:float,        UNITS:km.   Altitude of the satellite.
     OPTIONAL INPUTS:
-        top_layer  -- TYPE:str,                      'thin': model top layer as a thin shell of constant emission (default)
-                                                     'exp':  model top layer as an exponential falloff in altitude
+        top_layer  -- TYPE:str,          'thin': assume VER goes to zero above top layer
+                                         'exp':  assume VER falls off exponentially in altitude (default)
     OUTPUTS:
         D          -- TYPE:array(ny,ny), UNITS:km.   Observation matrix. Also called the "path matrix"
                                                      or "distance matrix"
@@ -286,10 +225,11 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='thin'):
             # from photochemical model fed by IRI/MSIS. (See MIGHTI SSR paper for details on
             # airglow models).
     
-    def q(x,rm,r): ### JJM What does this function do?
-        return 0.5*x*np.sqrt(rm**2 + x**2) + 0.5*rm**2 * np.log(2*(np.sqrt(rm**2 + x**2)+x)) - r*x ### JJM 2->2. in log?
+    def q(x,rm,r): 
+        # antiderivative of (sqrt(x**2 + rm**2) - r)   w.r.t. x
+        return 0.5*x*np.sqrt(rm**2 + x**2) + 0.5*rm**2 * np.log(2.*(np.sqrt(rm**2 + x**2)+x)) - r*x
     
-    M = len(tang_alt)   ### JJM What is M?
+    M = len(tang_alt)   # Number of rows of interferogram
 
     RE = 6371. # km, assume the Earth is locally spherical with an effective radius RE.
                # (The estimated winds are barely sensitive to the choice of RE. This
@@ -303,10 +243,10 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='thin'):
             # Region k is between nodes (i.e., tangent altitudes) k and k+1
             rk   = RE + tang_alt[k]
             rkp1 = RE + tang_alt[k+1]
-            # Note that to use formulas from notes, I have to swap rk and rkp1  ### JJM What notes?
-            # Contribution to node k
-            wkkp1 = 2/(rk-rkp1) * ( q(np.sqrt(rk**2  -rm**2),rm,rk)   - q(np.sqrt(rkp1**2-rm**2),rm,rk  ) )   ### JJM 2->2.?
-            wkk   = 2/(rk-rkp1) * ( q(np.sqrt(rkp1**2-rm**2),rm,rkp1) - q(np.sqrt(rk**2  -rm**2),rm,rkp1)  )  ### JJM 2->2.?
+            # Compile the contribution from this region to the nodes below and above, using the
+            # analytical evaluation of the Abel integral.
+            wkkp1 = 2./(rk-rkp1) * ( q(np.sqrt(rk**2  -rm**2),rm,rk)   - q(np.sqrt(rkp1**2-rm**2),rm,rk  ) )
+            wkk   = 2./(rk-rkp1) * ( q(np.sqrt(rkp1**2-rm**2),rm,rkp1) - q(np.sqrt(rk**2  -rm**2),rm,rkp1)  )
 
             D[m,k] += wkk
             D[m,k+1] += wkkp1
@@ -314,21 +254,21 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='thin'):
         # Handle contributions from above 300km differently, depending on top_layer='thin' or 'exp':
         if top_layer == 'thin': # Use assumption that airglow goes to zero just above top altitude
             # Calculate contribution to top node from above top tangent altitude
-            # (Assuming thin shell: zero above a certain altitude)
             rk   = RE + tang_alt[M-1]
             rkp1 = RE + tang_alt[M-1] + (tang_alt[M-1]-tang_alt[M-2])
-            wkk = 2/(rk-rkp1) * ( q(np.sqrt(rkp1**2-rm**2),rm,rkp1) - q(np.sqrt(rk**2  -rm**2),rm,rkp1)  )  ### JJM 2->2.?
+            wkk = 2./(rk-rkp1) * ( q(np.sqrt(rkp1**2-rm**2),rm,rkp1) - q(np.sqrt(rk**2  -rm**2),rm,rkp1)  )
             D[m,M-1] += wkk            
             
         elif top_layer == 'exp': # Use exponential falloff model
             rt = tang_alt[m] + RE 
             r0 = tang_alt[-1] + RE
             
-            def func(x, rt):  ### JJM Describe function
-                return np.exp(-1/H*(np.sqrt(x**2 + rt**2) - r0))   ### JJM 1->1.?
+            def func(x, rt):
+                # The extrapolation function to be numerically integrated. (Eq 6 in Harding et al. 2016 SSR)
+                return np.exp(-1./H*(np.sqrt(x**2 + rt**2) - r0))
             
             x0 = np.sqrt(r0**2- rt**2)
-            D[m,M-1] += 2*integrate.quad(func, x0, np.inf, args=(rt))[0]   ### JJM 2->2.?
+            D[m,M-1] += 2.*integrate.quad(func, x0, np.inf, args=(rt))[0] 
     
     return D
 
@@ -367,7 +307,7 @@ def create_local_projection_matrix(tang_alt, icon_alt):
         for j in range(i,ny): # only calculate upper triangular part
             th = theta[i]
             r = tang_alt[j]
-            B[i,j] = (RE+icon_alt)/(RE+r) * np.sin(th*np.pi/180)
+            B[i,j] = (RE+icon_alt)/(RE+r) * np.sin(np.deg2rad(th))
     return B
      
 
@@ -392,8 +332,11 @@ def extract_phase_from_row(row, zero_phase, phase_offset, Nignore):
     
     row_phase = np.angle(row)
 
-    # average phase and then take delta. Need unwrapping for this.
-    phaseu = unwrap(row_phase[Nignore:-Nignore]-phase_offset) + phase_offset
+    # Average phase and then take delta. Need unwrapping for this.
+    # First, apply phase offset (keeping phase between -pi and pi)
+    row_phase_off = np.mod(row_phase[Nignore:-Nignore] - phase_offset + np.pi, 2*np.pi) - np.pi
+    # Second, unwrap, and undo phase offset
+    phaseu = unwrap(row_phase_off) + phase_offset
     meanphase = np.mean(phaseu)
     phase = meanphase - zero_phase
     return phase
@@ -402,7 +345,7 @@ def extract_phase_from_row(row, zero_phase, phase_offset, Nignore):
     
     
     
-def perform_inversion(I, tang_alt, icon_alt, account_for_local_projection=False, zero_phase=None, phase_offset=None, Nignore=None, top_layer='thin'):
+def perform_inversion(I, tang_alt, icon_alt, account_for_local_projection=True, zero_phase=None, phase_offset=None, Nignore=None, top_layer='exp'):
     '''
     Perform the onion-peeling inversion on the interferogram to return
     a new interferogram, whose rows refer to specific altitudes. In effect,
@@ -414,18 +357,18 @@ def perform_inversion(I, tang_alt, icon_alt, account_for_local_projection=False,
         tang_alt    -- TYPE:array(ny),    UNITS:km.   Tangent altitudes of each row of interferogram.
         icon_alt    -- TYPE:float,        UNITS:km.   Altitude of the satellite.
     OPTIONAL INPUTS:
-        account_for_local_projection -- TYPE:bool.   If False, a simple inversion is used. (default)
+        account_for_local_projection -- TYPE:bool.   If False, a simple inversion is used.
                                         If True, the inversion accounts for the fact that the ray is not 
-                                        perfectly tangent to each shell at each point along the ray. If True,
-                                        the following variables are needed:
+                                        perfectly tangent to each shell at each point along the ray. (default True)
+                                        If True, the following variables are needed:
         zero_phase  -- TYPE:float,      UNITS:rad.   The phase angle which is equivalent 
                                                      to a wind value of zero.
         phase_offset-- TYPE:float,      UNITS:rad.   An offset to avoid 2pi ambiguities.
         Nignore     -- TYPE:int,        UNITS:pixel. The number of columns at the
                                         beginning and end of the interferogram to ignore due to phase
                                         distortion from the filtering.
-        top_layer   -- TYPE:str,        'thin': model top layer as a thin shell of constant emission (default)
-                                        'exp':  model top layer as an exponential falloff in altitude
+        top_layer   -- TYPE:str,        'thin': assume VER goes to zero above top layer
+                                        'exp':  assume VER falls off exponentially in altitude (default)
     OUTPUTS:
         Ip          -- TYPE:array(ny,nx), UNITS:arb.  The complex-valued, onion-peeled interferogram.
     '''
@@ -443,6 +386,9 @@ def perform_inversion(I, tang_alt, icon_alt, account_for_local_projection=False,
         Ip = np.linalg.solve(D,I)
         
     else:
+        # The problem becomes nonlinear, but still solvable in closed form.
+        # This code implements Eq (9) in the MIGHTI L2 Space Science Reviews
+        # paper (Harding et al. 2016).
         
         B = create_local_projection_matrix(tang_alt, icon_alt)
         Ip = np.zeros((ny,nx), dtype=complex) # onion-peeled interferogram
@@ -472,6 +418,7 @@ def perform_inversion(I, tang_alt, icon_alt, account_for_local_projection=False,
 
 
 
+
 def extract_wind(Ip, zero_phase, phase_offset, min_amp, Nignore, phase_to_wind_factor):
     '''
     Analyze the onion-peeled interferogram to extract wind and apparent intensity.
@@ -492,10 +439,9 @@ def extract_wind(Ip, zero_phase, phase_offset, min_amp, Nignore, phase_to_wind_f
     OUTPUTS:
         v                   -- TYPE:array(ny)     UNITS:m/s.  The estimated line of sight wind.
         ve                  -- TYPE:array(ny)     UNITS:m/s.  Estimated uncertainty in v.
-        a                   -- TYPE:array(ny)     UNITS:arb.  The estimated apparent intensity. Not
-                               to be confused with actual intensity, since temperature plays a role.
+        a                   -- TYPE:array(ny)     UNITS:arb.  The estimated apparent VER. Not
+                               to be confused with actual VER, since temperature plays a role.
         ae                  -- TYPE:array(ny)     UNITS:arb.  Estimated uncertainty in a.
-        p                   -- TYPE:array(ny)     UNITS:rad.  TEMPORARY. line of sight phase 
     '''
     ny,nx = np.shape(Ip)
     
@@ -512,10 +458,12 @@ def extract_wind(Ip, zero_phase, phase_offset, min_amp, Nignore, phase_to_wind_f
     # Convert phase to velocity
     v = phase_to_wind_factor * p 
     
-    ve = np.nan*np.zeros(np.shape(v))
-    ae = np.nan*np.zeros(np.shape(a))
+    # TODO: propagate uncertainties
+    ve = -999.*np.zeros(np.shape(v))
+    ae = -999.*np.zeros(np.shape(a))
 
-    return v, ve, a, ae, p
+    return v, ve, a, ae
+
 
 
 
@@ -534,16 +482,16 @@ def fix_longitudes(lons, lon_target):
     lons_new = np.array(lons).copy()
     
     # Find the index with value closest to lon_target (mod 360)
-    diff_vec = np.mod(lons_new - lon_target + 180, 360) - 180  ### JJM int->float?
+    diff_vec = np.mod(lons_new - lon_target + 180., 360.) - 180. 
     k = np.argmin(abs(diff_vec))
     # Change the entire array up or down by 360 (or a multiple) if necessary, keying off of target_lon.
     n = round((lons_new[k] - lon_target)/360.)
-    lons_new = lons_new - n*360 ### JJM 360->360.?
+    lons_new = lons_new - n*360.
         
     # Define function to remove jumps
     def fix_jump(jump, val):
         n = round(jump/360.)
-        return val - n*360 ### JJM 360->360.?
+        return val - n*360. 
     # Traverse right, removing jumps > +/- 180
     for i in range(k+1,len(lons_new)):
         jump = lons_new[i] - lons_new[i-1]
@@ -554,6 +502,7 @@ def fix_longitudes(lons, lon_target):
         lons_new[i] = fix_jump(jump, lons_new[i])   
 
     return lons_new
+
 
 
 
@@ -575,38 +524,7 @@ def attribute_measurement_location(tang_lat, tang_lon, tang_alt):
         lon         -- TYPE:array(ny), UNITS:deg.   Measurement longitudes.
         alt         -- TYPE:array(ny), UNITS:km.    Measurement altitudes.
     '''
-    
-    # The following two functions are saved for posterity, in case
-    # we switch back to Riemann integration.
-    def shift_up_by_half(vec):
-        '''
-        Shift the input vector up by half the resolution. Extrapolate for the top entry.
-        '''
-        bottom = vec
-        top = bottom.copy()
-        top[:-1] = top[1:]
-        top[-1] = top[-1] + (top[-2]-bottom[-2])
-        return (0.5*top + 0.5*bottom)
-    
-    def shift_up_by_half_angle(vec):
-        '''
-        Shift the input vector up by half the resolution. Extrapolate for the top entry.
-        Use circular mean instead of arithmetic mean. This is intended for longitude
-        calculations.
-        '''
-        # First, unwrap angles so there are no 360-deg jumps
-        vec_new = fix_longitudes(vec, vec[0])   ### JJM Is this variable used anywhere?
-        bottom = vec
-        top = bottom.copy()
-        top[:-1] = top[1:]
-        top[-1] = top[-1] + (top[-2]-bottom[-2])
-        mid = np.zeros(len(bottom))
-        for i in range(len(mid)):
-            mid[i] = circular_mean(top[i],bottom[i])
-        # Un-unwrap angles, so that they are all in (-180,180)
-        mid = np.mod(mid+180, 360) - 180  # JJM int->float?
-        return mid
-        
+ 
     lat = tang_lat
     lon = tang_lon
     alt = tang_alt
@@ -670,10 +588,10 @@ def remove_Earth_rotation(v_inertial, az, lat, lon, alt):
         meas_latlonalt = np.array([lat[i], lon[i], alt[i]]) # where the measurement is attributed to
         meas_xyz = ICON.wgs84_to_ecef(meas_latlonalt)
         rho = np.sqrt(meas_xyz[0]**2 + meas_xyz[1]**2)
-        sidereal_day_length = 23*60*60 + 56*60 + 4 # sidereal day is 23 hrs 56 min 4 sec ### JJM int->float?
-        corot_vel = 2*np.pi*rho/sidereal_day_length*1e3 ### JJM 2->2.
+        sidereal_day_length = 23.*60.*60. + 56.*60. + 4. # sidereal day is 23 hrs 56 min 4 sec 
+        corot_vel = 2.*np.pi*rho/sidereal_day_length*1e3
         # Compute component along LoS
-        corot_contribution[i] = corot_vel * np.sin(np.pi/180*az[i])
+        corot_contribution[i] = corot_vel * np.sin(np.deg2rad(az[i]))
     v = v_inertial - corot_contribution
     return v
 
@@ -695,7 +613,7 @@ def interpolate_linear(x,y,x0,extrapolation='hold'):
         y    -- TYPE:array(n), UNITS:arb. Dependent variable of samples of function.
         x0   -- TYPE:float,    UNITS:arb. Independent variable of interpolation point.
     OPTIONAL INPUTS:
-        extrapolation -- TYPE:str,        'hold': extrapolate by using values at end points
+        extrapolation -- TYPE:str,        'hold': extrapolate by using values at end points (default)
                                           'none': do not extrapolate. Points will be np.nan
     OUTPUTS:
         y0   -- TYPE:float,    UNITS:arb. Interpolated value.
@@ -724,4 +642,240 @@ def interpolate_linear(x,y,x0,extrapolation='hold'):
 
 
 
+
+
+def level1_to_dict(L1_fn):
+    '''
+    Read a level 1 file and translate it into a dictionary that the 
+    level 2.1 processing can use.
+    
+    INPUTS:
+        L1_fn   -- TYPE:str.  The full path and filename of the level 1 file
+    OUTPUTS:
+        L1_dict -- TYPE:dict. A dictionary containing information needed for
+                              the level 2.1 processing. The keys are:
+                                     L1_fn
+                                     Ir
+                                     Ii
+                                     tang_alt_start
+                                     tang_alt_end
+                                     tang_lat_start
+                                     tang_lat_end
+                                     tang_lon_start
+                                     tang_lon_end
+                                     emission_color
+                                     icon_alt_start
+                                     icon_alt_end
+                                     icon_lat_start
+                                     icon_lat_end
+                                     icon_lon_start
+                                     icon_lon_end
+                                     mighti_ecef_vectors_start
+                                     mighti_ecef_vectors_end
+                                     icon_ecef_ram_vector_start
+                                     icon_ecef_ram_vector_end
+                                     icon_velocity_start
+                                     icon_velocity_end
+                                     source_files
+                                     time
+                                     exp_time
+                                     interferometer_start_path
+                                     interferometer_end_path
+    '''
+    return Exception('Function Not Implemented')
+
+
+
+
+
+def level1_uiuc_to_dict(L1_uiuc_fn):
+    '''
+    Read a level 1 file in special "UIUC" format, and translate it into a 
+    dictionary that the level 2.1 processing can use. This function is 
+    intended to be temporary, and used for testing only, not in operations.
+    The L1_uiuc file is a .npz file.
+    
+    INPUTS:
+        L1_uiuc_fn   -- TYPE:str.  The full path and filename of the level 1 file
+    OUTPUTS:
+        L1_dict      -- TYPE:dict. A dictionary containing information needed for
+                                   the level 2.1 processing. The keys are:
+                                     L1_fn
+                                     Ir
+                                     Ii
+                                     tang_alt_start
+                                     tang_alt_end
+                                     tang_lat_start
+                                     tang_lat_end
+                                     tang_lon_start
+                                     tang_lon_end
+                                     emission_color
+                                     icon_alt_start
+                                     icon_alt_end
+                                     icon_lat_start
+                                     icon_lat_end
+                                     icon_lon_start
+                                     icon_lon_end
+                                     mighti_ecef_vectors_start
+                                     mighti_ecef_vectors_end
+                                     icon_ecef_ram_vector_start
+                                     icon_ecef_ram_vector_end
+                                     icon_velocity_start
+                                     icon_velocity_end
+                                     source_files
+                                     time
+                                     exp_time
+                                     interferometer_start_path
+                                     interferometer_end_path
+    '''
+    
+    L1_dict = {}
+    L1_dict['L1_fn'] = L1_uiuc_fn
+    
+    npzfile = np.load(L1_uiuc_fn)
+    for key in npzfile.keys():
+        if key in ['emission_color','icon_alt_start','icon_alt_end',
+                   'icon_lat_start','icon_lat_end','icon_lon_start','icon_lon_end',
+                   'icon_velocity_start','icon_velocity_end','time','exp_time',
+                   'interferometer_start_path','interferometer_end_path',]:
+            L1_dict[key] = npzfile[key].item()
+        else:
+            L1_dict[key] = npzfile[key]
+    npzfile.close()
+    
+    return L1_dict
+    
+
+
+
+
+
+def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0):
+    '''
+    High-level function to convert a level 1 dictionary (which was generated from
+    a level 1 file) into a level 2.1 file.
+    
+    INPUTS:
+        L1_dict             -- TYPE:dict.  A dictionary containing variables needed for
+                                           the level 2.1 processing:
+                                             L1_fn
+                                             Ir
+                                             Ii
+                                             tang_alt_start
+                                             tang_alt_end
+                                             tang_lat_start
+                                             tang_lat_end
+                                             tang_lon_start
+                                             tang_lon_end
+                                             emission_color
+                                             icon_alt_start
+                                             icon_alt_end
+                                             icon_lat_start
+                                             icon_lat_end
+                                             icon_lon_start
+                                             icon_lon_end
+                                             mighti_ecef_vectors_start
+                                             mighti_ecef_vectors_end
+                                             icon_ecef_ram_vector_start
+                                             icon_ecef_ram_vector_end
+                                             icon_velocity_start
+                                             icon_velocity_end
+                                             source_files
+                                             time
+                                             exp_time
+                                             interferometer_start_path
+                                             interferometer_end_path  
+                                             
+        L21_fn              -- TYPE:str.  The path and filename where the level 2.1
+                                          file will be saved.                             
+    OPTIONAL INPUTS:
+        zero_phase_addition -- TYPE:float, UNITS:rad. A value which we will be added
+                                                      to the zero phase used in the 
+                                                      inversion.                              
+    OUTPUTS:
+        flag                -- TYPE:int,              Equals 0 on success.
+            
+    TODO:
+        - save NetCDF file.
+        - error handling (return 0 or error code)
+    
+    '''
+
+    ###  Load parameters from input dictionary
+    Iraw = L1_dict['Ir'] + 1j*L1_dict['Ii']
+    emission_color = L1_dict['emission_color']
+    source_files = L1_dict['source_files']
+    time = L1_dict['time']
+    exp_time = L1_dict['exp_time']
+    L1_fn = L1_dict['L1_fn']
+    # Load parameters which are averaged from start to end of exposure.
+    icon_alt = (L1_dict['icon_alt_start'] + L1_dict['icon_alt_end'])/2
+    icon_lat = (L1_dict['icon_lat_start'] + L1_dict['icon_lat_end'])/2
+    icon_lon = circular_mean(L1_dict['icon_lon_start'], L1_dict['icon_lon_end'])
+    mighti_ecef_vectors = (L1_dict['mighti_ecef_vectors_start'] + L1_dict['mighti_ecef_vectors_end'])/2
+    tang_alt = (L1_dict['tang_alt_start'] + L1_dict['tang_alt_end'])/2
+    tang_lat = (L1_dict['tang_lat_start'] + L1_dict['tang_lat_end'])/2
+    tang_lon = circular_mean(L1_dict['tang_lon_start'], L1_dict['tang_lon_end'])
+    icon_ecef_ram_vector = (L1_dict['icon_ecef_ram_vector_start'] + L1_dict['icon_ecef_ram_vector_end'])/2
+    icon_velocity = (L1_dict['icon_velocity_start'] + L1_dict['icon_velocity_end'])/2
+    start_path = L1_dict['interferometer_start_path']
+    end_path   = L1_dict['interferometer_end_path']
+
+    
+    ### Load instrument constants 
+    instrument = get_instrument_constants(emission_color, start_path, end_path)
+
+    #### Remove Satellite Velocity
+    I = remove_satellite_velocity(Iraw, icon_velocity, icon_ecef_ram_vector, mighti_ecef_vectors, 
+                                  instrument['phase_to_wind_factor'])
+                                             
+    #### Determine geographical locations of inverted wind
+    lat, lon, alt = attribute_measurement_location(tang_lat, tang_lon, tang_alt)
+    
+    #### Onion-peel interferogram
+    Ip = perform_inversion(I, tang_alt, icon_alt, zero_phase=instrument['zero_phase'],
+                           phase_offset=instrument['phase_offset'],Nignore=instrument['Nignore'])
+
+    #### Extract wind
+    v_inertial, ve_inertial, a, ae = extract_wind(Ip, instrument['zero_phase'] + zero_phase_addition,
+                                                      instrument['phase_offset'],
+                                                      instrument['min_amp'], 
+                                                      instrument['Nignore'],
+                                                      instrument['phase_to_wind_factor'])
+
+
+    #### Calculate azimuth angles at measurement locations
+    icon_latlonalt = np.array([icon_lat, icon_lon, icon_alt])
+    az = los_az_angle(icon_latlonalt, lat, lon, alt)
+
+    #### Transform from inertial to rotating coordinate frame
+    v = remove_Earth_rotation(v_inertial, az, lat, lon, alt)
+    ve = ve_inertial.copy() # No uncertainty added in this process
+
+
+    np.savez(L21_fn,
+             los_wind                     = v,
+             los_wind_error               = ve,
+             lat                          = lat,
+             lon                          = lon,
+             alt                          = alt,
+             time                         = time,
+             exp_time                     = exp_time,
+             az                           = az,
+             emission_color               = emission_color,
+             resolution_along_track       = -999., # TODO
+             resolution_cross_track       = -999., # TODO
+             resolution_alt               = -999., # TODO
+             icon_alt                     = icon_alt,
+             icon_lat                     = icon_lat,
+             icon_lon                     = icon_lon,
+             fringe_amplitude             = a,
+             fringe_amplitude_error       = ae,
+             mighti_ecef_vectors          = mighti_ecef_vectors,
+             icon_velocity_ecef_vector    = icon_velocity * icon_ecef_ram_vector,
+             file_creation_time           = datetime.now(),
+             source_files                 = np.concatenate((source_files,[L1_fn])),
+             )
+    
+    return 0
 
