@@ -48,7 +48,8 @@ def RawMovie(files, movie_name=None, cmin=None, cmax=None, darks=None, flips=Non
         # Sum up all of the dark images
         for dark in darks:
             d = Image.open(dark)
-            all_dark = all_dark + np.reshape(d.getdata(), d.size)
+#            all_dark = all_dark + np.reshape(d.getdata(), d.size)
+	    all_dark = all_dark + np.array(d.getdata(),np.uint16).reshape(d.size)
 
         # Divide by the number of dark images to create a mean image
         darks = all_dark/len(darks)
@@ -60,9 +61,12 @@ def RawMovie(files, movie_name=None, cmin=None, cmax=None, darks=None, flips=Non
 
         for f in files:
             d = Image.open(f)
+	    im = np.array(d.getdata(),np.uint16).reshape(d.size)
 
-            all_min.append(d.info['pmin'])
-            all_max.append(d.info['pmax'])
+#            all_min.append(d.info['pmin'])
+#            all_max.append(d.info['pmax'])
+	    all_min.append(np.percentile(im,5))
+	    all_max.append(np.percentile(im,95))
 
         # Cast to an array for easy statistics
         all_min = np.array(all_min)
@@ -82,7 +86,7 @@ def RawMovie(files, movie_name=None, cmin=None, cmax=None, darks=None, flips=Non
         pa,fi = os.path.split(f)
 
         # Create a temporay file name
-        png_name = pa + '/tmp_' + fi[0:-4] + '_' + id_str + '.png'
+        png_name = pa + 'tmp_' + fi[0:-4] + '_' + id_str + '.png'
 
         # Plot the image and save it
         p = ASIDisplay.DisplayRaw(f,cmin=cmin,cmax=cmax,dark=darks, flips=flips, info=False,sitename=sitename,filt=filt)
@@ -197,7 +201,8 @@ def MapMovie(files, m, lat, lon, movie_name=None, cmin=None, cmax=None, darks=No
         # Sum up all of the dark images
         for dark in darks:
             d = Image.open(dark)
-            all_dark = all_dark + np.reshape(d.getdata(), d.size)
+#            all_dark = all_dark + np.reshape(d.getdata(), d.size)
+	    all_dark = all_dark + np.array(d.getdata(),np.uint16).reshape(d.size)
 
         # Divide by the number of dark images to create a mean image
         darks = all_dark/len(darks)
@@ -209,10 +214,13 @@ def MapMovie(files, m, lat, lon, movie_name=None, cmin=None, cmax=None, darks=No
 
         for f in files:
             d = Image.open(f)
+	    im = np.array(d.getdata(),np.uint16).reshape(d.size)
 
-            if d.info['pmax'] > 0:
-                all_min.append(d.info['pmin'])
-                all_max.append(d.info['pmax'])
+#            if d.info['pmax'] > 0:
+#                all_min.append(d.info['pmin'])
+#                all_max.append(d.info['pmax'])
+	    all_min.append(np.percentile(im,5))
+	    all_max.append(np.percentile(im,95))
 
         # Cast to an array for easy statistics
         all_min = np.array(all_min)

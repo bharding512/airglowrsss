@@ -48,13 +48,15 @@ def DisplayRaw(f, cmin=None, cmax=None, dark=None, flips=None, info=True, sitena
 
     # Create the image array from the data and dark image (if requested)
     if dark is None:
-        im = np.reshape(d.getdata(), d.size)
+#        im = np.reshape(d.getdata(), d.size)
+	im = np.array(d.getdata(), np.uint16).reshape(d.size)
 
         # No Dark image used.  Run a small median filter to remove any
         # noise spikes from the CCD
         im = ndimage.filters.median_filter(im,size=kernel_size)
     else:
-        im = np.reshape(d.getdata(), d.size)-dark
+#        im = np.reshape(d.getdata(), d.size)-dark
+	im = np.array(d.getdata(), np.uint16).reshape(d.size) - dark
 
     # Do we need to flip the image?
     if flips is not None:
@@ -72,13 +74,14 @@ def DisplayRaw(f, cmin=None, cmax=None, dark=None, flips=None, info=True, sitena
         if cmin is not None:
             a.set_clim([cmin,cmax])
         else:
-            a.set_clim(d.info['pmin'],d.info['pmax'])
+#            a.set_clim(d.info['pmin'],d.info['pmax'])
+	    a.set_clim(np.percentile(im,(5,95)))
     else:
         if cmin is not None:
             a.set_clim([cmin-np.median(dark),cmax-np.median(dark)])
         else:
-            a.set_clim([d.info['pmin']-np.median(dark),d.info['pmax']-np.median(dark)])
-
+#            a.set_clim([d.info['pmin']-np.median(dark),d.info['pmax']-np.median(dark)])
+	    a.set_clim(np.percentile(im,5)-np.median(dark),np.percentile(im,95)-np.median(dark))
     # Create the title and colorbar
     if sitename is None:
         sitename = d.info['Observatory'][0]
@@ -123,13 +126,15 @@ def DisplayMap(f, m, lat, lon, cmin=None, cmax=None, dark=None, sitename=None, f
 
     # Create the image array from the data and dark image (if requested)
     if dark is None:
-        im = np.reshape(d.getdata(), d.size)
+#        im = np.reshape(d.getdata(), d.size)
+	im = np.array(d.getdata(), np.uint16).reshape(d.size)
 
         # No Dark image used.  Run a small median filter to remove any
         # noise spikes from the CCD
     #    im = ndimage.filters.median_filter(im,size=kernel_size)
     else:
-        im = np.reshape(d.getdata(), d.size)-dark
+#        im = np.reshape(d.getdata(), d.size)-dark
+	im = np.array(d.getdata(), np.uint16).reshape(d.size) - dark
 
     im = ndimage.filters.median_filter(im,size=kernel_size)
 
@@ -147,13 +152,14 @@ def DisplayMap(f, m, lat, lon, cmin=None, cmax=None, dark=None, sitename=None, f
         if cmin is not None:
             a.set_clim([cmin,cmax])
         else:
-            a.set_clim(d.info['pmin'],d.info['pmax'])
+#            a.set_clim(d.info['pmin'],d.info['pmax'])
+	    a.set_clim(np.percentile(im,(5,95)))
     else:
         if cmin is not None:
-            a.set_clim([cmin-np.median(dark),cmax-np.median(dark)])
+            a.set_clim([cmin,cmax])
         else:
-            a.set_clim([d.info['pmin']-np.median(dark),d.info['pmax']-np.median(dark)])
-
+#            a.set_clim([d.info['pmin']-np.median(dark),d.info['pmax']-np.median(dark)])
+	    a.set_clim(np.percentile(im,5)-np.median(dark),np.percentile(im,95)-np.median(dark))
     # Create the title and colorbar
     if sitename is None:
         sitename = d.info['Observatory'][0]
@@ -200,7 +206,8 @@ def Keogram(files, lat, lon, target_lat, target_lon, darks=None, sitename=None, 
         # Sum up all of the dark images
         for dark in darks:
             d = Image.open(dark)
-            all_dark = all_dark + np.reshape(d.getdata(), d.size)
+#            all_dark = all_dark + np.reshape(d.getdata(), d.size)
+	    all_dark = all_dark + np.array(d.getdata(), np.uint16).reshape(d.size)
 
         # Divide by the number of dark images to create a mean image
         darks = all_dark/len(darks)
@@ -235,9 +242,11 @@ def Keogram(files, lat, lon, target_lat, target_lon, darks=None, sitename=None, 
 
         # Create the image array from the data and dark image (if requested)
         if darks is None:
-            im = np.reshape(d.getdata(), d.size)
+#            im = np.reshape(d.getdata(), d.size)
+	    im = np.array(d.getdata(), np.uint16).reshape(d.size)
         else:
-            im = np.reshape(d.getdata(), d.size)-darks*1.0
+#            im = np.reshape(d.getdata(), d.size)-darks*1.0
+	    im = np.array(d.getdata(), np.uint16).reshape(d.size) - darks*1.0
             
         # Median filter the data
         d = ndimage.filters.median_filter(im,size=kernel_size)
