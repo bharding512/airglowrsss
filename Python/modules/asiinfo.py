@@ -39,6 +39,8 @@ _dates['picasso02']['cto'] = { 'start': datetime.datetime(2010,8,10),
 _dates['picasso03'] = {}
 _dates['picasso03']['bon'] = { 'start': datetime.datetime(2009,3,22),
                             'stop': datetime.datetime(2011,7,29),}
+_dates['picasso03']['nso'] = { 'start': datetime.datetime(2016,6,1},
+                            'stop': None,}
 
 _dates['picasso04'] = {}
 _dates['picasso04']['sgt'] = { 'start': datetime.datetime(2008,8,8),
