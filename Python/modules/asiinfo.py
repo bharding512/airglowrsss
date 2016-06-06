@@ -157,8 +157,8 @@ _sites['tht'] = {
 
 # Instrument definitions
 _instruments = {}
-#TODO: lat, lon and cal file are site dependant, not insturment dependent, these should be moved to above... Unsure of sql_id...
-
+#TODO: lat, lon and cal file are site dependant ANDt insturment dependent (filter type)  ??
+# SOLUTION: NEVER TOUCH THESE AGAIN UNLESS TO ADD NEW INSTRUMENT.  CHANGES ARE MADE IN GET_INSTR_INFO BELOW
 _instruments['casi01'] = {
         'horizon':          20.,
         'filters':          ['6300','5577','7774','BGND','5890','Na'],
@@ -228,7 +228,7 @@ _instruments['picasso03'] = {
         'ignore_dark':      False,
         'ccd_temp_set':     -60,
     }
-'''
+
 _instruments['picasso04'] = {
         'horizon':          15.,
         'filters':          ['6300','7774','6343'],
@@ -240,19 +240,6 @@ _instruments['picasso04'] = {
         'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO4elaz_2202008.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
-    }
-'''
-_instruments['picasso04'] = {
-        'horizon':          15.,
-        'filters':          ['6300','7774','6343'],
-        'filter_names':     ['630.0 nm','777.4 nm','Background'],
-        'unwarp_ht':        [250., 350., 250.],
-        'sql_inst_id':      [36,38,37],
-        't_lat':            [31.2,31.2,31.2],
-        't_lon':            [352.1,352.1,352.1],
-        'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO4elaz_3122013.npz',
-        'kernel_size':      3,
-        'ignore_dark':      True,
         'ccd_temp_set':     -30,  # UNSURE
     }
 
@@ -449,7 +436,7 @@ def get_instr_info(instr_name, dn):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO03elaz_1552016.npz'
             instrument['t_lat'] = [33.,33.,33.]
             instrument['t_lon'] = [254.,254.,254.]
-    elif instr_name == 'picasso04':
+    elif instr_name == 'picasso04': #SGT
         if dn < datetime.datetime(2008,1,1) + datetime.timedelta(days = 269):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_2202008.npz'
         elif dn < datetime.datetime(2009,1,1) + datetime.timedelta(days = 61):
@@ -462,23 +449,28 @@ def get_instr_info(instr_name, dn):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_0182010.npz'
         elif dn < datetime.datetime(2013,11,1):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_0062011.npz'
-        elif dn < datetime.datetime(2014,3,3):
+        elif dn < datetime.datetime(2014,3,3): #MOR
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_3122013.npz'
-            ### FLAG ADDED
+            instrument['t_lat'] = [31.2,31.2,31.2]
+            instrument['t_lon'] = [352.1,352.1,352.1]
             instrument['kernel_size'] = 5
             instrument['ignore_dark'] = True
         elif dn < datetime.datetime(2014,7,1):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO04elaz_0622014.npz'
-            ### FLAG ADDED
+            instrument['t_lat'] = [31.2,31.2,31.2]
+            instrument['t_lon'] = [352.1,352.1,352.1]
             instrument['kernel_size'] = 5
             instrument['ignore_dark'] = True
         elif dn < datetime.datetime(2015,3,27):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO04elaz_1822014.npz'
-            ### FLAG ADDED
+            instrument['t_lat'] = [31.2,31.2,31.2]
+            instrument['t_lon'] = [352.1,352.1,352.1]
             instrument['kernel_size'] = 5
             instrument['ignore_dark'] = True
         else:
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO04elaz_0862015.npz'
+            instrument['t_lat'] = [31.2,31.2,31.2]
+            instrument['t_lon'] = [352.1,352.1,352.1]
             instrument['kernel_size'] = 3  
             instrument['ignore_dark'] = True
     elif instr_name == 'picasso05':
