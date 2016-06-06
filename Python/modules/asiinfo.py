@@ -39,7 +39,7 @@ _dates['picasso02']['cto'] = { 'start': datetime.datetime(2010,8,10),
 _dates['picasso03'] = {}
 _dates['picasso03']['bon'] = { 'start': datetime.datetime(2009,3,22),
                             'stop': datetime.datetime(2011,7,29),}
-_dates['picasso03']['nso'] = { 'start': datetime.datetime(2016,6,1},
+_dates['picasso03']['nso'] = { 'start': datetime.datetime(2016,6,1),
                             'stop': None,}
 
 _dates['picasso04'] = {}
@@ -442,7 +442,12 @@ def get_instr_info(instr_name, dn):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO02elaz_1182015.npz'
         else:
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO02elaz_2092015.npz'
-    if instr_name == 'picasso04':
+    elif instr_name == 'picasso03':
+        if dn < datetime.datetime(2016,6,1):
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO3_0852009_approximate.npz'
+        else:
+            instrument['cal_file'] = '/rdata/ariglow/imaging/calibrations/PICASSO03elaz_1552016.npz'
+    elif instr_name == 'picasso04':
         if dn < datetime.datetime(2008,1,1) + datetime.timedelta(days = 269):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_2202008.npz'
         elif dn < datetime.datetime(2009,1,1) + datetime.timedelta(days = 61):
