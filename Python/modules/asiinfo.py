@@ -442,11 +442,13 @@ def get_instr_info(instr_name, dn):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO02elaz_1182015.npz'
         else:
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO02elaz_2092015.npz'
-    elif instr_name == 'picasso03':
+    elif instr_name == 'picasso03': #BON
         if dn < datetime.datetime(2016,6,1):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO3_0852009_approximate.npz'
-        else:
+        else: #NSO
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO03elaz_1552016.npz'
+            instrument['t_lat'] = [33.,33.,33.]
+            instrument['t_lon'] = [254.,254.,254.]
     elif instr_name == 'picasso04':
         if dn < datetime.datetime(2008,1,1) + datetime.timedelta(days = 269):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_2202008.npz'
