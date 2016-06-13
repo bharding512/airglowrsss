@@ -939,8 +939,9 @@ _instruments['minime05'] = {
         'sql_temperatures_id'   : 73,           # ID for SQL database
         'sql_diagnostics_id'    : 87,           # ID for SQL database
         'many_fringes'          : True,         # indicates whether radial falloff terms should be used
-        'bad_wind_dates'        : [(datetime.datetime(2012,7,1), datetime.datetime(2013,11,20),1,)],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
-        'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'bad_wind_dates'        : [(datetime.datetime(2012,7,1), datetime.datetime(2013,11,20),1),
+                                   (datetime.datetime(2016,6,6), datetime.datetime(2016,6,7),2)],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'bad_temperature_dates' : [(datetime.datetime(2016,6,6), datetime.datetime(2016,6,7),2)],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'send_to_madrigal'      : True, # whether or not we should send this instrument's data to Madrigal
         'skyI_quality_thresh'   : 0.4467, # The brightness [counts/sec] below which we raise the quality flag
     }
