@@ -216,6 +216,9 @@ def MapMovie(files, m, lat, lon, movie_name=None, cmin=None, cmax=None, darks=No
             d = Image.open(f)
 	    im = np.array(d.getdata(),np.uint16).reshape(d.size)
 
+	    if darks:
+		im = im - darks
+
 #            if d.info['pmax'] > 0:
 #                all_min.append(d.info['pmin'])
 #                all_max.append(d.info['pmax'])
@@ -243,9 +246,10 @@ def MapMovie(files, m, lat, lon, movie_name=None, cmin=None, cmax=None, darks=No
 
         # Grab the path and filename
         pa,fi = os.path.split(f)
+        print pa
 
         # Create a temporary file name
-        png_name = pa + '/tmp_' + fi[0:-4] + '_' + id_str + '.png'
+        png_name = pa + 'tmp_' + fi[0:-4] + '_' + id_str + '.png'
 
         # Plot the image and save it
         ASIDisplay.DisplayMap(f,m,lat,lon,cmin=cmin,cmax=cmax,dark=darks,sitename=sitename,filt=filt,kernel_size=kernel_size, displayUT=displayUT)
@@ -291,7 +295,7 @@ def MapMovie(files, m, lat, lon, movie_name=None, cmin=None, cmax=None, darks=No
         passfile = pa + '/divx2pass' + id_str + '.log'
 
         command = ('mencoder',
-                   'mf://' + pa + '/tmp_*_' + id_str + '.png',
+                   'mf://' + pa + 'tmp_*_' + id_str + '.png',
                    '-mf',
                    'fps=5',
                    '-o',
@@ -319,7 +323,7 @@ def MapMovie(files, m, lat, lon, movie_name=None, cmin=None, cmax=None, darks=No
 #           '-o',
 #           movie_name)
         command = ('mencoder',
-                   'mf://' + pa + '/tmp_*_' + id_str + '.png',
+                   'mf://' + pa + 'tmp_*_' + id_str + '.png',
                    '-mf',
                    'fps=5',
                    '-o',

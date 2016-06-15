@@ -70,18 +70,25 @@ def DisplayRaw(f, cmin=None, cmax=None, dark=None, flips=None, info=True, sitena
     a = p.matshow(im, cmap=cm.gray)
 
     # Set color limits
-    if dark is None:
-        if cmin is not None:
-            a.set_clim([cmin,cmax])
-        else:
-#            a.set_clim(d.info['pmin'],d.info['pmax'])
-	    a.set_clim(np.percentile(im,(5,95)))
+    if cmin is not None and cmax is not None:
+	a.set_clim([cmin,cmax])
     else:
-        if cmin is not None:
-            a.set_clim([cmin-np.median(dark),cmax-np.median(dark)])
-        else:
+	a.set_clim(np.percentile(im,(5,95)))
+
+
+#    if dark is None:
+#        if cmin is not None:
+#            a.set_clim([cmin,cmax])
+#        else:
+##            a.set_clim(d.info['pmin'],d.info['pmax'])
+#	    a.set_clim(np.percentile(im,(5,95)))
+#    else:
+#        if cmin is not None:
+#            a.set_clim([cmin-np.median(dark),cmax-np.median(dark)])
+#        else:
 #            a.set_clim([d.info['pmin']-np.median(dark),d.info['pmax']-np.median(dark)])
-	    a.set_clim(np.percentile(im,5)-np.median(dark),np.percentile(im,95)-np.median(dark))
+#	    a.set_clim(np.percentile(im,5)-np.median(dark),np.percentile(im,95)-np.median(dark))
+
     # Create the title and colorbar
     if sitename is None:
         sitename = d.info['Observatory'][0]
@@ -147,19 +154,25 @@ def DisplayMap(f, m, lat, lon, cmin=None, cmax=None, dark=None, sitename=None, f
     # Create the plot
     a = m.pcolormesh(xpt,ypt,zdata,shading='flat',cmap=cm.gray)
 
-    # Set the colorlimits
-    if dark is None:
-        if cmin is not None:
-            a.set_clim([cmin,cmax])
-        else:
-#            a.set_clim(d.info['pmin'],d.info['pmax'])
-	    a.set_clim(np.percentile(im,(5,95)))
+    # Set the colorlimits 
+    if cmin is not None and cmax is not None:
+	a.set_clim([cmin,cmax])
     else:
-        if cmin is not None:
-            a.set_clim([cmin,cmax])
-        else:
+	a.set_clim(np.percentile(im,(5,95)))
+
+#    if dark is None:
+#        if cmin is not None:
+#            a.set_clim([cmin,cmax])
+#        else:
+##            a.set_clim(d.info['pmin'],d.info['pmax'])
+#	    a.set_clim(np.percentile(im,(5,95)))
+#    else:
+#        if cmin is not None:
+#            a.set_clim([cmin,cmax])
+#        else:
 #            a.set_clim([d.info['pmin']-np.median(dark),d.info['pmax']-np.median(dark)])
-	    a.set_clim(np.percentile(im,5)-np.median(dark),np.percentile(im,95)-np.median(dark))
+#	    a.set_clim(np.percentile(im,5)-np.median(dark),np.percentile(im,95)-np.median(dark))
+
     # Create the title and colorbar
     if sitename is None:
         sitename = d.info['Observatory'][0]
