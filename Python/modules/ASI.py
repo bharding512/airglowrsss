@@ -193,9 +193,7 @@ def MapMovie(files, m, lat, lon, movie_name=None, cmin=None, cmax=None, darks=No
     #   Written by Jonathan J. Makela on 9 July 2013
 
     # Create a master dark image if requested
-    if darks == None:
-        darks = []
-    if len(darks)>0:
+    if darks:
         # Find out the size of the image
         d = Image.open(darks[0])
         all_dark = np.zeros_like(np.reshape(d.getdata(), d.size))
@@ -218,7 +216,9 @@ def MapMovie(files, m, lat, lon, movie_name=None, cmin=None, cmax=None, darks=No
             d = Image.open(f)
 	    im = np.array(d.getdata(),np.uint16).reshape(d.size)
 
-	    if len(darks)>0:
+            if darks is None:
+                print 'No Dark Subtraction'
+            else:
 		im = im - darks
 
 #            if d.info['pmax'] > 0:
