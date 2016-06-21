@@ -1,6 +1,9 @@
 # See http://www.pythonware.com/library/pil/handbook/decoder.htm
 
-import Image, ImageFile
+try:
+    import Image, ImageFile
+except ImportError:
+    from PIL import Image, ImageFile
 import string
 import struct
 import datetime
@@ -84,7 +87,7 @@ class TifImageFile(ImageFile.ImageFile):
         ProjectionAltitude =  struct.unpack('f', self.fp.read(4))
         ProjectionLon = struct.unpack('f', self.fp.read(4))
         tmp = struct.unpack('63B', self.fp.read(63))
-        
+
         # Save pertinent header info
         self.info = {'LocalTime':LocalTime, 'UniversalTime': UniversalTime,
                      'pmin': pmin[0], 'pmax': pmax[0], 'Filter': Filter,

@@ -1,5 +1,8 @@
 import glob
-import Image
+try:
+    import Image
+except ImportError:
+    from PIL import Image
 import ASI
 import matplotlib.pyplot as plt
 import numpy as np
@@ -94,7 +97,7 @@ def DisplayRaw(f, cmin=None, cmax=None, dark=None, flips=None, info=True, sitena
         sitename = d.info['Observatory'][0]
     if filt is None:
         filt = d.info['Filter']
-        
+
     p.set_title('%s (%s): %s' % (sitename, filt, d.info['LocalTime'].strftime('%d %b %Y %H:%M:%S LT')))
     f.colorbar(a,orientation='vertical',shrink=0.8)
 
@@ -154,7 +157,7 @@ def DisplayMap(f, m, lat, lon, cmin=None, cmax=None, dark=None, sitename=None, f
     # Create the plot
     a = m.pcolormesh(xpt,ypt,zdata,shading='flat',cmap=cm.gray)
 
-    # Set the colorlimits 
+    # Set the colorlimits
     if cmin is not None and cmax is not None:
 	a.set_clim([cmin,cmax])
     else:
@@ -178,7 +181,7 @@ def DisplayMap(f, m, lat, lon, cmin=None, cmax=None, dark=None, sitename=None, f
         sitename = d.info['Observatory'][0]
     if filt is None:
         filt = d.info['Filter']
-        
+
     if displayUT:
        plt.title('%s (%s): %s' % (sitename, filt, d.info['UniversalTime'].strftime('%d %b %Y %H:%M:%S UT')))
     else:
@@ -260,7 +263,7 @@ def Keogram(files, lat, lon, target_lat, target_lon, darks=None, sitename=None, 
         else:
 #            im = np.reshape(d.getdata(), d.size)-darks*1.0
 	    im = np.array(d.getdata(), np.uint16).reshape(d.size) - darks*1.0
-            
+
         # Median filter the data
         d = ndimage.filters.median_filter(im,size=kernel_size)
 
@@ -331,7 +334,7 @@ def Keogram(files, lat, lon, target_lat, target_lon, darks=None, sitename=None, 
     else:
         # Date spans a year
         tstr = '%s (%s): %s-%s' % (sitename,filt, ut[0].strftime('%d %b %Y'), ut[-1].strftime('%d %b %Y'))
-    
+
     plt.title(tstr)
     a.set_clim([cmin,cmax])
 
@@ -349,5 +352,5 @@ def Keogram(files, lat, lon, target_lat, target_lon, darks=None, sitename=None, 
     plt.ylabel('Latitude')
     a.set_clim([cmin,cmax])
     plt.gca().invert_yaxis()
-    
+
     return f

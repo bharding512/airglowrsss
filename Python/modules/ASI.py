@@ -4,7 +4,10 @@ matplotlib.use('AGG')
 import ASIDisplay
 import numpy as np
 import os
-import Image
+try:
+    import Image
+except ImportError:
+    from PIL import Image
 import matplotlib.pyplot as plt
 import string
 import random
@@ -80,7 +83,7 @@ def RawMovie(files, movie_name=None, cmin=None, cmax=None, darks=None, flips=Non
 
     # Generate a random key (needed if multiple threads are generating png files
     id_str = id_generator(6)
-    
+
     for f in files:
         # Grab the path and filename given
         pa,fi = os.path.split(f)
@@ -149,7 +152,7 @@ def RawMovie(files, movie_name=None, cmin=None, cmax=None, darks=None, flips=Non
 #               'x264',
 #               '-x264encopts',
 #               'bitrate=500:pass=2')
-    
+
     os.spawnvp(os.P_WAIT, 'mencoder', command)
 
     # Remove the temporary png files
@@ -241,7 +244,7 @@ def MapMovie(files, m, lat, lon, movie_name=None, cmin=None, cmax=None, darks=No
     id_str = id_generator(6)
 
     pa = None
-    
+
     for f in files:
         # Clear the figure
         plt.clf();
