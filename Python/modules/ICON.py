@@ -249,10 +249,11 @@ def ecef_to_azze(latlonalt, ecef):
        24-Feb-2015: Written by Brian J. Harding (bhardin2@illinois.edu)
     '''
     
-    # First convert to VEN
+    # First, convert to VEN and normalize
     ven = ecef_to_ven(latlonalt, ecef)
+    ven = ven / np.linalg.norm(ven)
     
-    # Then convert VEN to az, ze
+    # Second, convert VEN to az, ze
     ze = np.arccos(ven[0])*180.0/np.pi
     az = np.arctan2(ven[1],ven[2])*180.0/np.pi
     
