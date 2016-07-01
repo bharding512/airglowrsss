@@ -1,67 +1,6 @@
-
-# TODO: Check this into svn.
-
-# TODO: Incorporate some of these functions into pyglow.Point? Probably not - it'll be nice
-# to have everything here.
-
 import numpy as np
 
-
-def calculate_slice(ze,az,satlat,satlon,satalt,ver,v,t,instr_params, step=1.):
-    '''
-    Step through the atmosphere modeled by the functions A, V, T and accumulate
-    a MIGHTI interferogram along the line-of-sight specified. Lines-of-sight are
-    calculated using a spherical earth.
-    INPUTS:
-        ze      - radians, zenith angle of look direction ( >pi/2 )
-        az      - radians, azimuth angle of look direction (0 is north, 90 is east)
-        satlat  - degrees, latitude of satellite
-        satlon  - degrees, longitude of satellite
-        satalt  - km,      altitude of satellite
-        ver     - function of (lat,lon,alt) which specifies the volume emission rate
-                  of the observed emission, in phot/cm^3/s
-        v       - function of (lat,lon,alt) which specifies the neutral velocity
-        t       - function of (lat,lon,alt) which specifies the neutral temperature
-        params  - dictionary containing MIGHTI instrument parameters (see "interferogram")
-        step    - km, resolution of the integration along the line of sight
-    OUTPUTS:
-        interferogram  - array of length instr_params['npixel']. 
-    
-    TODO: Eliminate the spherical-symmetry assumption. (i.e., actually use satlat, satlon, az)
-    TODO: Account for nonzero FOV in horizontal direction. ... How? Maybe better to just parameterize this.
-    '''
-    RE = 6371. # km, radius of earth
-    x = 0.          # This measures perpendicular to the satellite nadir
-    y = RE + satalt # This measures parallel to satellite nadir
-    dx = np.sin(ze) # unit step in x
-    dy = np.cos(ze) # unit step in y
-    igram = np.zeros(instr_params['npixelx'])
-    
-    while (np.sqrt(x**2 + y**2) <= RE+satalt): # until you get far enough away from earth that it doesn't matter
-        # Step along line-of-sight and accumulate fringe patterns
-        # calculate altitude
-        # TODO: step in real 3-D space, calculating lat,lon as well
-        alt = np.sqrt(x**2 + y**2) - RE
-        lat = np.nan # for now, this doesn't matter
-        lon = np.nan # for now, this doesn't matter
-
-        # create interferogram at this location
-        instr_params['V'] = v(lat, lon, alt)
-        instr_params['T'] = t(lat, lon, alt)
-        # ver is in phot/cm^3/s
-        # multiply by step in cm and by 1e-6 to put units in Mphot/cm^2/s, i.e., Rayleighs
-        instr_params['I'] = ver(lat, lon, alt) * step * 1.0e5 / 1.0e6
-
-        # add the resulting interferogram to the accumulating interferogram
-        igram += interferogram(instr_params)
-        
-        # take the next step
-        x += step*dx
-        y += step*dy
-
-    return igram
-        
-
+       
     
 def add_noise(I, instr_params):
     signal = I.copy() # in electrons
@@ -71,7 +10,7 @@ def add_noise(I, instr_params):
     signal += instr_params['darkcurrent']*instr_params['exptime'] # still "electrons" 
 
     # Add shot noise (doesn't matter if you do this before/after binning)
-    # This accounts for dark noise since dark current is in the signal.
+    # This accounts for dark noise if dark current is in the signal.
     shotnoise = np.sqrt(signal)*np.random.randn(*np.shape(signal))
     signal += shotnoise
 
@@ -101,7 +40,7 @@ def interferogram(params):
         sigma - wavenumber of center wavelength [m^-1]
         T - temperature of the line [K]
         V - line of sight wind velocity [m/s]
-        amplitude - interferogram amplitude at zero path for perfect visibility
+        I - incident brightness at aperture [Rayleigh]
         npixel - number of pixels in one fringe
         startpath - optical path difference on left edge of CCD [m]
         endpath - optical path difference on right edge of CCD [m]
@@ -114,6 +53,7 @@ def interferogram(params):
       provided by Christoph Englert in MIGHTIPerformanceModel_v4.1.pro
       17 Jan 2014: Updated by Brian Harding to match the specifications in
                    MIGHTIPerformanceModel_v11.pro provided by Kenneth Marr.
+      28 Jun 2016: Updated by Brian Harding to use correct units for simulating noise.
    
     '''
 
@@ -133,21 +73,11 @@ def interferogram(params):
     T = params['T'] # Neutral Temperature [K]
     V = params['V'] # Neutral velocity [m/s]
     I = params['I'] # Intensity of emission, in Rayleighs.
-                          # I think this should be "Intensity," though
-                          # I've never been clear about this.
-                          # e.g., VER*path put into units of Mphot/cm2/sec
-    gain = params['gain']
-    aperture_area = params['aperture_area'] # m^2
-    coneangle1 = params['coneangle1']
-    coneangle2 = params['coneangle2']
-    opteff     = params['opteff']
-    exptime    = params['exptime']
-    
-    
-    # Instrument visibility (assumption: independent of wavenumber and fringe
-    # frequency!  Real instrument will have some frequency dependence)
-    # Question: Where do these numbers (0.8, 0.05) come from?
-    InstrumentVisibility = 0.8-0.05*(np.arange(0.,npixelx))/(npixelx-1)
+
+    etendue         = params['etendue'] # for full FoV
+    opteff          = params['opteff']
+    exptime         = params['exptime']
+    fringe_contrast = params['fringe_contrast']
 
     # Calculate the thermal width of the line [cm^-1]
     sigma = 1./lam
@@ -162,19 +92,17 @@ def interferogram(params):
     
     # Construct the interferogram with thermal envelope and instrument
     # visibility. No meaningful units.
-    igram = ((np.cos(phase) * envelope) * InstrumentVisibility + 1.)
+    igram = ((np.cos(phase) * envelope) * fringe_contrast + 1.)
     
     # Account for etendue, emission brightness, and all other
     # instrumental effects that turn Rayleighs into electrons on the CCD.
     # Assume equi-angle lens projection in vertical direction.
     # (TODO: make sure this is right)
-    solidangle = np.sin(coneangle1)*np.sin(coneangle2)/npixely
-    photons = I*1.e10                         # phot/m^2/sec into 4*pi steradians
-    photons = photons * solidangle/(4*np.pi)  # phot/m^2/sec into detector
-    photons = photons * aperture_area         # phot/sec into detector
-    photons = photons * exptime               # total photons entering MIGHTI
-    electrons = photons * opteff              # total electrons on this row of CCD
-    # split up electrons into pixels in this slice of the interferogram
+    etendue_row     = etendue/npixely                      # for a single row of CCD
+    I0              = I * 1.e10 / (4*np.pi)                # phot/m^2/sec/ster
+    electrons       = I0 * etendue_row * opteff * exptime  # phot/m^2/sec into detector
+
+    # split up electrons into pixels in this row of the interferogram
     ccdslice = electrons * igram / np.sum(igram)
     
     return ccdslice
@@ -197,20 +125,32 @@ def get_emission_constants():
 
 def get_instrument_constants():
 
-    instrument = {    #'nx': 512,  # number of superpixels per slice of the interferogram (horizontal)
-                      'nx': 512,  # number of superpixels per slice of the interferogram (horizontal)
-                      'ny': 1456/16,  # number of superpixels in vertical (altitude) direction on CCD.
-                    'startpath': 4.62e-2, # optical path difference at start of interferometer [m]
-                      'endpath': 5.50e-2, # optical path difference at end of interferometer [m]
-                'aperture_area': 3.078e-2*3.078e-2, # cm^2
-                   'coneangle1': 3.22, # fov of instrument in horizontal direction, [deg]
-                   'coneangle2': 5.74, # fov of instrument in vertical direction, [deg]
-                        'gain' : 1, # gain of CCD (counts per electron)
-                       'opteff': 0.16, # combined transmittance of all optics.
-                  'darkcurrent': 0.1*64, # electrons/sec/pixel (TODO: per superpixel or pixel?)
-                    'readnoise': 7, # electrons rms, per 2.5 km superpixel
+    instrument = {
+          'nx': 450,  # number of binned pixels horizontally per color
+          'ny': 87,  # number of binned pixels vertically (in altitude) per color
+        'startpath': 4.62e-2, # optical path difference at start of interferometer [m]
+          'endpath': 5.50e-2, # optical path difference at end of interferometer [m]
+          'etendue': 0.0495*1e-4, # for full FoV [m^2 str] Englert et al 2016, Night.
+           'opteff': 0.115, # transmittance of all optics and QE, Englert et al 2016, Green.
+      'darkcurrent': 0.1*32, # electrons per sec per binned pixel
+        'readnoise': 16.8, # electrons rms, per binned pixel. Englert et al 2016
+  'fringe_contrast': 0.43, # Englert et al 2016, Green Night (worst case)
+         'exptime': 60., # Night.
                   }
 
+    #### TEMPORARY INSTRUMENT TO RE-CREATE CSR ANALYSIS ####                 
+#    instrument = {
+#          'nx': 450,  # number of binned pixels horizontally per color
+#          'ny': 87,  # number of binned pixels vertically (in altitude) per color
+#        'startpath': 4.62e-2, # optical path difference at start of interferometer [m]
+#          'endpath': 5.50e-2, # optical path difference at end of interferometer [m]
+#          'etendue': 0.04*1e-4, # for full FoV [m^2 str] CSR Table F6
+#           'opteff': 0.16, # transmittance of all optics and QE, CSR Table F6
+#      'darkcurrent': 0.1*32, # electrons per sec per binned pixel
+#        'readnoise': 7., # electrons rms, per binned pixel. CSR Table F6
+#  'fringe_contrast': 0.9, # CSR Table F6
+#          'exptime': 60., # Night.
+#                  }
     return instrument
 
 
