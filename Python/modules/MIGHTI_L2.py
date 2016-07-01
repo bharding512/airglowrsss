@@ -37,15 +37,18 @@ def get_instrument_constants(emission_color, start_path, end_path):
 
     if emission_color == 'red':
         lam          = 630.0304e-9   # center wavelength of emission [m] (Osterbrock et al. 1996)
-        phase_offset = -2.515976     # updated 2016-05-26 using my instrument model
+        phase_offset = -1.139683     # updated 2016-06-29 using my instrument model
         zero_phase   = 128.648464318 # updated 2016-05-26 using my instrument model
                                                        # (MIGHTI_Zero_wind_issues.ipynb)
+        bin_size     = 13            # How many rows to bin together in post-processing
+        
     elif emission_color == 'green':
-        lam          = 557.7338e-9     # center wavelength of emission [m]
-        phase_offset = -1.808653     # updated 2016-05-26 using my instrument model
+        lam          = 557.7338e-9   # center wavelength of emission [m]
+        phase_offset = -1.630175     # updated 2016-06-29 using my instrument model
         zero_phase = 54.6633360579   # updated 2016-05-26 using my instrument model
                                                       # (MIGHTI_Zero_wind_issues.ipynb)
-    else:
+        bin_size     = 2             # How many rows to bin together in post-processing
+    else: 
         raise Exception('emission_color = %s not understood' % emission_color)
 
     # Calculate phase-to-wind conversion factor
@@ -64,7 +67,7 @@ def get_instrument_constants(emission_color, start_path, end_path):
                      'zero_phase': zero_phase,
                         'min_amp': 0.0, # TODO. What's the best way to implement this? For now, do nothing.
            'phase_to_wind_factor': phase_to_wind_factor,
-                    
+                       'bin_size': bin_size,
                  }
 
     return instr_params
@@ -197,16 +200,66 @@ def remove_satellite_velocity(I, sat_velocity, sat_velocity_vector, mighti_ecef_
 
 
 
+def bin_data(b, I, tang_lat, tang_lon, tang_alt):
+    '''
+    To improve statistics, degrade the vertical resolution of the interferogram
+    by binning every b rows together.
+    INPUTS:
+        b           -- TYPE:int,                        The number of rows to bin together
+        I           -- TYPE:array(ny,nx),   UNITS:arb.  The MIGHTI interferogram
+        tang_lat    -- TYPE:array(ny),      UNITS:deg.  Tangent latitude of each row of I
+        tang_lon    -- TYPE:array(ny),      UNITS:deg.  Tangent longitudes of each row of I
+        tang_alt    -- TYPE:array(ny),      UNITS:km.   Tangent altitudes of each row of I
+    OUTPUTS:
+        I_b         -- TYPE:array(ny_b,nx), UNITS:arb.  The binned MIGHTI interferogram
+        tang_lat_b  -- TYPE:array(ny),      UNITS:deg.  Tangent latitude of each row of I_b
+        tang_lon_b  -- TYPE:array(ny),      UNITS:deg.  Tangent longitudes of each row of I_b
+        tang_alt_b  -- TYPE:array(ny),      UNITS:km.   Tangent altitudes of each row of I_b
+    '''
 
-def create_observation_matrix(tang_alt, icon_alt, top_layer='exp'):
+    ny,nx = np.shape(I)
+    ny_b = int(np.ceil(1.0*ny/b))
+    tang_lat_b = np.zeros(ny_b)
+    tang_lon_b = np.zeros(ny_b)
+    tang_alt_b = np.zeros(ny_b)
+    I_b = np.zeros((ny_b,nx),dtype=complex)
+    for i in range(0,ny_b): # bin from the top altitudes down
+        i_new   = ny_b-i-1
+        i_start = ny-(i+1)*b
+        i_stop  = ny-i*b
+        if np.mod(ny,b)!=0 and i_new==0: # special case in case ny is not divisible by b
+            tang_lat_b[i_new] = np.mean(tang_lat[:i_stop])
+            # Remove jumps before averaging
+            tang_lon_vec = fix_longitudes(tang_lon[:i_stop], 180.) 
+            tang_lon_b[i_new] = np.mean(tang_lon_vec)
+            tang_alt_b[i_new] = np.mean(tang_alt[:i_stop])
+            I_b[i_new,:] = np.mean(I[:i_stop,:],axis=0)
+
+        else:
+            tang_lat_b[i_new] = np.mean(tang_lat[i_start:i_stop])
+            # Remove jumps before averaging
+            tang_lon_vec = fix_longitudes(tang_lon[i_start:i_stop], 180.) 
+            tang_lon_b[i_new] = np.mean(tang_lon_vec)
+            tang_alt_b[i_new] = np.mean(tang_alt[i_start:i_stop])
+            I_b[i_new,:] = np.mean(I[i_start:i_stop,:],axis=0)
+            
+    return I_b, tang_lat_b, tang_lon_b, tang_alt_b
+
+
+
+
+def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_order=1):
     '''
     Define the matrix D whose inversion is known as "onion-peeling." The forward model is:
         I = D * Ip
     where I is the measured interferogram, D is the observation matrix, and Ip is the 
-    onion-peeled interferogram. The observation matrix is created by assuming the spectrum
-    (and thus the interferogram) is a piecewise linear function of altitude, treating the 
-    values of the interferogram at the tangent locations as the unknowns, and writing the 
-    measurements as a linear function of the unknowns.
+    onion-peeled interferogram. If integration_order is 1, the observation matrix is 
+    created by assuming the spectrum (and thus the interferogram) is a piecewise linear 
+    function of altitude, treating the values of the interferogram at the tangent locations
+    as the unknowns, and writing the measurements as a linear function of the unknowns.
+    If integration_order is 0, the same recipe is followed, except the spectrum is 
+    assumed to be a piecewise constant function of altitude, and the unknowns are the 
+    values of the interferogram at the midpoint between two tangent altitudes.
     
     INPUTS:
         tang_alt   -- TYPE:array(ny),    UNITS:km.   Tangent altitudes of each row of interferogram.
@@ -214,10 +267,13 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp'):
     OPTIONAL INPUTS:
         top_layer  -- TYPE:str,          'thin': assume VER goes to zero above top layer
                                          'exp':  assume VER falls off exponentially in altitude (default)
+        integration_order -- TYPE:int,   0: Use Riemann-sum rule for discretizing line-of-sight integral
+                                         1: Use trapezoidal rule for discretizing line-of-sight integral
     OUTPUTS:
         D          -- TYPE:array(ny,ny), UNITS:km.   Observation matrix. Also called the "path matrix"
                                                      or "distance matrix"
     '''
+    
     
     H = 26. # km, assumed scale height of VER falloff with altitude (used if top_layer=='exp')
             # This was found by fitting many profiles for which there was significant
@@ -234,41 +290,92 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp'):
     RE = 6371. # km, assume the Earth is locally spherical with an effective radius RE.
                # (The estimated winds are barely sensitive to the choice of RE. This
                #  approximation introduces an error < 1mm/s)
-    
+               
     D = np.zeros((M,M))
-    for m in range(M):
-        rm   = RE + tang_alt[m]
-        # Loop over regions
-        for k in range(m,M-1):
-            # Region k is between nodes (i.e., tangent altitudes) k and k+1
-            rk   = RE + tang_alt[k]
-            rkp1 = RE + tang_alt[k+1]
-            # Compile the contribution from this region to the nodes below and above, using the
-            # analytical evaluation of the Abel integral.
-            wkkp1 = 2./(rk-rkp1) * ( q(np.sqrt(rk**2  -rm**2),rm,rk)   - q(np.sqrt(rkp1**2-rm**2),rm,rk  ) )
-            wkk   = 2./(rk-rkp1) * ( q(np.sqrt(rkp1**2-rm**2),rm,rkp1) - q(np.sqrt(rk**2  -rm**2),rm,rkp1)  )
+    
+    #################### Zero-order integration #######################
+    # Assume airglow is constant within thin altitude shells. This is
+    # analogous to Riemann sum integration
+    if integration_order == 0:
+    
+        theta = np.deg2rad(tang_alt_to_ze(tang_alt, icon_alt, RE))
+        
+        # Define grid. Bottom of each layer is defined by tangent height of observation.
+        rbottom = tang_alt
+        # Define top of each layer.
+        rtop = rbottom.copy()
+        rtop[:-1] = rbottom[1:]
+        rtop[-1] = rbottom[-1] + (rtop[1]-rbottom[1])
+        # Define midpt of each layer
+        rmid = (rbottom + rtop)/2
 
-            D[m,k] += wkk
-            D[m,k+1] += wkkp1
-            
-        # Handle contributions from above 300km differently, depending on top_layer='thin' or 'exp':
-        if top_layer == 'thin': # Use assumption that airglow goes to zero just above top altitude
-            # Calculate contribution to top node from above top tangent altitude
-            rk   = RE + tang_alt[M-1]
-            rkp1 = RE + tang_alt[M-1] + (tang_alt[M-1]-tang_alt[M-2])
-            wkk = 2./(rk-rkp1) * ( q(np.sqrt(rkp1**2-rm**2),rm,rkp1) - q(np.sqrt(rk**2  -rm**2),rm,rkp1)  )
-            D[m,M-1] += wkk            
-            
-        elif top_layer == 'exp': # Use exponential falloff model
-            rt = tang_alt[m] + RE 
-            r0 = tang_alt[-1] + RE
-            
-            def func(x, rt):
-                # The extrapolation function to be numerically integrated. (Eq 6 in Harding et al. 2016 SSR)
-                return np.exp(-1./H*(np.sqrt(x**2 + rt**2) - r0))
-            
-            x0 = np.sqrt(r0**2- rt**2)
-            D[m,M-1] += 2.*integrate.quad(func, x0, np.inf, args=(rt))[0] 
+        # Build observation matrix
+        for m in range(M):
+            for k in range(M):
+                th = theta[m]
+                rb = rbottom[k]
+                rt = rtop[k]
+                sb = np.cos(th)**2 - 1 + ((RE+rb)/(RE+icon_alt))**2
+                st = np.cos(th)**2 - 1 + ((RE+rt)/(RE+icon_alt))**2
+                if sb < 0: # there is no intersection of LOS with altitude rb. Set term to 0.
+                    # Note: this might be due to numerical rounding for tangent altitude. 
+                    # Do the same thing either way.
+                    sb = 0.
+                if st < 0: # there is no intersection of LOS with altitude rt. Set term to 0.
+                    st = 0.
+                D[m,k] = 2*(RE+icon_alt) * ( np.sqrt(st) - np.sqrt(sb) )
+           
+            if top_layer == 'exp': # Use exponential falloff model
+                rt = tang_alt[m] + RE
+                r0 = tang_alt[-1] + RE
+                
+                def func(x, rt):
+                    # The extrapolation function to be numerically integrated. (Eq 6 in Harding et al. 2016 SSR)
+                    return np.exp(-1./H*(np.sqrt(x**2 + rt**2) - r0))
+                
+                x0 = np.sqrt(r0**2- rt**2)
+                D[m,M-1] = 2.*integrate.quad(func, x0, np.inf, args=(rt))[0]
+                
+    #################### First-order integration #######################
+    # Assume airglow varies linearly within thin altitude shells. This is
+    # analogous to trapezoidal rule integration
+    elif integration_order == 1:
+        for m in range(M):
+            rm   = RE + tang_alt[m]
+            # Loop over regions
+            for k in range(m,M-1):
+                # Region k is between nodes (i.e., tangent altitudes) k and k+1
+                rk   = RE + tang_alt[k]
+                rkp1 = RE + tang_alt[k+1]
+                # Compile the contribution from this region to the nodes below and above, using the
+                # analytical evaluation of the Abel integral.
+                wkkp1 = 2./(rk-rkp1) * ( q(np.sqrt(rk**2  -rm**2),rm,rk)   - q(np.sqrt(rkp1**2-rm**2),rm,rk  ) )
+                wkk   = 2./(rk-rkp1) * ( q(np.sqrt(rkp1**2-rm**2),rm,rkp1) - q(np.sqrt(rk**2  -rm**2),rm,rkp1)  )
+
+                D[m,k] += wkk
+                D[m,k+1] += wkkp1
+                
+            # Handle contributions from above 300km differently, depending on top_layer='thin' or 'exp':
+            if top_layer == 'thin': # Use assumption that airglow goes to zero just above top altitude
+                # Calculate contribution to top node from above top tangent altitude
+                rk   = RE + tang_alt[M-1]
+                rkp1 = RE + tang_alt[M-1] + (tang_alt[M-1]-tang_alt[M-2])
+                wkk = 2./(rk-rkp1) * ( q(np.sqrt(rkp1**2-rm**2),rm,rkp1) - q(np.sqrt(rk**2  -rm**2),rm,rkp1)  )
+                D[m,M-1] += wkk
+                
+            elif top_layer == 'exp': # Use exponential falloff model
+                rt = tang_alt[m] + RE
+                r0 = tang_alt[-1] + RE
+                
+                def func(x, rt):
+                    # The extrapolation function to be numerically integrated. (Eq 6 in Harding et al. 2016 SSR)
+                    return np.exp(-1./H*(np.sqrt(x**2 + rt**2) - r0))
+                
+                x0 = np.sqrt(r0**2- rt**2)
+                D[m,M-1] += 2.*integrate.quad(func, x0, np.inf, args=(rt))[0]
+                
+    else:
+        raise Exception('"integration_order == %i" not supported. Use 0 or 1.' % integration_order)
     
     return D
 
@@ -345,21 +452,26 @@ def extract_phase_from_row(row, zero_phase, phase_offset, Nignore):
     
     
     
-def perform_inversion(I, tang_alt, icon_alt, account_for_local_projection=True, zero_phase=None, phase_offset=None, Nignore=None, top_layer='exp'):
+def perform_inversion(I, tang_alt, icon_alt, top_layer='exp', integration_order=1, 
+                      account_for_local_projection=True, zero_phase=None, 
+                      phase_offset=None, Nignore=None):
     '''
     Perform the onion-peeling inversion on the interferogram to return
     a new interferogram, whose rows refer to specific altitudes. In effect,
-    this function undoes the integration along the line of sight. There is an
-    option to use a simple inversion, or a complicated inversion that accounts for
-    the fact that the line of sight is not always parallel to the ground.
+    this function undoes the integration along the line of sight.
     INPUTS:
         I           -- TYPE:array(ny,nx), UNITS:arb.  The complex-valued, MIGHTI interferogram.
         tang_alt    -- TYPE:array(ny),    UNITS:km.   Tangent altitudes of each row of interferogram.
         icon_alt    -- TYPE:float,        UNITS:km.   Altitude of the satellite.
     OPTIONAL INPUTS:
+        top_layer   -- TYPE:str,        'thin': assume VER goes to zero above top layer
+                                        'exp':  assume VER falls off exponentially in altitude (default)
+        integration_order -- TYPE:int,   0: Use Riemann-sum rule for discretizing line-of-sight integral
+                                         1: Use trapezoidal rule for discretizing line-of-sight integral
         account_for_local_projection -- TYPE:bool.   If False, a simple inversion is used.
                                         If True, the inversion accounts for the fact that the ray is not 
-                                        perfectly tangent to each shell at each point along the ray. (default True)
+                                        perfectly tangent to each shell at each point along the ray. 
+                                        (default True)
                                         If True, the following variables are needed:
         zero_phase  -- TYPE:float,      UNITS:rad.   The phase angle which is equivalent 
                                                      to a wind value of zero.
@@ -367,8 +479,6 @@ def perform_inversion(I, tang_alt, icon_alt, account_for_local_projection=True, 
         Nignore     -- TYPE:int,        UNITS:pixel. The number of columns at the
                                         beginning and end of the interferogram to ignore due to phase
                                         distortion from the filtering.
-        top_layer   -- TYPE:str,        'thin': assume VER goes to zero above top layer
-                                        'exp':  assume VER falls off exponentially in altitude (default)
     OUTPUTS:
         Ip          -- TYPE:array(ny,nx), UNITS:arb.  The complex-valued, onion-peeled interferogram.
     '''
@@ -376,7 +486,7 @@ def perform_inversion(I, tang_alt, icon_alt, account_for_local_projection=True, 
     ny,nx = np.shape(I)
     
     # Create the path matrix
-    D = create_observation_matrix(tang_alt, icon_alt, top_layer)
+    D = create_observation_matrix(tang_alt, icon_alt, top_layer=top_layer, integration_order=integration_order)
     
     # The inversion will proceed in different ways depending on whether
     # we will try to account for the local horizontal projection.
@@ -459,8 +569,8 @@ def extract_wind(Ip, zero_phase, phase_offset, min_amp, Nignore, phase_to_wind_f
     v = phase_to_wind_factor * p 
     
     # TODO: propagate uncertainties
-    ve = -999.*np.zeros(np.shape(v))
-    ae = -999.*np.zeros(np.shape(a))
+    ve = np.nan*np.zeros(np.shape(v))
+    ae = np.nan*np.zeros(np.shape(a))
 
     return v, ve, a, ae
 
@@ -507,27 +617,64 @@ def fix_longitudes(lons, lon_target):
 
 
 
-def attribute_measurement_location(tang_lat, tang_lon, tang_alt):
+def attribute_measurement_location(tang_lat, tang_lon, tang_alt, integration_order=1):
     '''
     Determine the geographical location to which the measurement will be attributed. The 
     current implementation of the inversion, which uses trapezoidal integration, means
     that we should simply return the tangent locations.
     
-    NOTE: If the implementation of the following functions are changed, this function may need
-    to change: create_observation_matrix, perform_inversion, extract_wind.
+    NOTE: If the implementation of any of the following functions are changed, this 
+    function may need to change: create_observation_matrix, perform_inversion, extract_wind.
     INPUTS:
         tang_lat    -- TYPE:array(ny), UNITS:deg.   Tangent latitudes.
         tang_lon    -- TYPE:array(ny), UNITS:deg.   Tangent longitudes.
         tang_alt    -- TYPE:array(ny), UNITS:km.    Tangent altitudes.
+    OPTIONAL INPUTS:
+        integration_order -- TYPE:int,   0: Use Riemann-sum rule for discretizing line-of-sight integral
+                                         1: Use trapezoidal rule for discretizing line-of-sight integral
     OUTPUTS:
         lat         -- TYPE:array(ny), UNITS:deg.   Measurement latitudes.
         lon         -- TYPE:array(ny), UNITS:deg.   Measurement longitudes.
         alt         -- TYPE:array(ny), UNITS:km.    Measurement altitudes.
     '''
- 
-    lat = tang_lat
-    lon = tang_lon
-    alt = tang_alt
+    
+    def shift_up_by_half(vec):
+        """
+        Shift the input vector up by half the resolution. Extrapolate for the top entry.
+        """
+        bottom = vec
+        top = bottom.copy()
+        top[:-1] = top[1:]
+        top[-1] = top[-1] + (top[-2] - bottom[-2])
+        return 0.5 * top + 0.5 * bottom
+
+    def shift_up_by_half_angle(vec):
+        """
+        Shift the input vector up by half the resolution. Extrapolate for the top entry.
+        Use circular mean instead of arithmetic mean. This is intended for longitude
+        calculations.
+        """
+        vec_new = fix_longitudes(vec, vec[0])
+        bottom = vec
+        top = bottom.copy()
+        top[:-1] = top[1:]
+        top[-1] = top[-1] + (top[-2] - bottom[-2])
+        mid = np.zeros(len(bottom))
+        for i in range(len(mid)):
+            mid[i] = circular_mean(top[i], bottom[i])
+
+        mid = np.mod(mid + 180, 360) - 180
+        return mid
+    
+    if integration_order == 1:
+        lat = tang_lat
+        lon = tang_lon
+        alt = tang_alt
+    else:
+        lat = shift_up_by_half(tang_lat)
+        lon = shift_up_by_half_angle(tang_lon)
+        alt = shift_up_by_half(tang_alt)
+        
     
     return lat, lon, alt
 
@@ -750,7 +897,8 @@ def level1_uiuc_to_dict(L1_uiuc_fn):
 
 
 
-def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0):
+def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer = 'exp', 
+                           integration_order = 1, account_for_local_projection = True, bin_size = None ):
     '''
     High-level function to convert a level 1 dictionary (which was generated from
     a level 1 file) into a level 2.1 file.
@@ -791,7 +939,20 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0):
     OPTIONAL INPUTS:
         zero_phase_addition -- TYPE:float, UNITS:rad. A value which we will be added
                                                       to the zero phase used in the 
-                                                      inversion.                              
+                                                      inversion.
+        top_layer           -- TYPE:str, 'thin': assume VER goes to zero above top layer
+                                         'exp':  assume VER falls off exponentially in altitude (default)
+        integration_order   -- TYPE:int, 0: Use Riemann-sum rule for discretizing line-of-sight integral
+                                         1: Use trapezoidal rule for discretizing line-of-sight integral
+        account_for_local_projection -- TYPE:bool.   If False, a simple inversion is used.
+                                        If True, the inversion accounts for the fact that the ray is not 
+                                        perfectly tangent to each shell at each point along the ray. 
+                                        (default True)
+        bin_size            -- TYPE:int or None,  The number of rows of the interferogram to bin together to 
+                                                  improve statistics at the cost of altitude resolution. If 
+                                                  None, use the default (color-dependent) value specified
+                                                  in get_instrument_constants().
+                                        
     OUTPUTS:
         flag                -- TYPE:int,              Equals 0 on success.
             
@@ -824,17 +985,25 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0):
     
     ### Load instrument constants 
     instrument = get_instrument_constants(emission_color, start_path, end_path)
+    if bin_size is None:
+        bin_size = instrument['bin_size']
 
     #### Remove Satellite Velocity
     I = remove_satellite_velocity(Iraw, icon_velocity, icon_ecef_ram_vector, mighti_ecef_vectors, 
                                   instrument['phase_to_wind_factor'])
-                                             
+                         
+    #### Bin data
+    I_b, tang_lat_b, tang_lon_b, tang_alt_b = bin_data(bin_size, I, tang_lat, tang_lon, tang_alt)
+                                                 
     #### Determine geographical locations of inverted wind
-    lat, lon, alt = attribute_measurement_location(tang_lat, tang_lon, tang_alt)
+    lat, lon, alt = attribute_measurement_location(tang_lat_b, tang_lon_b, tang_alt_b,
+                                                   integration_order=integration_order)
     
     #### Onion-peel interferogram
-    Ip = perform_inversion(I, tang_alt, icon_alt, zero_phase=instrument['zero_phase'],
-                           phase_offset=instrument['phase_offset'],Nignore=instrument['Nignore'])
+    Ip = perform_inversion(I_b, tang_alt_b, icon_alt, top_layer=top_layer, integration_order=integration_order,
+                           account_for_local_projection=account_for_local_projection,
+                           zero_phase=instrument['zero_phase'], phase_offset=instrument['phase_offset'],
+                           Nignore=instrument['Nignore'])
 
     #### Extract wind
     v_inertial, ve_inertial, a, ae = extract_wind(Ip, instrument['zero_phase'] + zero_phase_addition,
@@ -863,9 +1032,9 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0):
              exp_time                     = exp_time,
              az                           = az,
              emission_color               = emission_color,
-             resolution_along_track       = -999., # TODO
-             resolution_cross_track       = -999., # TODO
-             resolution_alt               = -999., # TODO
+             resolution_along_track       = np.nan,  # TODO
+             resolution_cross_track       = np.nan, # TODO
+             resolution_alt               = np.nan, # TODO
              icon_alt                     = icon_alt,
              icon_lat                     = icon_lat,
              icon_lon                     = icon_lon,
