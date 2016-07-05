@@ -214,7 +214,7 @@ def Keogram(files, lat, lon, target_lat, target_lon, darks=None, sitename=None, 
     #   Written by Jonathan J. Makela on 10 July 2013
 
     # Create a master dark image if requested
-    if darks is not None:
+    if darks:
         # Find out the size of the image
         d = Image.open(darks[0])
         all_dark = np.zeros_like(np.reshape(d.getdata(), d.size))
@@ -227,6 +227,8 @@ def Keogram(files, lat, lon, target_lat, target_lon, darks=None, sitename=None, 
 
         # Divide by the number of dark images to create a mean image
         darks = all_dark/len(darks)
+    else:
+        darks = None
 
     # Variables to hold the generated keograms
     keo_lat = []

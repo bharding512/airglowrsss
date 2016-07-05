@@ -56,6 +56,8 @@ def RawMovie(files, movie_name=None, cmin=None, cmax=None, darks=None, flips=Non
 
         # Divide by the number of dark images to create a mean image
         darks = all_dark/len(darks)
+    else:
+        darks = None
 
     # If no cmin, cmax given, calculate best values
     if cmin is None:
@@ -209,6 +211,8 @@ def MapMovie(files, m, lat, lon, movie_name=None, cmin=None, cmax=None, darks=No
 
         # Divide by the number of dark images to create a mean image
         darks = all_dark/len(darks)
+    else:
+        darks = None
 
     # If no cmin, cmax given, calculate best values
     if cmin is None:
