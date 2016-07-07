@@ -200,52 +200,69 @@ def remove_satellite_velocity(I, sat_velocity, sat_velocity_vector, mighti_ecef_
 
 
 
-def bin_data(b, I, tang_lat, tang_lon, tang_alt):
-    '''
-    To improve statistics, degrade the vertical resolution of the interferogram
-    by binning every b rows together.
-    INPUTS:
-        b           -- TYPE:int,                        The number of rows to bin together
-        I           -- TYPE:array(ny,nx),   UNITS:arb.  The MIGHTI interferogram
-        tang_lat    -- TYPE:array(ny),      UNITS:deg.  Tangent latitude of each row of I
-        tang_lon    -- TYPE:array(ny),      UNITS:deg.  Tangent longitudes of each row of I
-        tang_alt    -- TYPE:array(ny),      UNITS:km.   Tangent altitudes of each row of I
-    OUTPUTS:
-        I_b         -- TYPE:array(ny_b,nx), UNITS:arb.  The binned MIGHTI interferogram
-        tang_lat_b  -- TYPE:array(ny),      UNITS:deg.  Tangent latitude of each row of I_b
-        tang_lon_b  -- TYPE:array(ny),      UNITS:deg.  Tangent longitudes of each row of I_b
-        tang_alt_b  -- TYPE:array(ny),      UNITS:km.   Tangent altitudes of each row of I_b
-    '''
 
-    ny,nx = np.shape(I)
+def bin_array(b, y, lon = False):
+    '''
+    Downsample y by binning it, improving statistics. Every b
+    elements of y will be averaged together to create a new array, y_b, 
+    of length ny_b = ceil(len(y)/b). Binning starts at the end of the array, 
+    so the first element of y_b may not represent exactly b samples of y.
+    INPUTS:
+        b    -- TYPE:int,          The number of rows to bin together
+        y    -- TYPE:array(ny),    The array to be binned
+    OPTIONAL INPUTS:
+        lon  -- TYPE:bool,         If True, 360-deg discontinuities will
+                                   be removed before averaging (e.g., for
+                                   longitude binning).
+    OUTPUTS:
+        y_b  -- TYPE:array(ny_b),  The binned array
+    '''
+    ny = len(y)
     ny_b = int(np.ceil(1.0*ny/b))
-    tang_lat_b = np.zeros(ny_b)
-    tang_lon_b = np.zeros(ny_b)
-    tang_alt_b = np.zeros(ny_b)
-    I_b = np.zeros((ny_b,nx),dtype=complex)
-    for i in range(0,ny_b): # bin from the top altitudes down
+    y_b = np.zeros(ny_b, dtype=y.dtype)
+    for i in range(0,ny_b): # bin from the end to the beginning.
         i_new   = ny_b-i-1
         i_start = ny-(i+1)*b
         i_stop  = ny-i*b
+        
+        # grab the samples to be binned
         if np.mod(ny,b)!=0 and i_new==0: # special case in case ny is not divisible by b
-            tang_lat_b[i_new] = np.mean(tang_lat[:i_stop])
-            # Remove jumps before averaging
-            tang_lon_vec = fix_longitudes(tang_lon[:i_stop], 180.) 
-            tang_lon_b[i_new] = np.mean(tang_lon_vec)
-            tang_alt_b[i_new] = np.mean(tang_alt[:i_stop])
-            I_b[i_new,:] = np.mean(I[:i_stop,:],axis=0)
+            y_samps = y[:i_stop]
+        else: # grab 
+            y_samps = y[i_start:i_stop]
 
-        else:
-            tang_lat_b[i_new] = np.mean(tang_lat[i_start:i_stop])
-            # Remove jumps before averaging
-            tang_lon_vec = fix_longitudes(tang_lon[i_start:i_stop], 180.) 
-            tang_lon_b[i_new] = np.mean(tang_lon_vec)
-            tang_alt_b[i_new] = np.mean(tang_alt[i_start:i_stop])
-            I_b[i_new,:] = np.mean(I[i_start:i_stop,:],axis=0)
-            
-    return I_b, tang_lat_b, tang_lon_b, tang_alt_b
-
-
+        if lon:
+            y_samps = fix_longitudes(y_samps, 180.)
+        y_b[i_new] = np.mean(y_samps)
+        
+    return y_b
+    
+    
+    
+    
+def bin_interferogram(b, I):
+    '''
+    Downsample the interferogram in altitude to improve statistics while
+    degrading vertical resolution. Every b rows will be averaged together. 
+    Binning starts at high altitudes, so the lower rows of I_b may not represent 
+    exactly b rows of I.
+    INPUTS:
+        b           -- TYPE:int,                        The number of rows to bin together
+        I           -- TYPE:array(ny,nx),   UNITS:arb.  The MIGHTI interferogram
+    OUTPUTS:
+        I_b         -- TYPE:array(ny_b,nx), UNITS:arb.  The binned MIGHTI interferogram
+    '''
+    
+    ny,nx = np.shape(I)
+    # Initial call to bin_array to see what the size of the new image will be
+    tmp = bin_array(b, I[:,0])
+    ny_b = len(tmp)
+    
+    # Bin the interfogram column by column
+    I_b = np.zeros((ny_b,nx),dtype=I.dtype)
+    for i in range(nx):
+        I_b[:,i] = bin_array(b,I[:,i])
+    return I_b
 
 
 def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_order=1):
@@ -675,7 +692,6 @@ def attribute_measurement_location(tang_lat, tang_lon, tang_alt, integration_ord
         lon = shift_up_by_half_angle(tang_lon)
         alt = shift_up_by_half(tang_alt)
         
-    
     return lat, lon, alt
 
 
@@ -993,7 +1009,11 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
                                   instrument['phase_to_wind_factor'])
                          
     #### Bin data
-    I_b, tang_lat_b, tang_lon_b, tang_alt_b = bin_data(bin_size, I, tang_lat, tang_lon, tang_alt)
+    I_b        = bin_interferogram(bin_size, I)
+    tang_lat_b = bin_array(bin_size, tang_lat)
+    tang_lon_b = bin_array(bin_size, tang_lon, lon=True)
+    tang_alt_b = bin_array(bin_size, tang_alt)
+
                                                  
     #### Determine geographical locations of inverted wind
     lat, lon, alt = attribute_measurement_location(tang_lat_b, tang_lon_b, tang_alt_b,
