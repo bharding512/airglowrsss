@@ -212,7 +212,7 @@ _instruments['picasso02'] = {
         'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO2elaz_2342006.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
-        'ccd_temp_set':     -40,
+        'ccd_temp_set':     -20,
     }
 
 _instruments['picasso03'] = {
