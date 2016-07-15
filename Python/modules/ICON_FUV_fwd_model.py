@@ -15,6 +15,13 @@ import Regularization as reg
 from scipy.io import netcdf
 from time import gmtime, strftime
 from sys import exit
+from scipy.interpolate import interp1d,interp2d
+
+import FUV as fuv 
+from scipy.io import netcdf
+import FUV_Distance_Matrix as dmat
+
+
 
 # ICON FUV
 def get_FUV_instrument_constants():
@@ -124,7 +131,10 @@ def calculate_VER_1356_nighttime(satlat,satlon,satalt,dn,Ne_scaling = 1.,testing
         cont        - contribution factors, cont=1 -> RR+MN, 2-> RR
     OUTPUTS:
         VER         - A VER altitude profile for given lat/lon coords
+        RR          - A RR altitude profile for given lat/lon coords
+        MN          - A MN altitude profile for given lat/lon coords
         Ne          - A Electron density altitude profile for given lat/lon coords
+        O           - A O density altitude profile for given lat/lon coords
     NOTES:
 
     HISTORY:
@@ -833,3 +843,192 @@ def find_mid_cell(satlatlonalt,ze,az,spherical,limb = 130.):
         h_loc_mid[:,2] = rmid
     
     return rmid,rbot,rtop, h_loc_bot, h_loc_mid
+
+
+
+## TIEGCM Forward MODEL
+def TIEGCM_Altitude_interpolate(Ne,rbot,xnew):
+    '''
+    Given a TIEGCM altitude profile we make cubic intepolation and linear extrapolation to calculate the values for the altitude vector resulting from the tangent altitudes
+    INPUTS:
+        Ne       - Original Electron density profile [cm^{-3}]
+        rbot     - altitude vector for original electron density profile [km]
+        xnew     - Altitude vector that we want to intepolate the values to
+    OUTPUT:
+        NE_inter   -  Interpolated altitude profile for the estimated electron density
+        xnew       -  Interpolated altitude vector for the true electron density
+    NOTES:
+    HISTORY:
+        16-May-2016: Written by Dimitrios Iliou (iliou2@illinois.edu)
+    '''
+
+    # TIEGCM vectors
+    y_true = Ne
+    x_true = rbot
+
+    # Create two interpolators, one linear for the extrapolation and one cubic for the intepolation
+    # Cubic is more preferable since we want smoothness 
+    f_linear = interp1d(x_true, y_true, kind='linear',fill_value='extrapolate')
+    f_cubic = interp1d(x_true,y_true,kind ='cubic')    
+        
+    # Calculate the intepolations
+    linear = f_linear(xnew)
+    #cubic = f_cubic(xnew[np.where(xnew<max(x_true))])
+            
+    ## HERE I NEED TO ADD LINEAR INTERPOLATION BENEATH THE TANGENT POINT. MAYBE EXTRAPOLATE BELOW THE MIN VALUE OF TIEGCM
+    cubic_indices = np.intersect1d(np.where(xnew>min(x_true)),np.where(xnew<max(x_true)))
+    cubic = f_cubic(xnew[cubic_indices])    
+    
+    # Replace the values in the linear vector with the corresponding values of the cubic one to get the correct dimensions for the altitude vector wanted
+    # I need to find the indices that correspond to the the cubic and 
+    #linear[len(linear)-len(cubic):] = cubic
+    linear[cubic_indices] = cubic
+
+    linear[np.where(linear<=0)]=0
+    
+    return linear,xnew
+
+def fix_lat_lon_interp_indices(x,value):
+    
+    xnew = np.zeros(len(x)+1)
+
+    les = np.where(x<value)[0][-1]
+    mor = np.where(x>value)[0][0]
+
+    xnew[:les+1] = x[:les+1]
+    xnew[les+1] = value
+    xnew[les+2:] = x[mor:]
+    
+    return xnew
+
+def TIEGCM_LatLon_2Dinterpolate(Ne,alt,lat_vec,lon_vec,lat,lon):
+    '''
+    Given a TIEGCM altitude profile we make cubic intepolation and linear extrapolation to calculate the values for the altitude vector resulting from the tangent altitudes
+    INPUTS:
+        Ne       - Original Electron density profile [cm^{-3}] TIEGCM
+        alt      - Altitude profile TIEGCM [cm]
+        lat_vec  - Latitude value vector
+        lon_vec  - Longitude value vector
+        lat      - latitude coordinate that we want to interpolate
+        lon      - longitude coordinate that we want to interpolate
+    OUTPUT:
+        NE_interp   -  Interpolated altitude profile for the estimated electron density
+        alt_interp  -  Interpolated altitude vector for the true electron density
+        lat_new     - New latitude vector that includes the location for which we interpolated
+        lon_new     - New longitude vector that includes the location for which we interpolated
+    NOTES:
+    HISTORY:
+        16-May-2016: Written by Dimitrios Iliou (iliou2@illinois.edu)
+    '''
+    
+    if lat in lat_vec:
+        lat_new = lat_vec
+    else:
+        lat_new = fix_lat_lon_interp_indeces(lat_vec,lat)
+    if lon in lon_vec:
+        lon_new = lon_vec
+    else:
+        lon_new = fix_lat_lon_interp_indeces(lon_vec,lon)
+    
+    Ne_interp = np.zeros((np.size(Ne,0),len(lat_new),len(lon_new)))
+    
+    alt_interp = np.zeros((np.size(alt,0),len(lat_new),len(lon_new)))
+    
+    for i in range(0,np.size(Ne,0)):
+        f = interp2d( lon_vec,lat_vec,Ne[i,:,:], kind='cubic')
+        Ne_interp[i,:,:] = f(lon_new,lat_new)
+        
+        f_alt = interp2d( lon_vec,lat_vec,alt[i,:,:], kind='cubic')
+        alt_interp[i,:,:] = f_alt(lon_new,lat_new)
+        
+    return Ne_interp,alt_interp,lat_new,lon_new
+
+
+def find_nearest(array,value):
+    '''
+    Function that finds the closest value in the array. 
+    This will be used to find the interval in which we want to interpolate 
+    in when we call TIEGCM
+    INPUTS:
+        array  - array that contains the values that we have
+        value  - value that we want to find its closest neighbour
+    OUTPUTS:
+        inx    - index position of the matrix
+    HISTORY:
+        16-May-2016: Written by Dimitrios Iliou (iliou2@illinois.edu)
+    
+    '''
+    idx = (np.abs(array-value)).argmin()
+    return idx
+   
+    
+def TIEGCM_Brightness_Calculation(satlatlonalt,ze,az,hour = 0,spherical=0,limb = -500.,path = '/home/dimitris/public_html/Datafiles/TIEGMC/tiegcm_icon_merg2.0_DpertCbgrd.s_081.nc'):
+
+    '''
+    Foward model for  simulated Brightness measurements using TIEGCM files
+    INPUTS:
+        satlatlonalt    - Satellite coordinates [lat,lon,alt] 
+        ze              - zenith viewing geometry to calculate tangent altitudes
+        az              - azimuth viewing geometry to calculate tangent altitudes
+        hour            - Hour index for the TIEGCM model
+        spherical       - Spherical earth assumption [0->Spherical, 1-> Non-Spherical]
+        limb            - Lower tangent altitude
+        path            - Path containing the TIEGCM file
+    OUTPUTS:
+        Brightness_tiegcm - Simulated Brightness
+        ver_tiegcm        - Simulated VER
+        Ne_tiegcm         - Electron density extracted from TIEGCM
+        tan_alt           - Calculated tangent altitudes
+    HISTORY:
+        18-May-2016: Written by Dimitrios Iliou (iliou2@illinois.edu)
+    NOTES:
+        
+    
+    '''
+
+    # Read the NETCDF file containing the TIEGCM model
+        
+    data = netcdf.netcdf_file(path, 'r')
+
+    Ne = data.variables['NE'][:]
+    Ne = Ne[:,::-1,:,:]
+    lon = data.variables['lon'][:]
+    lat = data.variables['lat'][:]
+    day = data.variables['day'][:] # 81
+    year = data.variables['year'][:] # 2009
+    lev = data.variables['lev'][:]
+    ilev = data.variables['ilev'][:]
+    mtime = data.variables['mtime'][:]
+    time_ = data.variables['time'][:]
+    Z = data.variables['Z'][:]
+    Z = Z[:,::-1,:,:] * 1e-5
+
+    f107d = data.variables['f107d'][0]
+
+    data.close()
+    
+    # Assumes that the start date is first month and first date of the year declared on the TIEGCM file
+    start_date = datetime(year[0],1,1,0,0,0)
+    dn =  start_date + timedelta(minutes=time_[hour])
+
+    a1356 = 7.3e-13
+    
+    h_temp,_,_,_,_ = fuv.find_mid_cell(satlatlonalt = satlatlonalt,ze = ze,az =az,spherical = spherical,limb=limb)
+
+    if spherical == 0: 
+        S,_,_,_ = dmat.create_cells_Matrix_spherical_symmetry(np.deg2rad(ze),satlatlonalt[2])
+    else:
+        S,rmid = dmat.Calculate_D_Matrix_WGS84_mp(satlatlonalt,az,ze)
+
+    Ne_interp,Z_interp,lat_new,lon_new = TIEGCM_LatLon_2Dinterpolate(Ne[hour,:,:,:],Z[hour,:,:,:],lat,lon,satlatlonalt[0],satlatlonalt[1])
+        
+    lat_index = np.where(lat_new==satlatlonalt[0])[0][0]
+    lon_index = np.where(lon_new==satlatlonalt[1])[0][0]
+
+    Ne_tiegcm,tan_alt = TIEGCM_Altitude_interpolate(Ne_interp[:,lat_index,lon_index],Z_interp[:,lat_index,lon_index],h_temp)
+    ver_tiegcm = a1356*Ne_tiegcm**2
+    Brightness_tiegcm= S.dot(ver_tiegcm)
+        
+    return Brightness_tiegcm,ver_tiegcm,Ne_tiegcm,tan_alt  
+
+
