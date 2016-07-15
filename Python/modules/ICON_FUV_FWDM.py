@@ -12,6 +12,7 @@ import ICON as ic
 import Regularization as reg
 from scipy.io import netcdf
 from time import gmtime, strftime
+from sys import exit
 
 # ICON FUV
 def get_FUV_instrument_constants():
@@ -31,7 +32,7 @@ def get_FUV_instrument_constants():
                  'coneangle1_r': 0.314159265359,# fov of instrument in horizontal direction, [rad]
                  'coneangle2_r': 0.418879020479,# fov of instrument in vertical direction, [rad]
                     'exposure' : 12,            # exposure [sec]
-                  'Sensitivity': 0.083,         # combined transmittance of all optics. [counts/res_cell/s/R]
+                  'Sensitivity': 0.0873,         # combined transmittance of all optics. [counts/res_cell/s/R]
                         'fov_l': 98,            # Field of View (Vertical) Lower Bound (degrees)
                         'fov_u': 123,           # Field of View (Vertical) Upper Bound (degrees)
                        'fovr_l': 1.71042266695, # Field of View (Vertical) Lower Bound (radians)
@@ -73,7 +74,7 @@ def calc_1356_nighttime(lat,lon,alt,dn,Ne_scaling = 1.):
     k1 = 1.3e-15    # radiative attachment rate (cm^3/s)
     k2 = 1e-7       # ion-ion neutralization rate (cm^3/s)
     k3 = 1.4e-10    # ion-atom neutralization rate (cm^3/2)
-    
+    '''
     # Run pyglow at the requested location and time.  IRI and MSIS calls are needed to generate
     # model outputs of needed constituents
     pt = pyglow.Point(dn, lat, lon, alt)
@@ -89,7 +90,12 @@ def calc_1356_nighttime(lat,lon,alt,dn,Ne_scaling = 1.):
     # Calcualte radiative recombination (equation 17) and mutual neutralization (equation 18)
     RR = a1356*Ne*O_p  # radiatvie recombination (1/cm^3/s)
     MN  = (b1356*(k1*k2)) *((Ne*O*O_p)/(k2*O_p + k3*O)) # mutual neutralization (1/cm^3/s)
-
+    '''
+    Ne = 10**6*np.exp(-(alt-350)**2/100**2)
+    # Calcualte radiative recombination (equation 17) and mutual neutralization (equation 18)
+    RR = a1356*Ne**2  # radiatvie recombination (1/cm^3/s)
+    MN = 0
+    O = 0
     return RR,MN,Ne,O
 
 def calculate_VER_1356_nighttime(satlat,satlon,satalt,dn,Ne_scaling = 1.):
@@ -384,37 +390,55 @@ def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satal
         12-Dec-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
         01-Apr-2015: pixels_per_rescell -> stripes used 
         26-Jul-2015: Added the spherical and symmetry parameters on the function
+        26-Aug-2015: Exception for Pool added.
     '''
+    try:
+        params = get_FUV_instrument_constants()
+        if exposure==0:
+            exposure = params['exposure']
+        if TE==0:
+            TE =  params['Sensitivity']
+        if stripes_used==0:
+            stripes_used = params['stripes_used']
 
-    params = get_FUV_instrument_constants()
-    if exposure==0:
-        exposure = params['exposure']
-    if TE==0:
-        TE =  params['Sensitivity']
-    if stripes_used==0:
-        stripes_used = params['stripes_used']
+        photons = np.zeros(np.size(ze)) # Number of Counts without Noise
+        Rayl = np.zeros(np.size(ze))
+        
+        # i put index on azimuth
+        job_args = [(ze[i],az[i] ,satlat,satlon,satalt, dn,symmetry,shperical,exposure,TE,cont,Ne_scaling,step,stripes_used) for i in range(0,len(ze))]
+        N = multiprocessing.cpu_count()
 
-    photons = np.zeros(np.size(ze)) # Number of Counts without Noise
-    Rayl = np.zeros(np.size(ze))
+        # Create the pool.  Be nice.  Don't use all the cores!
+        pool = Pool(processes=16)
+        
+        t0 = time.time()
+        results = pool.map(get_Photons_from_Brightness_1356_nighttime_star,job_args)
+        for i in range(0,len(results)):
+            Rayl[i] = results[i][0]
+            photons[i] = results[i][1]
+
+        t1 = time.time()
+        pool.close()
+        pool.join()
+        #print t1-t0
+
+    except (KeyboardInterrupt,SystemExit,ZeroDivisionError,BaseException) as inst :
+        
+        if 'pool' in vars():
+            pool.terminate()
+            
+        #print "You cancelled the program!"
+        print type(inst)
+        print inst
+        exit(1) 
+
+    except Exception:
     
-    # i put index on azimuth
-    job_args = [(ze[i],az[i] ,satlat,satlon,satalt, dn,symmetry,shperical,exposure,TE,cont,Ne_scaling,step,stripes_used) for i in range(0,len(ze))]
-    N = multiprocessing.cpu_count()
+        print "Something Happened :("
+        print type(inst)
+        print inst
+        exit(1) 
 
-    # Create the pool.  Be nice.  Don't use all the cores!
-    pool = Pool(processes=16)
-    
-    t0 = time.time()
-    results = pool.map(get_Photons_from_Brightness_1356_nighttime_star,job_args)
-    for i in range(0,len(results)):
-        Rayl[i] = results[i][0]
-        photons[i] = results[i][1]
-
-    t1 = time.time()
-    pool.close()
-    pool.join()
-    #print t1-t0
-    
     return Rayl,photons
 
 # ICON FUV
@@ -502,6 +526,8 @@ def run_forward_modelling(satlatlonalt,date,symmetry = 0.,shperical=1, exp=12,re
         08-Jul-2015: Changed everything to assume non-symmetric non-spherical earth. Choice for symmetry is given.
         22-Jul-2015: Changed VER in Symmetry to include satalt and satlot instead of zero-zero
         26-Jul-2015: Added the spherical parameter on the function
+        11-Aug-2015: Added VER_true,h_coord on the ouput.
+        18-Aug-2015: Added Sigma variable on the output
     '''
     
     # Satellite coordinates
@@ -511,6 +537,10 @@ def run_forward_modelling(satlatlonalt,date,symmetry = 0.,shperical=1, exp=12,re
     
     # Load default az and ze angles from the fov of the instrument
     az,ze = get_azze_default()
+
+    # Same values with Jianqi for comparison
+    ze = np.linspace(98,110,131)
+    ########################################
     az_v = np.deg2rad(az)
     ze_v = np.deg2rad(ze)
 
@@ -525,25 +555,28 @@ def run_forward_modelling(satlatlonalt,date,symmetry = 0.,shperical=1, exp=12,re
         h = np.zeros(np.size(ze))
         RE = 6371.
         h = ic.angle2tanht(ze_v, satalt, RE) 
-        h = h[np.where(h>150)]
-        disk = len(h)
+        #h = h[np.where(h>150)]
+        #disk = len(h)
     else:
         # Tangent_poing function returns coordinates [lat-lon-lat] for the tangent point
         h_coord = np.zeros((len(ze),3))
         # Locate limb lower bound ~150km 
         for i in range(0,len(ze)):
             h_coord[i,:] = ic.tangent_point(satlatlonalt,az[i],ze[i])
-        h_loc = h_coord[np.where(h_coord[:,2]>=150),:]
-        h = h_coord[np.where(h_coord[:,2]>=150),2]
-        h = h[0,:]
-        disk = len(h)
+        #h_loc = h_coord[np.where(h_coord[:,2]>=150),:]
+        #h = h_coord[np.where(h_coord[:,2]>=150),2]
+        #h = h[0,:]
+        #disk = len(h)
+
+        # New line
+        h = h_coord[:,2]
 
     # Resize vectors for limb FOV
-    ze = ze[0:disk]
-    az = az[0:disk]
+    #ze = ze[0:disk]
+    #az = az[0:disk]
     
-    ze_v = ze_v[0:disk]
-    az_v = az_v[0:disk]
+    #ze_v = ze_v[0:disk]
+    #az_v = az_v[0:disk]
     
     
     # Initialize vectors
@@ -574,6 +607,7 @@ def run_forward_modelling(satlatlonalt,date,symmetry = 0.,shperical=1, exp=12,re
     Bright_n,Counts = add_noise_to_photon_and_brightness(photons,exp,sens,stripes_used,reps)
     Bright_n = np.transpose(Bright_n)
 
+    Sigma = np.diag(1/np.sqrt(photons))
     '''
     Caclulate VER 
     '''    
@@ -589,14 +623,15 @@ def run_forward_modelling(satlatlonalt,date,symmetry = 0.,shperical=1, exp=12,re
     '''
     if (shperical==0):
         VER_true,VER,MN,NE,O = calculate_VER_1356_nighttime(satlat,satlon,h,date)
+        h_coord = 0
     else:
         if symmetry == 0:
-            _,_,_,NE,O = calculate_VER_1356_nighttime(satlat,satlon,h,date)
+            VER_true,_,_,NE,O = calculate_VER_1356_nighttime(satlat,satlon,h,date)
         else:
             for i in range(0,len(h)):
-                _,_,_,NE[i],O[i] = calculate_VER_1356_nighttime(h_loc[0,i,0],h_loc[0,i,1],h_loc[0,i,2],date)
+                VER_true[i],_,_,NE[i],O[i] = calculate_VER_1356_nighttime(h_loc[0,i,0],h_loc[0,i,1],h_loc[0,i,2],date)
 
-    return NE,Bright,Bright_n,h,O#,h_coord
+    return NE,Bright,Bright_n,h,O,VER_true,h_coord,Sigma
 
 def get_azze_default():
     '''
@@ -729,62 +764,79 @@ def Calculate_D_Matrix_WGS84_mp(satlatlonalt,az,ze,azze_def = 1):
     NOTES:
     HISTORY:
         03-Jun-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
+        26-Aug-2015: Added the exception for the Pool
     '''
+    try:
+        rbot = np.zeros(np.size(ze,0))
 
-    rbot = np.zeros(np.size(ze,0))
+        for i in range(0,np.size(ze,0)):
+            _,_,rbot[i] =  ic.tangent_point(satlatlonalt,az[i],ze[i])
 
-    for i in range(0,np.size(ze,0)):
-        _,_,rbot[i] =  ic.tangent_point(satlatlonalt,az[i],ze[i])
+        rtop = rbot.copy()
+        rtop[1:] = rbot[:-1]
+        rtop[0] = satlatlonalt[2] - 1
+        rmid = (rbot + rtop)/2
+        S = np.zeros((np.size(ze),np.size(rbot)))
+        k = 0
 
-    rtop = rbot.copy()
-    rtop[1:] = rbot[:-1]
-    rtop[0] = satlatlonalt[2] - 1
-    rmid = (rbot + rtop)/2
-    S = np.zeros((np.size(ze),np.size(rbot)))
-    k = 0
+        N = multiprocessing.cpu_count()
 
-    N = multiprocessing.cpu_count()
+        # Create the pool.  Be nice.  Don't use all the cores!
+        pool = Pool(processes=16)
+        t0 = time.time()
+        for i in range(0,np.size(ze)):
 
-    # Create the pool.  Be nice.  Don't use all the cores!
-    pool = Pool(processes=16)
-    t0 = time.time()
-    for i in range(0,np.size(ze)):
+            job_args = [(satlatlonalt, az[i], ze[i],rtop[j]) for j in range(0,len(rbot))]
+            job_args2 = [(satlatlonalt, az[i], ze[i],rbot[j]) for j in range(0,len(rbot))]
+            job_args3 = [(satlatlonalt, az[i], ze[i],rtop[j],'second') for j in range(0,len(rbot))]
 
-        job_args = [(satlatlonalt, az[i], ze[i],rtop[j]) for j in range(0,len(rbot))]
-        job_args2 = [(satlatlonalt, az[i], ze[i],rbot[j]) for j in range(0,len(rbot))]
-        job_args3 = [(satlatlonalt, az[i], ze[i],rtop[j],'second') for j in range(0,len(rbot))]
-
-        ub = pool.map(Calculate_D_Matrix_WGS84_mp_star,job_args)
-        lb = pool.map(Calculate_D_Matrix_WGS84_mp_star,job_args2)
-        ub1 = np.array(ub)
-        '''
-        if np.sum(np.isnan(lb)) == len(lb):
+            ub = pool.map(Calculate_D_Matrix_WGS84_mp_star,job_args)
+            lb = pool.map(Calculate_D_Matrix_WGS84_mp_star,job_args2)
+            ub1 = np.array(ub)
+            '''
+            if np.sum(np.isnan(lb)) == len(lb):
+                lb2 = pool.map(Calculate_D_Matrix_WGS84_mp_star,job_args3)
+                lb21 = array(lb2)
+                S[i,np.where(np.isnan(ub)==True)and(np.where(np.isnan(lb)==True))]=0
+                diff = (ub1[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb2)==False))] - lb21[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb2)==False))])
+                S[i,np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb2)==False))]=abs(diff)
+            else:
+                lb1 = array(lb)
+                S[i,np.where(np.isnan(ub)==True)and(np.where(np.isnan(lb)==True))]=0
+                diff = (ub1[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb)==False))] - lb1[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb)==False))])
+                S[i,np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb)==False))]=2*abs(diff)
+            '''
             lb2 = pool.map(Calculate_D_Matrix_WGS84_mp_star,job_args3)
-            lb21 = array(lb2)
+            lb21 = np.array(lb2)
             S[i,np.where(np.isnan(ub)==True)and(np.where(np.isnan(lb)==True))]=0
-            diff = (ub1[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb2)==False))] - lb21[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb2)==False))])
-            S[i,np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb2)==False))]=abs(diff)
-        else:
-            lb1 = array(lb)
-            S[i,np.where(np.isnan(ub)==True)and(np.where(np.isnan(lb)==True))]=0
+            diff2 = (ub1[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb2)==False))] - lb21[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb2)==False))])
+            lb1 = np.array(lb)
             diff = (ub1[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb)==False))] - lb1[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb)==False))])
             S[i,np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb)==False))]=2*abs(diff)
-        '''
-        lb2 = pool.map(Calculate_D_Matrix_WGS84_mp_star,job_args3)
-        lb21 = np.array(lb2)
-        S[i,np.where(np.isnan(ub)==True)and(np.where(np.isnan(lb)==True))]=0
-        diff2 = (ub1[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb2)==False))] - lb21[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb2)==False))])
-        lb1 = np.array(lb)
-        diff = (ub1[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb)==False))] - lb1[np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb)==False))])
-        S[i,np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb)==False))]=2*abs(diff)
-        diago = np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb)==True))[0][0]
-        S[i,diago]=abs(diff2[diago])
+            diago = np.where(np.isnan(ub)==False)and(np.where(np.isnan(lb)==True))[0][0]
+            S[i,diago]=abs(diff2[diago])
+            
+        t1 = time.time()
+        #print t1-t0
+        pool.close()
+        pool.join()
+        S = S*1e-1
+    except (KeyboardInterrupt,SystemExit,ZeroDivisionError,BaseException) as inst :
         
-    t1 = time.time()
-    #print t1-t0
-    pool.close()
-    pool.join()
-    S = S*1e-1
+        if 'pool' in vars():
+            pool.terminate()
+            
+        #print "You cancelled the program!"
+        print type(inst)
+        print inst
+        exit(1) 
+
+    except Exception:
+    
+        print "Something Happened :("
+        print type(inst)
+        print inst
+        exit(1) 
     
     return S,rmid
 
@@ -853,6 +905,43 @@ def find_hm_Nm_F2(NE,rbot):
     
     return hmF2,NmF2
 
+def find_hm_nm_f2_Single(Ne_e,rbot_e,Ne,rbot,abs_flag=0.):
+    '''
+    Calculates the F2 peak for a single vector
+    INPUTS:
+        NE_e     - Estimated Electron density profile [cm^{-3}]
+        rbot_e   - altitude vector for estimated electron density profile [km]
+        Ne       - Original Electron density profile [cm^{-3}]
+        rbot     - altitude vector for original electron density profile [km]
+        abs_flag - flag that indicates if the return differences will be the absolute values [0:Regular Difference (default), 1:Absolute Difference]
+    OUTPUT:
+        Hmf2   -  mean altitude of the maximum intesity values of the Ne profile
+        Nmf2   -  mean peak intensity value of the altitude profiles
+    NOTES:
+        Till now it works for multiple Ne. Need to fix it for single comparison
+    HISTORY:
+        18-Aug-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
+    '''
+
+    hmF2o,Nmf2o = find_hm_Nm_F2(Ne,rbot)
+    
+    Nmdift = np.zeros(np.size(Ne_e,0))
+    Hmdift = np.zeros(np.size(Ne_e,0))
+    
+    indexf2= Ne_e.argmax()
+
+    Hmf2_t = rbot_e[indexf2]
+    Nmf2_t = Ne_e[indexf2]
+    if abs_flag == 0:
+        Nmdift = (Nmf2_t - Nmf2o)/(Nmf2o)
+        Hmdift =Hmf2_t-hmF2o
+    else:
+        Nmdift = abs((Nmf2_t - Nmf2o)/(Nmf2o))
+        Hmdift = abs(Hmf2_t- hmF2o)
+    
+    return Hmdift,Nmdift 
+
+
 def find_hm_nm_f2_Diff(Ne_e,rbot_e,Ne,rbot,abs_flag=0.):
     
     '''
@@ -886,11 +975,11 @@ def find_hm_nm_f2_Diff(Ne_e,rbot_e,Ne,rbot,abs_flag=0.):
         Hmf2_t = rbot_e[indexf2]
         Nmf2_t = Ne_e[indexf2,i]
         if abs_flag == 0:
-            Nmdift[i] = (Nmf2o-Nmf2_t)/(Nmf2o)
-            Hmdift[i] =hmF2o-Hmf2_t
+            Nmdift[i] = (Nmf2_t - Nmf2o)/(Nmf2o)
+            Hmdift[i] = Hmf2_t-hmF2o
         else:
-            Nmdift[i] = abs((Nmf2o-Nmf2_t)/(Nmf2o))
-            Hmdift[i] = abs(hmF2o-Hmf2_t)
+            Nmdift[i] = abs((Nmf2_t - Nmf2o)/(Nmf2o))
+            Hmdift[i] = abs(Hmf2_t- hmF2o)
 
     Hmf2 = np.mean(Hmdift)
     Nmf2 = np.mean(Nmdift)
@@ -930,11 +1019,11 @@ def find_hm_nm_f2_aoe(Ne_e,rbot_e,Ne,rbot,abs_flag=0.):
         Hmf2_t = rbot_e[indexf2]
         Nmf2_t = Ne_e[indexf2,i]
         if abs_flag == 0:
-            Nmdift[i] = (Nmf2o-Nmf2_t)/(Nmf2o)
-            Hmdift[i] =hmF2o-Hmf2_t
+            Nmdift[i] = (Nmf2_t-Nmf2o)/(Nmf2o)
+            Hmdift[i] =Hmf2_t-hmF2o
         else:
-            Nmdift[i] = abs((Nmf2o-Nmf2_t)/(Nmf2o))
-            Hmdift[i] = abs(hmF2o-Hmf2_t)
+            Nmdift[i] = abs((Nmf2_t-Nmf2o)/(Nmf2o))
+            Hmdift[i] = abs(Hmf2_t-hmF2o)
 
     
     return Nmdift,Hmdift
