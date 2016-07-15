@@ -1,4 +1,5 @@
 import ICON as ic
+from pyglow import pyglow
 from datetime import datetime, timedelta
 from scipy import optimize
 from scipy.linalg import sqrtm
@@ -8,6 +9,8 @@ from scipy.io import netcdf
 from time import gmtime, strftime
 import FUV_Distance_Matrix as dmat
 reload(dmat)
+
+import matplotlib.pyplot as plt
 
 import multiprocessing
 from multiprocessing import Pool
@@ -58,7 +61,8 @@ def guassian_elinimation(S,Rayl,pseudo = 0):
         
         return 0
 
-def calc_electron_density(Ip,O,cont=1):  
+#def calc_electron_density(Ip,O,cont=1):  
+def calc_electron_density(Ip,satlatlonalt,h,dn,cont=1):
     '''
     Given a VER profile the electron density is calculated. The physical process for the VER must be defined
     INPUTS:
@@ -89,6 +93,14 @@ def calc_electron_density(Ip,O,cont=1):
     k3 = 1.4e-10    # ion-atom neutralization rate (cm^3/2)
     
     if cont==1:
+        O = np.zeros(len(Ip))
+        for i in range(0,len(h)):
+            pt = pyglow.Point(dn, satlatlonalt[0], satlatlonalt[1], h[i])
+
+            pt.run_msis()
+
+            O[i] = pt.nn['O']  
+        
         a0 = a1356/O
         b0 = a1356*k3/k2+b1356*k1
         c0 = -Ip/O
@@ -110,6 +122,7 @@ def calc_electron_density(Ip,O,cont=1):
     else:    
         NE_est = np.sqrt(Ip/a1356)
 
+    NE_est[np.isnan(NE_est)] = 0
     return NE_est
 
 
@@ -494,11 +507,14 @@ def MAP_Estimation(S,Bright,VER_mean=0.,VER_reshape=0.):
     # To calculate the variance of the noise we just take a single Brightness profile and we find the variance. More accurate estimation can be performed if we sum the 6 stripes before feeding them here. We also need to have the sensitivity of the instrument to calculate the number of counts. 
     #W_var = np.sqrt(Bright * 0.0873);
     #W_var = Bright * 0.0873
-    W_var = Bright_interp * 0.0873
+    W_var = Bright_interp * 0.0873 * 12
     # Create Diagonal matrix of the VER variances.
     #Rw = np.diag(W_var)
-    W_var = W_var/(0.0873**2)
-    #maxvar = max(W_var)*10
+    W_var = W_var/((12*0.0873)**2)
+    
+    #plt.errorbar(x,Bright_interp, yerr=np.sqrt(W_var))
+    
+    #maxvar = max(W_var)
     #W_var[:] = maxvar
     
     # Create Diagonal matrix of the Brightness variances.
@@ -512,21 +528,24 @@ def MAP_Estimation(S,Bright,VER_mean=0.,VER_reshape=0.):
     
     #VER_mean = data['arr_0']
     #VER_reshape = data['arr_1']
+
     VER_reshape = VER_reshape[:len(Bright),:]
-    
     VER_mean =  VER_mean[:len(Bright)]
+    
     VER_var = np.cov(VER_reshape);
     Rx_ver = VER_var
-    
-    
-    covd12=sqrtm(np.linalg.inv(Rw));
-    covm12=sqrtm(np.linalg.inv(Rx_ver));
 
+    covd12=sqrtm(np.linalg.inv(Rw))
+    covm12=sqrtm(np.linalg.inv(Rx_ver))
+    #covd12=np.linalg.inv(sqrtm(Rw))
+    #covm12=np.linalg.inv(sqrtm(Rx_ver))
+    
     A = np.concatenate((covd12.dot(S), covm12), axis=0)
-
     rhs= np.concatenate((covd12.dot(Bright), covm12.dot(VER_mean)), axis=0)
 
-    VER = np.linalg.pinv(A).dot(rhs)
+    
+    #VER = np.linalg.pinv(A).dot(rhs)
+    VER,_,_,_ = np.linalg.lstsq(A,rhs)
     # Check if the values of the VER are negative. 
 
     
@@ -757,7 +776,7 @@ def hmF2_region_interpolate(Ne,rbot,int_increase = 5.,kind ='cubic'):
         return Ne,rbot
             
 # From this on the function focus on creating the solution and writing the NetCDF file
-def FUV_Level_2_OutputProduct_Calculation(Bright,h,satlatlonalt,az,ze,O,cont =1, regu=1,regu_order = 2,method=1,ireg=1,S_mp = 1,Spherical =1,low_ta = 150.,VER_mean=0.,VER_reshape=0.):
+def FUV_Level_2_OutputProduct_Calculation(Bright,h,satlatlonalt,az,ze,O,cont =1, regu=1,regu_order = 2,method=1,ireg=1,S_mp = 1,Spherical =1,low_ta = 150.,VER_mean=0.,VER_reshape=0,dn = datetime(2012, 9, 26, 20, 0, 0) ):
     '''
     Within this function, given the LVL1 Input file the VER and Ne profiles for the tangent altitude point are
     calculated
@@ -823,22 +842,23 @@ def FUV_Level_2_OutputProduct_Calculation(Bright,h,satlatlonalt,az,ze,O,cont =1,
     if regu ==0: # Gaussian Elimination
         print 'Gaussian Elimination Chosen'
         VER = guassian_elinimation(S,Bright,method)
-        counts= calc_electron_density(VER,O,cont)
+        #counts= calc_electron_density(VER,O,cont)
+        counts= calc_electron_density(VER,satlatlonalt,h,dn,cont)
         print 'VER & Ne profiles calculated'
     elif regu == 1: # LCurve
         print 'Tiknonov - Lcurve Chosen'
         VER,_,_,_,_ = Tikhonov(S,Bright,regu_order,0,method,ireg)
-        counts = calc_electron_density(VER,O,cont)
+        counts = calc_electron_density(VER,satlatlonalt,h,dn,cont)
         print 'VER & Ne profiles calculated'
     elif regu == 2: # GSVD
         print 'Tikhonov-GCV Chosen'
         VER = gcv(S,Bright,regu_order,0,ireg)
-        counts = calc_electron_density(VER,O,cont)
+        counts = calc_electron_density(VER,satlatlonalt,h,dn,cont)
         print 'VER & Ne profiles calculated'
     elif regu ==3: # Bayesian
         print 'MAP Estimation Method Chose'
         VER = MAP_Estimation(S,Bright,VER_mean=VER_mean,VER_reshape=VER_reshape) 
-        counts =calc_electron_density(VER,O,cont)
+        counts =calc_electron_density(VER,satlatlonalt,h,dn,cont)
         print 'VER & Ne profiles calculated'
               
     return VER,counts,h
@@ -1034,15 +1054,16 @@ def Get_lvl2_5_product(path_input='/home/dimitris/Data_Files/ICON_FUV_ray_UT_15s
     #tanlatlonalt = [FUV_TANGENT_LATITUDES[limb,STRIPE][0][::-1],FUV_TANGENT_LONGITUDES[limb,STRIPE][0][::-1],FUV_TANGENT_ALTITUDES[limb,STRIPE][0][::-1]]
     tanlatlonalt = np.column_stack((FUV_TANGENT_LATITUDES[limb,STRIPE][0][::-1],FUV_TANGENT_LONGITUDES[limb,STRIPE][0][::-1],FUV_TANGENT_ALTITUDES[limb,STRIPE][0][::-1]))
 
-    bright = FUV_1356_IMAGE[limb,STRIPE][0][::-1]
+    bright = FUV_1356_IMAGE[limb,:][0][::-1]
+    bright = np.mean(bright,axis=1)
     # h needs to be changed when non-symmetric earth is assumed. For now we have symmetry
     h = FUV_TANGENT_ALTITUDES[limb,STRIPE][0][::-1]
     # That might not work well now if non-symmetric earth is assumed from Scott
     O = FUV_TANGENT_O1[limb,STRIPE][0][::-1]
 
-    ver,Ne,h = FUV_Level_2_OutputProduct_Calculation(bright,h,satlatlonalt,az,ze,O,1,1,2,1,1,1)
+    ver,Ne,h = FUV_Level_2_OutputProduct_Calculation(bright,h,satlatlonalt,az,ze,O,2,1,2,1,1,1,0)
     hmF2,NmF2 = find_hm_Nm_F2(Ne,h)
-    NmF2 = NmF2*100
+    NmF2 = NmF2
     
     FUV_Level_2_OutputProduct_NetCDF(dn,satlatlonalt,az,ze,tanlatlonalt,bright,ver,Ne,NmF2,hmF2,path_output)
     
