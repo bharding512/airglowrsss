@@ -38,6 +38,7 @@ def create_cells_Matrix_spherical_symmetry(theta,Horbit,RE=6371.):
     rtop[1:] = rbot[:-1]
 
     rtop[0] = Horbit-1
+    #rtop[0] = rtop[1] + (rtop[1] - rtop[2])
     # Define midpt of each layer
     rmid = (rbot + rtop)/2
 
@@ -92,6 +93,7 @@ def Calculate_D_Matrix_WGS84_mp(satlatlonalt,az,ze,azze_def = 1):
         rtop = rbot.copy()
         rtop[1:] = rbot[:-1]
         rtop[0] = satlatlonalt[2] - 1
+        #rtop[0] = rtop[1] + (rtop[1] - rtop[2])
         rmid = (rbot + rtop)/2
         S = np.zeros((np.size(ze),np.size(rbot)))
         k = 0
