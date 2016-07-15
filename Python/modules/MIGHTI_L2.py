@@ -7,6 +7,7 @@ import ICON
 import bisect
 from scipy import integrate
 from datetime import datetime, timedelta
+import netCDF4
 
 
 
@@ -240,7 +241,7 @@ def bin_array(b, y, lon = False):
     
     
     
-def bin_interferogram(b, I):
+def bin_image(b, I):
     '''
     Downsample the interferogram in altitude to improve statistics while
     degrading vertical resolution. Every b rows will be averaged together. 
@@ -265,7 +266,7 @@ def bin_interferogram(b, I):
     return I_b
 
 
-def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_order=1):
+def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_order=0):
     '''
     Define the matrix D whose inversion is known as "onion-peeling." The forward model is:
         I = D * Ip
@@ -284,7 +285,7 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_o
     OPTIONAL INPUTS:
         top_layer  -- TYPE:str,          'thin': assume VER goes to zero above top layer
                                          'exp':  assume VER falls off exponentially in altitude (default)
-        integration_order -- TYPE:int,   0: Use Riemann-sum rule for discretizing line-of-sight integral
+        integration_order -- TYPE:int,   0: Use Riemann-sum rule for discretizing line-of-sight integral (default)
                                          1: Use trapezoidal rule for discretizing line-of-sight integral
     OUTPUTS:
         D          -- TYPE:array(ny,ny), UNITS:km.   Observation matrix. Also called the "path matrix"
@@ -469,7 +470,7 @@ def extract_phase_from_row(row, zero_phase, phase_offset, Nignore):
     
     
     
-def perform_inversion(I, tang_alt, icon_alt, top_layer='exp', integration_order=1, 
+def perform_inversion(I, tang_alt, icon_alt, top_layer='exp', integration_order=0, 
                       account_for_local_projection=True, zero_phase=None, 
                       phase_offset=None, Nignore=None):
     '''
@@ -483,7 +484,7 @@ def perform_inversion(I, tang_alt, icon_alt, top_layer='exp', integration_order=
     OPTIONAL INPUTS:
         top_layer   -- TYPE:str,        'thin': assume VER goes to zero above top layer
                                         'exp':  assume VER falls off exponentially in altitude (default)
-        integration_order -- TYPE:int,   0: Use Riemann-sum rule for discretizing line-of-sight integral
+        integration_order -- TYPE:int,   0: Use Riemann-sum rule for discretizing line-of-sight integral (default)
                                          1: Use trapezoidal rule for discretizing line-of-sight integral
         account_for_local_projection -- TYPE:bool.   If False, a simple inversion is used.
                                         If True, the inversion accounts for the fact that the ray is not 
@@ -580,7 +581,7 @@ def extract_wind(Ip, zero_phase, phase_offset, min_amp, Nignore, phase_to_wind_f
         if np.nanmax(ampl) > min_amp:
             dphase = extract_phase_from_row(irow, zero_phase, phase_offset, Nignore)
             p[j] = dphase
-            a[j] = ampl[Nignore:-Nignore].mean()
+            a[j] = ampl[Nignore:-Nignore].sum()
 
     # Convert phase to velocity
     v = phase_to_wind_factor * p 
@@ -634,7 +635,7 @@ def fix_longitudes(lons, lon_target):
 
 
 
-def attribute_measurement_location(tang_lat, tang_lon, tang_alt, integration_order=1):
+def attribute_measurement_location(tang_lat, tang_lon, tang_alt, integration_order=0):
     '''
     Determine the geographical location to which the measurement will be attributed. The 
     current implementation of the inversion, which uses trapezoidal integration, means
@@ -647,7 +648,7 @@ def attribute_measurement_location(tang_lat, tang_lon, tang_alt, integration_ord
         tang_lon    -- TYPE:array(ny), UNITS:deg.   Tangent longitudes.
         tang_alt    -- TYPE:array(ny), UNITS:km.    Tangent altitudes.
     OPTIONAL INPUTS:
-        integration_order -- TYPE:int,   0: Use Riemann-sum rule for discretizing line-of-sight integral
+        integration_order -- TYPE:int,   0: Use Riemann-sum rule for discretizing line-of-sight integral (default)
                                          1: Use trapezoidal rule for discretizing line-of-sight integral
     OUTPUTS:
         lat         -- TYPE:array(ny), UNITS:deg.   Measurement latitudes.
@@ -807,19 +808,23 @@ def interpolate_linear(x,y,x0,extrapolation='hold'):
 
 
 
-def level1_to_dict(L1_fn):
+def level1_to_dict(L1_fn, emission_color):
     '''
     Read a level 1 file and translate it into a dictionary that the 
     level 2.1 processing can use.
     
     INPUTS:
         L1_fn   -- TYPE:str.  The full path and filename of the level 1 file
+        emission_color --TYPE:str, 'green' or 'red'
+        
     OUTPUTS:
         L1_dict -- TYPE:dict. A dictionary containing information needed for
                               the level 2.1 processing. The keys are:
                                      L1_fn
-                                     Ir
-                                     Ii
+                                     I_amp
+                                     I_phase
+                                     I_amp_uncertainty
+                                     I_phase_uncertainty
                                      tang_alt_start
                                      tang_alt_end
                                      tang_lat_start
@@ -844,8 +849,50 @@ def level1_to_dict(L1_fn):
                                      exp_time
                                      interferometer_start_path
                                      interferometer_end_path
+    TODO:
+        - lots of stuff, mostly just waiting on finalization of L1 file.
+        - interferometer start path and end path
+        - time in better format
+        - exposure time different than end minus start?
     '''
-    return Exception('Function Not Implemented')
+    
+    f = netCDF4.Dataset(L1_fn)
+    L1_dict = {}
+    L1_dict['L1_fn']                       = L1_fn
+    L1_dict['I_amp']                       = f['%s_ENVELOPE_NOISY' % emission_color.upper()][:]
+    L1_dict['I_phase']                     = f['%s_PHASE_NOISY' % emission_color.upper()][:]
+    L1_dict['I_amp_uncertainty']           = f['%s_ENVELOPE_UNCERTAINTY' % emission_color.upper()][:]
+    L1_dict['I_phase_uncertainty']         = f['%s_PHASE_UNCERTAINTY' % emission_color.upper()][:]
+    L1_dict['tang_alt_start']              = f['TANGENT_ALTITUDES_START'][:]
+    L1_dict['tang_alt_end']                = f['TANGENT_ALTITUDES_END'][:]
+    L1_dict['tang_lat_start']              = f['TANGENT_LATITUDES_START'][:]
+    L1_dict['tang_lat_end']                = f['TANGENT_LATITUDES_END'][:]
+    L1_dict['tang_lon_start']              = f['TANGENT_LONGITUDES_START'][:]
+    L1_dict['tang_lon_end']                = f['TANGENT_LONGITUDES_END'][:]
+    L1_dict['emission_color']              = emission_color
+    L1_dict['icon_alt_start']              = f['ICON_ALTITUDE_START'][:].item()
+    L1_dict['icon_alt_end']                = f['ICON_ALTITUDE_END'][:].item()
+    L1_dict['icon_lat_start']              = f['ICON_LATITUDE_START'][:].item()
+    L1_dict['icon_lat_end']                = f['ICON_LATITUDE_END'][:].item()
+    L1_dict['icon_lon_start']              = f['ICON_LONGITUDE_START'][:].item()
+    L1_dict['icon_lon_end']                = f['ICON_LONGITUDE_END'][:].item()
+    L1_dict['mighti_ecef_vectors_start']   = f['MIGHTI_ECEF_VECTORS_START'][:]
+    L1_dict['mighti_ecef_vectors_end']     = f['MIGHTI_ECEF_VECTORS_END'][:]
+    L1_dict['icon_ecef_ram_vector_start']  = f['RAM_ECEF_VECTOR_START'][:]
+    L1_dict['icon_ecef_ram_vector_end']    = f['RAM_ECEF_VECTOR_END'][:]
+    L1_dict['icon_velocity_start']         = f['ICON_VELOCITY_START'][:].item()
+    L1_dict['icon_velocity_end']           = f['ICON_VELOCITY_END'][:].item()
+    L1_dict['source_files']                = [] # TODO
+    tsec                                   = f['IMAGE_TIME_START'][:].item()
+    L1_dict['time']                        = datetime(2015,1,1) + timedelta(seconds=tsec)
+    L1_dict['exp_time']                    = f['IMAGE_TIME_END'][:].item() - f['IMAGE_TIME_START'][:].item()
+    L1_dict['interferometer_start_path']   = 4.62e-2
+    L1_dict['interferometer_end_path']     = 5.50e-2
+    
+    
+    f.close()
+    
+    return L1_dict
 
 
 
@@ -864,8 +911,10 @@ def level1_uiuc_to_dict(L1_uiuc_fn):
         L1_dict      -- TYPE:dict. A dictionary containing information needed for
                                    the level 2.1 processing. The keys are:
                                      L1_fn
-                                     Ir
-                                     Ii
+                                     I_amp
+                                     I_phase
+                                     I_amp_uncertainty
+                                     I_phase_uncertainty
                                      tang_alt_start
                                      tang_alt_end
                                      tang_lat_start
@@ -896,6 +945,17 @@ def level1_uiuc_to_dict(L1_uiuc_fn):
     L1_dict['L1_fn'] = L1_uiuc_fn
     
     npzfile = np.load(L1_uiuc_fn)
+    
+    ####### Hack for backwards compatibility #######
+    # If interferogram is given as real/imaginary, then change
+    # it to amp/phase
+    if 'Ir' in npzfile.keys():
+        Ir = npzfile['Ir']
+        Ii = npzfile['Ii']
+        I = Ir + 1j*Ii
+        L1_dict['I_amp'] = abs(I)
+        L1_dict['I_phase'] = np.angle(I)
+    
     for key in npzfile.keys():
         if key in ['emission_color','icon_alt_start','icon_alt_end',
                    'icon_lat_start','icon_lat_end','icon_lon_start','icon_lon_end',
@@ -914,7 +974,8 @@ def level1_uiuc_to_dict(L1_uiuc_fn):
 
 
 def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer = 'exp', 
-                           integration_order = 1, account_for_local_projection = True, bin_size = None ):
+                           integration_order = 0, account_for_local_projection = True, 
+                           bin_size = None, bin_method = 'before' ):
     '''
     High-level function to convert a level 1 dictionary (which was generated from
     a level 1 file) into a level 2.1 file.
@@ -923,8 +984,10 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
         L1_dict             -- TYPE:dict.  A dictionary containing variables needed for
                                            the level 2.1 processing:
                                              L1_fn
-                                             Ir
-                                             Ii
+                                             I_amp
+                                             I_phase
+                                             I_amp_uncertainty
+                                             I_phase_uncertainty
                                              tang_alt_start
                                              tang_alt_end
                                              tang_lat_start
@@ -958,7 +1021,7 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
                                                       inversion.
         top_layer           -- TYPE:str, 'thin': assume VER goes to zero above top layer
                                          'exp':  assume VER falls off exponentially in altitude (default)
-        integration_order   -- TYPE:int, 0: Use Riemann-sum rule for discretizing line-of-sight integral
+        integration_order   -- TYPE:int, 0: Use Riemann-sum rule for discretizing line-of-sight integral (default)
                                          1: Use trapezoidal rule for discretizing line-of-sight integral
         account_for_local_projection -- TYPE:bool.   If False, a simple inversion is used.
                                         If True, the inversion accounts for the fact that the ray is not 
@@ -968,6 +1031,12 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
                                                   improve statistics at the cost of altitude resolution. If 
                                                   None, use the default (color-dependent) value specified
                                                   in get_instrument_constants().
+        bin_method          -- TYPE:str,  'before': perform binning on the L1 interferogram (default)
+                                          'after' : perform binning on the onion-peeled interferogram
+                                          Using 'before' has better precision but worse bias. It is recommended
+                                          to use 'before' because if better bias is desired (at the expense of
+                                          precision), then the recommended course is to not bin at all.
+                                        
                                         
     OUTPUTS:
         flag                -- TYPE:int,              Equals 0 on success.
@@ -977,9 +1046,11 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
         - error handling (return 0 or error code)
     
     '''
+    if bin_method not in ['before','after']:
+        raise Exception('bin_method="%s" not understood. Use "before" or "after".' % bin_method)
 
     ###  Load parameters from input dictionary
-    Iraw = L1_dict['Ir'] + 1j*L1_dict['Ii']
+    Iraw = L1_dict['I_amp']*np.exp(1j*L1_dict['I_phase'])
     emission_color = L1_dict['emission_color']
     source_files = L1_dict['source_files']
     time = L1_dict['time']
@@ -1009,21 +1080,32 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
                                   instrument['phase_to_wind_factor'])
                          
     #### Bin data
-    I_b        = bin_interferogram(bin_size, I)
-    tang_lat_b = bin_array(bin_size, tang_lat)
-    tang_lon_b = bin_array(bin_size, tang_lon, lon=True)
-    tang_alt_b = bin_array(bin_size, tang_alt)
+    if bin_method == 'before':
+        I        = bin_image(bin_size, I)
+        tang_lat = bin_array(bin_size, tang_lat)
+        tang_lon = bin_array(bin_size, tang_lon, lon=True)
+        tang_alt = bin_array(bin_size, tang_alt)
+        mighti_ecef_vectors = bin_image(bin_size, mighti_ecef_vectors)
 
                                                  
     #### Determine geographical locations of inverted wind
-    lat, lon, alt = attribute_measurement_location(tang_lat_b, tang_lon_b, tang_alt_b,
+    lat, lon, alt = attribute_measurement_location(tang_lat, tang_lon, tang_alt,
                                                    integration_order=integration_order)
     
     #### Onion-peel interferogram
-    Ip = perform_inversion(I_b, tang_alt_b, icon_alt, top_layer=top_layer, integration_order=integration_order,
+    Ip = perform_inversion(I, tang_alt, icon_alt, top_layer=top_layer, integration_order=integration_order,
                            account_for_local_projection=account_for_local_projection,
                            zero_phase=instrument['zero_phase'], phase_offset=instrument['phase_offset'],
                            Nignore=instrument['Nignore'])
+                           
+    #### Bin data
+    if bin_method == 'after':
+        Ip  = bin_image(bin_size, Ip)
+        lat = bin_array(bin_size, lat)
+        lon = bin_array(bin_size, lon, lon=True)
+        alt = bin_array(bin_size, alt)
+        mighti_ecef_vectors = bin_image(bin_size, mighti_ecef_vectors)
+
 
     #### Extract wind
     v_inertial, ve_inertial, a, ae = extract_wind(Ip, instrument['zero_phase'] + zero_phase_addition,
@@ -1031,7 +1113,7 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
                                                       instrument['min_amp'], 
                                                       instrument['Nignore'],
                                                       instrument['phase_to_wind_factor'])
-
+        
 
     #### Calculate azimuth angles at measurement locations
     icon_latlonalt = np.array([icon_lat, icon_lon, icon_alt])
@@ -1040,7 +1122,7 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
     #### Transform from inertial to rotating coordinate frame
     v = remove_Earth_rotation(v_inertial, az, lat, lon, alt)
     ve = ve_inertial.copy() # No uncertainty added in this process
-
+    
 
     np.savez(L21_fn,
              los_wind                     = v,
