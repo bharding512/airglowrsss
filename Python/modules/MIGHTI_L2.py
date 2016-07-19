@@ -239,6 +239,40 @@ def bin_array(b, y, lon = False):
     return y_b
     
     
+
+def bin_uncertainty(b, ye):
+    '''
+    Determine the uncertainty of a binned array from the uncertainty
+    of the un-binned array. Specifically:
+    If the array y has uncertainty given by array ye, then the array
+        y_b = bin_array(b, y)
+    has uncertainty given by the array
+        ye_b = bin_uncertainty(b, ye)
+    INPUTS:
+        b    -- TYPE:int,          The number of rows to bin together
+        ye   -- TYPE:array(ny),    The uncertainty of the pre-binned data
+    OUTPUTS:
+        ye_b  -- TYPE:array(ny_b), The uncertainty of the binned data
+    '''
+    ny = len(ye)
+    ny_b = int(np.ceil(1.0*ny/b))
+    ye_b = np.zeros(ny_b, dtype=ye.dtype)
+    for i in range(0,ny_b): # bin from the end to the beginning.
+        i_new   = ny_b-i-1
+        i_start = ny-(i+1)*b
+        i_stop  = ny-i*b
+        
+        # grab the samples to be binned
+        if np.mod(ny,b)!=0 and i_new==0: # special case in case ny is not divisible by b
+            ye_samps = ye[:i_stop]
+        else: # grab 
+            ye_samps = ye[i_start:i_stop]
+
+        ye_b[i_new] = 1.0/len(ye_samps) * np.sqrt(np.sum(ye_samps**2))
+        
+    return ye_b
+    
+    
     
     
 def bin_image(b, I):
@@ -264,6 +298,9 @@ def bin_image(b, I):
     for i in range(nx):
         I_b[:,i] = bin_array(b,I[:,i])
     return I_b
+
+
+
 
 
 def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_order=0):
@@ -470,9 +507,10 @@ def extract_phase_from_row(row, zero_phase, phase_offset, Nignore):
     
     
     
-def perform_inversion(I, tang_alt, icon_alt, top_layer='exp', integration_order=0, 
-                      account_for_local_projection=True, zero_phase=None, 
-                      phase_offset=None, Nignore=None):
+def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertainty, 
+                      zero_phase, phase_offset, Nignore,
+                      top_layer='exp', integration_order=0, 
+                      account_for_local_projection=True):
     '''
     Perform the onion-peeling inversion on the interferogram to return
     a new interferogram, whose rows refer to specific altitudes. In effect,
@@ -481,24 +519,32 @@ def perform_inversion(I, tang_alt, icon_alt, top_layer='exp', integration_order=
         I           -- TYPE:array(ny,nx), UNITS:arb.  The complex-valued, MIGHTI interferogram.
         tang_alt    -- TYPE:array(ny),    UNITS:km.   Tangent altitudes of each row of interferogram.
         icon_alt    -- TYPE:float,        UNITS:km.   Altitude of the satellite.
+        I_phase_uncertainty -- TYPE:array(ny), UNITS:rad. Uncertainty in the unwrapped, mean phase of each row of I.
+                                                          This is provided in L1 file.
+        I_amp_uncertainty   -- TYPE:array(ny), UNITS:arb. Uncertainty in the summed amplitude of each row of I.
+                                                          This is provided in L1 file.
+        zero_phase  -- TYPE:float,        UNITS:rad.   The phase angle which is equivalent 
+                                                       to a wind value of zero.
+        phase_offset-- TYPE:float,        UNITS:rad.   An offset to avoid 2pi ambiguities.
+        Nignore     -- TYPE:int,          UNITS:pixel. The number of columns at the
+                                          beginning and end of the interferogram to ignore due to phase
+                                          distortion from the filtering.
     OPTIONAL INPUTS:
-        top_layer   -- TYPE:str,        'thin': assume VER goes to zero above top layer
-                                        'exp':  assume VER falls off exponentially in altitude (default)
-        integration_order -- TYPE:int,   0: Use Riemann-sum rule for discretizing line-of-sight integral (default)
-                                         1: Use trapezoidal rule for discretizing line-of-sight integral
-        account_for_local_projection -- TYPE:bool.   If False, a simple inversion is used.
-                                        If True, the inversion accounts for the fact that the ray is not 
-                                        perfectly tangent to each shell at each point along the ray. 
-                                        (default True)
-                                        If True, the following variables are needed:
-        zero_phase  -- TYPE:float,      UNITS:rad.   The phase angle which is equivalent 
-                                                     to a wind value of zero.
-        phase_offset-- TYPE:float,      UNITS:rad.   An offset to avoid 2pi ambiguities.
-        Nignore     -- TYPE:int,        UNITS:pixel. The number of columns at the
-                                        beginning and end of the interferogram to ignore due to phase
-                                        distortion from the filtering.
+        top_layer   -- TYPE:str,          'thin': assume VER goes to zero above top layer
+                                          'exp':  assume VER falls off exponentially in altitude (default)
+        integration_order -- TYPE:int,     0: Use Riemann-sum rule for discretizing line-of-sight integral (default)
+                                           1: Use trapezoidal rule for discretizing line-of-sight integral
+        account_for_local_projection   -- TYPE:bool.   If False, a simple inversion is used.
+                                          If True, the inversion accounts for the fact that the ray is not 
+                                          perfectly tangent to each shell at each point along the ray. 
+                                          (default True)
+
     OUTPUTS:
-        Ip          -- TYPE:array(ny,nx), UNITS:arb.  The complex-valued, onion-peeled interferogram.
+        Ip          -- TYPE:array(ny,nx),    UNITS:arb. The complex-valued, onion-peeled interferogram.
+        phase       -- TYPE:array(ny),       UNITS:rad. The unwrapped, mean phase of each row of Ip.
+        amp         -- TYPE:array(ny),       UNITS:arb. The amplitude of each row of Ip.
+        phase_uncertainty -- TYPE:array(ny), UNITS:rad. The uncertainty of phase
+        amp_uncertainty   -- TYPE:array(ny), UNITS:rad. The uncertainty of amp
     '''
     
     ny,nx = np.shape(I)
@@ -506,12 +552,18 @@ def perform_inversion(I, tang_alt, icon_alt, top_layer='exp', integration_order=
     # Create the path matrix
     D = create_observation_matrix(tang_alt, icon_alt, top_layer=top_layer, integration_order=integration_order)
     
+    
+    
+    ######### Onion-peeling inversion and amp/phase extraction #########
     # The inversion will proceed in different ways depending on whether
     # we will try to account for the local horizontal projection.
+    phase = np.zeros(ny) # phases at each altitude
     if not account_for_local_projection:
         
         # This is implemented with a simple linear inversion
         Ip = np.linalg.solve(D,I)
+        for i in range(ny):
+            phase[i] = extract_phase_from_row(Ip[i,:], zero_phase, phase_offset, Nignore)
         
     else:
         # The problem becomes nonlinear, but still solvable in closed form.
@@ -520,8 +572,7 @@ def perform_inversion(I, tang_alt, icon_alt, top_layer='exp', integration_order=
         
         B = create_local_projection_matrix(tang_alt, icon_alt)
         Ip = np.zeros((ny,nx), dtype=complex) # onion-peeled interferogram
-        phase = np.zeros(ny) # phases at each altitude
-        
+
         for i in range(ny)[::-1]: # onion-peel from the top altitude down
             dii = D[i,i] # path length
             Li = I[i,:] # we will peel off the other layers from this row
@@ -541,57 +592,62 @@ def perform_inversion(I, tang_alt, icon_alt, top_layer='exp', integration_order=
             # Note that the zero-phase/zero-wind is needed for this step.
             phase[i] = extract_phase_from_row(Li, zero_phase, phase_offset, Nignore)
             
-    return Ip
+    amp = np.sum(abs(Ip),axis=1)        
+            
 
 
 
-
-
-def extract_wind(Ip, zero_phase, phase_offset, min_amp, Nignore, phase_to_wind_factor):
-    '''
-    Analyze the onion-peeled interferogram to extract wind and apparent intensity.
-    For now, we include a placeholder for the uncertainty.
-    INPUTS:
-        Ip                  -- TYPE:array(ny,nx), UNITS:arb.  The complex-valued, onion-peeled 
-                               interferogram.
-        zero_phase          -- TYPE:float,        UNITS:rad.  The phase angle which is equivalent 
-                               to a wind value of zero.
-        phase_offset        -- TYPE:float,        UNITS:rad.   An offset to avoid 2pi ambiguities.
-        min_amp             -- TYPE:float,        UNITS:arb.  Rows of the interferogram with 
-                               an amplitude less than this will not be analyzed.
-        Nignore             -- TYPE:int,          UNITS:pixel. The number of columns at the
-                               beginning and end of the interferogram to ignore due to phase
-                               distortion from the filtering.
-        phase_to_wind_factor-- TYPE:float,        UNITS:m/s/rad. The factor to multiply by a phase
-                               change to get a wind change.
-    OUTPUTS:
-        v                   -- TYPE:array(ny)     UNITS:m/s.  The estimated line of sight wind.
-        ve                  -- TYPE:array(ny)     UNITS:m/s.  Estimated uncertainty in v.
-        a                   -- TYPE:array(ny)     UNITS:arb.  The estimated apparent VER. Not
-                               to be confused with actual VER, since temperature plays a role.
-        ae                  -- TYPE:array(ny)     UNITS:arb.  Estimated uncertainty in a.
-    '''
-    ny,nx = np.shape(Ip)
+    ######### Uncertainty propagation #########
+    # Uncertainties can be propagated using simple linear inversion formula
+    # (i.e., as if account_for_local_projection=False) to a very good approximation
+    # (less than 1% error).
     
-    p = np.nan*np.zeros(ny) # analyzed phase of each shell
-    a = np.nan*np.zeros(ny) # analyzed intensity of each shell
-    for j in range(ny):
-        irow = Ip[j,:]
-        ampl  = abs(irow)
-        if np.nanmax(ampl) > min_amp:
-            dphase = extract_phase_from_row(irow, zero_phase, phase_offset, Nignore)
-            p[j] = dphase
-            a[j] = ampl[Nignore:-Nignore].sum()
+    ### Step 0: Characterize L1 and L2.1 interferograms with a single amp/phase per row
+    ph_L1 = np.zeros(ny)
+    for i in range(ny):
+        ph_L1[i] = extract_phase_from_row(I[i,:], zero_phase, phase_offset, Nignore)
+    A_L1 = np.sum(abs(I),axis=1)
+    ph_L2 = phase # this was calculated above
+    A_L2 = amp # this was calculated above
+        
+    ### Step 1: Transform amp/phase uncertainties to real/imag uncertainties
+    # Each row will have a 2x2 covariance matrix describing the real and imaginary parts
+    cov_real_imag_L1 = np.zeros((ny,2,2))
+    for m in range(ny):
+        # Jacobian of transformation from ampl/phase to real/imag.
+        J = np.array([[np.cos(ph_L1[m]), -A_L1[m]*np.sin(ph_L1[m])],
+                      [np.sin(ph_L1[m]),  A_L1[m]*np.cos(ph_L1[m])]])
+        cov_amp_phase = np.diag([I_amp_uncertainty[m], I_phase_uncertainty[m]])**2 # assuming uncorrelated
+        cov_real_imag_L1[m,:,:] = J.dot(cov_amp_phase).dot(J.T) # Error propagation
 
-    # Convert phase to velocity
-    v = phase_to_wind_factor * p 
+    ### Step 2: Propagate uncertainties through the path length inversion
+    # Treat real and imaginary parts separately.
+    # Build covariance matrix of vector of real parts and of imag parts.
+    cov_real_L1 = np.diag(cov_real_imag_L1[:,0,0]) # assume rows are uncorrelated
+    cov_imag_L1 = np.diag(cov_real_imag_L1[:,1,1]) # assume rows are uncorrelated
+    # Standard uncertainty propagation for matrix multiplication
+    Dinv = np.linalg.inv(D)
+    cov_real_L2 = Dinv.dot(cov_real_L1).dot(Dinv.T)
+    cov_imag_L2 = Dinv.dot(cov_imag_L1).dot(Dinv.T)
+    sigma_real_L2 = np.sqrt(np.diag(cov_real_L2))
+    sigma_imag_L2 = np.sqrt(np.diag(cov_imag_L2))
     
-    # TODO: propagate uncertainties
-    ve = np.nan*np.zeros(np.shape(v))
-    ae = np.nan*np.zeros(np.shape(a))
-
-    return v, ve, a, ae
-
+    ### Step 3: Transform back to amp/phase #########
+    # Each row will have a 2x2 covariance matrix describing the amplitude and phase
+    cov_amp_phase_L2 = np.zeros((ny,2,2))
+    for m in range(ny):
+        # Jacobian of transformation from ampl/phase to real/imag
+        J = np.array([[np.cos(ph_L2[m]), -A_L2[m]*np.sin(ph_L2[m])],
+                      [np.sin(ph_L2[m]),  A_L2[m]*np.cos(ph_L2[m])]])
+        # Jacobian of transformation from real/imag to ampl/phase
+        Jinv = np.linalg.inv(J)
+        cov_real_imag = np.diag([sigma_real_L2[m], sigma_imag_L2[m]])**2 # assume uncorrelated (TODO: does this matter?)
+        cov_amp_phase_L2[m,:,:] = Jinv.dot(cov_real_imag).dot(Jinv.T)
+    # Extract amplitude and phase uncertainties
+    amp_uncertainty = np.sqrt(cov_amp_phase_L2[:,0,0])
+    phase_uncertainty = np.sqrt(cov_amp_phase_L2[:,1,1])
+            
+    return Ip, phase, amp, phase_uncertainty, amp_uncertainty
 
 
 
@@ -642,7 +698,7 @@ def attribute_measurement_location(tang_lat, tang_lon, tang_alt, integration_ord
     that we should simply return the tangent locations.
     
     NOTE: If the implementation of any of the following functions are changed, this 
-    function may need to change: create_observation_matrix, perform_inversion, extract_wind.
+    function may need to change: create_observation_matrix, perform_inversion.
     INPUTS:
         tang_lat    -- TYPE:array(ny), UNITS:deg.   Tangent latitudes.
         tang_lon    -- TYPE:array(ny), UNITS:deg.   Tangent longitudes.
@@ -945,17 +1001,6 @@ def level1_uiuc_to_dict(L1_uiuc_fn):
     L1_dict['L1_fn'] = L1_uiuc_fn
     
     npzfile = np.load(L1_uiuc_fn)
-    
-    ####### Hack for backwards compatibility #######
-    # If interferogram is given as real/imaginary, then change
-    # it to amp/phase
-    if 'Ir' in npzfile.keys():
-        Ir = npzfile['Ir']
-        Ii = npzfile['Ii']
-        I = Ir + 1j*Ii
-        L1_dict['I_amp'] = abs(I)
-        L1_dict['I_phase'] = np.angle(I)
-    
     for key in npzfile.keys():
         if key in ['emission_color','icon_alt_start','icon_alt_end',
                    'icon_lat_start','icon_lat_end','icon_lon_start','icon_lon_end',
@@ -966,6 +1011,22 @@ def level1_uiuc_to_dict(L1_uiuc_fn):
             L1_dict[key] = npzfile[key]
     npzfile.close()
     
+    ####### Hacks for backwards compatibility #######
+    # If interferogram is given as real/imaginary, then change
+    # it to amp/phase
+    if 'Ir' in L1_dict.keys():
+        Ir = L1_dict['Ir']
+        Ii = L1_dict['Ii']
+        I = Ir + 1j*Ii
+        L1_dict['I_amp'] = abs(I)
+        L1_dict['I_phase'] = np.angle(I)
+    # If uncertainties aren't in the file, add placeholders
+    if 'I_amp_uncertainty' not in L1_dict.keys():
+        L1_dict['I_amp_uncertainty'] = np.nan * np.ones(shape(L1_dict['I_amp']))
+    if 'I_phase_uncertainty' not in L1_dict.keys():
+        L1_dict['I_phase_uncertainty'] = np.nan * np.ones(shape(L1_dict['I_amp']))
+        
+    
     return L1_dict
     
 
@@ -975,7 +1036,7 @@ def level1_uiuc_to_dict(L1_uiuc_fn):
 
 def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer = 'exp', 
                            integration_order = 0, account_for_local_projection = True, 
-                           bin_size = None, bin_method = 'before' ):
+                           bin_size = None):
     '''
     High-level function to convert a level 1 dictionary (which was generated from
     a level 1 file) into a level 2.1 file.
@@ -1031,26 +1092,21 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
                                                   improve statistics at the cost of altitude resolution. If 
                                                   None, use the default (color-dependent) value specified
                                                   in get_instrument_constants().
-        bin_method          -- TYPE:str,  'before': perform binning on the L1 interferogram (default)
-                                          'after' : perform binning on the onion-peeled interferogram
-                                          Using 'before' has better precision but worse bias. It is recommended
-                                          to use 'before' because if better bias is desired (at the expense of
-                                          precision), then the recommended course is to not bin at all.
-                                        
-                                        
+                                                                          
     OUTPUTS:
         flag                -- TYPE:int,              Equals 0 on success.
             
     TODO:
         - save NetCDF file.
         - error handling (return 0 or error code)
+        - Nignore will be done in L1, not L2.1, eventually.
     
     '''
-    if bin_method not in ['before','after']:
-        raise Exception('bin_method="%s" not understood. Use "before" or "after".' % bin_method)
 
     ###  Load parameters from input dictionary
     Iraw = L1_dict['I_amp']*np.exp(1j*L1_dict['I_phase'])
+    I_amp_uncertainty = L1_dict['I_amp_uncertainty']
+    I_phase_uncertainty = L1_dict['I_phase_uncertainty']
     emission_color = L1_dict['emission_color']
     source_files = L1_dict['source_files']
     time = L1_dict['time']
@@ -1080,39 +1136,30 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
                                   instrument['phase_to_wind_factor'])
                          
     #### Bin data
-    if bin_method == 'before':
-        I        = bin_image(bin_size, I)
-        tang_lat = bin_array(bin_size, tang_lat)
-        tang_lon = bin_array(bin_size, tang_lon, lon=True)
-        tang_alt = bin_array(bin_size, tang_alt)
-        mighti_ecef_vectors = bin_image(bin_size, mighti_ecef_vectors)
-
+    I        = bin_image(bin_size, I)
+    tang_lat = bin_array(bin_size, tang_lat)
+    tang_lon = bin_array(bin_size, tang_lon, lon=True)
+    tang_alt = bin_array(bin_size, tang_alt)
+    mighti_ecef_vectors = bin_image(bin_size, mighti_ecef_vectors)
+    I_amp_uncertainty   = bin_uncertainty(bin_size, I_amp_uncertainty)
+    I_phase_uncertainty = bin_uncertainty(bin_size, I_phase_uncertainty)
                                                  
     #### Determine geographical locations of inverted wind
     lat, lon, alt = attribute_measurement_location(tang_lat, tang_lon, tang_alt,
                                                    integration_order=integration_order)
     
     #### Onion-peel interferogram
-    Ip = perform_inversion(I, tang_alt, icon_alt, top_layer=top_layer, integration_order=integration_order,
-                           account_for_local_projection=account_for_local_projection,
-                           zero_phase=instrument['zero_phase'], phase_offset=instrument['phase_offset'],
-                           Nignore=instrument['Nignore'])
-                           
-    #### Bin data
-    if bin_method == 'after':
-        Ip  = bin_image(bin_size, Ip)
-        lat = bin_array(bin_size, lat)
-        lon = bin_array(bin_size, lon, lon=True)
-        alt = bin_array(bin_size, alt)
-        mighti_ecef_vectors = bin_image(bin_size, mighti_ecef_vectors)
+    zero_phase = instrument['zero_phase'] + zero_phase_addition
+    Ip, phase, amp, phase_uncertainty, amp_uncertainty = perform_inversion(I, tang_alt, icon_alt, 
+                           I_phase_uncertainty, I_amp_uncertainty,
+                           zero_phase, instrument['phase_offset'], instrument['Nignore'],
+                           top_layer=top_layer, integration_order=integration_order,
+                           account_for_local_projection=account_for_local_projection)
 
 
-    #### Extract wind
-    v_inertial, ve_inertial, a, ae = extract_wind(Ip, instrument['zero_phase'] + zero_phase_addition,
-                                                      instrument['phase_offset'],
-                                                      instrument['min_amp'], 
-                                                      instrument['Nignore'],
-                                                      instrument['phase_to_wind_factor'])
+    #### Transform from phase to wind
+    v_inertial             = instrument['phase_to_wind_factor'] * phase
+    v_inertial_uncertainty = instrument['phase_to_wind_factor'] * phase_uncertainty
         
 
     #### Calculate azimuth angles at measurement locations
@@ -1121,12 +1168,12 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
 
     #### Transform from inertial to rotating coordinate frame
     v = remove_Earth_rotation(v_inertial, az, lat, lon, alt)
-    ve = ve_inertial.copy() # No uncertainty added in this process
+    v_uncertainty = v_inertial_uncertainty.copy() # No appreciable uncertainty added in this process
     
 
     np.savez(L21_fn,
              los_wind                     = v,
-             los_wind_error               = ve,
+             los_wind_error               = v_uncertainty,
              lat                          = lat,
              lon                          = lon,
              alt                          = alt,
@@ -1140,12 +1187,16 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
              icon_alt                     = icon_alt,
              icon_lat                     = icon_lat,
              icon_lon                     = icon_lon,
-             fringe_amplitude             = a,
-             fringe_amplitude_error       = ae,
+             fringe_amplitude             = amp,
+             fringe_amplitude_error       = amp_uncertainty,
              mighti_ecef_vectors          = mighti_ecef_vectors,
              icon_velocity_ecef_vector    = icon_velocity * icon_ecef_ram_vector,
              file_creation_time           = datetime.now(),
              source_files                 = np.concatenate((source_files,[L1_fn])),
+             bin_size                     = bin_size,
+             top_layer                    = top_layer,
+             integration_order            = integration_order,
+             zero_phase                   = zero_phase,
              )
     
     return 0
