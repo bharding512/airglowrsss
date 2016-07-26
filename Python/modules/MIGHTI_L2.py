@@ -98,8 +98,8 @@ def unwrap(x):
 
 def circular_mean(angle0,angle1):
     '''
-    Find the mean angle, taking into account -180/180 crossover. For example,
-    circular_mean(10,50) is 30, but circular_mean(-170,160) is 175.
+    Find the mean angle, taking into account 0/360 crossover. For example,
+    circular_mean(10,50) is 30, but circular_mean(350,20) is 5.
     INPUTS:
         angle0  -- TYPE:float or array, UNITS:deg. An angle in degrees.
         angle1  -- TYPE:float or array, UNITS:deg. An angle in degrees.
@@ -107,7 +107,9 @@ def circular_mean(angle0,angle1):
         angle   -- TYPE:float or array, UNITS:deg. The circular mean of the two
                    input angles.
     '''
-    return np.rad2deg(np.angle((np.exp(1j*np.deg2rad(angle0)) + np.exp(1j*np.deg2rad(angle1)))/2.))
+    x = np.rad2deg(np.angle((np.exp(1j*np.deg2rad(angle0)) + np.exp(1j*np.deg2rad(angle1)))/2.))
+    x = np.mod(x,360.)
+    return x
 
 
 
@@ -149,9 +151,9 @@ def ze_to_tang_alt(ze, sat_alt, RE):
     '''
     if hasattr(ze,"__len__"):
         ze = np.array(ze)
-        if any( ze < 90 ) or any( ze > 180 ):
+        if any( ze < 90. ) or any( ze > 180. ):
             raise Exception('Angle must be between 90 and 180, exclusive.')
-    elif ( ze < 90 ) or ( ze > 180):
+    elif ( ze < 90. ) or ( ze > 180.):
         raise Exception('Angle must be between 90 and 180, exclusive.')
     tang_alt = (sat_alt+RE)*np.sin(np.deg2rad(ze)) - RE  
     return tang_alt
@@ -607,8 +609,11 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     for i in range(ny):
         ph_L1[i] = extract_phase_from_row(I[i,:], zero_phase, phase_offset, Nignore)
     A_L1 = np.sum(abs(I),axis=1)
-    ph_L2 = phase # this was calculated above
-    A_L2 = amp # this was calculated above
+    ph_L2 = phase.copy() # this was calculated above
+    A_L2 = amp.copy() # this was calculated above
+    # If amp is exactly zero (unlikely in practice), then replace it with a small number
+    # so that uncertainties can be calculated.
+    A_L2[A_L2==0.0] = 1e-6
         
     ### Step 1: Transform amp/phase uncertainties to real/imag uncertainties
     # Each row will have a 2x2 covariance matrix describing the real and imaginary parts
@@ -641,7 +646,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
                       [np.sin(ph_L2[m]),  A_L2[m]*np.cos(ph_L2[m])]])
         # Jacobian of transformation from real/imag to ampl/phase
         Jinv = np.linalg.inv(J)
-        cov_real_imag = np.diag([sigma_real_L2[m], sigma_imag_L2[m]])**2 # assume uncorrelated (TODO: does this matter?)
+        cov_real_imag = np.diag([sigma_real_L2[m], sigma_imag_L2[m]])**2 # assume uncorrelated
         cov_amp_phase_L2[m,:,:] = Jinv.dot(cov_real_imag).dot(Jinv.T)
     # Extract amplitude and phase uncertainties
     amp_uncertainty = np.sqrt(cov_amp_phase_L2[:,0,0])
@@ -737,7 +742,6 @@ def attribute_measurement_location(tang_lat, tang_lon, tang_alt, integration_ord
         for i in range(len(mid)):
             mid[i] = circular_mean(top[i], bottom[i])
 
-        mid = np.mod(mid + 180, 360) - 180
         return mid
     
     if integration_order == 1:
@@ -875,36 +879,8 @@ def level1_to_dict(L1_fn, emission_color):
         
     OUTPUTS:
         L1_dict -- TYPE:dict. A dictionary containing information needed for
-                              the level 2.1 processing. The keys are:
-                                     L1_fn
-                                     I_amp
-                                     I_phase
-                                     I_amp_uncertainty
-                                     I_phase_uncertainty
-                                     tang_alt_start
-                                     tang_alt_end
-                                     tang_lat_start
-                                     tang_lat_end
-                                     tang_lon_start
-                                     tang_lon_end
-                                     emission_color
-                                     icon_alt_start
-                                     icon_alt_end
-                                     icon_lat_start
-                                     icon_lat_end
-                                     icon_lon_start
-                                     icon_lon_end
-                                     mighti_ecef_vectors_start
-                                     mighti_ecef_vectors_end
-                                     icon_ecef_ram_vector_start
-                                     icon_ecef_ram_vector_end
-                                     icon_velocity_start
-                                     icon_velocity_end
-                                     source_files
-                                     time
-                                     exp_time
-                                     interferometer_start_path
-                                     interferometer_end_path
+                              the level 2.1 processing. See documentation for 
+                              level1_dict_to_level21(...) for required keys.
     TODO:
         - lots of stuff, mostly just waiting on finalization of L1 file.
         - interferometer start path and end path
@@ -939,8 +915,10 @@ def level1_to_dict(L1_fn, emission_color):
     L1_dict['icon_velocity_start']         = f['ICON_VELOCITY_START'][:].item()
     L1_dict['icon_velocity_end']           = f['ICON_VELOCITY_END'][:].item()
     L1_dict['source_files']                = [] # TODO
-    tsec                                   = f['IMAGE_TIME_START'][:].item()
-    L1_dict['time']                        = datetime(2015,1,1) + timedelta(seconds=tsec)
+    tsec_start                             = f['IMAGE_TIME_START'][:].item()
+    tsec_end                               = f['IMAGE_TIME_END'][:].item()
+    L1_dict['time_start']                  = datetime(2015,1,1) + timedelta(seconds=tsec_start)
+    L1_dict['time_end']                    = datetime(2015,1,1) + timedelta(seconds=tsec_end)
     L1_dict['exp_time']                    = f['IMAGE_TIME_END'][:].item() - f['IMAGE_TIME_START'][:].item()
     L1_dict['interferometer_start_path']   = 4.62e-2
     L1_dict['interferometer_end_path']     = 5.50e-2
@@ -965,36 +943,8 @@ def level1_uiuc_to_dict(L1_uiuc_fn):
         L1_uiuc_fn   -- TYPE:str.  The full path and filename of the level 1 file
     OUTPUTS:
         L1_dict      -- TYPE:dict. A dictionary containing information needed for
-                                   the level 2.1 processing. The keys are:
-                                     L1_fn
-                                     I_amp
-                                     I_phase
-                                     I_amp_uncertainty
-                                     I_phase_uncertainty
-                                     tang_alt_start
-                                     tang_alt_end
-                                     tang_lat_start
-                                     tang_lat_end
-                                     tang_lon_start
-                                     tang_lon_end
-                                     emission_color
-                                     icon_alt_start
-                                     icon_alt_end
-                                     icon_lat_start
-                                     icon_lat_end
-                                     icon_lon_start
-                                     icon_lon_end
-                                     mighti_ecef_vectors_start
-                                     mighti_ecef_vectors_end
-                                     icon_ecef_ram_vector_start
-                                     icon_ecef_ram_vector_end
-                                     icon_velocity_start
-                                     icon_velocity_end
-                                     source_files
-                                     time
-                                     exp_time
-                                     interferometer_start_path
-                                     interferometer_end_path
+                                   the level 2.1 processing. See documentation for 
+                                   level1_dict_to_level21(...) for required keys.
     '''
     
     L1_dict = {}
@@ -1022,9 +972,17 @@ def level1_uiuc_to_dict(L1_uiuc_fn):
         L1_dict['I_phase'] = np.angle(I)
     # If uncertainties aren't in the file, add placeholders
     if 'I_amp_uncertainty' not in L1_dict.keys():
-        L1_dict['I_amp_uncertainty'] = np.nan * np.ones(shape(L1_dict['I_amp']))
+        L1_dict['I_amp_uncertainty'] = np.nan * np.ones(np.shape(L1_dict['I_amp']))
     if 'I_phase_uncertainty' not in L1_dict.keys():
-        L1_dict['I_phase_uncertainty'] = np.nan * np.ones(shape(L1_dict['I_amp']))
+        L1_dict['I_phase_uncertainty'] = np.nan * np.ones(np.shape(L1_dict['I_amp']))
+    # Change time to time_start and time_end
+    if 'time' in L1_dict:
+        L1_dict['time_start'] = L1_dict['time']
+        L1_dict['time_end']   = L1_dict['time'] + timedelta(seconds=L1_dict['exp_time']/2)
+        del L1_dict['time']
+    # Ensure longitudes are defined [0,360]
+    for key in ['icon_lon_start','icon_lon_end','tang_lon_start','tang_lon_end']:
+        L1_dict[key] = np.mod(L1_dict[key],360.)
         
     
     return L1_dict
@@ -1069,7 +1027,8 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
                                              icon_velocity_start
                                              icon_velocity_end
                                              source_files
-                                             time
+                                             time_start
+                                             time_end
                                              exp_time
                                              interferometer_start_path
                                              interferometer_end_path  
@@ -1109,7 +1068,6 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
     I_phase_uncertainty = L1_dict['I_phase_uncertainty']
     emission_color = L1_dict['emission_color']
     source_files = L1_dict['source_files']
-    time = L1_dict['time']
     exp_time = L1_dict['exp_time']
     L1_fn = L1_dict['L1_fn']
     # Load parameters which are averaged from start to end of exposure.
@@ -1124,6 +1082,7 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
     icon_velocity = (L1_dict['icon_velocity_start'] + L1_dict['icon_velocity_end'])/2
     start_path = L1_dict['interferometer_start_path']
     end_path   = L1_dict['interferometer_end_path']
+    
 
     
     ### Load instrument constants 
@@ -1143,10 +1102,13 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
     mighti_ecef_vectors = bin_image(bin_size, mighti_ecef_vectors)
     I_amp_uncertainty   = bin_uncertainty(bin_size, I_amp_uncertainty)
     I_phase_uncertainty = bin_uncertainty(bin_size, I_phase_uncertainty)
-                                                 
+    
+    
+    
     #### Determine geographical locations of inverted wind
     lat, lon, alt = attribute_measurement_location(tang_lat, tang_lon, tang_alt,
                                                    integration_order=integration_order)
+    
     
     #### Onion-peel interferogram
     zero_phase = instrument['zero_phase'] + zero_phase_addition
@@ -1177,7 +1139,8 @@ def level1_dict_to_level21(L1_dict, L21_fn, zero_phase_addition = 0.0, top_layer
              lat                          = lat,
              lon                          = lon,
              alt                          = alt,
-             time                         = time,
+             time_start                   = L1_dict['time_start'],
+             time_end                     = L1_dict['time_end'],
              exp_time                     = exp_time,
              az                           = az,
              emission_color               = emission_color,
