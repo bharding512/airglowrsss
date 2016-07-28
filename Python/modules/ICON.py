@@ -257,6 +257,9 @@ def ecef_to_azze(latlonalt, ecef):
     ze = np.arccos(ven[0])*180.0/np.pi
     az = np.arctan2(ven[1],ven[2])*180.0/np.pi
     
+    # Third, ensure output is in [0,360]
+    az = np.mod(az,360.)
+
     return az,ze
     
     
