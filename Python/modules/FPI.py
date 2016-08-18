@@ -168,8 +168,8 @@ def FindCenter(img,  circle_fit_method = 'geometric', thresh=None, max_r=None):
     min_label_size = 100 # only use labeled regions with more pixels than this
     
     sx,sy = np.shape(img)
-    gx = floor(sx/2)
-    gy = floor(sy/2)
+    gx = int(floor(sx/2))
+    gy = int(floor(sy/2))
     
     # If we are not given a threshold, estimate one
     if not thresh:
@@ -342,7 +342,7 @@ def AnnularSum(img,annuli,bg = None):
 	sigma = np.zeros(N)
 	for i in range(0,N):
 		# The indicies to work with
-		ind = annuli['ind'][annuli['inner'][i]:(annuli['outer'][i]+1)]
+		ind = annuli['ind'][int(annuli['inner'][i]):int(annuli['outer'][i]+1)]
 	
 		# The indicies of pixels that are within 3 std of the mean of the annular region
 		ind2 = (abs(data[ind] - data[ind].mean()) < (3*data[ind].std())).nonzero()
@@ -790,6 +790,8 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
     dt_laser = []
     center = None
     fnames_to_remove = []
+    laser_fringes = []
+    laser_annuli = []
     lt0 = local.localize(datetime.datetime(1989,4,18)) # arbitrary default
     if uselaser: # analyze the laser images for the center
         for fname in lasers:
@@ -1010,6 +1012,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
                     last_chi = laser_fit.redchi
                     last_t = best_t
                     laser_redchi.append(laser_fit.redchi)
+                    laser_fringes.append(data)
+                    laser_annuli.append(annuli['r'][N0:N1])
+                    
                     logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + '%s reduced chisqr: %.4f\n' % (fname, laser_fit.redchi))
             
             else:
@@ -1258,6 +1263,8 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
     sky_intT = []
     sky_temperature = []
     sky_fns = []
+    sky_fringes = []
+    sky_annuli = []
 
 
     # Categorize the look directions in the directory
@@ -1474,7 +1481,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
                     sky_fit.params[p].stderr = np.inf
             
             sky_redchi.append(sky_fit.redchi)
-            sky_out.append(sky_fit) 
+            sky_out.append(sky_fit)
+            sky_fringes.append(sky_spectra[N0:N1])
+            sky_annuli.append(annuli['r'][N0:N1])
             
             # Calculate calibration wind error
             sigma_cal_v = 0.0 # default to 0 for zenith reference
@@ -1750,7 +1759,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
              'sky_value': sky_value, 'sky_stderr': sky_stderr,
              'laser_intT': np.array(laser_intT), 'laser_ccd_temperature': np.array(laser_temperature),
              'sky_intT': np.array(sky_intT), 'sky_ccd_temperature': np.array(sky_temperature),
-             'reference': reference, 'lam0': lam0, 'sky_fns': sky_fns, 'laser_fns':laser_fns, 'center_pixel':center,}
+             'reference': reference, 'lam0': lam0, 'sky_fns': sky_fns, 'laser_fns':laser_fns, 'center_pixel':center,
+             'laser_fringes':laser_fringes,'laser_annuli':laser_annuli,'sky_fringes':sky_fringes,
+             'sky_annuli':sky_annuli,}
     
     # Apply Doppler reference
     dref,drefe = DopplerReference(FPI_Results, reference=reference,AVERAGING_TIME=zenith_times)
