@@ -7,7 +7,7 @@ from scipy import integrate
 from datetime import datetime, timedelta
 import netCDF4
 import getpass # for determining who is running the script
-
+import glob
 
 
 ############################################################################################################
@@ -828,31 +828,46 @@ def remove_Earth_rotation(v_inertial, az, lat, lon, alt):
 
 
 
-def interpolate_linear(x,y,x0,extrapolation='hold'):
+def interpolate_linear(x, y, x0, extrapolation='hold', prop_err = False, yerr = None):
     '''
     Linear interpolation of the function y = f(x) to the location x0.
-    x and y are vectors comprising samples of this function. This function is
+    x and y are vectors comprising samples of this function. There is also
+    an option to propagate errors to the interpolated value. This function is
     5 times faster than scipy.interpolate.interp1d, and allows for
     zero-order-hold extrapolation. If you are interpolating to many points, 
-    then scipy.interpolate.interp1d is likely faster.
+    then scipy.interpolate.interp1d is likely faster. 
 
     INPUTS:
-        x    -- TYPE:array(n), UNITS:arb. Independent variable of samples of function.
-        y    -- TYPE:array(n), UNITS:arb. Dependent variable of samples of function.
-        x0   -- TYPE:float,    UNITS:arb. Independent variable of interpolation point.
+        x     -- TYPE:array(n), UNITS:arb. Independent variable of samples of function.
+        y     -- TYPE:array(n), UNITS:arb. Dependent variable of samples of function.
+        x0    -- TYPE:float,    UNITS:arb. Independent variable of interpolation point.
     OPTIONAL INPUTS:
         extrapolation -- TYPE:str,        'hold': extrapolate by using values at end points (default)
                                           'none': do not extrapolate. Points will be np.nan
+        prop_err      -- TYPE:bool,       True:  propagate errors from original to interpolated
+                                                 value, and return an extra output; yerr must
+                                                 be specified as an input. 
+                                          False: do not propagate errors, and return only one
+                                                 output (default).
+        yerr          -- TYPE:array(n), UNITS:arb. Error in y, to be propagated to interpolated value.
     OUTPUTS:
-        y0   -- TYPE:float,    UNITS:arb. Interpolated value.
-    
+        y0    -- TYPE:float,    UNITS:arb. Interpolated value.
+    OPTIONAL OUTPUT (if prop_err = True):
+        y0err -- TYPE:float,    UNTIS:arb. Propagated error of y0.
     '''
+    
+    if prop_err and yerr is None:
+        raise Exception('If prop_err=True, then yerr must be specified')
+    
     j0 = bisect.bisect(x,x0) - 1 # index to the left
     j1 = j0 + 1 # index to the right
+    y0err = np.nan
     # Handle extrapolations
     if j0 == -1:
         if extrapolation=='hold':
             y0 = y[0]
+            if prop_err:
+                y0err = yerr[0]
         elif extrapolation == 'none':
             y0 = np.nan
         else: 
@@ -860,13 +875,27 @@ def interpolate_linear(x,y,x0,extrapolation='hold'):
     elif j1 == len(x):
         if extrapolation=='hold':
             y0 = y[-1]
+            if prop_err:
+                y0err = yerr[-1]
         elif extrapolation == 'none':
             y0 = np.nan
         else: 
             raise Exception('"%s" not understood' % extrapolation)
     else: # linear interpolation
-        y0 = (y[j1]-y[j0])/(x[j1]-x[j0])*(x0-x[j0]) + y[j0]    
-    return y0
+        w1 = (x0-x[j0]) / (x[j1]-x[j0]) # weight of y[j1]
+        w0 = 1.0-w1 # weight of y[j0]
+        y0 = w0*y[j0] + w1*y[j1]
+        if prop_err:
+            # What is the best way to interpolate errors? 
+            # Statistically correct way, but yields counterintuitive results, such as
+            # a higher error near the sample points than between them:
+            #y0err = np.sqrt(w0**2*yerr[j0]**2 + w1**2*yerr[j1]**2)
+            # Simple way: just interpolate errors
+            y0err = w0*yerr[j0] + w1*yerr[j1]
+    if prop_err:
+        return y0, y0err
+    else:
+        return y0
 
 
 
@@ -980,11 +1009,11 @@ def level1_uiuc_to_dict(L1_uiuc_fn):
         I = Ir + 1j*Ii
         L1_dict['I_amp'] = abs(I)
         L1_dict['I_phase'] = np.angle(I)
-    # If uncertainties aren't in the file, add placeholders
+    # If uncertainties aren't in the file, add placeholders (0.01% and 2 mrad)
     if 'I_amp_uncertainty' not in L1_dict.keys():
-        L1_dict['I_amp_uncertainty'] = np.nan * np.ones(np.shape(L1_dict['I_amp']))
+        L1_dict['I_amp_uncertainty'] = 0.0001 * np.sum(L1_dict['I_amp'],axis=1)
     if 'I_phase_uncertainty' not in L1_dict.keys():
-        L1_dict['I_phase_uncertainty'] = np.nan * np.ones(np.shape(L1_dict['I_amp']))
+        L1_dict['I_phase_uncertainty'] = 0.002 * np.ones(np.shape(L1_dict['I_phase'])[0])
     # Change time to time_start and time_end
     if 'time' in L1_dict:
         L1_dict['time_start'] = L1_dict['time']
@@ -1300,7 +1329,7 @@ def save_nc_level21(path, L21_dict):
     
     INPUTS:
         path        -- TYPE:str.  The directory the file will be saved in, including trailing "/"
-                                  (e.g., '/home/bhardin2/')
+                                  (e.g., '/home/user/')
         L21_dict    -- TYPE:dict. A dictionary containing output variables of the Level 2.1 processing.
                                   See documentation for level1_dict_to_level21_dict(...) for details.
     OUTPUTS:
@@ -1690,7 +1719,8 @@ def level21_to_dict(L21_fns):
                     lat             -- TYPE:array(ny,nt), UNITS:deg. Sample latitudes.
                     lon             -- TYPE:array(ny,nt), UNITS:deg. Sample longitudes.
                     alt             -- TYPE:array(ny,nt), UNITS:km.  Sample altitudes.
-                    los_wind        -- TYPE:array(ny,nt), UNITS:m/s. Line-of-sight wind component towards MIGHTI
+                    los_wind        -- TYPE:array(ny,nt), UNITS:m/s. Line-of-sight wind component towards MIGHTI.
+                    los_wind_error  -- TYPE:array(ny,nt), UNITS:m/s. Error in los_wind variable.
                     local_az        -- TYPE:array(ny,nt), UNITS:deg. Azimuth angle of vector pointing from 
                                        MIGHTI towards the sample location, at the sample location (deg E of N).
                     amp             -- TYPE:array(ny,nt), UNITS:arb. Fringe amplitude at sample locations
@@ -1711,6 +1741,7 @@ def level21_to_dict(L21_fns):
     lon = np.zeros((ny,nt))
     alt = np.zeros((ny,nt))
     los_wind = np.zeros((ny,nt))
+    los_wind_error = np.zeros((ny,nt))
     local_az = np.zeros((ny,nt))   
     amp = np.zeros((ny,nt))
     time = np.zeros(nt, dtype=object)
@@ -1720,25 +1751,18 @@ def level21_to_dict(L21_fns):
         fn = L21_fns[i]
         d = netCDF4.Dataset(fn,mode='r')
         stub = 'ICON_L2_1_%s' % d.Instrument # The prefix of each variable
-        emission_color =    d.variables['%s_Emission_Color' % stub][...].lower()
-        lati =              d.variables['%s_Latitude' % stub][...]
-        loni =              d.variables['%s_Longitude' % stub][...]
-        alti =              1e-3 * d.variables['%s_Altitude' % stub][...] # m to km
-        azi  =              d.variables['%s_Line-of-sight_Azimuth' % stub][...]
-        los_windi =         d.variables['%s_Line-of-sight_Wind' % stub][...]
-        ampi =              d.variables['%s_Fringe_Amplitude' % stub][...]
-        time_msec =         d.variables['Epoch'][...].item()
-        timei =             datetime(1970,1,1) + timedelta(seconds = 1e-3*time_msec)
-        exptimei =          float(d.Time_Resolution.split(' ')[0])
+        emission_color = d.variables['%s_Emission_Color' % stub][...].lower()      
 
-        lat[:,i] = lati
-        lon[:,i] = loni
-        alt[:,i] = alti
-        los_wind[:,i] = los_windi
-        local_az[:,i] = azi
-        amp[:,i] = ampi
-        time[i] = timei
-        exp_time[i] = exptimei
+        lat[:,i] = d.variables['%s_Latitude' % stub][...]
+        lon[:,i] = d.variables['%s_Longitude' % stub][...]
+        alt[:,i] = 1e-3 * d.variables['%s_Altitude' % stub][...] # m to km
+        los_wind[:,i] = d.variables['%s_Line-of-sight_Wind' % stub][...]
+        los_wind_error[:,i] = d.variables['%s_Line-of-sight_Wind_Error' % stub][...]
+        local_az[:,i] = d.variables['%s_Line-of-sight_Azimuth' % stub][...]
+        amp[:,i] = d.variables['%s_Fringe_Amplitude' % stub][...]
+        time_msec =         d.variables['Epoch'][...].item()
+        time[i] = datetime(1970,1,1) + timedelta(seconds = 1e-3*time_msec)
+        exp_time[i] = float(d.Time_Resolution.split(' ')[0])
         d.close()    
     
     L21_dict = {}
@@ -1746,6 +1770,7 @@ def level21_to_dict(L21_fns):
     L21_dict['lon'] = lon
     L21_dict['alt'] = alt
     L21_dict['los_wind'] = los_wind
+    L21_dict['los_wind_error'] = los_wind_error
     L21_dict['local_az'] = local_az
     L21_dict['amp'] = amp
     L21_dict['time'] = time
@@ -1767,7 +1792,7 @@ def level21_to_dict(L21_fns):
 
     
    
-    
+
     
 def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
     '''
@@ -1827,28 +1852,29 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
     '''
 
     
-    lat_A      = L21_A_dict['lat']
-    lon_A      = L21_A_dict['lon']
-    alt_A      = L21_A_dict['alt']
-    los_wind_A = L21_A_dict['los_wind']
-    local_az_A = L21_A_dict['local_az']
-    amp_A      = L21_A_dict['amp']
-    time_A     = L21_A_dict['time']
-    exp_time_A = L21_A_dict['exp_time']
-    emission_color = L21_A_dict['emission_color']
+    lat_A      =       L21_A_dict['lat']
+    lon_A      =       L21_A_dict['lon']
+    alt_A      =       L21_A_dict['alt']
+    los_wind_A =       L21_A_dict['los_wind']
+    los_wind_A_err =   L21_A_dict['los_wind_error']
+    local_az_A =       L21_A_dict['local_az']
+    amp_A      =       L21_A_dict['amp']
+    time_A     =       L21_A_dict['time']
+    exp_time_A =       L21_A_dict['exp_time']
+    emission_color =   L21_A_dict['emission_color']
     N_alts_A, N_times_A = np.shape(lon_A)
 
-    lat_B      = L21_B_dict['lat']
-    lon_B      = L21_B_dict['lon']
-    alt_B      = L21_B_dict['alt']
-    los_wind_B = L21_B_dict['los_wind']
-    local_az_B = L21_B_dict['local_az']
-    amp_B      = L21_B_dict['amp']
-    time_B     = L21_B_dict['time']
-    exp_time_B = L21_B_dict['exp_time']
-    emission_color = L21_B_dict['emission_color']
+    lat_B      =       L21_B_dict['lat']
+    lon_B      =       L21_B_dict['lon']
+    alt_B      =       L21_B_dict['alt']
+    los_wind_B =       L21_B_dict['los_wind']
+    los_wind_B_err =   L21_B_dict['los_wind_error']
+    local_az_B =       L21_B_dict['local_az']
+    amp_B      =       L21_B_dict['amp']
+    time_B     =       L21_B_dict['time']
+    exp_time_B =       L21_B_dict['exp_time']
+    emission_color =   L21_B_dict['emission_color']
     N_alts_B, N_times_B = np.shape(lon_B)
-    
     
 
     ################### Parameters ###############################
@@ -1923,6 +1949,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
     # Output variables, which will be defined on the reconstruction grid
     U = np.nan*np.zeros(np.shape(lon))                # zonal wind
     V = np.nan*np.zeros(np.shape(lon))                # meridional wind
+    U_err = np.nan*np.zeros(np.shape(lon))            # zonal wind uncertainty
+    V_err = np.nan*np.zeros(np.shape(lon))            # meridional wind uncertainty
     lat = np.nan*np.zeros(np.shape(lon))              # latitude
     time = np.empty(np.shape(lon), dtype=object)      # time ascribed to L2.2 data point (as datetime objects)
     time_delta = np.nan*np.zeros(np.shape(lon))       # difference between A and B times used (seconds)
@@ -2012,25 +2040,54 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
             #   - time     (A and B, to be averaged and subtracted)
             #   - ver      (A and B, to be compared)
             
-            def bilinear_interp(lon_AB, alt_AB, val):
+            def bilinear_interp(lon_AB, alt_AB, val, prop_err = False, valerr = None):
                 '''
                 Helper function that will bilinearly interpolate the Nx2 array "val", sampled
                 at the Nx2 array of points described by lon_AB and alt_AB, to the point 
                 currently under consideration (i.e., lon_pt, alt_pt).
+                
+                Optional input to propagate error from original to interpolated value. If
+                prop_err = True, valerr must be specified (as the error of each value of
+                val), and the interpolated error will be provided an additional output.
                 '''
-                # Do interpolate of value to the desired altitude, for each longitude
-                val_0 = interpolate_linear(alt_AB[:,0], val[:,0], alt_pt)
-                val_1 = interpolate_linear(alt_AB[:,1], val[:,1], alt_pt)
-                # Interpolate the longitude coordinate to the desired altitude
-                lon_0 = interpolate_linear(alt_AB[:,0], lon_AB[:,0], alt_pt)
-                lon_1 = interpolate_linear(alt_AB[:,1], lon_AB[:,1], alt_pt)
-                # Do interpolation to the desired longitude
-                val_pt = interpolate_linear([lon_0, lon_1], [val_0, val_1], lon_pt,
-                                                      extrapolation='none')
-                return val_pt
+                
+                if prop_err and valerr is None:
+                    raise Exception('If prop_err = True, then valerr must be specified')
+                
+                if not prop_err:
+                    # Do interpolate of value to the desired altitude, for each longitude
+                    val_0 = interpolate_linear(alt_AB[:,0], val[:,0], alt_pt)
+                    val_1 = interpolate_linear(alt_AB[:,1], val[:,1], alt_pt)
+                    # Interpolate the longitude coordinate to the desired altitude
+                    lon_0 = interpolate_linear(alt_AB[:,0], lon_AB[:,0], alt_pt)
+                    lon_1 = interpolate_linear(alt_AB[:,1], lon_AB[:,1], alt_pt)
+                    # Do interpolation to the desired longitude
+                    val_pt = interpolate_linear([lon_0, lon_1], [val_0, val_1], lon_pt,
+                                                          extrapolation='none')
+                    return val_pt
+                
+                else: # prop_err is True
+                    # Do interpolate of value to the desired altitude, for each longitude
+                    val_0, val_0_err = interpolate_linear(alt_AB[:,0], val[:,0], alt_pt, 
+                                                          prop_err = True, yerr = valerr[:,0])
+                    val_1, val_1_err = interpolate_linear(alt_AB[:,1], val[:,1], alt_pt, 
+                                                          prop_err = True, yerr = valerr[:,1])
+                    # Interpolate the longitude coordinate to the desired altitude
+                    lon_0 = interpolate_linear(alt_AB[:,0], lon_AB[:,0], alt_pt)
+                    lon_1 = interpolate_linear(alt_AB[:,1], lon_AB[:,1], alt_pt)
+                    # Do interpolation to the desired longitude
+                    val_pt, val_pt_err = interpolate_linear([lon_0, lon_1], [val_0, val_1], lon_pt,
+                                                            extrapolation='none', 
+                                                            prop_err = True, yerr = [val_0_err, val_1_err])
+                    return val_pt, val_pt_err
+                    
             
-            los_wind_A_pt = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], los_wind_A[:,kA0:kA1+1])
-            los_wind_B_pt = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], los_wind_B[:,kB0:kB1+1])
+            los_wind_A_pt, los_wind_A_pt_err = \
+                            bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], los_wind_A[:,kA0:kA1+1],
+                                            prop_err = True, valerr = los_wind_A_err[:,kA0:kA1+1])
+            los_wind_B_pt, los_wind_B_pt_err = \
+                            bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], los_wind_B[:,kB0:kB1+1],
+                                            prop_err = True, valerr = los_wind_B_err[:,kB0:kB1+1])
             local_az_A_pt = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], local_az_A[:,kA0:kA1+1])
             local_az_B_pt = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], local_az_B[:,kB0:kB1+1])
             lat_A_pt      = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], lat_A     [:,kA0:kA1+1])
@@ -2060,18 +2117,22 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
             ############################ Inversion #############################
             # Coordinate transformation of winds from lines of sight to cardinal directions
             # Construct LoS winds in vector y
-
             y = np.array([-los_wind_A_pt, -los_wind_B_pt])
             # Coordinate transform (the heart of the L2.2 processing)
             azA_rad = np.deg2rad(local_az_A_pt)
             azB_rad = np.deg2rad(local_az_B_pt)
             A = np.array([[np.sin(azA_rad), np.cos(azA_rad)],
                           [np.sin(azB_rad), np.cos(azB_rad)]])
-            x = np.linalg.solve(A,y)
+            invA = np.linalg.inv(A) # explicitly compute inverse
+            x = invA.dot(y)
             u = x[0]
-            v = x[1] 
-            # TODO: propagate uncertainties
-            
+            v = x[1]
+            # propagate uncertainties
+            Sig_y = np.array([[los_wind_A_pt_err**2, 0.0],
+                              [0.0, los_wind_B_pt_err**2]]) # covariance matrix of y
+            Sig_x = invA.dot(Sig_y.dot(invA.T)) # standard linear error propagation
+            u_err = np.sqrt(Sig_x[0,0])
+            v_err = np.sqrt(Sig_x[1,1])
 
             
             ###################### Final error flagging #######################
@@ -2092,6 +2153,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
             # Fill in all the relevant variables at this grid point
             U[i,k] = u
             V[i,k] = v
+            U_err[i,k] = u_err
+            V_err[i,k] = v_err
             lat[i,k] = (lat_A_pt + lat_B_pt)/2
             time[i,k] = t_A + timedelta(seconds=(t_B-t_A).total_seconds()/2)
             time_delta[i,k] = (t_B-t_A).total_seconds()
@@ -2107,8 +2170,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
     L22_dict['alt'] = alt
     L22_dict['u'] = U
     L22_dict['v'] = V
-    L22_dict['u_error'] = np.nan*np.zeros(np.shape(U))
-    L22_dict['v_error'] = np.nan*np.zeros(np.shape(V))
+    L22_dict['u_error'] = U_err
+    L22_dict['v_error'] = V_err
     L22_dict['error_flags'] = error_flags
     L22_dict['time'] = time
     L22_dict['time_delta'] = time_delta
@@ -2130,7 +2193,7 @@ def save_nc_level22(path, L22_dict):
     
     INPUTS:
         path        -- TYPE:str.  The directory the file will be saved in, including trailing "/"
-                                  (e.g., '/home/bhardin2/')
+                                  (e.g., '/home/user/')
         L22_dict    -- TYPE:dict. A dictionary containing output variables of the Level 2.2 processing.
                                   See documentation for level21_dict_to_level22_dict(...) for details.
     OUTPUTS:
@@ -2412,12 +2475,41 @@ def save_nc_level22(path, L22_dict):
 
 
 
+def level21_to_level22(L21_path, L22_path):
+    '''
+    High-level function to apply the Level-2.1-to-Level-2.2 algorithm to a series of Level 2.1 files
+    (in the L21_path directory) and create a Level 2.2 file (in the L22_path directory)
+    
+    INPUTS:
+        L21_path    -- TYPE:str.  The directory containing the L2.1 files to be processed, including
+                                  trailing "/" (e.g., '/home/user/'). This should contain a series of
+                                  MIGHTI A and B files, over three orbits (previous, current, and next).
+                                  
+        L22_path    -- TYPE:str.  The directory the L2.2 file will be saved in, including trailing "/"
+                                  (e.g., '/home/user/')    
+    OUTPUTS:
+        L22_fn      -- TYPE:str.  The full path to the saved L2.2 file.
+    '''
+    
 
+    ##### Load L2.1 files into dictionaries
+    Afns = glob.glob('%s*_MIGHTI-A_*.nc' % L21_path)
+    Bfns = glob.glob('%s*_MIGHTI-B_*.nc' % L21_path)
 
+    # Sort the files by time (same as alphanumeric sorting)
+    Afns.sort()
+    Bfns.sort()
 
+    level21_A = level21_to_dict(Afns)
+    level21_B = level21_to_dict(Bfns)
 
+    ##### Run L2.2 processing to create L2.2 dictionary
+    L22_dict = level21_dict_to_level22_dict(level21_A, level21_B)
 
+    ##### Save L2.2 data to file
+    L22_fn = save_nc_level22(L22_path, L22_dict)
 
+    return L22_fn
 
 
 
