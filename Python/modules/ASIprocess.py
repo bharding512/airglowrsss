@@ -49,9 +49,9 @@ def process_instr(inst,year,doy,do_DB=True):
     datestr = process_dn.strftime('%Y%m%d')
     
     # User to scp to
-    scp_user = 'data@airglow.ece.illinois.edu'
+    scp_user = 'jmakela@webhost.engr.illinois.edu'
     web_stub = 'SummaryImages/'
-    file_stub = '/data/SummaryImages/'
+    file_stub = '/home/airglowgroup/data/SummaryImages/'
 
     inst = inst.lower()
 
@@ -197,7 +197,7 @@ def process_instr(inst,year,doy,do_DB=True):
                     stoput = d.info['UniversalTime']
 
                     # Open and populate the database (see http://zetcode.com/databases/mysqlpythontutorial/ for help)
-                    con = mdb.connect(host='airglow.ece.illinois.edu',user='WebUser',passwd='webpass',db='webdatabase')
+                    con = mdb.connect(host='webhost.engr.illinois.edu',db='airglowgroup_webdatabase',read_default_file='/home/airglow/.my.cnf')
                     cur = con.cursor()
 
                     # First find out if the entry is in there (i.e., we are just updating the png and avi file)

@@ -273,11 +273,11 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
     
     # Information about sending data to the website. Only used if send_to_website==True.
     temp_plots_stub= '/rdata/airglow/fpi/results/temporary_plots/' #where to save png files
-    scp_user       = 'data@airglow.ece.illinois.edu'    
+    scp_user       = 'jmakela@webhost.engr.illinois.edu'    
     db_image_stub  =        'SummaryImages/' # relative path from web server directory on airglow
     db_log_stub =           'SummaryLogs/'
-    web_images_stub =       '/data/SummaryImages/' # absolute location on airglow of summary images
-    web_logs_stub =         '/data/SummaryLogs/' # absolute location on airglow of summary logs
+    web_images_stub =       '/home/airglowgroup/data/SummaryImages/' # absolute location on airglow of summary images
+    web_logs_stub =         '/home/airglowgroup/data/SummaryLogs/' # absolute location on airglow of summary logs
     # Information about sending to Madrigal. Only used if send_to_madrigal==True
     madrigal_stub =         '/rdata/airglow/database/' # where reduced ascii txt and png files are saved for Madrigal
     # Information about sending to partner institutions. Only used if enable_share==True
@@ -722,7 +722,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
         stoput = dtime.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')  
         # Open the database (see http://zetcode.com/databases/mysqlpythontutorial/ for help)
         # Read the user and password from a file.
-        con = mdb.connect(host='airglow.ece.illinois.edu', db='webdatabase', read_default_file="~/.my.cnf")
+        con = mdb.connect(host='webhost.engr.illinois.edu', db='airglowgroup_webdatabase', read_default_file="/home/airglow/.my.cnf")
         cur = con.cursor()  
         # Create the summary images
         for fig, fn, db_id in zip(summary_figs, summary_fns, db_ids):

@@ -118,6 +118,11 @@ _networks['peru'] = {
         'estimate_vertical_wind': False, # whether to estimate vertical wind for wind field map
         }
         
+_networks['ethiopia'] = {
+        'sql_id':           0, # ID on the airglow SQL database
+        'quicklook_gif_id': 0, # ID of gif summary image of windfield
+        'estimate_vertical_wind': False, # whether to estimate vertical wind for wind field map
+        }
 
 
 

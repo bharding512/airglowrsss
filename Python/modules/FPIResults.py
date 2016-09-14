@@ -508,7 +508,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIE
                 pt = _pyglow.Point(t.replace(year=dn.year,month=dn.month,day=dn.day),SITELLA[0],SITELLA[1],alt)
                 if QUIET:
                     pt.kp = 0.0
-                    pt.ap = pt.ap_daily
+                    pt.ap = 0.0
         
                 # Intensity
                 pt.run_airglow() #FIX THIS AFTER ANALYSIS

@@ -170,14 +170,14 @@ def database(filenames,data_dir,startut,stoput,inst_id,site_id,send_to_madrigal=
     #   Written by Daniel J. Fisher on 27 Feb 2014
 
     # User to scp to
-    scp_user = 'data@airglow.ece.illinois.edu'
+    scp_user = 'jmakela@webhost.engr.illinois.edu'
     web_stub = 'SummaryImages/'
-    file_stub = '/data/SummaryImages/'
+    file_stub = '/home/airglowgroup/data/SummaryImages/'
     madgrigal_stub = '/rdata/airglow/database/'
     
     # Open the database (see http://zetcode.com/databases/mysqlpythontutorial/ for help)
     # Read the user and password from a file.
-    con = mdb.connect(host='airglow.ece.illinois.edu', db='webdatabase', read_default_file="/home/airglow/.my.cnf")
+    con = mdb.connect(host='webhost.engr.illinois.edu', db='airglowgroup_webdatabase', read_default_file="/home/airglow/.my.cnf")
     cur = con.cursor()  
     for fn,db_id in zip(filenames, inst_id):
         # Create the summary images
