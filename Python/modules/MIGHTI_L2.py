@@ -16,13 +16,11 @@ import glob
 
 
 
-def get_instrument_constants(emission_color, start_path, end_path):
+def get_instrument_constants(emission_color):
     '''
     The instrument constants needed for the MIGHTI L2.1 analysis.
     INPUTS:
         emission_color -- TYPE:str, 'green' or 'red'
-        start_path     -- TYPE:float, UNITS:m. optical path difference at left edge of interferogram
-        end_path       -- TYPE:float, UNITS:m. optical path difference at right edge of interferogram
     OUTPUTS:
         instr_params   -- TYPE:dict, dictionary of instrument parameters. (see below)
     TODO:
@@ -41,41 +39,54 @@ def get_instrument_constants(emission_color, start_path, end_path):
     #                turns out before deciding on this. (TODO)
 
     if emission_color == 'red':
-        lam          = 630.0304e-9   # center wavelength of emission [m] (Osterbrock et al. 1996)
-        phase_offset = -1.139683     # updated 2016-06-29 using my instrument model
-        zero_phase   = 128.648464318 # updated 2016-05-26 using my instrument model
-                                                       # (MIGHTI_Zero_wind_issues.ipynb)
-        bin_size     = 13            # How many rows to bin together in post-processing
-        
+        instr_params = {
+                        'sigma': 1.0/630.0304e-9,   # reciprocal of center wavelength of emission [m^-1] 
+                                                    #(Osterbrock et al. 1996)
+                        # to ignore due to phase distortion from the filtering.
+                        'phase_offset': -1.139683, # updated 2016-06-29 using my instrument model
+                        'zero_phase': 128.648464318, # updated 2016-05-26 using my instrument model
+                                                     # (MIGHTI_Zero_wind_issues.ipynb)
+                        'min_amp': 0.0, # TODO. What's the best way to implement this? For now, do nothing.
+                        'bin_size': 13, # How many rows to bin together in post-processing
+                        'fov_horz': 3.22, # deg
+                        'fov_vert': 5.36, # deg
+                       }
     elif emission_color == 'green':
-        lam          = 557.7338e-9   # center wavelength of emission [m]
-        phase_offset = -1.630175     # updated 2016-06-29 using my instrument model
-        zero_phase = 54.6633360579   # updated 2016-05-26 using my instrument model
-                                                      # (MIGHTI_Zero_wind_issues.ipynb)
-        bin_size     = 2             # How many rows to bin together in post-processing
+        instr_params = {
+                        'sigma': 1.0/557.7338e-9,   # reciprocal of center wavelength of emission [m^-1]
+                                                    # (Osterbrock et al. 1996)
+                        # to ignore due to phase distortion from the filtering.
+                        'phase_offset': -1.630175, # updated 2016-06-29 using my instrument model
+                        'zero_phase': 54.6633360579, # updated 2016-05-26 using my instrument model
+                                                     # (MIGHTI_Zero_wind_issues.ipynb)
+                        'min_amp': 0.0, # TODO. What's the best way to implement this? For now, do nothing.
+                        'bin_size': 2, # How many rows to bin together in post-processing
+                        'fov_horz': 3.22, # deg
+                        'fov_vert': 5.36, # deg
+                       }
     else: 
         raise Exception('emission_color = %s not understood' % emission_color)
 
-    # Calculate phase-to-wind conversion factor
-    # dphi = 2*pi*OPD*sigma*v/c (Eq 1 of Englert et al 2007 Appl Opt., 
-    #                           and Eq 2 of Harding et al. 2016 SSR)
-    # Use constant phase-to-wind factor for now, but we may eventually need to use
-    # column-dependent values in some cases, such as satellite velocity removal.   
-    c         = 299792458.0 # m/s, speed of light
-    sigma     = 1.0/lam
-    meanopd   = (start_path + end_path) / 2.
-    phase_to_wind_factor = c / (2.*np.pi*sigma*meanopd)
-
-    instr_params = {    'Nignore': 20, # The number of columns at the beginning and end of the interferogram
-                                       # to ignore due to phase distortion from the filtering.
-                   'phase_offset': phase_offset,
-                     'zero_phase': zero_phase,
-                        'min_amp': 0.0, # TODO. What's the best way to implement this? For now, do nothing.
-           'phase_to_wind_factor': phase_to_wind_factor,
-                       'bin_size': bin_size,
-                 }
-
     return instr_params
+
+
+
+
+def phase_to_wind_factor(sigma_opd):
+    '''
+    Return the value f that satisfies w = f*p, where w is a wind change and p is a phase change.
+    dphi = 2*pi*OPD*sigma*v/c (Eq 1 of Englert et al 2007 Appl Opt., 
+                               and Eq 2 of Harding et al. 2016 SSR)
+    INPUTS:
+        sigma_opd   -- TYPE:float, UNITS:none.  sigma times opd: Optical path difference measured 
+                                                in wavelengths. If analyzing an entire row at once, 
+                                                the mean OPD of that row should be used.
+    OUTPUTS:
+        f     -- TYPE:float, UNITS:m/s/rad. Phase to wind factor, described above.
+    '''
+    c      = 299792458.0 # m/s, speed of light
+    return c / (2.*np.pi*sigma_opd)
+
 
 
 
@@ -165,43 +176,60 @@ def ze_to_tang_alt(ze, sat_alt, RE):
 
 
 
-def remove_satellite_velocity(I, sat_velocity, sat_velocity_vector, mighti_ecef_vectors, phase_to_wind_factor):
+def remove_satellite_velocity(I, sat_latlonalt, sat_velocity, sat_velocity_vector, mighti_vectors, sigma_opd, fov_horz, method='2D'):
     '''
     Modify the interferogram to remove the effect of satellite velocity upon the phase. 
     INPUTS:
         I                   -- TYPE:array(ny,nx), UNITS:arb.  The MIGHTI interferogram. 
+        sat_latlonalt       -- TYPE:array(3),     UNITS:(deg,deg,km). Satellite location in WGS84.
         sat_velocity        -- TYPE:float,        UNITS:m/s.  ICON velocity.
-        sat_velocity_vector -- TYPE:array(3,),    UNITS:none. The unit ECEF vector describing
+        sat_velocity_vector -- TYPE:array(3),     UNITS:none. The unit ECEF vector describing
                                the direction of ICON's velocity vector.
         mighti_vectors      -- TYPE:array(ny,3),  UNITS:none. Each row is a unit 3-vector in
                                ECEF coordinates defining the look direction of each measurement.
-        phase_to_wind_factor-- TYPE:float,        UNITS:m/s/rad. The factor to multiply by a phase
-                               change to get a wind change.
+        sigma_opd           -- TYPE:array(nx),    UNITS:none. The optical path difference (measured in wavelengths)
+                                                              for each column of the interferogram.
+        fov_horz            -- TYPE:float,        UNITS:deg.  The full horizontal field of view.
+    OPTIONAL INPUTS:
+        method              -- TYPE:str,          '1D': Remove a single velocity for each row.
+                                                  '2D': To account for variations horizontally,
+                                                        remove a separate velocity for each pixel.
     OUTPUTS:
         I                   -- TYPE:array(ny,nx), UNITS:arb.  The MIGHTI interferogram, corrected
                                for the effects of satellite motion on the phase.
+    TODO:
+        - use pixel-dependent azimuth and zenith angles provided in the ancillary data instead of
+          generating them on my own
     '''
-    # TODO: Perhaps, remove on a column-by-column basis to account for the varying 
-    # velocity projection (and maybe also the varying phase_to_wind_factor) with x.
     
     ny,nx = np.shape(I)
-    I2 = I.copy() # make a copy so that the input isn't overwritten
     
-    # Create a column vector with projected satellite velocity. 
-    # Remember, we are ignoring horizontal extent for now. 
-    proj_sat_vel = np.zeros(ny)
-    for i in range(ny):
-        look_ecef = mighti_ecef_vectors[i,:] # look direction of this pixel in ECEF
-        proj_sat_vel[i] = sat_velocity * np.dot(sat_velocity_vector, look_ecef)
+    # Loop over each pixel, calculating the look direction, projected satellite velocity
+    # and the resulting phase shift in the interferogram
+    sat_vel_phase = np.zeros((ny,nx))
+    for i in range(ny): # loop over rows
+        a,z = ICON.ecef_to_azze(sat_latlonalt, mighti_vectors[i,:]) # Look direction of middle of this row (az, ze)
+        for j in range(nx): # Loop over columns
+            if method=='1D':
+                az = a
+                ze = z
+            elif method=='2D':
+                # Assume that azimuth varies linearly horizontally, and zenith doesn't vary at all.
+                # This is an assumption that is only strictly valid at ze=90, but we are using
+                # ze=105 to 110. The better solution is to use look angles provided in the ancillary
+                # data. However, this only changes the wind by less than 1 m/s.
+                az = a + fov_horz * (j-nx/2.0)/nx 
+                ze = z
+            else:
+                raise Exception('method=="%s" not recognized. Use "1D" or "2D"')
+            
+            look_vector = ICON.azze_to_ecef(sat_latlonalt, az, ze)
+            proj_sat_vel = sat_velocity * np.dot(sat_velocity_vector, look_vector) # positive apparent wind towards MIGHTI
+            sat_vel_phase[i,j] = proj_sat_vel/phase_to_wind_factor(sigma_opd[j])
 
-
-    # Convert the projected satellite velocity to a phase
-    icon_vel_phase = proj_sat_vel/phase_to_wind_factor
-
+    
     # Subtract phase from the interferogram
-    corr = np.exp(-1j*icon_vel_phase)
-    for jj in range(nx):
-        I2[:,jj] = I2[:,jj]*corr
+    I2 = I*np.exp(-1j*sat_vel_phase)
         
     return I2
 
@@ -482,7 +510,7 @@ def create_local_projection_matrix(tang_alt, icon_alt):
     
     
     
-def extract_phase_from_row(row, zero_phase, phase_offset, Nignore):
+def extract_phase_from_row(row, zero_phase, phase_offset):
     '''
     Given a 1-D interference pattern (i.e., a row of the intererogram), 
     analyze it to get a single phase value, which represents the wind.
@@ -491,9 +519,6 @@ def extract_phase_from_row(row, zero_phase, phase_offset, Nignore):
         zero_phase   -- TYPE:float,     UNITS:rad.   The phase angle which is equivalent 
                                                      to a wind value of zero.
         phase_offset -- TYPE:float,     UNITS:rad.   An offset to avoid 2pi ambiguities.
-        Nignore      -- TYPE:int,       UNITS:pixel. The number of columns at the
-                       beginning and end of the interferogram to ignore due to phase
-                       distortion from the filtering.
     OUTPUTS:
         phase        -- TYPE:float,     UNITS:rad. 
     '''
@@ -502,7 +527,7 @@ def extract_phase_from_row(row, zero_phase, phase_offset, Nignore):
 
     # Average phase and then take delta. Need unwrapping for this.
     # First, apply phase offset (keeping phase between -pi and pi)
-    row_phase_off = np.mod(row_phase[Nignore:-Nignore] - phase_offset + np.pi, 2*np.pi) - np.pi
+    row_phase_off = np.mod(row_phase - phase_offset + np.pi, 2*np.pi) - np.pi
     # Second, unwrap, and undo phase offset
     phaseu = unwrap(row_phase_off) + phase_offset
     meanphase = np.mean(phaseu)
@@ -514,7 +539,7 @@ def extract_phase_from_row(row, zero_phase, phase_offset, Nignore):
     
     
 def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertainty, 
-                      zero_phase, phase_offset, Nignore,
+                      zero_phase, phase_offset,
                       top_layer='exp', integration_order=0, 
                       account_for_local_projection=True):
     '''
@@ -532,9 +557,6 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
         zero_phase  -- TYPE:float,        UNITS:rad.   The phase angle which is equivalent 
                                                        to a wind value of zero.
         phase_offset-- TYPE:float,        UNITS:rad.   An offset to avoid 2pi ambiguities.
-        Nignore     -- TYPE:int,          UNITS:pixel. The number of columns at the
-                                          beginning and end of the interferogram to ignore due to phase
-                                          distortion from the filtering.
     OPTIONAL INPUTS:
         top_layer   -- TYPE:str,          'thin': assume VER goes to zero above top layer
                                           'exp':  assume VER falls off exponentially in altitude (default)
@@ -569,7 +591,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
         # This is implemented with a simple linear inversion
         Ip = np.linalg.solve(D,I)
         for i in range(ny):
-            phase[i] = extract_phase_from_row(Ip[i,:], zero_phase, phase_offset, Nignore)
+            phase[i] = extract_phase_from_row(Ip[i,:], zero_phase, phase_offset)
         
     else:
         # The problem becomes nonlinear, but still solvable in closed form.
@@ -596,7 +618,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
             Ip[i,:] = Li
             # Analyze the layer to get the phase, and store it.
             # Note that the zero-phase/zero-wind is needed for this step.
-            phase[i] = extract_phase_from_row(Li, zero_phase, phase_offset, Nignore)
+            phase[i] = extract_phase_from_row(Li, zero_phase, phase_offset)
             
     amp = np.sum(abs(Ip),axis=1)        
             
@@ -611,7 +633,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     ### Step 0: Characterize L1 and L2.1 interferograms with a single amp/phase per row
     ph_L1 = np.zeros(ny)
     for i in range(ny):
-        ph_L1[i] = extract_phase_from_row(I[i,:], zero_phase, phase_offset, Nignore)
+        ph_L1[i] = extract_phase_from_row(I[i,:], zero_phase, phase_offset)
     A_L1 = np.sum(abs(I),axis=1)
     ph_L2 = phase.copy() # this was calculated above
     A_L2 = amp.copy() # this was calculated above
@@ -799,7 +821,7 @@ def remove_Earth_rotation(v_inertial, az, lat, lon, alt):
     Earth rotation from the line-of-sight measurement."
     INPUTS:
         v_inertial    -- TYPE:array(ny), UNITS:m/s.   Line-of-sight velocity in inertial
-                         coordinates.
+                         coordinates, positive towards MIGHTI.
         az            -- TYPE:array(ny), UNITS:deg.   Azimuth angle of line of sight
                          from the satellite to the measurement location, evaluated at the 
                          measurement location. Degrees East of North. See los_az_angle() above.
@@ -808,7 +830,7 @@ def remove_Earth_rotation(v_inertial, az, lat, lon, alt):
         alt           -- TYPE:array(ny), UNITS:km.    Measurement altitudes.
     OUTPUTS:
         v             -- TYPE:array(ny), UNITS:m/s.   Line-of-sight velocity in Earth-fixed
-                         coordinates.
+                         coordinates, positive towards MIGHTI.
     '''
     ny = len(v_inertial)
     corot_contribution = np.zeros(ny)
@@ -819,7 +841,7 @@ def remove_Earth_rotation(v_inertial, az, lat, lon, alt):
         sidereal_day_length = 23.*60.*60. + 56.*60. + 4. # sidereal day is 23 hrs 56 min 4 sec 
         corot_vel = 2.*np.pi*rho/sidereal_day_length*1e3
         # Compute component along LoS
-        corot_contribution[i] = corot_vel * np.sin(np.deg2rad(az[i]))
+        corot_contribution[i] = -corot_vel * np.sin(np.deg2rad(az[i])) # positive towards MIGHTI
     v = v_inertial - corot_contribution
     return v
 
@@ -907,8 +929,8 @@ def level1_to_dict(L1_fn, emission_color):
     level 2.1 processing can use.
     
     INPUTS:
-        L1_fn   -- TYPE:str.  The full path and filename of the level 1 file
-        emission_color --TYPE:str, 'green' or 'red'
+        L1_fn          -- TYPE:str.  The full path and filename of the level 1 file.
+        emission_color -- TYPE:str, 'green' or 'red'.
         
     OUTPUTS:
         L1_dict -- TYPE:dict. A dictionary containing information needed for
@@ -916,7 +938,7 @@ def level1_to_dict(L1_fn, emission_color):
                               level1_dict_to_level21(...) for required keys.
     TODO:
         - lots of stuff, mostly just waiting on finalization of L1 file.
-        - interferometer start path and end path
+        - change from start/end path to full opd vector
         - time in better format
         - exposure time different than end minus start?
         - will ICON velocity be specified in m/s eventually?
@@ -925,16 +947,16 @@ def level1_to_dict(L1_fn, emission_color):
     f = netCDF4.Dataset(L1_fn)
     L1_dict = {}
     L1_dict['L1_fn']                       = L1_fn
-    L1_dict['I_amp']                       = f['%s_ENVELOPE_NOISY' % emission_color.upper()][:]
-    L1_dict['I_phase']                     = f['%s_PHASE_NOISY' % emission_color.upper()][:]
-    L1_dict['I_amp_uncertainty']           = f['%s_ENVELOPE_UNCERTAINTY' % emission_color.upper()][:]
-    L1_dict['I_phase_uncertainty']         = f['%s_PHASE_UNCERTAINTY' % emission_color.upper()][:]
-    L1_dict['tang_alt_start']              = f['TANGENT_ALTITUDES_START'][:]
-    L1_dict['tang_alt_end']                = f['TANGENT_ALTITUDES_END'][:]
-    L1_dict['tang_lat_start']              = f['TANGENT_LATITUDES_START'][:]
-    L1_dict['tang_lat_end']                = f['TANGENT_LATITUDES_END'][:]
-    L1_dict['tang_lon_start']              = f['TANGENT_LONGITUDES_START'][:]
-    L1_dict['tang_lon_end']                = f['TANGENT_LONGITUDES_END'][:]
+    L1_dict['I_amp']                       = f['%s_ENVELOPE_NOISY' % emission_color.upper()][0,:,:]
+    L1_dict['I_phase']                     = f['%s_PHASE_NOISY' % emission_color.upper()][0,:,:]
+    L1_dict['I_amp_uncertainty']           = f['%s_ENVELOPE_UNCERTAINTY' % emission_color.upper()][0,:]
+    L1_dict['I_phase_uncertainty']         = f['%s_PHASE_UNCERTAINTY' % emission_color.upper()][0,:]
+    L1_dict['tang_alt_start']              = f['TANGENT_ALTITUDES_START'][0,:]
+    L1_dict['tang_alt_end']                = f['TANGENT_ALTITUDES_END'][0,:]
+    L1_dict['tang_lat_start']              = f['TANGENT_LATITUDES_START'][0,:]
+    L1_dict['tang_lat_end']                = f['TANGENT_LATITUDES_END'][0,:]
+    L1_dict['tang_lon_start']              = f['TANGENT_LONGITUDES_START'][0,:]
+    L1_dict['tang_lon_end']                = f['TANGENT_LONGITUDES_END'][0,:]
     L1_dict['emission_color']              = emission_color
     L1_dict['icon_alt_start']              = f['ICON_ALTITUDE_START'][:].item()
     L1_dict['icon_alt_end']                = f['ICON_ALTITUDE_END'][:].item()
@@ -942,10 +964,10 @@ def level1_to_dict(L1_fn, emission_color):
     L1_dict['icon_lat_end']                = f['ICON_LATITUDE_END'][:].item()
     L1_dict['icon_lon_start']              = f['ICON_LONGITUDE_START'][:].item()
     L1_dict['icon_lon_end']                = f['ICON_LONGITUDE_END'][:].item()
-    L1_dict['mighti_ecef_vectors_start']   = f['MIGHTI_ECEF_VECTORS_START'][:]
-    L1_dict['mighti_ecef_vectors_end']     = f['MIGHTI_ECEF_VECTORS_END'][:]
-    L1_dict['icon_ecef_ram_vector_start']  = f['RAM_ECEF_VECTOR_START'][:]
-    L1_dict['icon_ecef_ram_vector_end']    = f['RAM_ECEF_VECTOR_END'][:]
+    L1_dict['mighti_ecef_vectors_start']   = f['MIGHTI_ECEF_VECTORS_START'][0,:]
+    L1_dict['mighti_ecef_vectors_end']     = f['MIGHTI_ECEF_VECTORS_END'][0,:]
+    L1_dict['icon_ecef_ram_vector_start']  = f['RAM_ECEF_VECTOR_START'][0,:]
+    L1_dict['icon_ecef_ram_vector_end']    = f['RAM_ECEF_VECTOR_END'][0,:]
     L1_dict['icon_velocity_start']         = f['ICON_VELOCITY_START'][:].item()*1e3 # convert to m/s
     L1_dict['icon_velocity_end']           = f['ICON_VELOCITY_END'][:].item()*1e3   # convert to m/s
     L1_dict['source_files']                = [] # TODO
@@ -954,8 +976,7 @@ def level1_to_dict(L1_fn, emission_color):
     L1_dict['time_start']                  = datetime(2015,1,1) + timedelta(seconds=tsec_start)
     L1_dict['time_end']                    = datetime(2015,1,1) + timedelta(seconds=tsec_end)
     L1_dict['exp_time']                    = f['IMAGE_TIME_END'][:].item() - f['IMAGE_TIME_START'][:].item()
-    L1_dict['interferometer_start_path']   = 4.62e-2
-    L1_dict['interferometer_end_path']     = 5.50e-2
+    L1_dict['optical_path_difference']     = f['OPD_BY_PIXEL_%s' % emission_color.upper()][0,:]
     
     # Dummy placeholder code for reading global attributes
     nc_attrs = f.ncattrs()
@@ -994,7 +1015,7 @@ def level1_uiuc_to_dict(L1_uiuc_fn):
         if key in ['emission_color','icon_alt_start','icon_alt_end',
                    'icon_lat_start','icon_lat_end','icon_lon_start','icon_lon_end',
                    'icon_velocity_start','icon_velocity_end','time','exp_time',
-                   'interferometer_start_path','interferometer_end_path',]:
+                   'interferometer_start_path','interferometer_end_path']:
             L1_dict[key] = npzfile[key].item()
         else:
             L1_dict[key] = npzfile[key]
@@ -1022,12 +1043,27 @@ def level1_uiuc_to_dict(L1_uiuc_fn):
     # Ensure longitudes are defined [0,360]
     for key in ['icon_lon_start','icon_lon_end','tang_lon_start','tang_lon_end']:
         L1_dict[key] = np.mod(L1_dict[key],360.)
-        
+    # Optical path difference as a function of column, if it isn't already
+    if 'optical_path_difference' not in L1_dict.keys(): 
+        print 'WARNING: "optical_path_difference" not in L1_UIUC file. Adding manually.'
+        if 'interferometer_start_path' not in npzfile.keys():
+            raise Exception('"interferometer_start_path" not found in L1 UIUC file. Cannot continue')
+        L1_dict['optical_path_difference'] = np.linspace(L1_dict['interferometer_start_path'],
+                                                      L1_dict['interferometer_end_path'], 
+                                                      np.shape(L1_dict['Ir'])[1])
+        del L1_dict['interferometer_start_path']
+        del L1_dict['interferometer_end_path']
+    
+    # Trim edges of interferogram.
+    # This is kind of hacky, but it's the easiest way of maintaining backwards
+    # compatibility now that NRL is doing the trimming.
+    N = 20
+    L1_dict['I_amp'] = L1_dict['I_amp'][:,N:-N]
+    L1_dict['I_phase'] = L1_dict['I_phase'][:,N:-N]
+    L1_dict['optical_path_difference'] = L1_dict['optical_path_difference'][N:-N]
     
     return L1_dict
     
-
-
 
 
 
@@ -1070,8 +1106,7 @@ def level1_dict_to_level21_dict(L1_dict, zero_phase_addition = 0.0, top_layer = 
                                              time_start
                                              time_end
                                              exp_time
-                                             interferometer_start_path
-                                             interferometer_end_path  
+                                             optical_path_difference 
                                                                   
     OPTIONAL INPUTS:
         zero_phase_addition -- TYPE:float, UNITS:rad. A value which we will be added
@@ -1121,7 +1156,6 @@ def level1_dict_to_level21_dict(L1_dict, zero_phase_addition = 0.0, top_layer = 
             
     TODO:
         - error handling
-        - Nignore will be done in L1, not L2.1, eventually.
     
     '''
 
@@ -1143,19 +1177,19 @@ def level1_dict_to_level21_dict(L1_dict, zero_phase_addition = 0.0, top_layer = 
     tang_lon = circular_mean(L1_dict['tang_lon_start'], L1_dict['tang_lon_end'])
     icon_ecef_ram_vector = (L1_dict['icon_ecef_ram_vector_start'] + L1_dict['icon_ecef_ram_vector_end'])/2
     icon_velocity = (L1_dict['icon_velocity_start'] + L1_dict['icon_velocity_end'])/2
-    start_path = L1_dict['interferometer_start_path']
-    end_path   = L1_dict['interferometer_end_path']
+    opd = L1_dict['optical_path_difference']
     
-
     
     ### Load instrument constants 
-    instrument = get_instrument_constants(emission_color, start_path, end_path)
+    instrument = get_instrument_constants(emission_color)
     if bin_size is None:
         bin_size = instrument['bin_size']
+    sigma_opd = instrument['sigma'] * opd # Optical path difference, in units of wavelengths
 
     #### Remove Satellite Velocity
-    I = remove_satellite_velocity(Iraw, icon_velocity, icon_ecef_ram_vector, mighti_ecef_vectors, 
-                                  instrument['phase_to_wind_factor'])
+    icon_latlonalt = np.array([icon_lat, icon_lon, icon_alt])
+    I = remove_satellite_velocity(Iraw, icon_latlonalt, icon_velocity, icon_ecef_ram_vector, mighti_ecef_vectors, 
+                                  sigma_opd, instrument['fov_horz'])
                          
     #### Bin data
     I        = bin_image(bin_size, I)
@@ -1177,18 +1211,18 @@ def level1_dict_to_level21_dict(L1_dict, zero_phase_addition = 0.0, top_layer = 
     zero_phase = instrument['zero_phase'] + zero_phase_addition
     Ip, phase, amp, phase_uncertainty, amp_uncertainty = perform_inversion(I, tang_alt, icon_alt, 
                            I_phase_uncertainty, I_amp_uncertainty,
-                           zero_phase, instrument['phase_offset'], instrument['Nignore'],
+                           zero_phase, instrument['phase_offset'],
                            top_layer=top_layer, integration_order=integration_order,
                            account_for_local_projection=account_for_local_projection)
 
 
     #### Transform from phase to wind
-    v_inertial             = instrument['phase_to_wind_factor'] * phase
-    v_inertial_uncertainty = instrument['phase_to_wind_factor'] * phase_uncertainty
+    f = phase_to_wind_factor(np.mean(sigma_opd)) # Use average OPD to analyze entire row
+    v_inertial             = f * phase
+    v_inertial_uncertainty = f * phase_uncertainty
         
 
     #### Calculate azimuth angles at measurement locations
-    icon_latlonalt = np.array([icon_lat, icon_lon, icon_alt])
     az = los_az_angle(icon_latlonalt, lat, lon, alt)
 
     #### Transform from inertial to rotating coordinate frame
@@ -1228,9 +1262,9 @@ def level1_dict_to_level21_dict(L1_dict, zero_phase_addition = 0.0, top_layer = 
     return L21_dict
    
    
-   
-   
-   
+
+
+
 def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', dimensions=(), zlib=True, complevel=6, 
                     shuffle=True,  depend_0=None, depend_1=None, depend_2=None, chunk_sizes=None, desc='', 
                     display_type='scalar', field_name='', fill_value=None,label_axis='', bin_location=0.5, 
@@ -1287,6 +1321,10 @@ def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', di
     #var._FillValue         = fill_value
     if fill_value is not None:
         var.FillVal        = var._FillValue
+    elif fill_value is None and format_nc == str: 
+        # Special case for strings. Make sure to set FillVal even thought _FillValue can't be set
+        var.FillVal        = ''
+        
     var.Format             = format_fortran
     var.LablAxis           = label_axis
     var.Bin_Location       = bin_location
@@ -1335,10 +1373,8 @@ def save_nc_level21(path, L21_dict):
     OUTPUTS:
         L21_fn      -- TYPE:str.  The full path to the saved file.
     TO-DO:
-      - figure out how to make np.nan the fill value
-      - Are attributes _FillValue and FillVal needed for variables that are strings? python-NetCDF4 doesn't seem to support this
       - Maybe: Fill in more notes for each variable
-      - How will sensor and the 4 versions be specified?
+      - accept L2.1 filename as argument, from which I will extract what should go in Data_Version
       - Have a second set of eyes look at descriptions of each variable
       - Should dimensions be labeled the same as variables? Altitude/Vector/Epoch. Should Depend_0 point to vars or dims?
     '''
@@ -1440,8 +1476,8 @@ def save_nc_level21(path, L21_dict):
         ncfile.Generated_By =                   'ICON SDC > ICON UIUC MIGHTI L2.1 Processor v%.2f, B. J. Harding' % software_version
         ncfile.Generation_Date =                t_file.strftime('%Y%m%d')
         ncfile.History =                        'Version %i, %s, %s, ' % (data_version, user_name, t_file.strftime('%Y-%m-%dT%H:%M:%S')) +\
-                                                'MIGHTI L2.1 Processor v%.2f ' % software_version +\
-                                                '((TODO: Prepend previous history of this file, if it exists))'
+                                                'MIGHTI L2.1 Processor v%.2f ' % software_version # TODO: Tori suggested we make this a history
+                                                                                                  # of the software versions instead of data versions
         ncfile.HTTP_LINK =                      'http://icon.ssl.berkeley.edu/Instruments/MIGHTI'
         ncfile.Instrument =                     'MIGHTI-%s' % sensor
         ncfile.Instrument_Type =                'Imagers (space)'
@@ -1583,7 +1619,7 @@ def save_nc_level21(path, L21_dict):
         # Emission color
         var = _create_variable(ncfile, 'ICON_L2_1_MIGHTI-%s_Emission_Color'%sensor, L21_dict['emission_color'].capitalize(), 
                               dimensions=(),
-                              format_nc=str, format_fortran='A', desc='Emission used for wind estimate: "Red" or "Green"', 
+                              format_nc=str, format_fortran='A', desc='Emission used for wind estimate: Red or Green', 
                               display_type='scalar', field_name='Emission Color', fill_value=None, label_axis='Color', bin_location=0.5,
                               units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
                               notes='')
@@ -1609,7 +1645,7 @@ def save_nc_level21(path, L21_dict):
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The WGS84 latitude of ICON', 
                               display_type='scalar', field_name='Spacecraft Latitude', fill_value=None, label_axis='S/C Lat', bin_location=0.5,
-                              units='deg', valid_min=--90., valid_max=90., var_type='metadata', chunk_sizes=1,
+                              units='deg', valid_min=-90., valid_max=90., var_type='metadata', chunk_sizes=1,
                               notes='')
 
         # ICON longitude
@@ -1684,7 +1720,7 @@ def save_nc_level21(path, L21_dict):
         # How the top layer was handled in the inversion
         var = _create_variable(ncfile, 'ICON_L2_1_MIGHTI-%s_Top_Layer_Model'%sensor, L21_dict['top_layer'].capitalize(), 
                               dimensions=(),
-                              format_nc=str, format_fortran='A', desc='How the top altitudinal layer is handled in the inversion: "Exp" or "Thin"', 
+                              format_nc=str, format_fortran='A', desc='How the top altitudinal layer is handled in the inversion: Exp or Thin', 
                               display_type='scalar', field_name='Top Layer', fill_value=None, label_axis='Top Layer', bin_location=0.5,
                               units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
                               notes='')    
@@ -2199,13 +2235,10 @@ def save_nc_level22(path, L22_dict):
     OUTPUTS:
         L22_fn      -- TYPE:str.  The full path to the saved file.
     TO-DO:
-      - figure out how to make np.nan the fill value
-      - Are attributes _FillValue and FillVal needed for variables that are strings? python-NetCDF4 doesn't seem to support this
       - Maybe: Fill in more notes for each variable
-      - How will the 4 versions be specified?
+      - accept L2.2 filename as argument, from which I will extract Data_Version    
       - Have a second set of eyes look at descriptions of each variable
       - Should dimensions be labeled the same as variables? Altitude/Vector/Epoch. Should Depend_0 point to vars or dims?
-      - Parent files: Do we really want this? There are hundreds.
       - Time Resolution attribute? 30-60 seconds? Varied? N/A?
       - Add VER/fringe-amplitude estimate?
       - So far I haven't used Depend_0 or Depend_1 because there isn't an array for altitude or longitude. It's not a
@@ -2236,7 +2269,6 @@ def save_nc_level22(path, L22_dict):
     user_name = getpass.getuser()
     ### Parent files
     parents = '' # This will go in global attr Parents
-    # TODO: parent files (there will be a lot...)
     for source_fn in L22_dict['source_files']:
         s = source_fn.split('/')[-1].split('.')
         pre = '.'.join(s[:-1])
@@ -2300,7 +2332,7 @@ def save_nc_level22(path, L22_dict):
         ncfile.Discipline =                     'Space Physics > Ionospheric Science'
         ncfile.File =                           L22_fn
         ncfile.File_Date =                      t_file.strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC'
-        ncfile.Generated_By =                   'ICON SDC > ICON UIUC MIGHTI L2.2 Processor v%.2f, B. J. Harding' % software_version
+        ncfile.Generated_By =                   'ICON SDC > ICON UIUC MIGHTI L2.2 Processor v%.2f, B. J. Harding (bhardin2@illinois.edu)' % software_version
         ncfile.Generation_Date =                t_file.strftime('%Y%m%d')
         ncfile.History =                        'Version %i, %s, %s, ' % (data_version, user_name, t_file.strftime('%Y-%m-%dT%H:%M:%S')) +\
                                                 'MIGHTI L2.2 Processor v%.2f ' % software_version +\
@@ -2320,7 +2352,7 @@ def save_nc_level22(path, L22_dict):
         ncfile.PI_Name =                        'T. J. Immel'
         ncfile.Project =                        'NASA > ICON'
         ncfile.Rules_of_Use =                   'Public Data for Scientific Use'
-        ncfile.Software_Version =               'ICON SDC > ICON UIUC MIGHTI L2.2 Processor v%.2f' % software_version
+        ncfile.Software_Version =               'ICON SDC > ICON UIUC MIGHTI L2.2 Processor v%.2f, B. J. Harding (bhardin2@illinois.edu)' % software_version
         ncfile.Source_Name =                    'ICON > Ionospheric Connection Explorer'
         ncfile.Spacecraft_ID =                  'NASA > ICON - 493'
         ncfile.Text =                           'ICON explores the boundary between Earth and space  the ionosphere  ' +\
@@ -2435,7 +2467,7 @@ def save_nc_level22(path, L22_dict):
         # Emission color
         var = _create_variable(ncfile, 'ICON_L2_2_MIGHTI_Emission_Color', L22_dict['emission_color'].capitalize(), 
                               dimensions=(),
-                              format_nc=str, format_fortran='A', desc='Emission used for wind estimate: "Red" or "Green"', 
+                              format_nc=str, format_fortran='A', desc='Emission used for wind estimate: Red or Green', 
                               display_type='scalar', field_name='Emission Color', fill_value=None, label_axis='Color', bin_location=0.5,
                               units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
                               notes='')
