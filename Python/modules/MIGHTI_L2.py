@@ -964,8 +964,8 @@ def level1_to_dict(L1_fn, emission_color):
     L1_dict['icon_lat_end']                = f['ICON_LATITUDE_END'][:].item()
     L1_dict['icon_lon_start']              = f['ICON_LONGITUDE_START'][:].item()
     L1_dict['icon_lon_end']                = f['ICON_LONGITUDE_END'][:].item()
-    L1_dict['mighti_ecef_vectors_start']   = f['MIGHTI_ECEF_VECTORS_START'][0,:]
-    L1_dict['mighti_ecef_vectors_end']     = f['MIGHTI_ECEF_VECTORS_END'][0,:]
+    L1_dict['mighti_ecef_vectors_start']   = f['MIGHTI_ECEF_VECTORS_START'][0,:,:]
+    L1_dict['mighti_ecef_vectors_end']     = f['MIGHTI_ECEF_VECTORS_END'][0,:,:]
     L1_dict['icon_ecef_ram_vector_start']  = f['RAM_ECEF_VECTOR_START'][0,:]
     L1_dict['icon_ecef_ram_vector_end']    = f['RAM_ECEF_VECTOR_END'][0,:]
     L1_dict['icon_velocity_start']         = f['ICON_VELOCITY_START'][:].item()*1e3 # convert to m/s
@@ -1387,9 +1387,9 @@ def save_nc_level21(path, L21_dict):
     
     # TODO: How will sensor be determined? Will it be in L1 file?
     source_files = ' '.join(L21_dict['source_files'])
-    if '_A_' in source_files:
+    if ('_A_' in source_files) or ('-A_' in source_files):
         sensor = 'A'
-    elif '_B_' in source_files:
+    elif ('_B_' in source_files) or ('-B_' in source_files):
         sensor = 'B'
     else:
         raise Exception('Cannot Determine Sensor from "%s"'%source_files) 
@@ -1419,8 +1419,9 @@ def save_nc_level21(path, L21_dict):
 
 
     ######################### Open file for writing ##############################
-    L21_fn = 'ICON_L2_1_MIGHTI-%s_%s_v%02i_r%02i.nc' % (sensor,t_mid.strftime('%Y-%m-%d_%H.%M.%S'),
-                                                        version_for_filename, revision_for_filename)
+    L21_fn = 'ICON_L2_1_MIGHTI-%s_%s_%s_v%02i_r%02i.nc' % (sensor,L21_dict['emission_color'].upper(),
+                                                           t_mid.strftime('%Y-%m-%d_%H.%M.%S'),
+                                                           version_for_filename, revision_for_filename)
     L21_full_fn = '%s%s'%(path, L21_fn)
     ncfile = netCDF4.Dataset(L21_full_fn,mode='w',format='NETCDF4') 
 
@@ -2278,7 +2279,8 @@ def save_nc_level22(path, L22_dict):
 
 
     ######################### Open file for writing ##############################
-    L22_fn = 'ICON_L2_2_MIGHTI_%s_v%02i_r%02i.nc' % (t_mid.strftime('%Y-%m-%d_%H.%M.%S'),
+    L22_fn = 'ICON_L2_2_MIGHTI_%s_%s_v%02i_r%02i.nc' % (L22_dict['emission_color'].upper(),
+                                                        t_mid.strftime('%Y-%m-%d_%H.%M.%S'),
                                                         version_for_filename, revision_for_filename)
     L22_full_fn = '%s%s'%(path, L22_fn)
     ncfile = netCDF4.Dataset(L22_full_fn,mode='w',format='NETCDF4') 
