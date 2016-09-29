@@ -467,12 +467,19 @@ def get_instr_info(instr_name, dn):
             instrument['t_lon'] = [352.1,352.1,352.1]
             instrument['kernel_size'] = 5
             instrument['ignore_dark'] = True
-        else:
+        elif dn < datetime.datetime(2016,6,7):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO04elaz_0862015.npz'
             instrument['t_lat'] = [31.2,31.2,31.2]
             instrument['t_lon'] = [352.1,352.1,352.1]
             instrument['kernel_size'] = 3  
             instrument['ignore_dark'] = True
+        else:
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO04elaz_1602016.npz'
+            instrument['t_lat'] = [31.2,31.2,31.2]
+            instrument['t_lon'] = [352.1,352.1,352.1]
+            instrument['kernel_size'] = 3
+            instrument['ignore_dark'] = True
+            
     elif instr_name == 'picasso05':
         if dn < datetime.datetime(2009,1,1) + datetime.timedelta(days = 264):
             instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO5elaz_2122009.npz'
