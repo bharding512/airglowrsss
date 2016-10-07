@@ -295,9 +295,9 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
     iData   = _np.empty((b_len,count_len))*_np.nan
     ieData  = _np.empty((b_len,count_len))*_np.nan
     # For harmonic testing
-    uecData = _np.empty((b_len,count_len))*_np.nan
-    vecData = _np.empty((b_len,count_len))*_np.nan
-    wecData = _np.empty((b_len,count_len))*_np.nan
+    uefData = _np.empty((b_len,count_len))*_np.nan
+    vefData = _np.empty((b_len,count_len))*_np.nan
+    wefData = _np.empty((b_len,count_len))*_np.nan
     count   = b_len*[0]
     lat = []
     lon = []
@@ -346,7 +346,7 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
                             else:
                                 uData[bin,count[bin]] = r1.u[zelda]
                                 ueData[bin,count[bin]] = r1.ue[zelda]
-                                uecData[bin,count[bin]] = r1.uec[zelda]
+                                uefData[bin,count[bin]] = r1.uef[zelda]
                         if len(r1.v) > 0:
                             if SPLIT and ('south' in r1.key.lower() or '_2' in r1.key.lower()):
                             # Split N&S
@@ -355,12 +355,12 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
                             else:
                                 vData[bin,count[bin]] = r1.v[zelda]
                                 veData[bin,count[bin]] = r1.ve[zelda]
-                                vecData[bin,count[bin]] = r1.vec[zelda]
+                                vefData[bin,count[bin]] = r1.vef[zelda]
                         #if len(r1.w) > 0 and ('zenith' in r1.key.lower() or 'in' in r1.key.lower()) and r1.parent[0].reference == 'laser':
                         if len(r1.w) > 0 and r1.parent[0].reference == 'laser':
                             wData[bin,count[bin]] = r1.w[zelda]
                             weData[bin,count[bin]] = r1.we[zelda]
-                            wecData[bin,count[bin]] = r1.wec[zelda]
+                            wefData[bin,count[bin]] = r1.wef[zelda]
                         if len(r1.T) > 0:
                             TData[bin,count[bin]] = r1.T[zelda]
                             TeData[bin,count[bin]] = r1.Te[zelda]
@@ -391,12 +391,12 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
         v2D,v2eD = WeightedAverage(v2Data,v2eData) 
 
     # Weighted error of cal only (for harmonic testing) 
-    ucD,ucD = WeightedAverage(uData,uecData)
-    vcD,vcD = WeightedAverage(vData,vecData)
-    wcD,wcD = WeightedAverage(wData,wecData)
-    d.uec= ucD
-    d.vec= vcD
-    d.wec= wcD
+    ufD,ufD = WeightedAverage(uData,uefData)
+    vfD,vfD = WeightedAverage(vData,vefData)
+    wfD,wfD = WeightedAverage(wData,wefData)
+    d.uef= ufD
+    d.vef= vfD
+    d.wef= wfD
 
     # Save Averages
     d.u = uD
