@@ -144,11 +144,10 @@ def process_instr(inst,year,doy,do_DB=True):
         
         # NOTE: Python code (originally from /programs/plot_CASES_day.py
         try:
-        
             # Paths to use
-            datapath = '/rdata/airglow/gps/'+inst+'/streaming/'
+            datapath = '/rdata/airglow/gps/'+inst+'/'+site+'/streaming/'
             pngpath = '/rdata/airglow/gps/results/'
-            archivepath = '/rdata/airglow/gps/'+inst+'/'+year+'/'
+            archivepath = '/rdata/airglow/gps/'+inst+'/'+site+'/'+year+'/'
             log_fname = '/rdata/airglow/gps/results/'+inst+'_'+site+'.log'
             #log_cmd = '/usr/bin/perl /usr/local/share/Python/programs/load_'+inst+'_'+site+'_logfile.pl'
             
