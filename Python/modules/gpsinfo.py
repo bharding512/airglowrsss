@@ -20,6 +20,10 @@ import datetime
 #   05 Feb 2014 djf: Reformated asiinfo for gpsinfo
 _dates = {}
 
+_dates['cases01'] = {}
+_dates['cases01']['hka'] = { 'start': datetime.datetime(2011,5,20),
+                            'stop': None,}
+
 _dates['casi01'] = {}
 _dates['casi01']['hka'] = { 'start': datetime.datetime(2001,2,16),
                             'stop': None,}
