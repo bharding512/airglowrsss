@@ -76,7 +76,7 @@ def process_instr(inst,year,doy,do_DB=True):
             os.system('/usr/local/bin/lsum4 -n ' + f[0:-4])
             print 'Move raw data...'
             os.system('chmod 750 '+data_dir+f[0:-4]+'*')
-            
+
             sumfile = glob.glob(f[0:-4]+'.sum')
             if(sumfile):
                 # change ownership
@@ -91,11 +91,11 @@ def process_instr(inst,year,doy,do_DB=True):
                     database([s4filename],data_dir,startut,stoput,[inst_id],site_id)
                 os.system('rm -f ' + data_dir+s4filename)
             else:
-                subject = "!!! Processing Error (\'" + inst +'\','+str(year)+','+str(doy)+') @ ' + site 
+                subject = "!!! Processing Error (\'" + inst +'\','+year+','+doy+') @ ' + site 
                 print subject
                 Emailer.emailerror(subject, 'lsum4 problem - move rawdata back and reprocess?')
-            
-    
+
+
     # Do Scinda S4/TEC Processing
     elif instr == 'scinda':
         try:
@@ -134,72 +134,72 @@ def process_instr(inst,year,doy,do_DB=True):
             os.system('rm -f ' + data_dir+s4filename)
             os.system('rm -f ' + data_dir+tecfilename)
         except:
-            subject = "!!! Processing Error (\'" + inst +'\','+str(year)+','+str(doy)+') @ ' + site 
+            subject = "!!! Processing Error (\'" + inst +'\','+year+','doy+') @ ' + site 
             print subject
             Emailer.emailerror(subject, 'wintec problem')
-    
-    
+
+
     # Do Cases Processing
     elif instr == 'cases':
-        
+
         # NOTE: Python code (originally from /programs/plot_CASES_day.py
         try:
             # Paths to use
             datapath = '/rdata/airglow/gps/'+inst+'/'+site+'/streaming/'
             pngpath = '/rdata/airglow/gps/results/'
-            archivepath = '/rdata/airglow/gps/'+inst+'/'+site+'/'+year+'/'
             log_fname = '/rdata/airglow/gps/results/'+inst+'_'+site+'.log'
             #log_cmd = '/usr/bin/perl /usr/local/share/Python/programs/load_'+inst+'_'+site+'_logfile.pl'
-            
+
             # Create the filename of the data to be parsed
-            fname = '{:s}dataout_{:04d}_{:03d}.bin'.format(datapath,year,doy) 
-            
+            fname = '{:s}dataout_{:s}_{:03d}.bin'.format(datapath,year,doy) 
+
             # Run binflate
-            os.popen('/usr/local/sbin/binflate -i ' + fname)
-            
+            os.popen('/rdata/airglow/gps/cases01/hka/streaming/binflate -i ' + fname)
+
             # Load txinfo.log file
             txfname = 'txinfo.log'
             txprn,txdn, el, az, txsystem = cases.load_txinfo(txfname)
-            
+
             # Load scint.log file
             s4fname = 'scint.log'
             s4prn, s4dn, s4, s4system = cases.load_scint(s4fname)
-            
+            startut = s4dn[0].strftime('%Y-%m-%d %H:%M:%S')
+            stoput = s4dn[-1].strftime('%Y-%m-%d %H:%M:%S')
+
             # Create plots
-            dn = datetime.date(YEAR,1,1)+datetime.timedelta(days=doy-1)
-            s4fname = '{:s}{:s}H.png'.format(pngpath,dn.strftime('%y%m%d'))
-            cases.plot_s4summary(txprn,txdn,el,az,txsystem,s4prn,s4dn,s4,s4system,s4fname)
-            
+            dn = datetime.date(int(year),1,1)+datetime.timedelta(days=doy-1)
+            s4fname = '{:s}H.png'.format(dn.strftime('%y%m%d'))
+            cases.plot_s4summary(txprn,txdn,el,az,txsystem,s4prn,s4dn,s4,s4system,pngpath+s4fname)
+
             # Write the logfile
             fid = open(log_fname,'w')
+
             fid.writelines('Site,Instrument,StartUTTime,StopUTTime,SummaryImage,MovieFile\n')
             fid.writelines('{:d},{:d},{:s},{:s},{:s}H.png'.format(site_id,inst_id,
-                            s4dn[0].strftime('%Y-%m-%d %H:%M:%S'),
-                            s4dn[-1].strftime('%Y-%m-%d %H:%M:%S'),
-                            dn.strftime('%y%m%d')))
+                           startut, stoput, dn.strftime('%y%m%d')))
             fid.close()
-            
+
             # Load the log file into the database
             #os.popen(log_cmd)
             if do_DB:
-                database([s4fname],datapath,startut,stoput,inst_id,site_id)
-            
+                database([s4fname],pngpath,startut,stoput,[inst_id],site_id)
+
             # Move the data
-            os.popen('mv {:s}dataout*_{:04d}_{:03d}.bin .'.format(datapath,year,doy
+            os.popen('mv {:s}dataout*_{:s}_{:03d}.bin .'.format(datapath,year,doy
                 ) )
             tar = tarfile.open('{:s}.tgz'.format(dn.strftime('%y%m%d')), 'w:gz')
-            
-            tar.add('dataout_{:04d}_{:03d}.bin'.format(year,doy))
-            
-            if os.path.exists('dataoutiq_{:04d}_{:03d}.bin'.format(year,doy)):
-                tar.add('dataoutiq_{:04d}_{:03d}.bin'.format(year,doy))
-            
+
+            tar.add('dataout_{:s}_{:03d}.bin'.format(year,doy))
+
+            if os.path.exists('dataoutiq_{:s}_{:03d}.bin'.format(year,doy)):
+                tar.add('dataoutiq_{:s}_{:03d}.bin'.format(year,doy))
+
             tar.close()
-            
+
             # Clean up files
-            #os.popen('tar czvf {:s}.tgz dataout*_{:04d}_{:03d}.bin'.format(dn.strftime('%y%m%d'), YEAR, DOY))
-            os.popen('rm dataout*_{:04d}_{:03d}.bin'.format(year,doy))
-            os.popen('mv {:s}.tgz {:s}{:04d}'.format(dn.strftime('%y%m%d'),archivepath,year))
+            #os.popen('tar czvf {:s}.tgz dataout*_{:s}_{:03d}.bin'.format(dn.strftime('%y%m%d'), year, DOY))
+            os.popen('rm dataout*_{:s}_{:03d}.bin'.format(year,doy))
+            os.popen('mv {:s}.tgz {:s}{:s}'.format(dn.strftime('%y%m%d'),data_dir,year))
             os.popen('rm channel.log')
             os.popen('rm iono.log')
             os.popen('rm navsol.log')
@@ -207,17 +207,17 @@ def process_instr(inst,year,doy,do_DB=True):
             os.popen('rm txinfo.log')
 
         except:
-            subject = "!!! Processing Error (\'" + inst +'\','+str(year)+','+str(doy)+') @ ' + site 
+            subject = "!!! Processing Error (\'" + inst +'\','+str(year)+','+str(doy)+') @ ' + site
             print subject
             Emailer.emailerror(subject, 'Cases problem')
-        
+
 
     # Send Error if Neither
-    else: 
+    else:
         subject = "!!! GPS Problem " + date
         print subject
         Emailer.emailerror(subject, 'Something weird has happened: '+inst)
-        
+
     os.chdir('/rdata/airglow/rx/')
 
 
@@ -244,11 +244,11 @@ def database(filenames,data_dir,startut,stoput,inst_id,site_id,send_to_madrigal=
     web_stub = 'SummaryImages/'
     file_stub = '/home/airglowgroup/data/SummaryImages/'
     madgrigal_stub = '/rdata/airglow/database/'
-    
+
     # Open the database (see http://zetcode.com/databases/mysqlpythontutorial/ for help)
     # Read the user and password from a file.
     con = mdb.connect(host='webhost.engr.illinois.edu', db='airglowgroup_webdatabase', read_default_file="/home/airglow/.my.cnf")
-    cur = con.cursor()  
+    cur = con.cursor()
     for fn,db_id in zip(filenames, inst_id):
         # Create the summary images
         subprocess.call(['scp', data_dir+fn, scp_user + ':' + file_stub + fn]) # send to airglow
@@ -271,7 +271,7 @@ def database(filenames,data_dir,startut,stoput,inst_id,site_id,send_to_madrigal=
     con.close()
 
 
-#def plot_cases_day(YEAR,DOY):
+#def plot_cases_day(year,doy):
 
 
 def GPS_multiprocess(arg_list, num_processes):
