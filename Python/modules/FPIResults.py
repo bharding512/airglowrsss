@@ -15,6 +15,7 @@ Included functions are:
     PlotAverages
     PlotClimatology
     PlotClimatologyF107
+    PlotLocalTime
     PlotGridMonth
     PlotSpaghetti
     SetBinTime
@@ -35,6 +36,13 @@ import FPIprocessLevel2_Legacy as L2
 import fpiinfo as _fpiinfo
 from multiprocessing import Pool as _pool
 from functools import partial as _partial
+
+# I have no idea where these ipython.html.widgets and matplotlib.use are called, 
+# but these warings occur in BinMonthlyData... TOBERECTIFIED DJF
+import warnings
+warnings.filterwarnings("ignore")
+# This one removes divided by nan warnings in Filtering OK - DJF
+_np.seterr(divide='ignore',invalid='ignore')
 
 def SetBinTime(MIN):
     '''
@@ -58,7 +66,7 @@ def SetBinTime(MIN):
 
 
 def SetFilter(UMIN=-250.,UMAX=250.,VMIN=-250.,VMAX=250.,WMIN=-75.,WMAX=75.,TMIN=600.,TMAX=1400., \
-        TERR=50.,WERR=25.,CERR=300.):
+        TERR=50.,WERR=25.,CERR=300.,VERBOSE=True):
     '''
     Summary:
         Returns filter limits for averages. This is used because the Level0 automated processing \
@@ -87,9 +95,10 @@ def SetFilter(UMIN=-250.,UMAX=250.,VMIN=-250.,VMAX=250.,WMIN=-75.,WMAX=75.,TMIN=
            'umax':UMAX,'umin':UMIN,'uef':WERR, 'uec':CERR,\
            'vmax':VMAX,'vmin':VMIN,'vef':WERR, 'vec':CERR,\
            'wmax':WMAX,'wmin':WMIN,'wef':WERR, 'wec':CERR}
-
-    print 'The following limits are set:'
-    print sorted(lim.items())
+   
+    if VERBOSE:
+        print 'The following limits are set:'
+        print sorted(lim.items())
 
 
 # Set up default parameters
@@ -113,7 +122,7 @@ def FilterData(DATA,QF=1):
 
     Inputs:
         DATA = The data object
-        QF = Quality Flag max [default = 1] 
+        QF   = Quality Flag max [default = 1] 
 
     History:
         3/20/13 -- Written by DJF (dfisher2@illinois.edu)
@@ -172,25 +181,24 @@ def WeightedAverage(VAL,STD,CNT=None,AXIS=0,test=False):
         Returns weighted mean/std, and variability/std of FPI data if CNT is given
 
     Inputs:
-        VAL = data to average
-        STD = standard deviation of data
-        CNT = count of data
+        VAL  = data to average
+        STD  = standard deviation of data
+        CNT  = count of data
         AXIS = axis to average across?
 
     Outputs:
-        WM = weighted mean
-        WE = weighted std
+        WM  = weighted mean
+        WE  = weighted std
     Outputs2:
-        SS = sample std (variability)
-        SE = sample std uncertainty
-        WSS= weighted sampel std
-        AE = average uncertainty (average error/std)
-        P16= 16th percentile
-        P25= 25th percentile
-        P50= 50th percentile
-        P75= 75th percentile
-        P84= 84th percentile
-
+        SS  = sample std (variability)
+        SE  = sample std uncertainty
+        WSS = weighted sampel std
+        AE  = average uncertainty (average error/std)
+        P16 = 16th percentile
+        P25 = 25th percentile
+        P50 = 50th percentile
+        P75 = 75th percentile
+        P84 = 84th percentile
 
     History:
         3/20/13 -- Written by DJF (dfisher2@illinois.edu)
@@ -242,16 +250,16 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
         Returns filted and binned single data for a single instrument over one night.
 
     Inputs:
-        SITE = site, e.g. uao
-        YEAR = year, e.g. 2013
-        DOY = doy of year, e.g. 47
+        SITE  = site, e.g. uao
+        YEAR  = year, e.g. 2013
+        DOY   = doy of year, e.g. 47
         SPLIT = Split look directions in binning [default = False]
-        KP = Filter days by KP [default = [0,10] - all kp]
-        CV = Include CV directions [default = True]
-        QF = Quality Flag Limit Allowed [default = 1]
+        KP    = Filter days by KP [default = [0,10] - all kp]
+        CV    = Include CV directions [default = True]
+        QF    = Quality Flag Limit Allowed [default = 1]
 
     Outputs:
-        DATA = Object with winds, Temps, and more
+        DATA  = Object with winds, Temps, and more
 
     History:
         3/20/13 -- Written by DJF (dfisher2@illinois.edu)
@@ -265,19 +273,23 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
     
     # Load in Day's Data
     if SITE in ['renoir','peru','nation']:
-        nets = _fpiinfo.get_network_info(SITE).keys()
+        nets = _fpiinfo.get_network_info(SITE)
         tots = _fpiinfo.get_all_sites_info()
-        sites = [x for x in nets if x in tots]
+        sites = [x for x in nets.keys() if x in tots]
+        lla = nets['mean_location']
         project = SITE.lower()
     else:
         sites = [SITE.lower()]
-        project = _fpiinfo.get_site_info(sites[0])['Network']
+        siteinfo = _fpiinfo.get_site_info(sites[0])
+        project = siteinfo['Network']
+        lla = siteinfo['Location']
     data = L2.GetLevel2(project,dn)
     bc = FilterData(data,QF)
     
     # Get Empty
     d = _BinnedData(dn,SITE)
     d.key = "Daily"
+    d.lla = lla
     d.t = times
     count_len = 500
     uData   = _np.empty((b_len,count_len))*_np.nan
@@ -299,9 +311,6 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
     vefData = _np.empty((b_len,count_len))*_np.nan
     wefData = _np.empty((b_len,count_len))*_np.nan
     count   = b_len*[0]
-    lat = []
-    lon = []
-    alt = []
     cvc = 0
     cc  = 0
 
@@ -317,11 +326,6 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
                 break
             # for each location with that site
             if s in r1.key.lower():
-                # Accumulate AIPP locations
-                if len(r1.lla) == 3:
-                    lat.append(r1.lla[0])
-                    lon.append(r1.lla[1])
-                    alt.append(r1.lla[2])
                 # Do cv or card counts
                 if 'cv_' in r1.key.lower() or 'in_' in r1.key.lower():
                     if CV:
@@ -369,8 +373,6 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
                             ieData[bin,count[bin]] = r1.ie[zelda]
                         count[bin] += 1
             
-    # Mean LLA
-    d.lla = _np.array([_np.nanmean(lat),_np.nanmean(lon),_np.nanmean(alt)])
     
     ## Weighted Mean of Winds
     # Zonal
@@ -435,18 +437,18 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIE
         Returns HWMfor a single instrument over one night.
 
     Inputs:
-        SITELLA = site latitude, longitude, altitude
-        YEAR = year, e.g. 2013
-        DOY = doy of year, e.g. 47
-        WMODEL = name of wind model, e.g. 'hwm93'
-        TMODEL = name of temp model [default = 'msis']
-        ALT = altitude of desired profile in km [default = 250]
-        WEIGHTED = flag to intensity weight winds [default = True]
-        QUIET = flag to set Kp=0 and Ap=Ap_daily [default = False]
+        SITELLA   = site latitude, longitude, altitude
+        YEAR      = year, e.g. 2013
+        DOY       = doy of year, e.g. 47
+        WMODEL    = name of wind model, e.g. 'hwm93'
+        TMODEL    = name of temp model [default = 'msis']
+        ALT       = altitude of desired profile in km [default = 250]
+        WEIGHTED  = flag to intensity weight winds [default = True]
+        QUIET     = flag to set Kp=0 and Ap=Ap_daily [default = False]
         MULTICORE = flag to allow multicore processing [default = True]
 
     Outputs:
-        DATA = Object with winds, Temps, and more
+        DATA      = Object with winds, Temps, and more
 
     History:
         3/20/13 -- Written by DJF (dfisher2@illinois.edu)
@@ -476,7 +478,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIE
     d.key = 'DailyModel'
     d.t = times
     d.lla = SITELLA
-    if _np.nan in SITELLA:
+    if _np.isnan(SITELLA).any():
         print 'Bad LLA'
         return
 
@@ -515,7 +517,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIE
 
     else:
         # Faux model
-        #ag6300 = Fmodel('low') #high 
+        #ag6300 = Fmodel('high') #high 
         
         # Fill Data
         for tind,t in enumerate(times):
@@ -627,7 +629,7 @@ def _MPsinglemodel(T,ALTS,SITELLA,WMODEL,TMODEL,QUIET):
         pt = _pyglow.Point(T,SITELLA[0],SITELLA[1],alt)
         if QUIET:
             pt.kp = 0.0
-            pt.ap = pt.ap_daily
+            pt.ap = 0.0
     
         # Intensity
         pt.run_airglow() #FIX THIS AFTER ANALYSIS
@@ -676,28 +678,29 @@ def _MPsinglemodel(T,ALTS,SITELLA,WMODEL,TMODEL,QUIET):
     
     
 
-def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[0,10],CV=True,QF=1, \
-        VERBOSE=True,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIET=False):
+def BinMonthlyData(SITE,YEAR,MONTH,DLIST=[],YLIST=[],SPLIT=False,KP=[0,10],CV=True,QF=1, \
+        SITELLA=[],TMODEL='msis',ALT=250.,WEIGHTED=False,QUIET=False,VERBOSE=True):
     '''
     Summary:
-        Returns filted and binned data over one month.
+        Returns filted and binned data/models over one month.
 
     Inputs:
-        SITE = site of interest, e.g. 'UAO'
-        YEAR = year, e.g. 2013
-        MONTH = month of year, e.g. 2 (February)
-        SITELLA = site location array for model run [lat,lon,alt_km]
-        SPLIT = Split look directions in binning [default = False]
-        DLIST = list of doys in year  [default = [] - all doys in MONTH,YEAR used], or [doy,spread] for storms
-        YLIST = list of years in year [default = [] - only YEAR used]
-        KP = limits of kp for filtering days [default = [0,10] - all kp used]
-        CV = use CV modes [default = True]
-        QF = Quality Flag Limit Allowed [default = 1]
-        VERBOSE = Print information to stdout [default = True]
-        TMODEL = name of temp model [default = 'msis']
-        ALT = altitude of desired profile in km [default = 250]
-        WEIGHTED = flag to intensity weight winds [default = False]
-        QUIET = flag to set Kp=0 and Ap=Ap_daily [default = False]
+        SITE     = site of interest, e.g. 'UAO' or model, e.g. 'hwm14'
+        YEAR     = year, e.g. 2013
+        MONTH    = month of year, e.g. 2 (February)
+        DLIST    = list of doys in year  [default = [] - all doys in MONTH,YEAR used]
+                   or [doy,spread] for storms
+        YLIST    = list of years in year [default = [] - only YEAR used]
+        SPLIT    = [data param] split look directions in binning [default = False]
+        KP       = [data param] limits of kp for filtering days [default = [0,10] - all kp used]
+        CV       = [data param] use CV modes [default = True]
+        QF       = [data param] Quality Flag Limit Allowed [default = 1]
+        SITELLA  = [model param] site location array for model run [lat,lon,alt_km]
+        TMODEL   = [model param] name of temp model [default = 'msis']
+        ALT      = [model param] altitude of desired profile in km [default = 250]
+        WEIGHTED = [model param] flag to intensity weight winds [default = False]
+        QUIET    = [model param] flag to set Kp=0 and Ap=Ap_daily [default = False]
+        VERBOSE  = Print information to stdout [default = True]
 
     Outputs:
         DATA = dictionary of data whose keys are Zonal, Meridional, or Temp 
@@ -783,9 +786,9 @@ def BinMonthlyData(SITE,YEAR,MONTH,SITELLA=[],SPLIT=False,DLIST=[],YLIST=[],KP=[
 
     # Make a site list
     if SITE in ['renoir','peru','nation']:
-        nets = _fpiinfo.get_network_info(SITE).keys()
+        nets = _fpiinfo.get_network_info(SITE)
         tots = _fpiinfo.get_all_sites_info()
-        sites = [x for x in nets if x in tots]
+        sites = [x for x in nets.keys() if x in tots]
     else:
         sites = [SITE]
     if 'hwm' in SITE:
@@ -1018,18 +1021,18 @@ def _MPsingleday(SITE_YEAR_DOY,SPLIT,KP,CV,QF,SITELLA,TMODEL,ALT,WEIGHTED,QUIET)
 
     Inputs:
         SITE_YEAR_DOY = tuple of the following variable inputs:
-            SITE = sites of interest, e.g. 'UAO'
-            YEAR = year, e.g. 2013
-            DOY = day of year, e.g. 47 
-        SPLIT = Split look directions in binning [default = False]
-        KP = Filter days by KP [default = [0,10] - all kp]
-        CV = use CV modes [default = True]
-        QF = Quality Flag Limit Allowed [default = 1]
-        SITELLA = site location array for model run [lat,lon,alt_km]
-        TMODEL = name of temp model [default = 'msis']
-        ALT = altitude of desired profile in km [default = 250]
-        WEIGHTED = flag to intensity weight winds [default = True]
-        QUIET = flag to set Kp=0 and Ap=Ap_daily [default = False]
+            SITE      = sites of interest, e.g. 'UAO'
+            YEAR      = year, e.g. 2013
+            DOY       = day of year, e.g. 47 
+        SPLIT         = [data param] Split look directions in binning [default = False]
+        KP            = [data param] Filter days by KP [default = [0,10] - all kp]
+        CV            = [data param] use CV modes [default = True]
+        QF            = [data param] Quality Flag Limit Allowed [default = 1]
+        SITELLA       = [model param] site location array for model run [lat,lon,alt_km]
+        TMODEL        = [model param] name of temp model [default = 'msis']
+        ALT           = [model param] altitude of desired profile in km [default = 250]
+        WEIGHTED      = [model param] flag to intensity weight winds [default = True]
+        QUIET         = [model param] flag to set Kp=0 and Ap=Ap_daily [default = False]
 
     Outputs:
         DD = Daily Data binned object
@@ -1063,7 +1066,7 @@ def _MPsingleday(SITE_YEAR_DOY,SPLIT,KP,CV,QF,SITELLA,TMODEL,ALT,WEIGHTED,QUIET)
     return(DD,F107)
 
 
-def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=True,QF=1):
+def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=True,QF=1,VERBOSE=True):
     '''
     Summary:
         Plots monthly averages in a 2x6 month plot
@@ -1077,6 +1080,7 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         KP = Filter days by KP [default = [0,10] - all kp]
         UT = Plot in UT or SLT [default = True]
         QF = Quality Flags [default = 1]
+        VERBOSE = Print monthly average info [default = True]
 
     Outputs:
 
@@ -1135,7 +1139,7 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
             month = month - 12*((month-1)/12)
         #print nsp,year,month
 
-        MD = BinMonthlyData(SITE,year,month,SPLIT=SPLIT,KP=KP,QF=QF)
+        MD = BinMonthlyData(SITE,year,month,SPLIT=SPLIT,KP=KP,QF=QF,VERBOSE=VERBOSE)
         tlim = [MD.t[len(MD.t)/5],MD.t[-len(MD.t)/5]]
         MD.t  = MD.t + _dt.timedelta(seconds=ut_offset)
 #	tlim = [MD.t[len(MD.t)/5],MD.t[-len(MD.t)/5]]
@@ -1242,7 +1246,7 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         #fig.savefig("%s%s-%4.0f-%s.eps" % (dirout,title[i],YEAR,SITE))
         
 
-def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,QF=1,F_VAL=[50,100,150,200,250]):
+def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,QF=1,F_VAL=[50,100,150,200,250],VERBOSE=True):
     '''
     Summary:
         Plots monthly averages in a 2x6 month plot binning by average F10.7
@@ -1256,6 +1260,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,QF=1,F_
         UT = Plot in UT [default = True]
         QF = Quality Flags [default = 1]
         F_VALS = List of F10.7 Cutoff values
+        VERBOSE = Print monthly average information [default = True]
 
     Outputs:
 
@@ -1315,7 +1320,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,QF=1,F_
         nsp = ((nsp*2)%24 - 11*((nsp*2)%24>11))%12
         for k,(f_doy,f_yr) in enumerate(zip(f_doy_index,f_yr_index)):
             print mon,'-',F_VAL[k]
-            MD = BinMonthlyData(SITE,arbdate.year,mon,SPLIT=SPLIT,KP=KP,DLIST=f_doy,QF=QF,YLIST=f_yr)
+            MD = BinMonthlyData(SITE,arbdate.year,mon,DLIST=f_doy,YLIST=f_yr,SPLIT=SPLIT,KP=KP,QF=QF,VERBOSE=VERBOSE)
             #print '|_ F107b:',MD.f107,'\n\n'
             MD.t2 = MD.t + _dt.timedelta(minutes=3)
             '''
@@ -1477,7 +1482,231 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,QF=1,F_
     #ft.savefig("%s%s-F107b-%s.pdf" % (dirout,'Clima-T',SITE),format='pdf')
     
     
-def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1,HIST=False):
+def PlotLocalTime(SITE,DNSTART,DNEND,HOUR,WMODEL=[],TMODEL='msis',KP=[0,10],QF=1,QUIET=False):
+    '''
+    Summary:
+        Plots single site at a local time w/ models
+    
+    Inputs:
+        SITE = sites of interest, e.g. 'UAO'
+        DNSTART = datetime of start date
+        DNEND = datetime of end date
+        HOUR = List of Local Time Hour to use, e.g. 4
+        WMODEL = list of wind models to plot with data [default = []]
+        TMODEL = temp model to plot with data [default = 'msis']
+        KP = Filter days by KP [default = [0,10] - all kp]
+        QF = Quality Flag Limit Allowed [default = 1]
+        QUIET  = [model param] flag to set Kp=0 and Ap=Ap_daily [default = False]
+
+    History:
+        5/5/16 -- Written by DJF (dfisher2@illinois.edu)
+    '''
+    _mpl.rcParams.update({'font.size':8})
+    _mpl.rcParams['savefig.dpi'] = 200
+    _mpl.rcParams['figure.figsize'] = (6,4)   
+    
+    # Set up Figures
+    markerwide = 0
+    linewide = 1
+    linewide2= 3
+    ms  = 2
+    ms2 = 2
+    color = {'hwm93':'y.','hwm07':'r.','hwm14':'g.'}
+    gflag = True
+    if isinstance(HOUR, int):
+        HOUR = [HOUR]
+    h_len = len(HOUR)
+
+    _plt.figure(0)
+    fz,((axz))  = _plt.subplots(h_len,1, sharex=True, sharey=False)
+    _plt.figure(1)
+    fm,((axm))  = _plt.subplots(h_len,1, sharex=True, sharey=False)
+    _plt.figure(2)
+    fv,((axv))  = _plt.subplots(h_len,1, sharex=True, sharey=False)
+    _plt.figure(3)
+    ft,((axt))  = _plt.subplots(h_len,1, sharex=True, sharey=False)
+    
+    # Get LT bin
+    lt = []
+    dh = [t.hour+t.minute/60. for t in times]
+    for hr in HOUR:
+        lt.append(int(_np.argmin(abs(_np.roll(dh,b_len/2)-hr))))
+    yl = []; dl = [];
+    t_lim = [_dt.datetime(1969,12,31),_dt.datetime(1971,1,1)]
+    
+    # allocate arrays for data and models
+    t_len = (DNEND-DNSTART).days
+    m_len = 12.  # for each month
+    t   = list(_np.empty((t_len))*_np.nan)
+    Td  = _np.empty((t_len,h_len))*_np.nan
+    Ted = _np.empty((t_len,h_len))*_np.nan
+    Ud  = _np.empty((t_len,h_len))*_np.nan
+    Ued = _np.empty((t_len,h_len))*_np.nan
+    Vd  = _np.empty((t_len,h_len))*_np.nan
+    Ved = _np.empty((t_len,h_len))*_np.nan
+    Wd  = _np.empty((t_len,h_len))*_np.nan
+    Wed = _np.empty((t_len,h_len))*_np.nan
+    mt  = list(_np.empty((m_len))*_np.nan)
+    Ta  = _np.empty((m_len,h_len))*_np.nan
+    Tea = _np.empty((m_len,h_len))*_np.nan
+    Ua  = _np.empty((m_len,h_len))*_np.nan
+    Uea = _np.empty((m_len,h_len))*_np.nan
+    Va  = _np.empty((m_len,h_len))*_np.nan
+    Vea = _np.empty((m_len,h_len))*_np.nan
+    Wa  = _np.empty((m_len,h_len))*_np.nan
+    Wea = _np.empty((m_len,h_len))*_np.nan
+    Tm = {}; Um = {}; Vm = {}; Wm = {};
+    if isinstance(WMODEL, str):
+        WMODEL = [WMODEL]        
+    for m in WMODEL:
+        Tm[m]  = _np.empty((t_len,h_len))*_np.nan
+        Um[m]  = _np.empty((t_len,h_len))*_np.nan
+        Vm[m]  = _np.empty((t_len,h_len))*_np.nan
+        Wm[m]  = _np.empty((t_len,h_len))*_np.nan
+
+    # Loop though days
+    for step in range(t_len):
+        dn = DNSTART+_dt.timedelta(days=step)
+        doy = (dn-_dt.datetime(dn.year,1,1)).total_seconds()/(60.*60*24)+1
+        yl.append(dn.year)   # for monthly binning
+        dl.append(doy)   # for monthly binning
+        t[step] = dn.replace(year=1970)
+
+        # Grab data for day TODO Weekly!
+        DD = BinDailyData(SITE,dn.year,doy,KP=KP,QF=QF)
+        for h_ind,hr in enumerate(lt):
+            Td[step,h_ind]  = DD.T [hr]
+            Ted[step,h_ind] = DD.Te[hr]
+            Ud[step,h_ind]  = DD.u [hr]
+            Ued[step,h_ind] = DD.ue[hr]
+            Vd[step,h_ind]  = DD.v [hr]
+            Ved[step,h_ind] = DD.ve[hr]
+            Wd[step,h_ind]  = DD.w [hr]
+            Wed[step,h_ind] = DD.we[hr]
+
+        # Grab model for day TODO Weekly
+        for m in WMODEL:
+            MM = GetModels(DD.lla,dn.year,doy,m,TMODEL=TMODEL,ALT=250.,WEIGHTED=True,QUIET=QUIET)
+            for h_ind,hr in enumerate(lt):
+                Tm[m] [step,h_ind] = MM.T [hr]
+                Um[m] [step,h_ind] = MM.u [hr]
+                Vm[m] [step,h_ind] = MM.v [hr]
+                Wm[m] [step,h_ind] = MM.w [hr]
+
+    for m_ind,mon in enumerate(range(1,13)):
+        AD = BinMonthlyData(SITE,1970,mon,DLIST=dl,YLIST=yl,KP=KP,QF=QF,VERBOSE=False)
+        mt[m_ind] = AD.dn
+        for h_ind,hr in enumerate(lt):
+            Ta[m_ind,h_ind]  = AD.T [hr]
+            Tea[m_ind,h_ind] = AD.Tv[hr]
+            Ua[m_ind,h_ind]  = AD.u [hr]
+            Uea[m_ind,h_ind] = AD.uv[hr]
+            Va[m_ind,h_ind]  = AD.v [hr]
+            Vea[m_ind,h_ind] = AD.vv[hr]
+            Wa[m_ind,h_ind]  = AD.w [hr]
+            Wea[m_ind,h_ind] = AD.wv[hr]
+            
+
+    # Plot this stuff
+    for h_ind,hr in enumerate(HOUR):
+        # Zonal
+        axz[h_ind].set_ylabel("%02i LT" % (hr))
+        axz[h_ind].set_xlim(t_lim)
+        axz[h_ind].set_ylim(-100, 200)
+        axz[h_ind].set_yticks([0, 100])
+        axz[h_ind].plot(t,Ud[:,h_ind],'k.',linewidth=linewide,markersize=ms,label='Data')
+        axz[h_ind].errorbar(mt,Ua[:,h_ind],yerr=Uea[:,h_ind],fmt='.',color='b', \
+                linewidth=linewide,elinewidth=linewide2,capsize=markerwide,markersize=ms2,label='Mon_Ave')
+        for m in WMODEL:
+            axz[h_ind].plot(t,Um[m][:,h_ind],color[m],alpha=0.33,markersize=ms2)
+        axz[h_ind].grid(gflag)
+        axz[h_ind].plot(t_lim,[0,0],'k--')
+
+        # Meridional 
+        axm[h_ind].set_ylabel("%02i LT" % (hr))
+        axm[h_ind].set_xlim(t_lim)
+        axm[h_ind].set_ylim(-150, 150)
+        axm[h_ind].set_yticks([-75,0,75])
+        axm[h_ind].plot(t,Vd[:,h_ind],'k.',linewidth=linewide,markersize=ms,label='Data')
+        axm[h_ind].errorbar(mt,Va[:,h_ind],yerr=Vea[:,h_ind],fmt='.',color='b', \
+                linewidth=linewide,elinewidth=linewide2,capsize=markerwide,markersize=ms2,label='Mon_Ave')
+        for m in WMODEL:
+            axm[h_ind].plot(t,Vm[m][:,h_ind],color[m],alpha=0.33,markersize=ms2)
+        axm[h_ind].grid(gflag)
+        axm[h_ind].plot(t_lim,[0,0],'k--')
+
+        # Vertical
+        axv[h_ind].set_ylabel("%02i LT" % (hr))
+        axv[h_ind].set_xlim(t_lim)
+        axv[h_ind].set_ylim(-75,75)
+        axv[h_ind].set_yticks([-25,0,25])
+        axv[h_ind].plot(t,Wd[:,h_ind],'k.',linewidth=linewide,markersize=ms,label='Data')
+        axv[h_ind].errorbar(mt,Wa[:,h_ind],yerr=Wea[:,h_ind],fmt='.',color='b', \
+                linewidth=linewide,elinewidth=linewide2,capsize=markerwide,markersize=ms2,label='Mon_Ave')
+        for m in WMODEL:
+            axv[h_ind].plot(t,Wm[m][:,h_ind],color[m],alpha=0.33,markersize=ms2)
+        axv[h_ind].grid(gflag)
+        axv[h_ind].plot(t_lim,[0,0],'k--')
+
+        # Temps 
+        axt[h_ind].set_ylabel("%02i LT" % (hr))
+        axt[h_ind].set_xlim(t_lim)
+        axt[h_ind].set_ylim(600, 1150)
+        axt[h_ind].set_yticks([700,800,900,1000,1100])
+        axt[h_ind].plot(t,Td[:,h_ind],'k.',linewidth=linewide,markersize=ms,label='Data')
+        axt[h_ind].errorbar(mt,Ta[:,h_ind],yerr=Tea[:,h_ind],fmt='.',color='b', \
+                linewidth=linewide,elinewidth=linewide2,capsize=markerwide,markersize=ms2,label='Mon_Ave')
+        for m in WMODEL:
+            axt[h_ind].plot(t,Tm[m][:,h_ind],color[m],alpha=0.33,markersize=ms2)
+        axt[h_ind].grid(gflag)
+
+    # Finalize Zonal
+    fz.suptitle('Zonal winds')
+    fz.subplots_adjust(hspace = 0.001)
+    fz.subplots_adjust(wspace = .32)
+    fz.subplots_adjust(left=.14)
+    fz.text(0.5,0.05,'Date',ha='center',va='center', fontsize=11)
+    fz.text(0.02,0.5,'Wind Speed [$m/s$]',ha='center',va='center',rotation='vertical', fontsize=11)
+    axz[0].xaxis.set_major_formatter(_md.DateFormatter('%b')) # :%M
+    fz.savefig("%s%s-LT-%s.eps" % (dirout,'Clima-Z',SITE),format='eps')
+    #fz.savefig("%s%s-F107b-%s.pdf" % (dirout,'Clima-Z',SITE),format='pdf')
+
+    # Finalize Meridional
+    fm.suptitle('Meridional winds')
+    fm.subplots_adjust(hspace = 0.001)
+    fm.subplots_adjust(wspace = .32)
+    fm.subplots_adjust(left=.14)
+    fm.text(0.5,0.05,'Date',ha='center',va='center', fontsize=11)
+    fm.text(0.02,0.5,'Wind Speed [$m/s$]',ha='center',va='center',rotation='vertical', fontsize=11)
+    axm[0].xaxis.set_major_formatter(_md.DateFormatter('%b')) # :%M
+    fm.savefig("%s%s-LT-%s.eps" % (dirout,'Clima-M',SITE),format='eps')
+    #fm.savefig("%s%s-F107b-%s.pdf" % (dirout,'Clima-M',SITE),format='pdf')
+
+    # Finalize Vertical
+    fv.suptitle('Vertical winds')
+    fv.subplots_adjust(hspace = 0.001)
+    fv.subplots_adjust(wspace = .32)
+    fv.subplots_adjust(left=.14)
+    fv.text(0.5,0.05,'Date',ha='center',va='center', fontsize=11)
+    fv.text(0.02,0.5,'Wind Speed [$m/s$]',ha='center',va='center',rotation='vertical', fontsize=11)
+    axv[0].xaxis.set_major_formatter(_md.DateFormatter('%b')) # :%M
+    fv.savefig("%s%s-LT-%s.eps" % (dirout,'Clima-V',SITE),format='eps')
+    #fv.savefig("%s%s-F107b-%s.pdf" % (dirout,'Clima-V',SITE),format='pdf')
+
+    # Finalize Temps
+    ft.suptitle('Neutral Temperatures')
+    ft.subplots_adjust(hspace = 0.001)
+    ft.subplots_adjust(wspace = .32)
+    ft.subplots_adjust(left=.14)
+    ft.text(0.5,0.05,'Date',ha='center',va='center', fontsize=11)
+    ft.text(0.02,0.5,'Temperature [$K$]',ha='center',va='center',rotation='vertical', fontsize=11)
+    axt[0].xaxis.set_major_formatter(_md.DateFormatter('%b')) # :%M
+    ft.savefig("%s%s-LT-%s.eps" % (dirout,'Clima-T',SITE),format='eps')
+    #ft.savefig("%s%s-F107b-%s.pdf" % (dirout,'Clima-T',SITE),format='pdf')
+
+
+
+def PlotAverages(SITE,YEAR,MONTH,WMODEL=[],TMODEL='msis',SPLIT=False,KP=[0,10],UT=True,QF=1,HIST=False):
     '''
     Summary:
         Plots single site monthly averages w/ models
@@ -1486,7 +1715,8 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1,HIS
         SITE = sites of interest, e.g. 'UAO'
         YEAR = year, e.g. 2013
         MONTH = month to plot, e.g. 4
-        MODEL = list of model keys to plot with data [default is empty]
+        WMODEL = list of wind models to plot with data [default = []]
+        TMODEL = temp model to plot with data [default = 'msis']
         SPLIT = Split look directions in binning [default = False]
         KP = Filter days by KP [default = [0,10] - all kp]
         UT = Plot in UT or SLT [default = True]
@@ -1510,12 +1740,12 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1,HIS
 
     # Get models
     tm = {}; Tm = {}; Tem = {}; Um = {}; Uem = {}; Vm = {}; Vem = {}; Wm = {}; Wem = {};
-    if isinstance(MODEL, str):
-        MODEL = [MODEL]
-    for nm,m in enumerate(MODEL):
+    if isinstance(WMODEL, str):
+        WMODEL = [WMODEL]
+    for nm,m in enumerate(WMODEL):
         if _np.nan in MD.lla:
             break
-        MM = BinMonthlyData(m,YEAR,MONTH,SPLIT=SPLIT,SITELLA=MD.lla)
+        MM = BinMonthlyData(m,YEAR,MONTH,SPLIT=SPLIT,SITELLA=MD.lla,TMODEL=TMODEL,WEIGHTED=True,QUIET=False)
         tm[m] = MM.t + _dt.timedelta(minutes=3*(nm+2)) + _dt.timedelta(seconds=ut_offset)
 #        if not(UT):
 #            tm[m] = tm[m] - _dt.timedelta(seconds=ut_offset) # JJM
@@ -1544,15 +1774,11 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1,HIS
     ax = fig.add_subplot(1,1,1)
     (_, caps1, _) = _plt.errorbar(MD.t,MD.T,yerr=MD.Tv,label='Data',color='k',linewidth=2)
     # Hardcoded Tmodel -- Fix
-    for nm,m in enumerate(MODEL):
+    for nm,m in enumerate(WMODEL):
         if nm == 0:
 	    _plt.fill_between(tm[m],Tm[m]-Tem[m],Tm[m]+Tem[m],alpha=0.5,linewidth=0,facecolor=facecolor['MSIS'])
 	    _plt.plot(tm[m],Tm[m],'r',label='MSIS')
-#            (_, caps2, _) = _plt.errorbar(tm[m],Tm[m],yerr=Tem[m],fmt=color[nm],label='MSIS')
-#            for cap in caps2:
-#                cap.set_markeredgewidth(markerwide)
-#    for cap in caps1:
-#        cap.set_markeredgewidth(markerwide)
+#           _plt.errorbar(tm[m],Tm[m],yerr=Tem[m],fmt=color[nm],capsize=markerwide,label='MSIS')
     _plt.plot([MD.t[0],MD.t[-1]],[0,0],'k--')
     _plt.ylim([600,1200])
     _plt.xlim([MD.t[tstart],MD.t[tend]])
@@ -1580,21 +1806,15 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1,HIS
     # Winds Figure Zonal
     fig = _plt.figure(1,figsize=(10,6)); _plt.clf()
     ax = fig.add_subplot(1,1,1)
-    for nm,m in enumerate(MODEL):
+    for nm,m in enumerate(WMODEL):
         _plt.fill_between(tm[m],Um[m]-Uem[m],Um[m]+Uem[m],alpha=0.5,linewidth=0,facecolor=facecolor[m.upper()])
-        _plt.plot(tm[m],Um[m],color=facecolor[m.upper()],label=m.upper())
-#        (_, caps2, _) = _plt.errorbar(tm[m],Um[m],yerr=Uem[m],fmt=color[nm],label=m.upper())
-#        for cap in caps2:
-#            cap.set_markeredgewidth(markerwide)
+        _plt.plot(tm[m],Um[m],color=facecolor[m.upper()],capsize=markerwide,label=m.upper())
+#        _plt.errorbar(tm[m],Um[m],yerr=Uem[m],fmt=color[nm],capsize=markerwide,label=m.upper())
     if SPLIT:
-        (_, caps1, _) = _plt.errorbar(MD.t,MD.u,yerr=MD.uv,fmt='b-',label='East')
-        (_, caps3, _) = _plt.errorbar(MD.t2,MD.u2,yerr=MD.u2v,fmt='c-',label='West')
-        for cap in caps3:
-            cap.set_markeredgewidth(markerwide)
+        _plt.errorbar(MD.t,MD.u,yerr=MD.uv,fmt='b-',capsize=markerwide,label='East')
+        _plt.errorbar(MD.t2,MD.u2,yerr=MD.u2v,fmt='c-',capsize=markerwide,label='West')
     else:
-        (_, caps1, _) = _plt.errorbar(MD.t,MD.u,yerr=MD.uv,label='Data',color='k',linewidth=2)
-    for cap in caps1:
-        cap.set_markeredgewidth(markerwide)
+        _plt.errorbar(MD.t,MD.u,yerr=MD.uv,label='Data',color='k',capsize=markerwide,linewidth=2)
 
     _plt.plot([MD.t[0],MD.t[-1]],[0,0],'k--')
     _plt.ylim([-200,200])
@@ -1625,21 +1845,15 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1,HIS
     # Winds Figure Meridional
     fig = _plt.figure(2,figsize=(10,6)); _plt.clf()
     ax = fig.add_subplot(1,1,1)
-    for nm,m in enumerate(MODEL):
+    for nm,m in enumerate(WMODEL):
         _plt.fill_between(tm[m],Vm[m]-Vem[m],Vm[m]+Vem[m],alpha=0.5,linewidth=0,facecolor=facecolor[m.upper()])
-        _plt.plot(tm[m],Vm[m],color=facecolor[m.upper()],label=m.upper())
-#        (_, caps2, _) = _plt.errorbar(tm[m],Um[m],yerr=Uem[m],fmt=color[nm],label=m.upper())
-#        for cap in caps2:
-#            cap.set_markeredgewidth(markerwide)
+        _plt.plot(tm[m],Vm[m],color=facecolor[m.upper()],capsize=markerwide,label=m.upper())
+#        _plt.errorbar(tm[m],Um[m],yerr=Uem[m],fmt=color[nm],capsize=markerwide,label=m.upper())
     if SPLIT:
-        (_, caps1, _) = _plt.errorbar(MD.t,MD.v,yerr=MD.vv,fmt='b-',label='North')
-        (_, caps3, _) = _plt.errorbar(MD.t2,MD.v2,yerr=MD.v2v,fmt='c-',label='South')
-        for cap in caps3:
-            cap.set_markeredgewidth(markerwide)
+        _plt.errorbar(MD.t,MD.v,yerr=MD.vv,fmt='b-',capsize=markerwide,label='North')
+        _plt.errorbar(MD.t2,MD.v2,yerr=MD.v2v,fmt='c-',capsize=markerwide,label='South')
     else:
-        (_, caps1, _) = _plt.errorbar(MD.t,MD.v,yerr=MD.vv,label='Data',color='k',linewidth=2)
-    for cap in caps1:
-        cap.set_markeredgewidth(markerwide)
+        _plt.errorbar(MD.t,MD.v,yerr=MD.vv,label='Data',color='k',capsize=markerwide,linewidth=2)
     _plt.plot([MD.t[0],MD.t[-1]],[0,0],'k--')
     _plt.ylim([-200,200])
     _plt.xlim([MD.t[tstart],MD.t[tend]])
@@ -1669,13 +1883,9 @@ def PlotAverages(SITE,YEAR,MONTH,MODEL=[],SPLIT=False,KP=[0,10],UT=True,QF=1,HIS
     # Winds Figure Vertical
     fig = _plt.figure(3,figsize=(10,6)); _plt.clf()
     ax = fig.add_subplot(1,1,1)
-    (_, caps1, _) = _plt.errorbar(MD.t,MD.w,yerr=MD.wv,label='Data',color='k',linewidth=2)
-#    for nm,m in enumerate(MODEL):
-#        (_, caps2, _) = _plt.errorbar(tm[m],Wm[m],yerr=Wem[m],fmt=color[nm],label=m.upper())
-#        for cap in caps2:
-#            cap.set_markeredgewidth(markerwide)
-    for cap in caps1:
-        cap.set_markeredgewidth(markerwide)
+    _plt.errorbar(MD.t,MD.w,yerr=MD.wv,label='Data',color='k',capsize=markerwide,linewidth=2)
+#    for nm,m in enumerate(WMODEL):
+#        _plt.errorbar(tm[m],Wm[m],yerr=Wem[m],fmt=color[nm],capsize=markerwide,label=m.upper())
     _plt.plot([MD.t[0],MD.t[-1]],[0,0],'k--')
     _plt.ylim([-75,75])
     _plt.xlim([MD.t[tstart],MD.t[tend]])
@@ -1865,7 +2075,7 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True):
     #M = BinMonthlyData(SITE,YEAR,MONTH,SPLIT=SPLIT)
     #M.t = M.t + _dt.timedelta(seconds=(_dt.datetime(YEAR-1,1,1)-_dt.datetime(M.t[0].year,1,1)).total_seconds())
 
-    markerwide = 0
+    cs = 0
     lalpha = .3
     lw=2
     
@@ -1885,30 +2095,20 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True):
         # Temps
         for l in [y for y in D[d] if ('North' in y.key)]:
             #print (l.t1[0]-_dt.timedelta(days=doy)).astimezone(_utc).replace(tzinfo=None)
-            (l1, caps1, _) = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,yerr=l.Te,fmt='r.')
-            for cap in caps1:
-                cap.set_markeredgewidth(markerwide)
-            m1, = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,'r-',linewidth=lw,alpha=lalpha)
+            l1 = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,yerr=l.Te,capsize=cs,fmt='r.')
+            m1 = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,'r-',linewidth=lw,alpha=lalpha)
         for l in [y for y in D[d] if ('South' in y.key)]:
-            (l2, caps2, _) = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,yerr=l.Te,fmt='g.')
-            for cap in caps2:
-                cap.set_markeredgewidth(markerwide)
-            m2, = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,'g-',linewidth=lw,alpha=lalpha)
+            l2 = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,yerr=l.Te,capsize=cs,fmt='g.')
+            m2 = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,'g-',linewidth=lw,alpha=lalpha)
         for l in [y for y in D[d] if ('East' in y.key)]:
-            (l3, caps3, _) = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,yerr=l.Te,fmt='y.')
-            for cap in caps3:
-                cap.set_markeredgewidth(markerwide)
-            m3, = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,'y-',linewidth=lw,alpha=lalpha)
+            l3 = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,yerr=l.Te,capsize=cs,fmt='y.')
+            m3 = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,'y-',linewidth=lw,alpha=lalpha)
         for l in [y for y in D[d] if ('West' in y.key)]:
-            (l4, caps4, _) = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,yerr=l.Te,fmt='m.')
-            for cap in caps4:
-                cap.set_markeredgewidth(markerwide)
-            m4, = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,'m-',linewidth=lw,alpha=lalpha)
+            l4 = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,yerr=l.Te,capsize=cs,fmt='m.')
+            m4 = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,'m-',linewidth=lw,alpha=lalpha)
         for l in [y for y in D[d] if ('Zenith' in y.key)]:
-            (l5, caps5, _) = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,yerr=l.Te,fmt='b.')
-            for cap in caps5:
-                cap.set_markeredgewidth(markerwide)
-            m5, = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,'b-',linewidth=lw,alpha=lalpha)
+            l5 = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,yerr=l.Te,capsize=cs,fmt='b.')
+            m5 = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.T,'b-',linewidth=lw,alpha=lalpha)
         ax[d].annotate('Doy %03d'%doy, xy=(0.02,0.03), xycoords='axes fraction', fontsize=12)
     f.subplots_adjust(hspace=0)
     f.subplots_adjust(wspace=0)
@@ -1945,15 +2145,11 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True):
             continue
         # Zonal
         for l in [y for y in D[d] if ('East' in y.key)]:
-            (l1, caps1, _) = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.u,yerr=l.ue,fmt='yo')
-            for cap in caps1:
-                cap.set_markeredgewidth(markerwide)
-            m1, = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.u,'y-',linewidth=lw,alpha=lalpha,label='Doy %03i'%doy)
+            l1 = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.u,yerr=l.ue,capsize=cs,fmt='yo')
+            m1 = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.u,'y-',linewidth=lw,alpha=lalpha,label='Doy %03i'%doy)
         for l in [y for y in D[d] if ('West' in y.key)]:
-            (l2, caps2, _) = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.u,yerr=l.ue,fmt='mo')
-            for cap in caps2:
-                cap.set_markeredgewidth(markerwide)
-            m2, = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.u,'m-',linewidth=lw,alpha=lalpha,label='Doy %03i'%doy)
+            l2 = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.u,yerr=l.ue,capsize=cs,fmt='mo')
+            m2 = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.u,'m-',linewidth=lw,alpha=lalpha,label='Doy %03i'%doy)
         ax[d].plot(tlim,[0,0],'k--')
         ax[d].annotate('Doy %03d'%doy, xy=(0.02,0.03), xycoords='axes fraction', fontsize=12)
     f.subplots_adjust(hspace=0)
@@ -1991,15 +2187,11 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True):
             continue
         # Meridional
         for l in [y for y in D[d] if ('North' in y.key)]:
-            (l1, caps1, _) = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,yerr=l.ve,fmt='ro')
-            for cap in caps1:
-                cap.set_markeredgewidth(markerwide)
-            m1, = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,'r-',linewidth=lw,alpha=lalpha)
+            l1 = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,yerr=l.ve,capsize=cs,fmt='ro')
+            m1 = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,'r-',linewidth=lw,alpha=lalpha)
         for l in [y for y in D[d] if ('South' in y.key)]:
-            (l2, caps2, _) = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,yerr=l.ve,fmt='go')
-            for cap in caps2:
-                cap.set_markeredgewidth(markerwide)
-            m2, = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,'g-',linewidth=lw,alpha=lalpha)
+            l2 = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,yerr=l.ve,capsize=cs,fmt='go')
+            m2 = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,'g-',linewidth=lw,alpha=lalpha)
         ax[d].plot(tlim,[0,0],'k--')
         ax[d].annotate('Doy %03d'%doy, xy=(0.02,0.03), xycoords='axes fraction', fontsize=12)
     f.subplots_adjust(hspace=0)
@@ -2038,10 +2230,8 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True):
             continue
         # Vertical
         for l in [y for y in D[d] if ('Zenith' in y.key)]:
-            (l1, caps1, _) = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.w,yerr=l.we,fmt='bo')
-            for cap in caps1:
-                cap.set_markeredgewidth(markerwide)
-            m1, = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.w,'b-',linewidth=lw,alpha=lalpha)
+            l1 = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.w,yerr=l.we,capsize=cs,fmt='bo')
+            m1 = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.w,'b-',linewidth=lw,alpha=lalpha)
         ax[d].plot(tlim,[0,0],'k--')
         ax[d].annotate('Doy %03d'%doy, xy=(0.02,0.03), xycoords='axes fraction', fontsize=12)
     f.subplots_adjust(hspace=0)
@@ -2077,21 +2267,15 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True):
             continue
         # Meridional
         for l in [y for y in D[d] if ('CV' in y.key and '_1' in y.key)]:
-            (l1, caps1, _) = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.w,yerr=l.ve,fmt='ro')
-            for cap in caps1:
-                cap.set_markeredgewidth(markerwide)
-            m1, = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,'r-',linewidth=lw,alpha=lalpha)
+            l1 = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.w,yerr=l.ve,capsize=cs,fmt='ro')
+            m1 = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,'r-',linewidth=lw,alpha=lalpha)
         for l in [y for y in D[d] if ('CV' in y.key and '_2' in y.key)]:
-            (l2, caps2, _) = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.w,yerr=l.ve,fmt='go')
-            for cap in caps2:
-                cap.set_markeredgewidth(markerwide)
-            m2, = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,'g-',linewidth=lw,alpha=lalpha)
+            l2 = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.w,yerr=l.ve,capsize=cs,fmt='go')
+            m2 = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,'g-',linewidth=lw,alpha=lalpha)
         '''
         for l in [y for y in D[d] if ('IN' in y.key)]:
-            (l3, caps3, _) = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,yerr=l.ve,fmt='bo')
-            for cap in caps3:
-                cap.set_markeredgewidth(markerwide)
-            m3, = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,'b-',linewidth=lw,alpha=lalpha)
+            l3 = ax[d].errorbar(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,yerr=l.ve,capsize=cs,fmt='bo')
+            m3 = ax[d].plot(_np.array([x.astimezone(_utc).replace(tzinfo=None) for x in l.t1-_dt.timedelta(days=doy)]),l.v,'b-',linewidth=lw,alpha=lalpha)
         '''
         ax[d].plot(tlim,[0,0],'k--')
         ax[d].annotate('Doy %03d'%doy, xy=(0.02,0.03), xycoords='axes fraction', fontsize=12)
@@ -2233,20 +2417,20 @@ def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1):
 		        dn = x.t1[i].astimezone(_utc)
 		        utctime = dn.strftime("%Y-%m-%d %H:%M:%S")
 		        if('Zenith' in x.key or 'IN' in x.key):
-		            line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.w[i], x.we[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		            line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.w[i], x.we[i], x.i[i], x.ie[i], x.b[i], x.be[i])
 		        elif('North' in x.key or 'South' in x.key):
-		            line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		            line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i])
 		        elif('East' in x.key or 'West' in x.key):
-		            line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		            line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i])
 		        elif('CV_VTI_EKU_PAR' in x.key):
 		            line = ""
 		        elif('Unknown' in x.key):
 		            line = ""
                         # Code to add MTM Temps (REMOVE SOON)
 		        elif('MTM_Search' in x.key):
-		            line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  -------  ------  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		            line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  -------  ------  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.i[i], x.ie[i], x.b[i], x.be[i])
                         elif('CV' in x.key):
-		            line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}  {:30s}".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i], x.notes)
+		            line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i])
 		        #line = "%14s  %19s  %3.1f  %3.1f  %4.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %1.3f  %1.3f  %5s  %30s" % (x.key, utctime, lat, lon, x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.w[i], x.we[i], x.I[i], x.Ie[i], x.cloudy[i], x.notes)
 		        note.write(line)
 		    
@@ -2288,7 +2472,7 @@ def CreateMonthlyASCII(PROJECT,YEAR,MONTH,QF=1):
     note.write('Hour[UTC]  Lat  Lon  Temp[K]  Temp_Error[K]  Zonal_Wind[m/s]  Zonal_Wind_Error[m/s] Meridional_Wind[m/s]  Meridional_Wind_Error[m/s] Vertical_Wind[m/s]  Vertical_Wind_Error[m/s] \n')
         
     for site in SITES:
-        MD = BinMonthlyData(site,YEAR,MONTH,QF=QF)
+        MD = BinMonthlyData(site,YEAR,MONTH,QF=QF,VERBOSE=False)
         
         for ind,dn in enumerate(MD.t):
             #dn = MD.t[ind] #.astimezone(_utc)
@@ -2307,8 +2491,6 @@ class _BinnedData:
         Each also has c-count of data points per time, e-weighted std, v-monthly variablility
     '''
     def __init__(self, dn, site):
-        import datetime as dt
-        import ephem
 
         self.dn = dn
         self.site = site

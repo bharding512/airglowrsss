@@ -134,7 +134,7 @@ def process_instr(inst,year,doy,do_DB=True):
             os.system('rm -f ' + data_dir+s4filename)
             os.system('rm -f ' + data_dir+tecfilename)
         except:
-            subject = "!!! Processing Error (\'" + inst +'\','+year+','str(doy)+') @ ' + site 
+            subject = "!!! Processing Error (\'" + inst +'\','+year+','+str(doy)+') @ ' + site 
             print subject
             Emailer.emailerror(subject, 'wintec problem')
 
@@ -145,6 +145,7 @@ def process_instr(inst,year,doy,do_DB=True):
         # NOTE: Python code (originally from /programs/plot_CASES_day.py
         try:
             # Paths to use
+            name = inst + '_' + site
             datapath = '/rdata/airglow/gps/'+inst+'/'+site+'/streaming/'
             pngpath = '/rdata/airglow/gps/results/'
             log_fname = '/rdata/airglow/gps/results/'+inst+'_'+site+'.log'
@@ -168,15 +169,15 @@ def process_instr(inst,year,doy,do_DB=True):
 
             # Create plots
             dn = datetime.date(int(year),1,1)+datetime.timedelta(days=doy-1)
-            s4fname = '{:s}H.png'.format(dn.strftime('%y%m%d'))
+            s4fname = '{:s}_{:s}H.png'.format(name, dn.strftime('%y%m%d'))
             cases.plot_s4summary(txprn,txdn,el,az,txsystem,s4prn,s4dn,s4,s4system,pngpath+s4fname)
 
             # Write the logfile
             fid = open(log_fname,'w')
 
             fid.writelines('Site,Instrument,StartUTTime,StopUTTime,SummaryImage,MovieFile\n')
-            fid.writelines('{:d},{:d},{:s},{:s},{:s}H.png'.format(site_id,inst_id,
-                           startut, stoput, dn.strftime('%y%m%d')))
+            fid.writelines('{:d},{:d},{:s},{:s},{:s}_{:s}H.png'.format(site_id,inst_id,
+                           startut, stoput, name, dn.strftime('%y%m%d')))
             fid.close()
 
             # Load the log file into the database
@@ -187,7 +188,7 @@ def process_instr(inst,year,doy,do_DB=True):
             # Move the data
             os.popen('mv {:s}dataout*_{:s}_{:03d}.bin .'.format(datapath,year,doy
                 ) )
-            tar = tarfile.open('{:s}.tgz'.format(dn.strftime('%y%m%d')), 'w:gz')
+            tar = tarfile.open('{:s}_{:s}.tgz'.format(name, dn.strftime('%y%m%d')), 'w:gz')
 
             tar.add('dataout_{:s}_{:03d}.bin'.format(year,doy))
 
@@ -199,7 +200,7 @@ def process_instr(inst,year,doy,do_DB=True):
             # Clean up files
             #os.popen('tar czvf {:s}.tgz dataout*_{:s}_{:03d}.bin'.format(dn.strftime('%y%m%d'), year, DOY))
             os.popen('rm dataout*_{:s}_{:03d}.bin'.format(year,doy))
-            os.popen('mv {:s}.tgz {:s}{:s}'.format(dn.strftime('%y%m%d'),data_dir,year))
+            #os.popen('mv {:s}.tgz {:s}{:s}'.format(dn.strftime('%y%m%d'),data_dir,year))
             os.popen('rm channel.log')
             os.popen('rm iono.log')
             os.popen('rm navsol.log')

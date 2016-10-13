@@ -104,18 +104,21 @@ _networks['nation'] = {
         'sql_id':           26, # ID on the airglow SQL database
         'quicklook_gif_id': 104, # ID of gif summary image of windfield
         'estimate_vertical_wind': True, # whether to estimate vertical wind for wind field map
+        'mean_location':[38,-84,999.]  # eyeballed middle don't trust this
         }
         
 _networks['renoir'] = {
         'sql_id':           27, # ID on the airglow SQL database
         'quicklook_gif_id': 105, # ID of gif summary image of windfield
         'estimate_vertical_wind': False, # whether to estimate vertical wind for wind field map
+        'mean_location': [-7.13,-37.5,390.] #mean locaiton of two sites
         }
         
 _networks['peru'] = {
         'sql_id':           28, # ID on the airglow SQL database
         'quicklook_gif_id': 106, # ID of gif summary image of windfield
         'estimate_vertical_wind': False, # whether to estimate vertical wind for wind field map
+        'mean_location': [-11,-76,1000.]  #mean location of three sites
         }
         
 _networks['ethiopia'] = {

@@ -3,10 +3,11 @@ from datetime import datetime,timedelta
 import numpy as np
 import fpiinfo
 import pytz
-import matplotlib
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.dates as md
-matplotlib.rcParams['savefig.bbox']='tight'
+from collections import defaultdict as _defaultdict
+mpl.rcParams['savefig.bbox']='tight'
 
 def cosd(arg):
     return np.cos(arg*np.pi/180.)
@@ -576,14 +577,12 @@ class Level1:
         # Brian removed wind plot, in light of FPIDisplay.PlotDay().
         # What is the ultimate plan for plotting single-station data?
         
-        from datetime import timedelta
-        from matplotlib.font_manager import FontProperties
 
         if ax is None:
             fig = figure(1); clf()
             ax = fig.add_subplot(111)
         
-        fontP = FontProperties() 
+        fontP = mpl.font_manager.FontProperties() 
         fontP.set_size(6)
 
         w = -self.los_wind['Zenith'] # los is towards observer
@@ -601,7 +600,7 @@ class Level1:
                 np.nanmax([70., 1.1*self.alliw.max(), 1.1*w.max()])  ])
         #ax.set_ylim([-70., 70.])
         ax.set_ylabel("Interpolated vertical wind")
-        ax.get_xaxis().set_major_formatter(matplotlib.dates.DateFormatter('%H'))
+        ax.get_xaxis().set_major_formatter(md.DateFormatter('%H'))
         ax.set_xlabel('Universal Time')
         td = timedelta(hours=0.5) # offset for plotting
         t0 = self.r['sky_times'][0]
@@ -825,10 +824,6 @@ class Level2:
         return
 
     def plot(self, switch_onefig=False):
-        import matplotlib.pyplot as plt
-        import matplotlib.dates as mdates
-        from datetime import timedelta
-        import matplotlib as mpl
         mpl.rcParams['font.family'] = 'monospace'
 
         switch_plot_u = True
@@ -874,7 +869,7 @@ class Level2:
 
         dnp1 = self.dn + timedelta(days=1)
         plt.ylim([-200.,200.]) 
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        ax.xaxis.set_major_formatter(md.DateFormatter('%H:%M'))
         fig.autofmt_xdate()
         plt.legend()
         plt.grid()
@@ -891,28 +886,82 @@ class Level2:
         plt.show()
         return 0
 
+
+def convert2dict(obj):
+    '''
+    Summary:
+        data = convert2dict(obj)
+        Returns data for cardinal mode points,
+
+    Inputs:
+        obj = Level1 object / list of Level2 objects
+
+    Outputs:
+        data = Level1/2 dictonary (for easier useage)
+
+    History:
+        6/9/16 -- Written by DJF (dfisher2@illionis.edu)
+    '''        
+    # Setup dictionary
+    d = _defaultdict(dict)
+    # Convert L1 to Dictionary
+    if isinstance(obj,Level1):
+        for l1key in self.t.keys():
+            d[l1key]['t']           = obj.t        [l1key]
+            d[l1key]['los_wind']    = obj.los_wind [l1key]
+            d[l1key]['los_sigma']   = obj.los_sigma[l1key]
+            d[l1key]['T']           = obj.T        [l1key]
+            d[l1key]['Te']          = obj.Te       [l1key]
+            d[l1key]['i']           = obj.i        [l1key]
+            d[l1key]['ie']          = obj.ie       [l1key]
+            d[l1key]['flag_T']      = obj.flag_T   [l1key]
+            d[l1key]['flag_wind']   = obj.flag_wind[l1key]
+            d[l1key]['instr']       = obj.instr
+            d[l1key]['site']        = obj.site
+            d[l1key]['dn']          = obj.dn
+            d[l1key]['type']        = 'Level1Dictionary'
+
+    # Convert L2 to Dictionary
+    elif type(obj) is list and isinstance(obj[0],Level2):
+        for l2 in obj:
+            if l2.error and l2.errorT:
+                continue # Break if no data
+            d[l2.key]['t']          = l2.t1
+            d[l2.key]['u']          = l2.u
+            d[l2.key]['ue']         = l2.ue
+            d[l2.key]['v']          = l2.v
+            d[l2.key]['ve']         = l2.ve
+            d[l2.key]['w']          = l2.w
+            d[l2.key]['we']         = l2.we
+            d[l2.key]['T']          = l2.T
+            d[l2.key]['Te']         = l2.Te
+            d[l2.key]['i']          = l2.i
+            d[l2.key]['ie']         = l2.ie
+            d[l2.key]['flag_T']     = l2.flag_T
+            d[l2.key]['flag_wind']  = l2.flag_wind
+            #d[l2.key]['instr']      = l2.instr
+            d[l2.key]['dn']         = l2.dn
+            d[l2.key]['type']       = 'Level2Dictionary'
+
+    return(d)
+
+
 def CardFinder(dn, instr1):
     '''
-    Summary
-    -------
+    Summary:
+        data = CardFinder(dn, instr1)
+        Returns data for cardinal mode points,
 
-    data = CardFinder(dn, instr1)
-    
-    Returns data for cardinal mode points,
-
-    Inputs
-    ------
+    Inputs:
         dn = datetime day
+        instr = instrument name
 
-    Outputs
-    -------
+    Outputs:
+        data = Level2 object
 
-
-    History
-    -------
-    3/26/13 -- Written by DJF (dfisher2@illionis.edu),
+    History:
+        3/26/13 -- Written by DJF (dfisher2@illionis.edu),
                         & TMD (duly2@illinois.edu)
-
     '''
     import os, sys
     import copy
@@ -1110,22 +1159,21 @@ def CardFinder(dn, instr1):
 
 def CVFinder(dn, instr1, instr2):
     '''
-    Summary
-    -------
+    Summary:
+        data = CVFinder(dn,instr1,instr2)
+        Returns data for common value points,
 
-    Returns data for common value points,
+    Inputs:
+        dn = datetime day
+        instr1 = instrument 1 name
+        instr2 = instrument 2 name
 
-    Inputs
-    ------
+    Outputs:
+        data = Level2 object
 
-    Outputs
-    -------
-
-    History
-    -------
+    History:
     3/11/13 -- Written by DJF (dfisher2@illionis.edu),
                         & TMD (duly2@illinois.edu)
-
     '''
     #print "dn=",dn,'site1=',site1,'site2=',site2
     import os, sys 
@@ -1655,7 +1703,6 @@ def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
     
     from scipy.interpolate import interp2d
     from scipy.interpolate import LinearNDInterpolator
-    from matplotlib.pyplot import *
     figure(1, figsize=(18,10.5)); clf()
     #figure(1, figsize=(18/1.5,10.5/1.5)); clf() # laptop testing
     matplotlib.rcParams.update({'font.size': 24})
@@ -1894,27 +1941,22 @@ def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
 
 def GetLevel2(project,dn,dnstart='noon',dnend='noon'):
     '''
-    Summary
-    -------
-    Returns all Level 2 data for an entire project for a single night.
+    Summary:
+        Returns all Level 2 data for an entire project for a single night.
 
-    Inputs
-    ------
-    project = name of poject to collect data from, project = 'NATION'
-    dn = datetime of data desired, dn = datetime(2013,2,23)
-    dnstart = starting point of time range desired, defaults to noon on dn day, dnend(2013,2,23,14,0,0)
-    dnend = end point of time range desired, defaults to noon on dn + 1 day, dnend(2013,2,24,6,0,0)
-    reference = reference to process data with, defaults to laser, reference = 'laser'
+    Inputs:
+        project = name of poject to collect data from, project = 'NATION'
+        dn = datetime of data desired, dn = datetime(2013,2,23)
+        dnstart = starting point of time range desired, defaults to noon of dn, dnend(2013,2,23,14,0,0)
+        dnend = end point of time range desired, defaults to noon of dn +1 day, dnend(2013,2,24, 6,0,0)
+        #reference = reference to process data with, defaults to laser, reference = 'laser'
 
-    Outputs
-    -------
-    cvs -- a list of Level 2 instances
-    
+    Outputs:
+        cvs -- a list of Level 2 instances
 
-    History
-    -------
-    05/23/13 -- Written by DJF (dfisher2@illinois.edu)
-    08/07/13 -- Updated to be instrument-based (Timothy Duly, duly2@illinois.edu)
+    History:
+        05/23/13 -- Written by DJF (dfisher2@illinois.edu)
+        08/07/13 -- Updated to be instrument-based (Timothy Duly, duly2@illinois.edu)
     '''
     from datetime import timedelta
     from datetime import datetime
@@ -2143,12 +2185,12 @@ def FindClosestTime(t, t_list):
     return ind, minutes
 
 if __name__=="__main__":
-    import matplotlib.pyplot as plt
-    from matplotlib.pyplot import *
+    #import matplotlib.pyplot as plt
+    #from matplotlib.pyplot import *
     import time
-    import matplotlib
-    from matplotlib.dates import date2num
-    from datetime import timedelta
+    #import matplotlib
+    #from matplotlib.dates import date2num
+    #from datetime import timedelta
     import pytz
     import os
 
