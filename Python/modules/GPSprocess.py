@@ -91,7 +91,7 @@ def process_instr(inst,year,doy,do_DB=True):
                     database([s4filename],data_dir,startut,stoput,[inst_id],site_id)
                 os.system('rm -f ' + data_dir+s4filename)
             else:
-                subject = "!!! Processing Error (\'" + inst +'\','+year+','+doy+') @ ' + site 
+                subject = "!!! Processing Error (\'" + inst +'\','+year+','+str(doy)+') @ ' + site 
                 print subject
                 Emailer.emailerror(subject, 'lsum4 problem - move rawdata back and reprocess?')
 
@@ -134,7 +134,7 @@ def process_instr(inst,year,doy,do_DB=True):
             os.system('rm -f ' + data_dir+s4filename)
             os.system('rm -f ' + data_dir+tecfilename)
         except:
-            subject = "!!! Processing Error (\'" + inst +'\','+year+','doy+') @ ' + site 
+            subject = "!!! Processing Error (\'" + inst +'\','+year+','str(doy)+') @ ' + site 
             print subject
             Emailer.emailerror(subject, 'wintec problem')
 
@@ -207,7 +207,7 @@ def process_instr(inst,year,doy,do_DB=True):
             os.popen('rm txinfo.log')
 
         except:
-            subject = "!!! Processing Error (\'" + inst +'\','+str(year)+','+str(doy)+') @ ' + site
+            subject = "!!! Processing Error (\'" + inst +'\','+year+','+str(doy)+') @ ' + site
             print subject
             Emailer.emailerror(subject, 'Cases problem')
 

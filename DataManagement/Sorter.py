@@ -246,7 +246,7 @@ def sorter(san,pgm):
         os.chdir(dir_local+'rx/')
         #os.system('chmod 774 *') No longer have permissions, tx sends as 774.
         # Get info files for non-standard (Zip->Send->Sort) data
-        rxfiles = ["fpi04_kaf", "cas01_hka"]
+        rxfiles = ["fpi04_kaf","cas01_hka"]
         for x in rxfiles:
             for files in glob(x + '*'):
                 makeinfo(files)
@@ -388,20 +388,23 @@ def sorter(san,pgm):
 
 
                 ##### CASES CASE: #####
-                elif instr in ['tec','scn','cas']:
-                    ## Part 1: Sorting Data
-                    dir_data = dir_local + 'gps/' + code[instr] + inum + '/' + site + '/' + str(year) + '/'
+                elif instr in ['cas']:
+                    ### Partr 1: "Sort Data"
                     # Move info file to tracking
                     os.system('mv ' + f + ' ./tracking')
-                    # Move data to proper folder
-                    os.system('cp ' + name + '* ' + dir_data)
-                    # Change ownership
-                    os.system('chmod u+rwx,go+rX,go-w ' + dir_data + name + '*')
-                    os.system('chown airglow.gps ' + dir_data + name + '*')
-                    # Remove files from rx
+                    # Remove files from rx (it was a duplicate)
                     os.system('rm -f ' + name + '*')
                     print "!!! Success Sorting"
-                        
+
+                    ### Part 2: Processing Data
+                        print "!!! Begin Processing..."
+                        # Run processing script for site
+                        try:
+                            GPSprocess.process_instr(code[instr] + inum,year,doy)
+                        except:
+                            subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+                            print subject
+                            Emailer.emailerror(emails, subject, traceback.format_exc())                       
                         
                 
                 ##### IMAGER CASE: #####

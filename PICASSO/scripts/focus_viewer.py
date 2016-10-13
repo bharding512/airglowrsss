@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
     try:
         while True:
-            time.sleep(2)
+            time.sleep(1)
             if flag:
                 # move figures if not first image
                 if old:
