@@ -1872,7 +1872,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
                     time_delta      -- TYPE:array(ny,nx),    UNITS:s.    The difference between the time of the MIGHTI
                                                                          A and B measurements that contribute to this 
                                                                          grid point.
-                    amp_rel_diff    -- TYPE:array(ny,nx),    UNITS:none. The difference between the fringe amplitude 
+                    ver_rel_diff    -- TYPE:array(ny,nx),    UNITS:none. The difference between the fringe amplitude 
                                                                          of the MIGHTI A and B measurements that 
                                                                          contribute to this grid point, divided by the
                                                                          mean. When this is high, it indicates that 
