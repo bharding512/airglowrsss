@@ -1866,13 +1866,13 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
                                                                              6  = spherical asymmetry: A&B VER 
                                                                                   estimates disagree
                                                                              7  = unknown error
-                    time            -- TYPE:array(ny,nt),    UNITS:none. The average between the time of the MIGHTI A 
+                    time            -- TYPE:array(ny,nx),    UNITS:none. The average between the time of the MIGHTI A 
                                                                          and B measurements that contribute to this 
                                                                          grid point, given as a datetime object. 
-                    time_delta      -- TYPE:array(ny,nt),    UNITS:s.    The difference between the time of the MIGHTI
+                    time_delta      -- TYPE:array(ny,nx),    UNITS:s.    The difference between the time of the MIGHTI
                                                                          A and B measurements that contribute to this 
                                                                          grid point.
-                    amp_rel_diff    -- TYPE:array(ny,nt),    UNITS:none. The difference between the fringe amplitude 
+                    amp_rel_diff    -- TYPE:array(ny,nx),    UNITS:none. The difference between the fringe amplitude 
                                                                          of the MIGHTI A and B measurements that 
                                                                          contribute to this grid point, divided by the
                                                                          mean. When this is high, it indicates that 
