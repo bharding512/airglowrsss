@@ -397,14 +397,14 @@ def sorter(san,pgm):
                     print "!!! Success Sorting"
 
                     ### Part 2: Processing Data
-                        print "!!! Begin Processing..."
-                        # Run processing script for site
-                        try:
-                            GPSprocess.process_instr(code[instr] + inum,year,doy)
-                        except:
-                            subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
-                            print subject
-                            Emailer.emailerror(emails, subject, traceback.format_exc())                       
+                    print "!!! Begin Processing..."
+                    # Run processing script for site
+                    try:
+                        GPSprocess.process_instr(code[instr] + inum,year,doy)
+                    except:
+                        subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+                        print subject
+                        Emailer.emailerror(emails, subject, traceback.format_exc())                       
                         
                 
                 ##### IMAGER CASE: #####
