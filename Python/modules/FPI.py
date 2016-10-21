@@ -865,12 +865,30 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
                 lasers = [fn for (fn, valid) in zip(lasers, good) if valid]
                 laser_times_center = [t for (t, valid) in zip(laser_times_center, good) if valid]
                 nignored = len(good) - sum(good)
-                if nignored > 1:
-                    notify_the_humans = True
+                if nignored > 0:
                     logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                             'WARNING: %03i laser images ignored because the center is an outlier.\n' % nignored)
+                if nignored > 1: # Only warn humans if there's more than one problem image
+                    notify_the_humans = True
                     
-                    
+            # Find large jumps and remove the files that contributed to them
+            cenx = center[:,0]
+            ceny = center[:,1]
+            center_diff = np.sqrt((cenx[1:]-cenx[:-1])**2 + (ceny[1:]-ceny[:-1])**2)
+            jumpy = center_diff > CENTER_VARIATION_MAX
+            if any(jumpy):
+                # Remove all points before and after the jump
+                good = ~ (np.concatenate(([False],jumpy)) | np.concatenate((jumpy,[False])))
+                center = center[good,:]
+                dt_laser = dt_laser[good]
+                lasers = [fn for (fn, valid) in zip(lasers, good) if valid]
+                laser_times_center = [t for (t, valid) in zip(laser_times_center, good) if valid]
+                nignored = len(good) - sum(good)
+                if nignored > 0:
+                    logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
+                            'WARNING: %03i laser images ignored because the center jumped by too much.\n' % nignored)
+                if nignored > 2: # Only warn humans if there's more than one problem jump
+                    notify_the_humans = True                
             
             # If there are enough points after this, fit a poly to the center positions
             if len(dt_laser) > 0:
