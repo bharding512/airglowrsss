@@ -273,7 +273,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
     
     # Information about sending data to the website. Only used if send_to_website==True.
     temp_plots_stub= '/rdata/airglow/fpi/results/temporary_plots/' #where to save png files
-    scp_user       = 'jmakela@webhost.engr.illinois.edu'    
+    scp_user       = 'airglowgroup@webhost.engr.illinois.edu'    
     db_image_stub  =        'SummaryImages/' # relative path from web server directory on airglow
     db_log_stub =           'SummaryLogs/'
     web_images_stub =       '/home/airglowgroup/data/SummaryImages/' # absolute location on airglow of summary images
