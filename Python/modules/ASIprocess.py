@@ -49,7 +49,7 @@ def process_instr(inst,year,doy,do_DB=True):
     datestr = process_dn.strftime('%Y%m%d')
     
     # User to scp to
-    scp_user = 'jmakela@webhost.engr.illinois.edu'
+    scp_user = 'airglowgroup@webhost.engr.illinois.edu'
     web_stub = 'SummaryImages/'
     file_stub = '/home/airglowgroup/data/SummaryImages/'
 

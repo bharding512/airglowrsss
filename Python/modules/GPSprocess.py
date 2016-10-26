@@ -241,7 +241,7 @@ def database(filenames,data_dir,startut,stoput,inst_id,site_id,send_to_madrigal=
     #   Written by Daniel J. Fisher on 27 Feb 2014
 
     # User to scp to
-    scp_user = 'jmakela@webhost.engr.illinois.edu'
+    scp_user = 'airglowgroup@webhost.engr.illinois.edu'
     web_stub = 'SummaryImages/'
     file_stub = '/home/airglowgroup/data/SummaryImages/'
     madgrigal_stub = '/rdata/airglow/database/'
