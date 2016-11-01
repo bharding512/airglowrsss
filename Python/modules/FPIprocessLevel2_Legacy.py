@@ -1224,10 +1224,10 @@ def CVFinder(dn, instr1, instr2):
     # -------------------------------------------------------
     if l1_1.error:
         d.error = True
-        d.log += l1_1.log
+        #d.log += l1_1.log
         # just use l1_2 temps then:
         dirs = ['CV_', 'IN_']
-        common_pair = list(set([l for x in dirs for l in l1_2.directions if x in l])) 
+        common_pair = list(set([l for x in dirs for l in l1_2.directions if x in l and site1 in l])) 
         ds = []
         for cv in common_pair:
             d_loop = copy.deepcopy(d)
@@ -1258,10 +1258,10 @@ def CVFinder(dn, instr1, instr2):
 
     if l1_2.error:
         d.error = True
-        d.log += l1_2.log
+        #d.log += l1_2.log
         # just use l1_1 temps then:# just use l1_2 temps then:
         dirs = ['CV_', 'IN_']
-        common_pair = list(set([l for x in dirs for l in l1_1.directions if x in l])) 
+        common_pair = list(set([l for x in dirs for l in l1_1.directions if x in l and site2 in l])) 
         ds = []
         for cv in common_pair:
 	    d_loop = copy.deepcopy(d)
