@@ -1861,13 +1861,13 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
                                                                              1  = missing B file
                                                                              2  = A signal too weak
                                                                              3  = B signal too weak
-                                                                             3  = A did not sample this altitude
-                                                                             4  = B did not sample this altitude
-                                                                             5  = A sample exists but equals np.nan
-                                                                             6  = B sample exists but equals np.nan
-                                                                             7  = spherical asymmetry: A&B VER 
+                                                                             4  = A did not sample this altitude
+                                                                             5  = B did not sample this altitude
+                                                                             6  = A sample exists but equals np.nan
+                                                                             7  = B sample exists but equals np.nan
+                                                                             8  = spherical asymmetry: A&B VER 
                                                                                   estimates disagree
-                                                                             8  = unknown error
+                                                                             9  = unknown error
                     time            -- TYPE:array(ny,nx),    UNITS:none. The average between the time of the MIGHTI A 
                                                                          and B measurements that contribute to this 
                                                                          grid point, given as a datetime object. 
@@ -1996,17 +1996,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
     ver_A = np.nan*np.zeros(np.shape(lon))            # fringe amplitude from A (related to VER)
     ver_B = np.nan*np.zeros(np.shape(lon))            # fringe amplitude from B (related to VER)
     ver_rel_diff = np.nan*np.zeros(np.shape(lon))     # relative difference in the above two
-    error_flags = np.zeros((N_alts, N_lons, 10))      # Error flags, one set per grid point, defined as follows:
-                                                      # 0  = missing A file
-                                                      # 1  = missing B file
-                                                      # 2  = A signal too weak
-                                                      # 3  = B signal too weak
-                                                      # 4  = A did not sample this altitude
-                                                      # 5  = B did not sample this altitude
-                                                      # 6  = A sample exists but equals np.nan
-                                                      # 7  = B sample exists but equals np.nan
-                                                      # 8  = Spherical asymmetry: A&B VER estimates disagree
-                                                      # 9  = unknown error
+    error_flags = np.zeros((N_alts, N_lons, 10))      # Error flags, one set per grid point. See above for definition.
+    
     # Loop over the reconstruction altitudes
     for i in range(N_alts):   
         alt_pt = alt_vec[i]
