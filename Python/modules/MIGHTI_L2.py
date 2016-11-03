@@ -1854,18 +1854,20 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
                     u_error         -- TYPE:array(ny,nx),    UNITS:m/s.  Uncertainty in u.
                     v_error         -- TYPE:array(ny,nx),    UNITS:m/s.  Uncertainty in v.
                     error_flags     -- TYPE:array(ny,nx,ne), UNITS:none. The error flags (either 0 or 1) for each point
-                                                                         in the grid. Each point has ne=8 error flags, 
+                                                                         in the grid. Each point has a number of error flags, 
                                                                          which are set to 1 under the following 
                                                                          circumstances:
                                                                              0  = missing A file
                                                                              1  = missing B file
-                                                                             2  = A did not sample this altitude
-                                                                             3  = B did not sample this altitude
-                                                                             4  = A sample exists but equals np.nan
-                                                                             5  = B sample exists but equals np.nan
-                                                                             6  = spherical asymmetry: A&B VER 
+                                                                             2  = A signal too weak
+                                                                             3  = B signal too weak
+                                                                             3  = A did not sample this altitude
+                                                                             4  = B did not sample this altitude
+                                                                             5  = A sample exists but equals np.nan
+                                                                             6  = B sample exists but equals np.nan
+                                                                             7  = spherical asymmetry: A&B VER 
                                                                                   estimates disagree
-                                                                             7  = unknown error
+                                                                             8  = unknown error
                     time            -- TYPE:array(ny,nx),    UNITS:none. The average between the time of the MIGHTI A 
                                                                          and B measurements that contribute to this 
                                                                          grid point, given as a datetime object. 
@@ -1994,15 +1996,17 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
     ver_A = np.nan*np.zeros(np.shape(lon))            # fringe amplitude from A (related to VER)
     ver_B = np.nan*np.zeros(np.shape(lon))            # fringe amplitude from B (related to VER)
     ver_rel_diff = np.nan*np.zeros(np.shape(lon))     # relative difference in the above two
-    error_flags = np.zeros((N_alts, N_lons, 8))       # Error flags, one set per grid point, defined as follows:
+    error_flags = np.zeros((N_alts, N_lons, 10))      # Error flags, one set per grid point, defined as follows:
                                                       # 0  = missing A file
                                                       # 1  = missing B file
-                                                      # 2  = A did not sample this altitude
-                                                      # 3  = B did not sample this altitude
-                                                      # 4  = A sample exists but equals np.nan
-                                                      # 5  = B sample exists but equals np.nan
-                                                      # 6  = Spherical asymmetry: A&B VER estimates disagree
-                                                      # 7  = unknown error
+                                                      # 2  = A signal too weak
+                                                      # 3  = B signal too weak
+                                                      # 4  = A did not sample this altitude
+                                                      # 5  = B did not sample this altitude
+                                                      # 6  = A sample exists but equals np.nan
+                                                      # 7  = B sample exists but equals np.nan
+                                                      # 8  = Spherical asymmetry: A&B VER estimates disagree
+                                                      # 9  = unknown error
     # Loop over the reconstruction altitudes
     for i in range(N_alts):   
         alt_pt = alt_vec[i]
@@ -2061,9 +2065,9 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
             altmax_B = min(max(alt_B[:,kB0]), max(alt_B[:,kB1])) + alt_res
             if alt_pt > min(altmax_A, altmax_B) or alt_pt < max(altmin_A, altmin_B):
                 if alt_pt > altmax_A or alt_pt < altmin_A:
-                    error_flags[i,k,2] = 1
+                    error_flags[i,k,4] = 1
                 if alt_pt > altmax_B or alt_pt < altmin_B:
-                    error_flags[i,k,3] = 1
+                    error_flags[i,k,5] = 1
                 continue
             
             
@@ -2176,15 +2180,15 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict):
             # Check spherical symmetry
             ver_rel_diff_pt = abs(ver_A_pt - ver_B_pt)/np.mean([ver_A_pt,ver_B_pt])
             if ver_rel_diff_pt > VER_REL_DIFF_THRESH:
-                error_flags[i,k,6] = 1
+                error_flags[i,k,8] = 1
         
             # Check if L2.1 data were nan
             if np.isnan(los_wind_A_pt):
-                error_flags[i,k,4] = 1
+                error_flags[i,k,6] = 1
             if np.isnan(los_wind_B_pt):
-                error_flags[i,k,5] = 1
-            if np.isnan(u) or np.isnan(v) and all(error_flags[i,k,:] == 0): # Unknown error
                 error_flags[i,k,7] = 1
+            if np.isnan(u) or np.isnan(v) and all(error_flags[i,k,:] == 0): # Unknown error
+                error_flags[i,k,9] = 1
                 
                 
             # Fill in all the relevant variables at this grid point
@@ -2488,15 +2492,17 @@ def save_nc_level22(path, L22_dict):
                               format_nc='b', format_fortran='I', desc='Error flags. See Var_Notes attribute for description.', 
                               display_type='image', field_name='Error Flags', fill_value=None, label_axis='', bin_location=0.5,
                               units='', valid_min=0, valid_max=1, var_type='metadata', chunk_sizes=[1,1,1],
-                              notes='Eight error flags for each grid point, each either 0 or 1:\n' +\
+                              notes='Ten error flags for each grid point, each either 0 or 1:\n' +\
                                     '    0 = missing MIGHTI A file'+\
                                     '    1 = missing MIGHTI B file'+\
-                                    '    2 = A did not sample this altitude'+\
-                                    '    3 = B did not sample this altitude'+\
-                                    '    4 = A sample exists but is NaN'+\
-                                    '    5 = B sample exists but is NaN'+\
-                                    '    6 = Spherical asymmetry: A&B VER estimates disagree'+\
-                                    '    7 = Unknown Error')
+                                    '    2 = A signal too weak'+\
+                                    '    3 = B signal too weak'+\
+                                    '    4 = A did not sample this altitude'+\
+                                    '    5 = B did not sample this altitude'+\
+                                    '    6 = A sample exists but is NaN'+\
+                                    '    7 = B sample exists but is NaN'+\
+                                    '    8 = Spherical asymmetry: A&B VER estimates disagree'+\
+                                    '    9 = Unknown Error')
         
         ncfile.close()
         
