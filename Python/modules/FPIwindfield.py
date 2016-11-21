@@ -46,7 +46,7 @@ class WindField:
                  printstuffinner = False, printstuffouter = False, maxiters=100, \
                  lam1small = 1e-4, lam0guess = 1e-5, lam0interior = 1e10, \
                  lam1interior = 1, distthresh = 250, Nmc = 100, estimate_vertical_wind=False, \
-                 estimate_uncertainty=False):
+                 estimate_uncertainty=False, use_zenith_ref=False,):
         '''
         Initializes the Wind Field object. Loads and organizes data, but does not run inversion.
         INPUTS:
@@ -100,9 +100,15 @@ class WindField:
             estimate_uncertainty: bool. If True, estimate the uncertainty in the resulting wind field.
                                         This is time-consuming and not recommended for Nx,Ny>20.
                                         (default False)
+            use_zenith_ref:  bool.  If True, override the Doppler reference used in the npz file, and re-establish
+                                    the Doppler reference using zenith reference, to force the vertical wind to be zero.
+                                    If this is True, then estimate_vertical_wind will be set to False. (default False).
         '''
         
         # Record input
+        if use_zenith_ref:
+            estimate_vertical_wind = False
+        
         self.network_names = network_names
         self.year = year
         self.doy = doy
@@ -132,6 +138,7 @@ class WindField:
         self.Nmc = Nmc  
         self.estimate_vertical_wind = estimate_vertical_wind
         self.estimate_uncertainty = estimate_uncertainty
+        self.use_zenith_ref = use_zenith_ref
         
                 
         # Set other parameters
@@ -206,17 +213,22 @@ class WindField:
             cloud = fpir['Clouds']
             site_name = fpiinfo.get_site_of(instr_name, dn)
             site = fpiinfo.get_site_info(site_name)
+                        
 
             if not cloud:
                 self.message += '\t%s: No cloud data. Hoping it was clear.\n' % instr_name
 
             try:
                 # Calculate doppler reference
-                if fpir['reference']=='laser': # use the doppler reference function above
+                ref = fpir['reference']
+                if use_zenith_ref:
+                    ref = 'zenith'
+                    
+                if ref=='laser': # use the doppler reference function above
                     drefvec, drefevec = FPI.DopplerReference(fpir, reference='laser')
                     losu = losu - drefvec
                     losue = sqrt(losue**2 + drefevec**2)
-                elif fpir['reference']=='zenith': # use zenith reference and remove the zenith measurement
+                elif ref=='zenith': # use zenith reference and remove the zenith measurement
                     drefvec, drefevec = FPI.DopplerReference(fpir, reference='zenith')
                     losu = losu - drefvec
                     losue = sqrt(losue**2 + drefevec**2)
