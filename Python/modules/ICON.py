@@ -12,6 +12,17 @@ from scipy import optimize
 
 
 def wgs84constants():
+    '''
+    Return the constants associated with the WGS-84 coordinate system
+    
+    OUTPUTS:
+    
+      * a - semi-major axis of Earth, km
+      * b - semi-minor axis of Earth, km
+      * e - eccentricity of Earth
+      
+    '''
+    
     # http://en.wikipedia.org/wiki/World_Geodetic_System (Nov 10, 2014)
     # https://en.wikipedia.org/wiki/Flattening (Sep 9, 2015) 
     a = 6378.137 # semi-major axis of earth [km]
@@ -28,24 +39,25 @@ def ecef_to_wgs84(ecef_xyz):
     Convert from earth-centered earth-fixed (ECEF)
     coordinates (x,y,z) to WGS-84 latitude, longitude, and altitude.
     INPUTS:
-       ecef_xyz - a length-3 array containing the X, Y, and Z locations in ECEF
-                  coordinates in kilometers.
+    
+     *  ecef_xyz - a length-3 array containing the X, Y, and Z locations in ECEF
+                   coordinates in kilometers.
 
     OUTPUTS:
-       latlonalt - a length-3 array containing the WGS-84 coordinates:
-                   [latitude (degrees), longitude (degrees), altitude (km)]
-                   Altitude is defined as the height above the reference
-                   ellipsoid. Longitude is defined in [0,360).
+     *  latlonalt - a length-3 array containing the WGS-84 coordinates:
+                    [latitude (degrees), longitude (degrees), altitude (km)]
+                    Altitude is defined as the height above the reference
+                    ellipsoid. Longitude is defined in [0,360).
 
     HISTORY:
-       11-Jun-2006: Initial MATLAB template created by Jonathan J. Makela
+     * 11-Jun-2006: Initial MATLAB template created by Jonathan J. Makela
        (jmakela@uiuc.edu)
-       17-July-2006: Algorithm implemented by Dwayne P. Hagerman
+     * 17-July-2006: Algorithm implemented by Dwayne P. Hagerman
        (dhagerm2@uiuc.ed)
-       10-Nov-2014: Translated to Python by Brian J. Harding
+     * 10-Nov-2014: Translated to Python by Brian J. Harding
        (bhardin2@illinois.edu)
-       19-Jan-2015: Changed from iterative to closed-form implementation (BJH)
-       09-Sep-2015: Changed from ublox implementation (with mm accuracy) to
+     * 19-Jan-2015: Changed from iterative to closed-form implementation (BJH)
+     * 09-Sep-2015: Changed from ublox implementation (with mm accuracy) to
                     Olson implementation (with nm accuracy). (BJH)
                     https://possiblywrong.wordpress.com/2014/02/14/when-approximate-is-better-than-exact/
     '''
@@ -117,20 +129,20 @@ def wgs84_to_ecef(latlonalt):
     earth-centered earth-fixed coordinates (ECEF) [x,y,z]
     
     INPUTS:
-       latlonalt - a length-3 array containing the WGS-84 coordinates:
-                   [latitude (degrees), longitude (degrees), altitude (km)]    
+      * latlonalt - a length-3 array containing the WGS-84 coordinates:
+                    [latitude (degrees), longitude (degrees), altitude (km)]    
 
     OUTPUTS:
-       ecef_xyz - a length-3 array containing the X, Y, and Z locations in ECEF
-                  coordinates in kilometers.
+      * ecef_xyz - a length-3 array containing the X, Y, and Z locations in ECEF
+                   coordinates in kilometers.
                   
     HISTORY:
-       11-Jun-2006: Initial MATLAB template created by Jonathan J. Makela
-       (jmakela@uiuc.edu)
-       17-July-2006: Algorithm implemented by Dwayne P. Hagerman
-       (dhagerm2@uiuc.ed)
-       10-Nov-2014: Translated to Python by Brian J. Harding
-       (bhardin2@illinois.edu)    
+      * 11-Jun-2006: Initial MATLAB template created by Jonathan J. Makela
+        (jmakela@uiuc.edu)
+      * 17-July-2006: Algorithm implemented by Dwayne P. Hagerman
+        (dhagerm2@uiuc.ed)
+      * 10-Nov-2014: Translated to Python by Brian J. Harding
+        (bhardin2@illinois.edu)    
     '''
     
     a,b,e = wgs84constants()
@@ -157,16 +169,16 @@ def ven_to_ecef(latlonalt, ven):
     (ECEF) coordinates [x,y,z].
     
     INPUTS:
-        latlonalt - a length-3 array containing the WGS-84 coordinates of the location:
-                   [latitude (degrees), longitude (degrees), altitude (km)]
-        ven - the local direction vector [vertical, east, north] which will be converted to 
-             ECEF coordinates.
+       * latlonalt - a length-3 array containing the WGS-84 coordinates of the location:
+                    [latitude (degrees), longitude (degrees), altitude (km)]
+       * ven - the local direction vector [vertical, east, north] which will be converted to 
+              ECEF coordinates.
     OUTPUTS:
-        xyz - the direction vector in ECEF coordinates [x,y,z]
+       * xyz - the direction vector in ECEF coordinates [x,y,z]
         
     HISTORY:
-       10-Nov-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
-       02-Sep-2015: Changed from numerical to analytical solution (BJH)
+      * 10-Nov-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
+      * 02-Sep-2015: Changed from numerical to analytical solution (BJH)
     '''
                 
     # Convert to float values, in case they are integers
@@ -196,17 +208,17 @@ def ecef_to_ven(latlonalt, ecef):
     coordinates.
     
     INPUTS:
-        latlonalt - a length-3 array containing the WGS-84 coordinates of the location:
-                   [latitude (degrees), longitude (degrees), altitude (km)]
-        ecef - the direction vector [dx,dy,dz] which will be converted to 
-               VEN coordinates.
+       * latlonalt - a length-3 array containing the WGS-84 coordinates of the location:
+                    [latitude (degrees), longitude (degrees), altitude (km)]
+       * ecef - the direction vector [dx,dy,dz] which will be converted to 
+                VEN coordinates.
        
     OUTPUTS:
-        ven - the direction vector in [vertical, east, north] coordinates.
+       * ven - the direction vector in [vertical, east, north] coordinates.
         
     HISTORY:
-       06-Jan-2015: Written by Brian J. Harding (bhardin2@illinois.edu)
-       02-Sep-2015: Changed from numerical to analytical solution (BJH)
+      * 06-Jan-2015: Written by Brian J. Harding (bhardin2@illinois.edu)
+      * 02-Sep-2015: Changed from numerical to analytical solution (BJH)
     '''
                 
     # Convert to float values, in case they are integers
@@ -236,17 +248,17 @@ def ecef_to_azze(latlonalt, ecef):
     direction vector. This function is similar to ecef_to_ven.
     
     INPUTS:
-        latlonalt - a length-3 array containing the WGS-84 coordinates of the location:
-                   [latitude (degrees), longitude (degrees), altitude (km)]
-        ecef - the direction vector [dx,dy,dz] which will be converted to 
-               azimuth and zenith angles.
+       * latlonalt - a length-3 array containing the WGS-84 coordinates of the location:
+                    [latitude (degrees), longitude (degrees), altitude (km)]
+       * ecef - the direction vector [dx,dy,dz] which will be converted to 
+                azimuth and zenith angles.
        
     OUTPUTS:
-        az,ze - the azimuth (degrees East from North) and zenith (degrees down
+       * az,ze - the azimuth (degrees East from North) and zenith (degrees down
                 from Vertical) angles of the direction vector.
         
     HISTORY:
-       24-Feb-2015: Written by Brian J. Harding (bhardin2@illinois.edu)
+      * 24-Feb-2015: Written by Brian J. Harding (bhardin2@illinois.edu)
     '''
     
     # First, convert to VEN and normalize
@@ -273,16 +285,16 @@ def azze_to_ecef(latlonalt, az, ze):
     function is very similiar to ven_to_ecef.
     
     INPUTS:
-        latlonalt - a length-3 array containing the WGS-84 coordinates of the location:
-                   [latitude (degrees), longitude (degrees), altitude (km)]
-        az - direction of line of sight. degrees east of north.
-        ze - direction of line of sight. degrees down from zenith
+      *  latlonalt - a length-3 array containing the WGS-84 coordinates of the location:
+                    [latitude (degrees), longitude (degrees), altitude (km)]
+      *  az - direction of line of sight. degrees east of north.
+      *  ze - direction of line of sight. degrees down from zenith
        
     OUTPUTS:
-        xyz - the unit direction vector in ECEF coordinates [x,y,z]
+      *  xyz - the unit direction vector in ECEF coordinates [x,y,z]
         
     HISTORY:
-       15-May-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
+      * 15-May-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
     '''
     zer = ze*np.pi/180.
     azr = az*np.pi/180.    
@@ -306,23 +318,23 @@ def project_line_of_sight(satlatlonalt, az, ze, step_size = 1., total_distance =
     longitude, and altitude coordinates.
     
     INPUTS:
-        satlatlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the satellite
-        az - direction of line of sight. degrees east of north.
-        ze - direction of line of sight. degrees down from zenith
+       * satlatlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the satellite
+       * az - direction of line of sight. degrees east of north.
+       * ze - direction of line of sight. degrees down from zenith
         
     OPTIONAL INPUTS:
-        step_size - spacing between points in the returned array (km).
-        total_distance - length of the projected line (km).
+       * step_size - spacing between points in the returned array (km).
+       * total_distance - length of the projected line (km).
         
     OUTPUTS:
-        xyz - array of size 3xN, where N is floor(total_distance/step_size). Contains
-              the ECEF coordinates of every point along the line of sight, in step_size
-              intervals.
-        latlonalt - array of size 3xN, where each column contains the latitude, longitude
-                    and altitude corresponding to the column of xyz, in WGS84 coordinates
+       * xyz - array of size 3xN, where N is floor(total_distance/step_size). Contains
+               the ECEF coordinates of every point along the line of sight, in step_size
+               intervals.
+       * latlonalt - array of size 3xN, where each column contains the latitude, longitude
+                     and altitude corresponding to the column of xyz, in WGS84 coordinates
     
     HISTORY:
-        10-Nov-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
+       * 10-Nov-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
     '''
     
     # Convert to radians
@@ -359,20 +371,20 @@ def tangent_point(satlatlonalt, az, ze, tol=1e-7):
     precision is much better than the horizontal precision.
     
     INPUTS:
-        satlatlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the satellite
-        az - direction of line of sight. degrees east of north.
-        ze - direction of line of sight. degrees down from zenith
+       * satlatlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the satellite
+       * az - direction of line of sight. degrees east of north.
+       * ze - direction of line of sight. degrees down from zenith
         
     OPTIONAL INPUTS:
-        tol - km, stopping criterion for the solver. Stop when the solution is not moving
-              by more than a horizontal distance of tol.
+       * tol - km, stopping criterion for the solver. Stop when the solution is not moving
+               by more than a horizontal distance of tol.
         
     OUTPUTS:
-        latlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the tangent location.
+       * latlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the tangent location.
     
     HISTORY:
-        10-Dec-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
-        02-Sep-2015: Use scipy.optimize to do minimization instead of my own implementation.
+       * 10-Dec-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
+       * 02-Sep-2015: Use scipy.optimize to do minimization instead of my own implementation.
     '''
     
     # Convert to radians
@@ -417,9 +429,13 @@ def earth_curvature(lat):
     The radius of curvature of the Earth at the location specified. This is 
     different from the radius of Earth at that point. WGS84 Earth is assumed.
     INPUTS:
-        lat -- TYPE:float, UNITS:deg. Latitude of point on surface.
+    
+       * lat -- TYPE:float, UNITS:deg. Latitude of point on surface.
+       
     OUTPUTS:
-        r   -- TYPE:float, UNITS:km.  Radius of curvature of Earth.
+    
+       * r   -- TYPE:float, UNITS:km.  Radius of curvature of Earth.
+       
     '''
     ecef = wgs84_to_ecef([lat, 0., 0.])
     z = ecef[2]
@@ -439,23 +455,23 @@ def distance_to_shell(satlatlonalt, az, ze, shell_altitude, intersection='first'
     exists, return np.nan. If the satellite is below this shell, return np.nan.
     
     INPUTS:
-        satlatlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the satellite
-        az - direction of line of sight. degrees east of north.
-        ze - direction of line of sight. degrees down from zenith
-        shell_altitude - the altitude of the shell in km.
+       * satlatlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the satellite
+       * az - direction of line of sight. degrees east of north.
+       * ze - direction of line of sight. degrees down from zenith
+       * shell_altitude - the altitude of the shell in km.
         
     OPTIONAL INPUTS:
-        intersection - str, 'first' or 'second'. In general there are two intersections of the 
-                       ray with the shell. This argument specifies which will be returned.
-        tol - km, stopping criterion for the solver. Stop when the solution is not changing
-              by more than  tol.
+       * intersection - str, 'first' or 'second'. In general there are two intersections of the 
+                        ray with the shell. This argument specifies which will be returned.
+       * tol - km, stopping criterion for the solver. Stop when the solution is not changing
+               by more than  tol.
         
     OUTPUTS:
-        d - distance in km. If no intersection exists, d is nan.
+       * d - distance in km. If no intersection exists, d is nan.
     
     HISTORY:
-        10-Dec-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
-        31-Mar-2015: Included "intersection" parameter.
+       * 10-Dec-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
+       * 31-Mar-2015: Included "intersection" parameter.
     '''
     maxiters = 1e4 # Just in case, so it doesn't hang forever
 
@@ -540,15 +556,15 @@ def distance_to_tangent_point(satlatlonalt, az, ze):
     tangent point.
     
     INPUTS:
-        satlatlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the satellite
-        az - direction of line of sight. degrees east of north.
-        ze - direction of line of sight. degrees down from zenith
+       * satlatlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the satellite
+       * az - direction of line of sight. degrees east of north.
+       * ze - direction of line of sight. degrees down from zenith
         
     OUTPUTS:
-        d - distance in km.
+       * d - distance in km.
     
     HISTORY:
-        07-Jan-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
+       * 07-Jan-2014: Written by Brian J. Harding (bhardin2@illinois.edu)
     '''
     tanglatlonalt = tangent_point(satlatlonalt, az, ze)
     tangxyz = wgs84_to_ecef(tanglatlonalt)
@@ -565,17 +581,17 @@ def azze_to_lla(satlatlonalt, az, ze, ht):
     intersects the specified altitude
     
     INPUTS:
-        satlatlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the satellite
-        az - direction of line of sight. degrees east of north.
-        ze - direction of line of sight. degrees down from zenith.
-        ht - altitude (km) to calculate the intersection point for.
+       * satlatlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the satellite
+       * az - direction of line of sight. degrees east of north.
+       * ze - direction of line of sight. degrees down from zenith.
+       * ht - altitude (km) to calculate the intersection point for.
         
     OUTPUTS:
-        latlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the tangent location
+       * latlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the tangent location
     
     HISTORY:
-        22-Jan-2015: Written by Jonathan J. Makela (jmakela@illinois.edu) based on ICON.tangent_point
-        13-Oct-2015: Updated by Brian J. Harding to use distance_to_shell function.
+       * 22-Jan-2015: Written by Jonathan J. Makela (jmakela@illinois.edu) based on ICON.tangent_point
+       * 13-Oct-2015: Updated by Brian J. Harding to use distance_to_shell function.
     '''
     # This is the main workhorse:
     s = distance_to_shell(satlatlonalt, az, ze, ht)
@@ -596,11 +612,17 @@ def get_solar_zenith_angle(pt):
     Calculate the angle from zenith to the sun at the time and
     location of the pyglow.Point pt.
     INPUT:
-        pt - pyglow.Point
+    
+       * pt - pyglow.Point
+       
     OUTPUT:
-        sza - Solar zenith angle (deg)
+    
+       * sza - Solar zenith angle (deg)
+       
     HISTORY:
-        13-Oct-2015: Written by Brian J. Harding
+    
+       * 13-Oct-2015: Written by Brian J. Harding
+       
     '''
     import ephem
     sun = ephem.Sun()
