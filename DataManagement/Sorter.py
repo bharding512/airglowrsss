@@ -390,6 +390,13 @@ def sorter(san,pgm):
                 ##### CASES CASE: #####
                 elif instr in ['cas']:
                     ### Partr 1: "Sort Data"
+                    # Make sure folder exists
+                    dir_data = dir_local + 'gps/'+code[instr] + inum + '/' + site + '/' + str(year) + '/'
+                    try:
+                        os.makedirs(dir_data)
+                        os.system('chmod 755 ' + dir_data)
+                    except OSError:
+                        print '!!! Raw Folder Exists... moving on'
                     # Move info file to tracking
                     os.system('mv ' + f + ' ./tracking')
                     # Remove files from rx (it was a duplicate)
