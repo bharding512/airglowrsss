@@ -210,6 +210,10 @@ def bin_array(b, y, lon = False):
       *  y_b  -- TYPE:array(ny_b),  The binned array
       
     '''
+    # To save time, return quickly if b==1
+    if b==1:
+        return y
+    
     ny = len(y)
     ny_b = int(np.ceil(1.0*ny/b))
     y_b = np.zeros(ny_b, dtype=y.dtype)
@@ -256,6 +260,10 @@ def bin_uncertainty(b, ye):
       *  ye_b -- TYPE:array(ny_b), The uncertainty of the binned data
       
     '''
+    # To save time, return quickly if b==1
+    if b==1:
+        return ye
+    
     ny = len(ye)
     ny_b = int(np.ceil(1.0*ny/b))
     ye_b = np.zeros(ny_b, dtype=ye.dtype)
@@ -294,6 +302,10 @@ def bin_image(b, I):
       *  I_b         -- TYPE:array(ny_b,nx), UNITS:arb.  The binned MIGHTI interferogram
       
     '''
+    
+    # To save time, return quickly if b==1
+    if b==1:
+        return I
     
     ny,nx = np.shape(I)
     # Initial call to bin_array to see what the size of the new image will be
