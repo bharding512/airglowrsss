@@ -167,7 +167,7 @@ _instruments['casi01'] = {
         'sql_inst_id':      [21,20,22,24,23,23],
         't_lat':            [20.71, 20.71, 20.71, 20.71, 20.71,20.71],
         't_lon':            [203.74, 203.74, 203.74, 203.74, 203.74,203.74],
-        'cal_file':         '/rdata/airglow/imaging/calibrations/CASIelaz_0482002.npz',
+        'cal_file':         '/rdata/airglow/imaging/calibrations/casi01_elaz_0482002.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
         'ccd_temp_set':     -35,
@@ -181,7 +181,7 @@ _instruments['cnfi01'] = {
         'sql_inst_id':      [9,10,11,12,19],
         't_lat':            [8.0, 12.0, 8.0, 8.0, 8.0],
         't_lon':            [203.74, 203.74, 203.74, 203.74, 203.74],
-        'cal_file':         '/rdata/airglow/imaging/calibrations/CNFIelaz_0022002.npz',
+        'cal_file':         '/rdata/airglow/imaging/calibrations/cnfi01_elaz_0022002.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
         'ccd_temp_set':     -40,
@@ -195,7 +195,7 @@ _instruments['picasso01'] = {
         'sql_inst_id':      [54,4,3,55],
         't_lat':            [32.788,32.788,32.788,32.788],
         't_lon':            [254.194,254.194,254.194,254.194],
-        'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO1elaz_1342010.npz',
+        'cal_file':         '/rdata/airglow/imaging/calibrations/picasso01_elaz_1342010.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
         'ccd_temp_set':     -30,
@@ -209,7 +209,7 @@ _instruments['picasso02'] = {
         'sql_inst_id':      [27,28,29],
         't_lat':            [-20.,-19.,-20.],
         't_lon':            [289.194,289.194,289.194],
-        'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO2elaz_2342006.npz',
+        'cal_file':         '/rdata/airglow/imaging/calibrations/picasso02_elaz_2342006.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
         'ccd_temp_set':     -20,
@@ -223,7 +223,7 @@ _instruments['picasso03'] = {
         'sql_inst_id':      [34,33,35],
         't_lat':            [12.19,12.19,12.19],
         't_lon':            [291.76,291.76,291.76],
-        'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO3_0852009_approximate.npz',
+        'cal_file':         '/rdata/airglow/imaging/calibrations/picasso03_elaz_0852009.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
         'ccd_temp_set':     -60,
@@ -237,7 +237,7 @@ _instruments['picasso04'] = {
         'sql_inst_id':      [36,38,37],
         't_lat':            [10.57,10.57,10.57],
         't_lon':            [298.83,298.83,298.83],
-        'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO4elaz_2202008.npz',
+        'cal_file':         '/rdata/airglow/imaging/calibrations/picasso04_elaz_2202008.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
         'ccd_temp_set':     -30,  # UNSURE
@@ -251,7 +251,7 @@ _instruments['picasso05'] = {
         'sql_inst_id':      [30,31,32,40],
         't_lat':            [-6.8726,-6.8726,-6.8726,-6.8726],
         't_lon':            [321.4434,321.4434,321.4434,321.4434],
-        'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO5elaz_2122009.npz',
+        'cal_file':         '/rdata/airglow/imaging/calibrations/picasso05_elaz_2122009.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
         'ccd_temp_set':     -30,
@@ -265,8 +265,7 @@ _instruments['picasso06'] = { # TODO: check all of these
         'sql_inst_id':      [101, 102, 103],
         't_lat':            [-17.56, -17.56, -17.56],
         't_lon':            [210.43, 210.43, 210.43],
-#        'cal_file':         '/rdata/airglow/imaging/calibrations/PICASSO06elaz_0302014.npz',
-	'cal_file':	    '/rdata/airglow/imaging/calibrations/picasso06_tht_20140130.npz',
+	'cal_file':	    '/rdata/airglow/imaging/calibrations/picasso06_elaz_0302014.npz',
         'kernel_size':      5,
         'ignore_dark':      False,
         'ccd_temp_set':     -69,
@@ -280,7 +279,7 @@ _instruments['swenson01'] = {
         'sql_inst_id':      [59,60,61,62],
         't_lat':            [34.05,34.05,34.05,34.05],
         't_lon':            [253.08,253.08,253.08,253.08],
-        'cal_file':         '/rdata/airglow/imaging/calibrations/SWENSON01_1322010.npz',
+        'cal_file':         '/rdata/airglow/imaging/calibrations/swenson01_elaz_1322010.npz',
         'kernel_size':      3,
         'ignore_dark':      False,
         'ccd_temp_set':     -30,
@@ -393,88 +392,88 @@ def get_instr_info(instr_name, dn):
 
     if instr_name == 'casi01':
         if dn < datetime.datetime(2005,1,1) + datetime.timedelta(days = 253):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/CASIelaz_0482002.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/casi01_elaz_0482002.npz'
         elif dn < datetime.datetime(2006,1,1) + datetime.timedelta(days = 261):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/CASIelaz_02542005.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/casi01_elaz_2542005.npz'
         elif dn < datetime.datetime(2007,1,1) + datetime.timedelta(days = 56):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/CASI01elaz_2622006.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/casi01_elaz_2622006.npz'
         elif dn < datetime.datetime(2009,1,1) + datetime.timedelta(days = 267):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/CASIelaz_2622006.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/casi01_elaz_2622006.npz'
         elif dn < datetime.datetime(2011,1,1) + datetime.timedelta(days = 69):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/CASIelaz_2682009.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/casi01_elaz_2682009.npz'
         else:
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/CASIelaz_0702011.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/casi01_elaz_0702011.npz'
     elif instr_name == 'cnfi01':
         if dn < datetime.datetime(2002,1,1) + datetime.timedelta(days = 65):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/CNFIelaz_0022002.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/cnfi01_elaz_0022002.npz'
         elif dn < datetime.datetime(2002,1,1) + datetime.timedelta(days = 77):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/CNFIelaz_0662002.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/cnfi01_elaz_0662002.npz'
         elif dn < datetime.datetime(2005,1,1) + datetime.timedelta(days = 253):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/CNFIelaz_0782002.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/cnfi01_elaz_0782002.npz'
         elif dn < datetime.datetime(2015,10,15):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/CNFIelaz_2542005.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/cnfi01_elaz_2542005.npz'
         else:
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/CNFIelaz_3342015.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/cnfi01_elaz_3342015.npz'
     elif instr_name == 'picasso01':
         if dn < datetime.datetime(2010,5,14):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO1elaz_1342010.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso01_elaz_1342010.npz'
         else:
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO1elaz_1352010.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso01_elaz_1352010.npz'
     elif instr_name == 'picasso02':
         if dn < datetime.datetime(2007,1,20):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO2elaz_2342006.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso02_elaz_2342006.npz'
         elif dn < datetime.datetime(2015,4,26):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO2elaz_0202007.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso02_elaz_0202007.npz'
         elif dn < datetime.datetime(2015,7,27):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO02elaz_1182015.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso02_elaz_1182015.npz'
         else:
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO02elaz_2092015.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso02_elaz_2092015.npz'
     elif instr_name == 'picasso03': #BON
         if dn < datetime.datetime(2016,6,1):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO3_0852009_approximate.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso03_elaz_0852009.npz'
         else: #NSO
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO03elaz_1552016.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso03_elaz_1552016.npz'
             instrument['t_lat'] = [33.,33.,33.]
             instrument['t_lon'] = [254.,254.,254.]
     elif instr_name == 'picasso04': #SGT
         if dn < datetime.datetime(2008,1,1) + datetime.timedelta(days = 269):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_2202008.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso04_elaz_2202008.npz'
         elif dn < datetime.datetime(2009,1,1) + datetime.timedelta(days = 61):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_2702008.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso04_elaz_2702008.npz'
         elif dn < datetime.datetime(2009,1,1) + datetime.timedelta(days = 268):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_0622009.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso04_elaz_0622009.npz'
         elif dn < datetime.datetime(2010,1,1) + datetime.timedelta(days = 17):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_2692009.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso04_elaz_2692009.npz'
         elif dn < datetime.datetime(2011,1,1) + datetime.timedelta(days = 5):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_0182010.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso04_elaz_0182010.npz'
         elif dn < datetime.datetime(2013,11,1):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_0062011.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso04_elaz_0062011.npz'
         elif dn < datetime.datetime(2014,3,3): #MOR
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO4elaz_3122013.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso04_elaz_3122013.npz'
             instrument['t_lat'] = [31.2,31.2,31.2]
             instrument['t_lon'] = [352.1,352.1,352.1]
             instrument['kernel_size'] = 5
             instrument['ignore_dark'] = True
         elif dn < datetime.datetime(2014,7,1):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO04elaz_0622014.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso04_elaz_0622014.npz'
             instrument['t_lat'] = [31.2,31.2,31.2]
             instrument['t_lon'] = [352.1,352.1,352.1]
             instrument['kernel_size'] = 5
             instrument['ignore_dark'] = True
         elif dn < datetime.datetime(2015,3,27):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO04elaz_1822014.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso04_elaz_1822014.npz'
             instrument['t_lat'] = [31.2,31.2,31.2]
             instrument['t_lon'] = [352.1,352.1,352.1]
             instrument['kernel_size'] = 5
             instrument['ignore_dark'] = True
         elif dn < datetime.datetime(2016,6,7):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO04elaz_0862015.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso04_elaz_0862015.npz'
             instrument['t_lat'] = [31.2,31.2,31.2]
             instrument['t_lon'] = [352.1,352.1,352.1]
             instrument['kernel_size'] = 3  
             instrument['ignore_dark'] = True
         elif dn < datetime.datetime(2016,10,14):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO04elaz_1602016.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso04_elaz_1602016.npz'
             instrument['t_lat'] = [31.2,31.2,31.2]
             instrument['t_lon'] = [352.1,352.1,352.1]
             instrument['kernel_size'] = 3
@@ -488,11 +487,11 @@ def get_instr_info(instr_name, dn):
             
     elif instr_name == 'picasso05':
         if dn < datetime.datetime(2009,1,1) + datetime.timedelta(days = 264):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO5elaz_2122009.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso05_elaz_2122009.npz'
         elif dn < datetime.datetime(2012,1,1) + datetime.timedelta(days = 207):
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO5elaz_2652009.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso05_elaz_2652009.npz'
         else:
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/PICASSO5elaz_2082012.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso05_elaz_2082012.npz'
     
     return instrument
     
