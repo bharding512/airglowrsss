@@ -479,7 +479,7 @@ def get_instr_info(instr_name, dn):
             instrument['kernel_size'] = 3
             instrument['ignore_dark'] = True
         else:
-            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso04elaz_2882016.npz'
+            instrument['cal_file'] = '/rdata/airglow/imaging/calibrations/picasso04_elaz_2882016.npz'
             instrument['t_lat'] = [31.2,31.2,31.2]
             instrument['t_lon'] = [352.1,352.1,352.1]
             instrument['kernel_size'] = 3
