@@ -80,7 +80,7 @@ if zelda == 0:
                 os.system('rm -rf ' + l[k][0])
 
         # if file not on remote
-        else:
+        elif send:
             print 'Send new data'
             # send file
             flag = os.system('scp ' + l[k][0]+'/*.tif ' + AIRGLOW + '%04i/%03i/.'%(k.year,k.timetuple().tm_yday))
@@ -90,6 +90,9 @@ if zelda == 0:
                 #os.remove(l[k][0])
                 os.system('rm -rf ' + l[k][0])
             '''
+
+        else:
+            print "Send new data later - %s"%k
 
         
 else:
