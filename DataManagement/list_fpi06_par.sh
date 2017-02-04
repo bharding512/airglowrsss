@@ -1,4 +1,4 @@
-data='/rdata/airglow/fpi/minime05/uao'
+data='/rdata/airglow/fpi/minime06/par'
 if [ -e "$data/foldersizes.txt" ]
 then
 	rm $data/foldersizes.txt
