@@ -13,7 +13,7 @@ from glob import glob
 import os
 
 # Create "True" filename
-dn = dt.datetime.now()
+dn = dt.datetime.now()-dt.timedelta(days=1)
 doy = (dn-dt.datetime(dn.year,1,1)).days+1
 truefn = '/rdata/airglow/rx/cas01_hka_{:04d}{:02d}{:02d}.tar.gz'.format(dn.year,dn.month,dn.day)
 

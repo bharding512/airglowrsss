@@ -9,7 +9,7 @@ do
 	justyear=$( echo "$year"  | cut -c33-36)
 	
 	# Skip this year because we had filenaming issues.
-	if [$justyear == 2012]
+	if [ "$justyear" = 2012 ]
 	then
 		continue
 	fi

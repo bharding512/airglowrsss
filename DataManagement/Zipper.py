@@ -210,7 +210,7 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
     ########## TO ZIP UP FPI ##########
         if 'fpi' == instr:
             # Grab all files made within 24 hour period
-            name = [f for f in glob(os.path.join('*','*.img')) if (dt.datetime(int(year),int(month),int(day),12) < dt.datetime.fromtimestamp(os.path.getmtime(f)) < (dt.datetime(int(year),int(month),int(day),12)+dt.timedelta(1)))]
+            name = [f for f in glob(os.path.join('*','*.img')) if (dt.datetime(int(year),int(month),int(day),12) < dt.datetime.fromtimestamp(os.path.getmtime(f)) and dt.datetime.fromtimestamp(os.path.getmtime(f)) < (dt.datetime(int(year),int(month),int(day),12)+dt.timedelta(1)))]
             zipper(name,filename)
             splitter(site,instr,num,code,filename,checkname,mfs)
             os.remove(code[site][instr][num]['local_dir']+filename)

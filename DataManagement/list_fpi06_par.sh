@@ -6,11 +6,12 @@ fi
 
 for year in $( find $data/20* -maxdepth 0 -type d )
 do
-	justyear=$( echo "$year"  | cut -c33-36)
+	justyear=$( echo "$year"  | cut -c34-36)
 	
 	# Skip this year because we had filenaming issues.
-	if [$justyear == 2012]
+	if [ "$justyear" = 2012 ]
 	then
+		echo $justyear
 		continue
 	fi
 
