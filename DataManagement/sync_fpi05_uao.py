@@ -41,7 +41,7 @@ if zelda == 0:
     print "remote file parsed"
     
     # Grab local files
-    days = glob(DATA + '*/*')
+    days = glob(DATA + '*')
     for d in days:
         try:
             t = dt.datetime(int(d[21:25]),int(d[25:27]),int(d[27:29]))

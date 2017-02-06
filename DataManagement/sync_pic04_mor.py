@@ -1,7 +1,7 @@
-#!/usr/bin/python2.7
+#!/usr/local/bin/python
 '''
 Script to send files back to remote2 and remove already copied data to free space
-NOTE: this is for nfi only
+NOTE: this is for asi only
 
 History: 05 Aug 2014 - initial script written based on Tom Gehrels sh script; Daniel J. Fisher (dfisher2@illinois.edu)
 '''
@@ -12,19 +12,11 @@ import sys
 import datetime as dt
 from glob import glob
 
-# Why add this?  You need to type in the scp for every day to send data back
-# This is because we don't want site computers to have passwordless login to our server
-send = input("Do you want to send back files [1] or just delete duplicate data [0]?")
-if send not in [0,1]:
-    print 'Bad input'
-    exit()
-
-print "You will still need to enter the scp password..."
+print "You will need to enter the scp password..."
 
 # Filestuff
-#TODO: puth this in an array so it works for all FPI sites
-DATA = '/cygdrive/c/FPI_Data/'
-AIRGLOW = 'airglow@remote2.ece.illinois.edu:/rdata/airglow/fpi/minime06/par/'
+DATA = '/data/'
+AIRGLOW = 'airglow@remote2.ece.illinois.edu:/rdata/airglow/imaging/picasso04/mor/'
 FILENAME = DATA + 'foldersizes.txt'
 r = {}
 l = {}
@@ -37,20 +29,20 @@ if zelda == 0:
     with open(FILENAME, 'r') as f:
         for line in f:
             a,b,c = line.strip().split()
-            r[dt.datetime(int(a),int(b[:2]),int(b[2:]))] = [a+b,c]
+            r[dt.datetime(int(a),1,1)+dt.timedelta(days=int(b)-1)] = [b,c]
     print "remote file parsed"
     
     # Grab local files
-    days = glob(DATA + '*')
+    days = glob(DATA + '*/*')
     for d in days:
         try:
-            t = dt.datetime(int(d[21:25]),int(d[25:27]),int(d[27:29]))
+            t = dt.datetime(int(d[6:10]),1,1) + dt.timedelta(days=int(d[11:14])-1)
             size = 0
-            for f in glob(d+'/*.img'):
+            for f in glob(d+'/*.tif'):
                 size += os.stat(f).st_size
             l[t] = [d,size]
         except:
-            print 'not data folder'
+            print d,'not data folder'
     print 'local files parsed'
         
     # Do comparison
@@ -58,20 +50,17 @@ if zelda == 0:
         # if file exists on remote...
         if k in r.keys():
             # if local is larger than remote
-            if int(l[k][1]) > int(r[k][1]) and send:
-                print 'Incomplete file needs to be sent'
+            if int(l[k][1]) > int(r[k][1]):
+                print 'Not completely sent'
                 # send file
-                flag = os.system('scp ' + l[k][0]+' ' + AIRGLOW + '%04i/%03s/.'%(k.year,r[k][0]))
+                flag = os.system('scp ' + l[k][0]+'/*.tif ' + AIRGLOW + '%04i/%03s/.'%(k.year,r[k][0]))
                 '''
                 #Should I remove it once sent???
                 if flag == 0:
                     #os.remove(l[k][0])
                     os.system('rm -rf ' + l[k][0])
                 '''
-            
-            elif int(l[k][1]) > int(r[k][1]) and not(send):
-                print "File needs to be sent later"
-
+                
             # if local is smaller or equal to remote
             else:
                 print 'File okay to remove'
@@ -80,7 +69,7 @@ if zelda == 0:
                 os.system('rm -rf ' + l[k][0])
 
         # if file not on remote
-        elif send:
+        else:
             print 'Send new data'
             # send file
             flag = os.system('scp ' + l[k][0]+'/*.tif ' + AIRGLOW + '%04i/%03i/.'%(k.year,k.timetuple().tm_yday))
@@ -90,9 +79,6 @@ if zelda == 0:
                 #os.remove(l[k][0])
                 os.system('rm -rf ' + l[k][0])
             '''
-
-        else:
-            print "Send new data later - %s"%k
 
         
 else:
