@@ -12,7 +12,14 @@ import sys
 import datetime as dt
 from glob import glob
 
-print "You will need to enter the scp password..."
+# Why add this?  You need to type in the scp for every day to send data back
+# This is because we don't want site computers to have passwordless login to our server
+send = input("Do you want to send back files [1] or just delete duplicate data [0]?")
+if send not in [0,1]:
+    print 'Bad input'
+    exit()
+
+print "You will still need to enter the scp password..."
 
 # Filestuff
 #TODO: puth this in an array so it works for all FPI sites
@@ -37,7 +44,7 @@ if zelda == 0:
     days = glob(DATA + '*/*')
     for d in days:
         try:
-            t = dt.datetime.strptime(d[21:25]+' '+d[25:27]+' '+d[27:29],"%Y %b %d")
+            t = dt.datetime(int(d[21:25]),int(d[25:27]),int(d[27:29]))
             size = 0
             for f in glob(d+'/*.img'):
                 size += os.stat(f).st_size
@@ -51,17 +58,20 @@ if zelda == 0:
         # if file exists on remote...
         if k in r.keys():
             # if local is larger than remote
-            if int(l[k][1]) > int(r[k][1]):
-                print 'Not completely sent'
+            if int(l[k][1]) > int(r[k][1]) and send:
+                print 'Incomplete file needs to be sent'
                 # send file
-                flag = os.system('scp ' + l[k][0]+'/*.tif ' + AIRGLOW + '%04i/%03s/.'%(k.year,r[k][0]))
+                flag = os.system('scp ' + l[k][0]+' ' + AIRGLOW + '%04i/%03s/.'%(k.year,r[k][0]))
                 '''
                 #Should I remove it once sent???
                 if flag == 0:
                     #os.remove(l[k][0])
                     os.system('rm -rf ' + l[k][0])
                 '''
-                
+            
+            elif int(l[k][1]) > int(r[k][1]) and not(send):
+                print "File needs to be sent later"
+
             # if local is smaller or equal to remote
             else:
                 print 'File okay to remove'
@@ -70,7 +80,7 @@ if zelda == 0:
                 os.system('rm -rf ' + l[k][0])
 
         # if file not on remote
-        else:
+        elif send:
             print 'Send new data'
             # send file
             flag = os.system('scp ' + l[k][0]+'/*.tif ' + AIRGLOW + '%04i/%03i/.'%(k.year,k.timetuple().tm_yday))
@@ -80,6 +90,9 @@ if zelda == 0:
                 #os.remove(l[k][0])
                 os.system('rm -rf ' + l[k][0])
             '''
+
+        else:
+            print "Send new data later - %s"%k
 
         
 else:
