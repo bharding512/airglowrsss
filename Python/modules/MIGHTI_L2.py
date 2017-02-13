@@ -1019,32 +1019,50 @@ def level1_to_dict(L1_fn, emission_color):
     L1_dict['I_phase']                     = f['ICON_L1_MIGHTI_%s_%s_PHASE_NOISY' % (sensor, emission_color.upper())][0,:,:]
     L1_dict['I_amp_uncertainty']           = f['ICON_L1_MIGHTI_%s_%s_ENVELOPE_UNCERTAINTY' % (sensor, emission_color.upper())][0,:]
     L1_dict['I_phase_uncertainty']         = f['ICON_L1_MIGHTI_%s_%s_PHASE_UNCERTAINTY' % (sensor, emission_color.upper())][0,:]
-    L1_dict['tang_alt_start']              = f['ICON_L0_MIGHTI_%s_TANGENT_ALTITUDES_START' % sensor][0,:] 
-    L1_dict['tang_alt_stop']               = f['ICON_L0_MIGHTI_%s_TANGENT_ALTITUDES_STOP'% sensor][0,:]
-    L1_dict['tang_lat_start']              = f['ICON_L0_MIGHTI_%s_TANGENT_LATITUDES_START'% sensor][0,:]
-    L1_dict['tang_lat_stop']               = f['ICON_L0_MIGHTI_%s_TANGENT_LATITUDES_STOP'% sensor][0,:]
-    L1_dict['tang_lon_start']              = f['ICON_L0_MIGHTI_%s_TANGENT_LONGITUDES_START'% sensor][0,:]
-    L1_dict['tang_lon_stop']               = f['ICON_L0_MIGHTI_%s_TANGENT_LONGITUDES_STOP'% sensor][0,:]
+    tang_lla                               = f['ICON_L1_MIGHTI_%s_TANGENT_LATLONALT' % sensor][0,:,:,:] 
+    L1_dict['tang_alt_start']              = tang_lla[0,2,:]
+    L1_dict['tang_alt_stop']               = tang_lla[2,2,:]
+    L1_dict['tang_lat_start']              = tang_lla[0,0,:]
+    L1_dict['tang_lat_stop']               = tang_lla[2,0,:]
+    L1_dict['tang_lon_start']              = tang_lla[0,1,:]
+    L1_dict['tang_lon_stop']               = tang_lla[2,1,:]
     L1_dict['emission_color']              = emission_color
-    L1_dict['icon_alt_start']              = f['ICON_L0_MIGHTI_%s_ICON_ALTITUDE_START'% sensor][:].item()
-    L1_dict['icon_alt_stop']               = f['ICON_L0_MIGHTI_%s_ICON_ALTITUDE_STOP'% sensor][:].item()
-    L1_dict['icon_lat_start']              = f['ICON_L0_MIGHTI_%s_ICON_LATITUDE_START'% sensor][:].item()
-    L1_dict['icon_lat_stop']               = f['ICON_L0_MIGHTI_%s_ICON_LATITUDE_STOP'% sensor][:].item()
-    L1_dict['icon_lon_start']              = f['ICON_L0_MIGHTI_%s_ICON_LONGITUDE_START'% sensor][:].item()
-    L1_dict['icon_lon_stop']               = f['ICON_L0_MIGHTI_%s_ICON_LONGITUDE_STOP'% sensor][:].item()
-    L1_dict['mighti_ecef_vectors_start']   = f['ICON_L1_MIGHTI_%s_%s_ECEF_VECTORS_START'% (sensor, emission_color.upper())][0,:,:,:]
-    L1_dict['mighti_ecef_vectors_stop']    = f['ICON_L1_MIGHTI_%s_%s_ECEF_VECTORS_STOP'% (sensor, emission_color.upper())][0,:,:,:]
+    tmp                                    = f['ICON_L1_MIGHTI_%s_%s_ECEF_VECTORS'% (sensor, emission_color.upper())][0,:,:,:,:] # time x vector x V x H
+    L1_dict['mighti_ecef_vectors_start']   = np.transpose(tmp[0,:,:,:], (1,2,0)) # V x H x vector
+    L1_dict['mighti_ecef_vectors_stop']    = np.transpose(tmp[2,:,:,:], (1,2,0)) # V x H x vector
+    #L1_dict['mighti_ecef_vectors_start']   = f['ICON_L1_MIGHTI_%s_%s_ECEF_VECTORS_START'% (sensor, emission_color.upper())][0,:,:,:]
+    #L1_dict['mighti_ecef_vectors_stop']    = f['ICON_L1_MIGHTI_%s_%s_ECEF_VECTORS_STOP'% (sensor, emission_color.upper())][0,:,:,:]
     L1_dict['icon_ecef_ram_vector_start']  = f['ICON_L0_MIGHTI_%s_RAM_ECEF_VECTOR_START'% sensor][0,:]
     L1_dict['icon_ecef_ram_vector_stop']   = f['ICON_L0_MIGHTI_%s_RAM_ECEF_VECTOR_STOP'% sensor][0,:]
     L1_dict['icon_velocity_start']         = f['ICON_L0_MIGHTI_%s_ICON_VELOCITY_START'% sensor][:].item()
     L1_dict['icon_velocity_stop']          = f['ICON_L0_MIGHTI_%s_ICON_VELOCITY_STOP'% sensor][:].item()
     L1_dict['source_files']                = [f.SOURCE_FILE]
-    tsec_start                             = f['ICON_L1_MIGHTI_%s_IMAGE_TIME_START'% sensor][:].item()
-    tsec_stop                              = f['ICON_L1_MIGHTI_%s_IMAGE_TIME_STOP'% sensor][:].item()
+    tsec_start                             = f['ICON_L1_MIGHTI_%s_IMAGE_TIME'% sensor][0,0]
+    tsec_stop                              = f['ICON_L1_MIGHTI_%s_IMAGE_TIME'% sensor][0,2]
     L1_dict['time_start']                  = datetime(2016,1,1) + timedelta(seconds=tsec_start) # TODO: absolute time
     L1_dict['time_stop']                   = datetime(2016,1,1) + timedelta(seconds=tsec_stop)  # TODO: absolute time
     L1_dict['exp_time']                    = tsec_stop - tsec_start
     L1_dict['optical_path_difference']     = f['ICON_L1_MIGHTI_%s_OPD_BY_PIXEL_%s' % (sensor, emission_color.upper())][0,:]*1e-2 # convert to m
+    
+    # S/C position: TBD
+    # OLD:
+    #L1_dict['icon_alt_start']              = f['ICON_L0_MIGHTI_%s_ICON_ALTITUDE_START'% sensor][:].item()
+    #L1_dict['icon_alt_stop']               = f['ICON_L0_MIGHTI_%s_ICON_ALTITUDE_STOP'% sensor][:].item()
+    #L1_dict['icon_lat_start']              = f['ICON_L0_MIGHTI_%s_ICON_LATITUDE_START'% sensor][:].item()
+    #L1_dict['icon_lat_stop']               = f['ICON_L0_MIGHTI_%s_ICON_LATITUDE_STOP'% sensor][:].item()
+    #L1_dict['icon_lon_start']              = f['ICON_L0_MIGHTI_%s_ICON_LONGITUDE_START'% sensor][:].item()
+    #L1_dict['icon_lon_stop']               = f['ICON_L0_MIGHTI_%s_ICON_LONGITUDE_STOP'% sensor][:].item()
+    # NEW:
+    icon_ecef                              = f['ICON_L1_MIGHTI_%s_SC_ECEF'% sensor][:][0,:,:] # timetable x [x,y,z]
+    icon_latlonalt = np.zeros((3,3))
+    for i in range(3):
+        icon_latlonalt[i,:] = ICON.ecef_to_wgs84(icon_ecef[i,:])
+    L1_dict['icon_alt_start'] = icon_latlonalt[0,2]
+    L1_dict['icon_alt_stop']  = icon_latlonalt[2,2]
+    L1_dict['icon_lat_start'] = icon_latlonalt[0,0]
+    L1_dict['icon_lat_stop']  = icon_latlonalt[2,0]
+    L1_dict['icon_lon_start'] = icon_latlonalt[0,1]
+    L1_dict['icon_lon_stop']  = icon_latlonalt[2,1]
     
     # Dummy placeholder code for reading global attributes, if that matters
     nc_attrs = f.ncattrs()
@@ -1162,7 +1180,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma, zero_phase, phase_offset, top_la
     INPUTS:
     
       *  L1_dict             -- TYPE:dict.  A dictionary containing variables needed for
-                                             the level 2.1 processing:
+                                             the level 2.1 processing: (TODO: describe dimensions, units).
                                              
                                              * L1_fn
                                              * I_amp
@@ -1258,6 +1276,9 @@ def level1_dict_to_level21_dict(L1_dict, sigma, zero_phase, phase_offset, top_la
     source_files = L1_dict['source_files']
     exp_time = L1_dict['exp_time']
     L1_fn = L1_dict['L1_fn']
+    opd = L1_dict['optical_path_difference']
+    sigma_opd = sigma * opd # Optical path difference, in units of wavelengths
+
     # Load parameters which are averaged from start to stop of exposure.
     icon_alt = (L1_dict['icon_alt_start'] + L1_dict['icon_alt_stop'])/2
     icon_lat = (L1_dict['icon_lat_start'] + L1_dict['icon_lat_stop'])/2
@@ -1268,10 +1289,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma, zero_phase, phase_offset, top_la
     tang_lon = circular_mean(L1_dict['tang_lon_start'], L1_dict['tang_lon_stop'])
     icon_ecef_ram_vector = (L1_dict['icon_ecef_ram_vector_start'] + L1_dict['icon_ecef_ram_vector_stop'])/2
     icon_velocity = (L1_dict['icon_velocity_start'] + L1_dict['icon_velocity_stop'])/2
-    opd = L1_dict['optical_path_difference']
     
     
-    sigma_opd = sigma * opd # Optical path difference, in units of wavelengths
 
     #### Remove Satellite Velocity
     icon_latlonalt = np.array([icon_lat, icon_lon, icon_alt])
@@ -1316,6 +1335,10 @@ def level1_dict_to_level21_dict(L1_dict, sigma, zero_phase, phase_offset, top_la
     v = remove_Earth_rotation(v_inertial, az, lat, lon, alt)
     v_uncertainty = v_inertial_uncertainty.copy() # No appreciable uncertainty added in this process
     
+    #### For reporting in output file, determine ecef vector at center of row
+    _, nx, _ = np.shape(mighti_ecef_vectors)
+    mighti_ecef_vectors_center = mighti_ecef_vectors[:,nx/2,:]
+    
     # Make a L2.1 dictionary
     L21_dict = {
              'los_wind'                     : v,
@@ -1336,7 +1359,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma, zero_phase, phase_offset, top_la
              'icon_lon'                     : icon_lon,
              'fringe_amplitude'             : amp,
              'fringe_amplitude_error'       : amp_uncertainty,
-             'mighti_ecef_vectors'          : mighti_ecef_vectors,
+             'mighti_ecef_vectors'          : mighti_ecef_vectors_center,
              'icon_velocity_ecef_vector'    : icon_velocity * icon_ecef_ram_vector,
              'file_creation_time'           : datetime.now(),
              'source_files'                 : np.concatenate((source_files,[L1_fn])),
