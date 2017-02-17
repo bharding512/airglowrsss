@@ -1,4 +1,4 @@
-#!/usr/bin/python2.7
+#!/usr/local/bin/python
 '''
 Script to send files back to remote2 and remove already copied data to free space
 NOTE: this is for pic04 only
