@@ -41,10 +41,10 @@ if zelda == 0:
     print "remote file parsed"
     
     # Grab local files
-    days = glob(DATA + a + '/*/*')
+    days = glob(DATA + '*/*')
     for d in days:
         try:
-            t = dt.datetime.strptime(d[17:21]+' '+d[22:25]+' '+d[25:27],"%Y %b %d")
+            t = dt.datetime(int(d[6:10]),1,1)+dt.timedelta(days=int(d)-1))
             size = 0
             for f in glob(d+'/*.tif'):
                 size += os.stat(f).st_size
