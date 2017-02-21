@@ -44,7 +44,7 @@ if zelda == 0:
     days = glob(DATA + '*/*')
     for d in days:
         try:
-            t = dt.datetime(int(d[6:10]),1,1)+dt.timedelta(days=int(d)-1))
+            t = dt.datetime(int(d[-8:-4]),1,1)+dt.timedelta(days=int(d[-3:])-1)
             size = 0
             for f in glob(d+'/*.tif'):
                 size += os.stat(f).st_size

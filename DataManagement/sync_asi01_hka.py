@@ -11,6 +11,7 @@ import os
 import sys
 import datetime as dt
 from glob import glob
+months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 # Why add this?  You need to type in the scp for every day to send data back
 # This is because we don't want site computers to have passwordless login to our server
@@ -43,7 +44,7 @@ if zelda == 0:
     days = glob(DATA + '*/*')
     for d in days:
         try:
-            t = dt.datetime.strptime(d[17:21]+' '+d[22:25]+' '+d[25:27],"%Y %b %d")
+            t = dt.datetime(int(d[-13:-9]),months.index(d[-8:-5])+1,int(d[-5:-3]))
             size = 0
             for f in glob(d+'/*.tif'):
                 size += os.stat(f).st_size
