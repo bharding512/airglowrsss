@@ -1425,7 +1425,7 @@ class WindField:
         headaxislength= headlength-1
         minshaft = 2
         qcolor = 'k'
-        Nq = 10. # approximately how many arrows across and down you want
+        Nq = 10 # approximately how many arrows across and down you want
         WN = 4 # upsample factor for vertical wind color plot
         # Figure out the color limits for vertical wind based on the data
         wmax = 30.
@@ -1546,10 +1546,10 @@ class WindField:
         lons = self.lons
         lats = self.lats
         
-        Nq = 10. # approximately how many arrows across and down you want
+        Nq = 10 # approximately how many arrows across and down you want
         WN = 8 # upsample factor for vertical wind color plot
         figsize=(6,6) # 6,6
-        sc = figsize[1]/(Nq*200) # 1/Nq^th of the plot width <==> 250 m/s, for quiver
+        sc = figsize[1]/(Nq*200.) # 1/Nq^th of the plot width <==> 250 m/s, for quiver
         pivot = 'middle' # for quiver
         headwidth = 4 # 3
         headlength = 4 # 3
@@ -1710,10 +1710,10 @@ class WindField:
         lons = self.lons
         lats = self.lats
         
-        Nq = 10. # approximately how many arrows across and down you want
+        Nq = 10 # approximately how many arrows across and down you want
         WN = 8 # upsample factor for vertical wind color plot
         figsize=(5,5) # 6,6
-        sc = figsize[1]/(Nq*200) # 1/Nq^th of the plot width <==> 250 m/s, for quiver
+        sc = figsize[1]/(Nq*200.) # 1/Nq^th of the plot width <==> 250 m/s, for quiver
         pivot = 'middle' # for quiver
         headwidth = 4 # 3
         headlength = 4 # 3
