@@ -1,4 +1,6 @@
 # A module for functions used for the conversion of MIGHTI Level 1 files to Level 2.1 and 2.2 files
+# Altitudes and distances are expressed in km everywhere in the code, except when it's about to be
+# saved in a netCDF file.
 
 import numpy as np
 import ICON
@@ -646,8 +648,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
             phase[i] = extract_phase_from_row(Li, zero_phase, phase_offset)
             
     amp = np.sum(abs(Ip),axis=1)        
-            
-
+    
 
 
     ######### Uncertainty propagation #########
@@ -937,7 +938,11 @@ def interpolate_linear(x, y, x0, extrapolation='hold', prop_err = False, yerr = 
     '''
     
     if prop_err and yerr is None:
-        raise Exception('If prop_err=True, then yerr must be specified')
+        raise Exception('If prop_err=True, then yerr must be specified')    
+        
+    # Special corner case: x0 is exactly on the last grid point
+    if x0==x[-1]:
+        return y[-1]
     
     j0 = bisect.bisect(x,x0) - 1 # index to the left
     j1 = j0 + 1 # index to the right
@@ -1501,6 +1506,7 @@ def save_nc_level21(path, L21_dict):
       * accept L2.1 filename as argument, from which I will extract what should go in Data_Version
       * Have a second set of eyes look at descriptions of each variable
       * Should dimensions be labeled the same as variables? Altitude/Vector/Epoch. Should Depend_0 point to vars or dims?
+      * How to specify sensor?
       
     '''
 
@@ -1517,7 +1523,7 @@ def save_nc_level21(path, L21_dict):
     elif ('_B_' in source_files) or ('-B_' in source_files):
         sensor = 'B'
     else:
-        raise Exception('Cannot Determine Sensor from "%s"'%source_files) 
+        raise Exception('Cannot Determine Sensor from filename: "%s"'%source_files) 
 
     #################### Compile variables to write in file ######################
     ### Timing:
@@ -1673,8 +1679,8 @@ def save_nc_level21(path, L21_dict):
 
 
         ######### Data Location and Direction Variables #########
-        prefix = 'ICON_L2_1_MIGHTI-%s_%s' % (sensor, L21_dict['emission_color'].upper()) # prefix of each variable,
-                                                                                         # e.g., ICON_L2_1_MIGHTI-A_RED
+        prefix = 'ICON_L2_1_MIGHTI_%s_%s' % (sensor, L21_dict['emission_color'].upper()) # prefix of each variable,
+                                                                                         # e.g., ICON_L2_1_MIGHTI_A_RED
         
         # Altitude
         val = L21_dict['alt']*1e3 # convert to meters
@@ -1702,7 +1708,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # Azimuth angle of line of sight
-        var = _create_variable(ncfile, '%s_Line-of-sight_Azimuth'%prefix, L21_dict['az'], 
+        var = _create_variable(ncfile, '%s_Line_of_Sight_Azimuth'%prefix, L21_dict['az'], 
                               dimensions=('Altitude'), depend_0 = var_alt.name,
                               format_nc='f8', format_fortran='F', desc='Azimuth angle of the line of sight at the tangent point. Deg East of North.', 
                               display_type='altitude_profile', field_name='Line-of-sight Azimuth', fill_value=None, label_axis='Azimuth', bin_location=0.5,
@@ -1713,7 +1719,7 @@ def save_nc_level21(path, L21_dict):
         ######### Data Variables #########
 
         # Line-of-sight wind profile
-        var = _create_variable(ncfile, '%s_Line-of-sight_Wind'%prefix, L21_dict['los_wind'], 
+        var = _create_variable(ncfile, '%s_Line_of_Sight_Wind'%prefix, L21_dict['los_wind'], 
                               dimensions=('Altitude'), depend_0 = var_alt.name,
                               format_nc='f8', format_fortran='F', desc='Line-of-sight horizontal wind profile. A positive wind is towards MIGHTI.', 
                               display_type='altitude_profile', field_name='Line-of-sight Wind', fill_value=None, label_axis='LoS Wind', bin_location=0.5,
@@ -1721,7 +1727,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # Line-of-sight wind error profile
-        var = _create_variable(ncfile, '%s_Line-of-sight_Wind_Error'%prefix, L21_dict['los_wind_error'], 
+        var = _create_variable(ncfile, '%s_Line_of_Sight_Wind_Error'%prefix, L21_dict['los_wind_error'], 
                               dimensions=('Altitude'), depend_0 = var_alt.name,
                               format_nc='f8', format_fortran='F', desc='Line-of-sight Horizontal Wind Error Profile', 
                               display_type='altitude_profile', field_name='Line-of-sight Wind Error', fill_value=None, label_axis='Wind Error', bin_location=0.5,
@@ -1816,7 +1822,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # MIGHTI ECEF vectors
-        var = _create_variable(ncfile, '%s_Line-of-sight_Vector'%prefix, L21_dict['mighti_ecef_vectors'], 
+        var = _create_variable(ncfile, '%s_Line_of_Sight_Vector'%prefix, L21_dict['mighti_ecef_vectors'], 
                               dimensions=('Altitude','Vector'), depend_0 = var_alt.name, # depend_1 = 'Vector',
                               format_nc='f8', format_fortran='F', desc='The look direction of each MIGHTI line of sight, as a vector in ECEF', 
                               display_type='altitude_profile', field_name='Line-of-sight Vector', fill_value=None, label_axis='LoS Vec', bin_location=0.5,
@@ -2027,7 +2033,9 @@ def level21_to_dict(L21_fns):
     
     fn = L21_fns[0]
     d = netCDF4.Dataset(fn)
-    prefix = fn.split('/')[-1][:-31] # e.g., ICON_L2_1_MIGHTI-A_RED
+    sens  = fn.split('/')[-1][:-31].split('_')[-2][-1] # A or B
+    color = fn.split('/')[-1][:-31].split('_')[-1]     # RED or GREEN
+    prefix = 'ICON_L2_1_MIGHTI_%s_%s' % (sens, color)
     ny = len(d.variables['%s_Altitude'%prefix])
     nt = len(L21_fns)
     d.close()
@@ -2045,15 +2053,17 @@ def level21_to_dict(L21_fns):
     for i in range(nt):
         fn = L21_fns[i]
         d = netCDF4.Dataset(fn)
-        prefix = fn.split('/')[-1][:-31] # e.g., ICON_L2_1_MIGHTI-A_RED
+        sens  = fn.split('/')[-1][:-31].split('_')[-2][-1] # A or B
+        color = fn.split('/')[-1][:-31].split('_')[-1]     # RED or GREEN
+        prefix = 'ICON_L2_1_MIGHTI_%s_%s' % (sens, color)
         emission_color = d.variables['%s_Emission_Color' % prefix][...].lower()      
 
         lat[:,i] =            d.variables['%s_Latitude' % prefix][...]
         lon[:,i] =            d.variables['%s_Longitude' % prefix][...]
         alt[:,i] =     1e-3 * d.variables['%s_Altitude' % prefix][...] # m to km
-        los_wind[:,i] =       d.variables['%s_Line-of-sight_Wind' % prefix][...]
-        los_wind_error[:,i] = d.variables['%s_Line-of-sight_Wind_Error' % prefix][...]
-        local_az[:,i] =       d.variables['%s_Line-of-sight_Azimuth' % prefix][...]
+        los_wind[:,i] =       d.variables['%s_Line_of_Sight_Wind' % prefix][...]
+        los_wind_error[:,i] = d.variables['%s_Line_of_Sight_Wind_Error' % prefix][...]
+        local_az[:,i] =       d.variables['%s_Line_of_Sight_Azimuth' % prefix][...]
         amp[:,i] =            d.variables['%s_Fringe_Amplitude' % prefix][...]
         time_msec =           d.variables['Epoch'][...].item()
         time[i] = datetime(1970,1,1) + timedelta(seconds = 1e-3*time_msec)
