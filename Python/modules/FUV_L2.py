@@ -18,6 +18,7 @@ import datetime
 
 # From the scipy module we need the optimize, linalg.sqrtm, io.netcdf, interpolate.interp1d
 import scipy
+from scipy import interpolate
 
 # From the time modeule we need the gmtime, strftime functions
 import time
@@ -104,7 +105,7 @@ def create_cells_Matrix_spherical_symmetry(theta,Horbit,RE=6371.):
     theta = np.deg2rad(theta)
     
     #for angle in theta:
-    rbot= ic.angle2tanht(theta, Horbit, RE)
+    rbot= ic.ze_to_tang_alt(np.rad2deg(theta), Horbit, RE)
     # Define top of each layer.
     
     rtop = rbot.copy()
@@ -340,7 +341,7 @@ def Maximum_Curvature_gradiens(residual,x_lamda,reg_param):
     return reg_corner
 
 # Create regularization parameter vector
-def create_alpha_values(A,npoints = 100.):
+def create_alpha_values(A,npoints = 100):
     '''
     Given a distance matrix A a number of points the regularization parameter vector is created. 
     INPUTS:
@@ -642,7 +643,7 @@ def hmF2_region_interpolate(Ne,alt_vector,interval_increase = 5.,kind ='cubic'):
         x_true = alt_vector[nm_true-5:nm_true+5]
 
         # Create the interplator
-        f2 = interp1d(x_true, y_true, kind)
+        f2 = interpolate.interp1d(x_true, y_true, kind)
         
         # Create the new altitude vector by determining how many new points we want in the F2-peak region interval
         alt_vector_interp = np.linspace(x_true[0], x_true[-1], num=len(x_true)*interval_increase, endpoint=True)

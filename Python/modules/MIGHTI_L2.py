@@ -89,63 +89,6 @@ def circular_mean(angle0,angle1):
 
 
 
-def tang_alt_to_ze(tang_alt, sat_alt, RE):
-    '''
-    Return the zenith angle(s) of the look direction(s) with given tangent 
-    altitude(s). Uses spherical Earth approximation.
-    
-    INPUTS:
-    
-      *  tang_alt -- TYPE:array or float, UNITS:km. Tangent altitude(s) of the ray(s)
-      *  sat_alt  -- TYPE:float,          UNITS:km. Satellite altitude (sat_alt > tang_alt)
-      *  RE       -- TYPE:float,          UNITS:km. Effective radius of Earth
-      
-    OUTPUT:
-    
-      *  ze       -- TYPE:array or float, UNITS:deg. Zenith angle(s) of the ray(s)
-      
-    '''
-    if hasattr(tang_alt,"__len__"):
-        tang_alt = np.array(tang_alt)
-        if any(sat_alt <= tang_alt):
-            raise Exception('Tangent altitude must be below satellite altitude')
-    elif sat_alt <= tang_alt:
-        raise Exception('Tangent altitude must be below satellite altitude')
-        
-    ze = 180. - np.rad2deg(np.arcsin( (tang_alt+RE)/(sat_alt+RE) ))
-    return ze
-
-
-
-
-def ze_to_tang_alt(ze, sat_alt, RE):
-    '''
-    Return the tangent altitude(s) of the look direction(s) with given zenith 
-    angle(s). Uses spherical Earth approximation.
-    
-    INPUTS:
-    
-      *  ze       -- TYPE:array or float, UNITS:deg. Zenith angle(s) of the ray(s)
-      *  sat_alt  -- TYPE:float,          UNITS:km.  Satellite altitude
-      *  RE       -- TYPE:float,          UNITS:km.  Effective radius of Earth
-      
-    OUTPUT:
-    
-      *  tang_alt -- TYPE:array or float, UNITS:km.  Tangent altitude(s) of the ray(s)
-      
-    '''
-    if hasattr(ze,"__len__"):
-        ze = np.array(ze)
-        if any( ze < 90. ) or any( ze > 180. ):
-            raise Exception('Angle must be between 90 and 180, exclusive.')
-    elif ( ze < 90. ) or ( ze > 180.):
-        raise Exception('Angle must be between 90 and 180, exclusive.')
-    tang_alt = (sat_alt+RE)*np.sin(np.deg2rad(ze)) - RE  
-    return tang_alt
-
-
-
-
 def remove_satellite_velocity(I, sat_latlonalt, sat_velocity, sat_velocity_vector, mighti_vectors, sigma_opd,):
     '''
     Modify the interferogram to remove the effect of satellite velocity upon the phase. 
@@ -392,7 +335,7 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_o
     # analogous to Riemann sum integration
     if integration_order == 0:
     
-        theta = np.deg2rad(tang_alt_to_ze(tang_alt, icon_alt, RE))
+        theta = np.deg2rad(ICON.tang_alt_to_ze(tang_alt, icon_alt, RE))
         
         # Define grid. Bottom of each layer is defined by tangent height of observation.
         rbottom = tang_alt
@@ -503,7 +446,7 @@ def create_local_projection_matrix(tang_alt, icon_alt):
     # (The estimated winds are barely sensitive to the choice of RE. This
     #  approximation introduces an error < 1mm/s)
     RE = 6371.
-    theta = tang_alt_to_ze(tang_alt, icon_alt, RE)
+    theta = ICON.tang_alt_to_ze(tang_alt, icon_alt, RE)
     
     ny = len(tang_alt)
     

@@ -360,15 +360,70 @@ def project_line_of_sight(satlatlonalt, az, ze, step_size = 1., total_distance =
         
     return xyz, latlonalt
  
+    
+    
+    
+def tang_alt_to_ze(tang_alt, sat_alt, RE):
+    '''
+    Calculate the zenith angle from the satellite that has the specified 
+    tangent altitude, using a spherical Earth approximation.
+    
+    INPUTS:
+    
+      *  tang_alt -- TYPE:array or float, UNITS:km. Tangent altitude(s) of the ray(s)
+      *  sat_alt  -- TYPE:float,          UNITS:km. Satellite altitude (sat_alt > tang_alt)
+      *  RE       -- TYPE:float,          UNITS:km. Effective radius of Earth
+      
+    OUTPUT:
+    
+      *  ze       -- TYPE:array or float, UNITS:deg. Zenith angle(s) of the ray(s)
+      
+    '''
+    if hasattr(tang_alt,"__len__"):
+        tang_alt = np.array(tang_alt)
+        if any(sat_alt <= tang_alt):
+            raise Exception('Tangent altitude must be below satellite altitude')
+    elif sat_alt <= tang_alt:
+        raise Exception('Tangent altitude must be below satellite altitude')
+        
+    ze = 180. - np.rad2deg(np.arcsin( (tang_alt+RE)/(sat_alt+RE) ))
+    return ze
+
+
+
+
+def ze_to_tang_alt(ze, sat_alt, RE):
+    '''
+    Calculate the tangent altitude using a spherical Earth approximation. See
+    tangent_point(...) function for a WGS84 Earth model.
+    
+    INPUTS:
+    
+      *  ze       -- TYPE:array or float, UNITS:deg. Zenith angle(s) of the ray(s)
+      *  sat_alt  -- TYPE:float,          UNITS:km.  Satellite altitude
+      *  RE       -- TYPE:float,          UNITS:km.  Effective radius of Earth
+      
+    OUTPUT:
+    
+      *  tang_alt -- TYPE:array or float, UNITS:km.  Tangent altitude(s) of the ray(s)
+      
+    '''
+    if hasattr(ze,"__len__"):
+        ze = np.array(ze)
+        if any( ze < 90. ) or any( ze > 180. ):
+            raise Exception('Angle must be between 90 and 180, exclusive.')
+    elif ( ze < 90. ) or ( ze > 180.):
+        raise Exception('Angle must be between 90 and 180, exclusive.')
+    tang_alt = (sat_alt+RE)*np.sin(np.deg2rad(ze)) - RE  
+    return tang_alt
+
  
     
     
 def tangent_point(satlatlonalt, az, ze, tol=1e-7):
     '''
-    Find the location (lat, lon, alt) of the tangent point of a ray from the satellite.
-    Current implementation finds the minimum altitude along the line of sight by using
-    a numerical method with a precision of about 0.1 m. The vertical
-    precision is much better than the horizontal precision.
+    Find the location (lat, lon, alt) of the tangent point of a ray from the satellite using
+    a WGS84 Earth model. See ze_to_tang_alt(....) for a spherical Earth model.
     
     INPUTS:
        * satlatlonalt - array [latitude (deg), longitude (deg), altitude (km)] of the satellite
