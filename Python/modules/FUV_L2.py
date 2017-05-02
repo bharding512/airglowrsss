@@ -32,6 +32,11 @@ from scipy import io
 #scipy.io.netcdf for the reader
 import netCDF4
 
+# For Monte Carlo processing:
+from numpy.random import multivariate_normal
+
+from scipy.linalg import sqrtm # matrix square root
+
 '''
 From the multiprocssing tool we need Pool. 
 This might not be used since we dont know how many cores we are going to have in our disposal.
@@ -228,72 +233,125 @@ TIKHONOV REGULARIZATION
 '''
 
 # Tikhonov Regularization
-def Tikhonov(A,Brightness,reg_deg,reg_param=0.):
+def Tikhonov(A, Bright, reg_deg, reg_param=0., Sig_Bright=None, weight_resid=False):
     '''
     Tikhonov Regularization function. Solves the minimization problem.
     The regularization parameter is calculated using the L-Curve and finding the maximum curvature point. 
     INPUTS:
-        A          - Distance matrix
-        Brightness - Brightness Profile (Rayleigh)
-        reg_deg    - The degree of Tikhonov regularization [valid is 0,1,2]
-        reg_param  - regularization parameter. [Input 0: Calls If zero, calls create_alpha_values to create the reguraliation
-                     parameter vector. Input, any scalar or matrix: perform regularization given that input.
+        A            - Distance matrix
+        Bright       - Brightness Profile (Rayleigh)
+        reg_deg      - The degree of Tikhonov regularization [valid is 0,1,2]
+        reg_param    - regularization parameter. [Input 0: calls create_alpha_values to create the reguraliation
+                       parameter vector. Input, any scalar or matrix: perform regularization given that input]
+        Sig_Bright   - Covariance matrix of Bright. If None, ver is the only output. If specified, it is propagated
+                       through, and both ver and Sig_ver are outputs.
+        weight_resid - Whether to weight the data by its covariance. If this is True, Sig_Bright must be specified.
     OUTPUT:
-        ver        - Estimated Volume emission rate [ph/cm^{-3}/s]
+        ver          - Estimated Volume emission rate [ph/cm^{-3}/s]
+        Sig_ver      - Covariance matrix of ver (only outputted if Sig_Bright is not None)
     NOTES:
     HISTORY:
         15-May-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
+        20-Apr-2016: Uncertainty propagation added by Brian Harding (bhardin2@illinois.edu)
     CALLS:
         -create_alpha_values
         -calc_solution
         -Maximum_Curvature_gradiens
     '''
+    
+    # Make copy of inputs so we don't accidentally overwrite them
+    A = A.copy()
+    Bright = Bright.copy()
+
+            
+    # Check if weight inputs make sense
+    if weight_resid and Sig_Bright is None:
+        raise Exception('weight_resid==True does not make sense if Sig_Bright is None. Either specify Sig_Bright or ' +\
+                        'set weight_resid==False')
+        
+    # If we want to use a weighted least-squares formulation, we can "whiten" the errors and use
+    # the exact same code.
+    if weight_resid:
+        W = sqrtm(np.linalg.inv(Sig_Bright)) # whitening matrix
+        A = W.dot(A)
+        Bright = W.dot(Bright)
+        Sig_Bright = np.eye(len(Bright)) # whitening diagonalizes the covariance matrix
+        
 
     # Check if reg_param is a vector or not
     if np.size(reg_param) == 1:
         # if its not a vector only if zero it will calculate the vector. Otherwise it will use the single value given. 
         if reg_param == 0:
             reg_param = create_alpha_values(A)
-
+    
     residual = np.zeros(len(reg_param))
     seminorm = np.zeros(len(reg_param))
     
     # create the matrix that defines the order of the regularization.
-    L = get_rough_matrix(len(Brightness),reg_deg)
+    L = get_rough_matrix(len(Bright),reg_deg)
 
-    # For every regularization parameter estimate solution
+    # For every regularization parameter, estimate solution
     for i in range(0,len(reg_param)):
-        sol = calc_solution(A,Brightness,reg_param[i],L) 
-        residual[i] = np.linalg.norm(A.dot(sol)-Brightness)
+        sol = calc_solution(A,Bright,reg_param[i],L) # for speed, we can omit the uncertainty prop here 
+        r = A.dot(sol) - Bright
+        residual[i] = np.linalg.norm(r)
         seminorm[i] = np.linalg.norm(L.dot(sol))
         
     # Find the optimal regularization parameter using the maximum second derivative method
     reg_corner = Maximum_Curvature_gradiens(residual,seminorm,reg_param)
-        
-    ver = calc_solution(A,Brightness,reg_corner,L) 
-
-    return ver
+    
+    # Calculate the solution with the optimal parameter (and, if desired, also the uncertainty)
+    if Sig_Bright is None:
+        ver = calc_solution(A,Bright,reg_corner,L)
+        return ver
+    else:
+        # Note that if weight_resid was True, we already whitened the errors so don't need to weight
+        # again in the sub-function
+        ver,Sig_ver = calc_solution(A,Bright,reg_corner,L,Sig_Bright=Sig_Bright,weight_resid=False)
+        return ver,Sig_ver
     
 
 # Calculate regularized inverse rolution
-def calc_solution(A,Bright,lamda,L):
+def calc_solution(A,Bright,alpha,L,Sig_Bright=None,weight_resid=False):
     '''
-    Calculates the solution using non-negative least square for the regularization problem
+    Calculates the solution using non-negative least square for the regularization problem.
+    Optionally propagates uncertainty from input brightness to output VER.
     INPUTS:
-        A      - Distance matrix
-        Bright - Brightness Profile (Rayleigh)
-        lamda  - The selected regularization parameter
-        L      - Roughening matrix
+        A          - Distance matrix
+        Bright     - Brightness Profile (Rayleigh)
+        lamda      - The selected regularization parameter
+        L          - Roughening matrix
+    OPTIONAL INPUTS:
+        Sig_Bright   - Covariance matrix of Bright. If not None, the uncertainty propagation calculation will be performed, and
+                       output uncertainty will be returned. Default is None, for speed.
+        weight_resid - Whether to weight the data by its covariance. If this is True, Sig_Bright must be specified.
     OUTPUT:
-        ver    - Estimated electron density (cm^-3)       
+        ver        - Estimated electron density (cm^-3)
+    OPTIONAL OUTPUT:
+        Sig_ver    - Covariance matrix of ver.
+                     
     NOTES:
     HISTORY:
         15-May-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
+        20-Apr-2016: Uncertainty propagation added by Brian Harding (bhardin2@illinois.edu)
     CALLS:
     '''
     
+    # Check if weight inputs make sense
+    if weight_resid and Sig_Bright is None:
+        raise Exception('weight_resid==True does not make sense if Sig_Bright is None. Either specify Sig_Bright or ' +\
+                        'set weight_resid==False')
+        
+    # If we want to use a weighted least-squares formulation, we can "whiten" the errors and use
+    # the exact same code.
+    if weight_resid:
+        W = sqrtm(np.linalg.inv(Sig_Bright)) # whitening matrix
+        A = W.dot(A)
+        Bright = W.dot(Bright)
+        Sig_Bright = np.eye(len(Bright)) # whitening diagonalizes the covariance matrix
+    
     # Create the augmented matrix C
-    C = np.concatenate((A, lamda*L))
+    C = np.concatenate((A, alpha*L))
     
     # Check of the size of the brightness is correct
     if np.size(np.shape(Bright))==2:
@@ -308,11 +366,19 @@ def calc_solution(A,Bright,lamda,L):
     # Solve the non-negative constrained least-squares
     ver,_ = scipy.optimize.nnls(C,d)
     
+    # Solve using normal least squares
+    #ver = np.linalg.lstsq(C,d)[0]
     
-    return ver
+    if Sig_Bright is None:
+        return ver
+    else:
+        # Use linear error propagation, ignoring the non-negativity constrant.
+        R = np.linalg.inv(A.T.dot(A) + alpha**2 * L.T.dot(L))
+        Sig_ver = R.dot(A.T).dot(Sig_Bright).dot(A).dot(R.T)
+        return ver, Sig_ver
     
-# Calculate the optimal regularization parameter using maximum second derivative  
-def Maximum_Curvature_gradiens(residual,x_lamda,reg_param):
+# Calculate the optimal regularization parameter
+def Maximum_Curvature_gradiens(residual,x_lamda,reg_param,method='derivative'):
     '''
     Given the residual and the seminorm of the L2 norm problem the corner of the L-Curve is calculated by
     finding the maximum curvature by finding the maximum second derivative
@@ -320,24 +386,42 @@ def Maximum_Curvature_gradiens(residual,x_lamda,reg_param):
         residual   - The residual norm of our minimization problem
         x_lamda    - The seminorm of ||Lx||
         reg_param  - Vector containing all the regularization parameters
+        method     - either 'curvature' or 'derivative':
+                        'curvature': find the point in the L-curve with the minimum radius of curvature
+                        'derivative': find the point in the L-curve with the maximum 2nd derivative
     OUTPUT:
-        reg_corner - Maximum curvature point - Best regularization parameter 
+        reg_corner - Optimal regularization parameter 
     NOTES:
     HISTORY:
         17-Sep-2015: Written by Dimitrios Iliou (iliou2@illinois.edu) and Jianqi Qin (jianqi@illinois.edu)
+        26-Apr-2017: Added option for maximum curvature (instead of maximum 2nd derivative) Brian Harding (bhardin2@illinois.edu) 
     CALLS:
     '''
-    # Maximum Curvature
-    #transform rho and eta into log-log space
-    d1=np.log(residual);
-    m1=np.log(x_lamda);
     
-    grad1 =  np.gradient(m1)/np.gradient(d1)
-    grad2 = np.gradient(grad1)/np.gradient(d1)
+    #transform rho and eta into log-log space
+    Xvec=np.log(residual);
+    Yvec=np.log(x_lamda);
+    
+    if method == 'derivative': # Compute second derivative at each point
+        grad1 =  np.gradient(Yvec)/np.gradient(Xvec)
+        grad2 = np.gradient(grad1)/np.gradient(Xvec)
+    
+    elif method == 'curvature': # Compute radius of curvature at each point
+        grad2 = np.zeros(len(reg_param))
+        for i in range(1,len(reg_param)-1):
+            da = reg_param[i+1]-reg_param[i-1]
+            dxda = (Xvec[i+1]-Xvec[i-1])/da
+            dyda = (Yvec[i+1]-Yvec[i-1])/da
+            da2 = ((reg_param[i+1]-reg_param[i-1])/2)**2
+            d2yda2 = (Yvec[i-1] - 2*Yvec[i] + Yvec[i+1])/da2
+            d2xda2 = (Xvec[i-1] - 2*Xvec[i] + Xvec[i+1])/da2
+            grad2[i] = (dxda*d2yda2 - dyda*d2xda2)/(dxda**2 + dyda**2)**(1.5)
+    else:
+        raise Exception('Input "method" should be "curvature" or "derivative"')
     
     ireg_corner=np.argmax(grad2)
-    reg_corner=reg_param[ireg_corner];
-    
+    reg_corner=reg_param[ireg_corner]
+            
     return reg_corner
 
 # Create regularization parameter vector
@@ -415,7 +499,7 @@ MAP ESTIMATION
 
 '''
 # MAP ESTIMATION FUNCTION
-def MAP_Estimation(S,Bright,VER_mean=0.,VER_profiles=0.):
+def MAP_Estimation(S,Bright,VER_mean=0.,VER_profiles=0.,weight_resid=False):
     '''
     Bayesian MAP Estimation Method for regularization. This method takes as input the prior distribution mean and ver profiles
     INPUTS:
@@ -423,6 +507,7 @@ def MAP_Estimation(S,Bright,VER_mean=0.,VER_profiles=0.):
         Bright       - Brightness Profile (Rayleigh)  
         VER_mean     - Prior mean
         VER_profiles - Prior variance matrix  
+        weight_resid - Whether to weight the data
     OUTPUT:
         VER          - Estimated VER (ph/cm^-3/s)
     NOTES:
@@ -437,6 +522,9 @@ def MAP_Estimation(S,Bright,VER_mean=0.,VER_profiles=0.):
         if (VER_profiles==0):
             print 'PRIOR IS MISSING'
             raise Exception
+            
+    if weight_resid:
+        raise Exception('Weighted residual not yet implemented for MAP_Estimation')
     
     # Interpolate brightness to remove zeros and calculate the covariance matrix
     # This is needed so the covariance matrix for the data is not singular
@@ -499,7 +587,7 @@ CALCULATE ELECTRON DENSITY
 '''
 
 # Calculate the electron density given VER
-def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,contribution='RR'):
+def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,Sig_VER=None,contribution='RR'):
     '''
     Given a VER profile the electron density is calculated. The physical process for the VER must be defined.
     INPUTS:
@@ -507,13 +595,18 @@ def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,contribution='R
         satlatlonalt    - satellite coordinates [latitude(degrees),longitude(degrees),altitude(km)]
         tang_altitude   - tangent altitude [km]
         dt              - datetime (python datetime)
+        Sig_VER         - Covariance matrix of VER. If None, Ne will be the only output. [(ph/cm^-3)**2]
         contribution    - contributions to the 135.6nm emission, RR: Radiative Recombination, RRMN: Radiative Recombination and Mutual Neutralization 
     OUTPUTS:
-        Ne              - The estimated Electron Density profile (1/cm^3/s)       
+        Ne              - The estimated Electron Density profile (1/cm^3/s)
+        Sig_Ne          - (OPTIONAL) covariance matrix of Ne. If Sig_VER is None, this is not returned.
     NOTES:
-        For the calculation, Ne is approximately equal O+. This is assumption is valid for the altitudes that the FUV limb measurement are looking
+        For the calculation, Ne is approximately equal O+. This is assumption is valid for the altitudes that the FUV limb measurement are looking.
+    TODO:
+        (BJH) For MN, we should use the location of the tangent point, not the satellite location (though it probably won't matter much).
     HISTORY:
         17-Sep-2015: Written by Dimitrios Iliou (iliou2@illinois.edu) 
+        24-Apr-2017: Uncertainty propagation added by Brian Harding (bhardin2@illinois.edu)
     CALLS:
         Pyglow
     
@@ -524,6 +617,12 @@ def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,contribution='R
         VER = VER[:,0]
     elif np.size(np.shape(VER))>2:
         raise Exception('Invalid data vector')
+
+    # Check if uncertainties should be returned
+    ret_cov = True
+    if Sig_VER is None:
+        Sig_VER = np.eye(len(VER)) # dummy variable
+        ret_cov = False
 
     b1356 = 0.54    # yield parameter (unitless)
     a1356 = 7.3e-13 # radiative recombination rate (cm^3/s)
@@ -541,7 +640,7 @@ def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,contribution='R
             pt = pyglow.pyglow.Point(dt, satlatlonalt[0], satlatlonalt[1], height)
             # Run MSIS-00 to get O density
             pt.run_msis()
-
+    
             # Store the Oxygen density for every line of sight - tangent altitude
             O[i] = pt.nn['O']  
         
@@ -565,13 +664,42 @@ def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,contribution='R
             
         # used arccos instead of MATLAB acos
         Ne = c1+2.0*np.sqrt(-b1)*np.cos(np.arccos(d1)/3.0)
-    elif contribution == 'RR':    
+        
+        # Propagation of uncertainty through this process
+        # TODO: use the correct formulation for RRMN
+        # CURRENT IMPLEMENTATION: copy of RR implementation
+        dVER = np.sqrt(np.diag(Sig_VER))
+        dNe_dVER = 1/np.sqrt(a1356) * (np.sqrt(VER+dVER) - np.sqrt(VER))/dVER
+        J = np.diag(dNe_dVER) # Ne at altitude i only depends on VER at altitude i
+        Sig_Ne = J.dot(Sig_VER).dot(J.T)
+        
+    elif contribution == 'RR': 
+       
+        # VER to ne conversion
         Ne = np.sqrt(VER/a1356)
+        
+        # Propagate uncertainty through this conversion, using the Jacobian formula:
+        # if X is a random vector, and Y=f(X), then SigY = J.dot(SigX).dot(J.T) where
+        # J is the Jacobian of f.
+        
+        # The only problem is that when VER is really small, the Jacobian grows to infinity.
+        # For these samples, simple linearized error propagation is not valid. Instead of
+        # using the analytical dy/dx, we will use dy/dx estimated from the secant method.
+        # This gives a better indication of the true confidence intervals.
+        dVER = np.sqrt(np.diag(Sig_VER))
+        dNe_dVER = 1/np.sqrt(a1356) * (np.sqrt(VER+dVER) - np.sqrt(VER))/dVER
+        J = np.diag(dNe_dVER) # Ne at altitude i only depends on VER at altitude i
+        Sig_Ne = J.dot(Sig_VER).dot(J.T)
+        
     else:
         raise Exception('Invalid input for the process selection')
 
-    Ne[np.isnan(Ne)] = 0
-    return Ne
+    #Ne[np.isnan(Ne)] = 0
+    
+    if ret_cov:
+        return Ne,Sig_Ne
+    else:
+        return Ne
     
     
 '''
@@ -579,22 +707,33 @@ def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,contribution='R
 EXTRACT F2 PEAK DENSITY AND HEIGHT
 
 '''
-def find_hm_Nm_F2(NE,alt_vector,interpolate_F2=False,interval_increase = 5.,kind ='cubic'):
+def find_hm_Nm_F2(NE,alt_vector,interpolate_F2=True,interval_increase = 20.,kind ='cubic', Sig_NE=None, Nmc=100):
     '''
     Calculates the NmF2 and hmF2 of a given electron density profile
     INPUTS:
-        NE            - Electron density profile [cm^{-3}]
-        alt_vector    - altitude vector [km]
+        NE             - Electron density profile [cm^{-3}]
+        alt_vector     - altitude vector [km]
         interpolate_F2 - Flag indicating if we interpolation in the F2-peak region will be performed 
+        interval_increase  - Number indicating the amount of points to be created. => len(hmf2Region)* int_increase
+        kind           - Goes as input to the interp1d function and declares the type of interpolation
+        Sig_NE         - covariance matrix of NE. If this is not None, then the sigma_hmF2 and sigma_NmF2 will be outputted.
+        Nmc            - number of Monte Carlo trials to calculate uncertainty (Only used if Sig_NE is not None).
     OUTPUT:
-        hmF2 -  altitude of the maximum intesity value of the Ne profile
-        NmF2 -  peak intensity value of the altitude profile
+        hmF2       - altitude of the maximum intesity value of the Ne profile
+        NmF2       - peak intensity value of the altitude profile
+        sigma_hmF2 - (OPTIONAL) propagated uncertainty of hmF2 (only outputted if Sig_NE is not None)
+        sigma_NmF2 - (OPTIONAL) propagated uncertainty of NmF2 (only outputted if Sig_NE is not None)
     NOTES:
 
     HISTORY:
         06-Jun-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
         16-Jun-2016: Added F2-peak region interpolation option
+        25-Apr-2017: Uncertainty propagation (Monte Carlo) added by Brian Harding (bhardin2@illinois.edu)
     '''
+    
+    # Save copy of the inputs in case interpolate_F2 is True.
+    NE_orig = NE.copy()
+    alt_vector_orig = alt_vector.copy()
     
     # If flagged do interpolation in the F2-peak region
     if interpolate_F2:
@@ -608,11 +747,37 @@ def find_hm_Nm_F2(NE,alt_vector,interpolate_F2=False,interval_increase = 5.,kind
         
     # Return the value in the electron density vector that corresponds to the above index
     NmF2 = NE[indexf2]
+
     
-    return hmF2,NmF2
+    # If desired, propagate uncertainty using bootstrapped Monte Carlo
+    if Sig_NE is not None:
+        # For this we only need to consider the region near hmF2. By restricting the domain:
+        #     - it runs faster
+        #     - it avoids problems with huge uncertainties on bottomside
+        idx = np.where(abs(alt_vector_orig-hmF2) < 100)[0] # focus on +/- 100 km from peak
+        NE2 = NE_orig[idx]
+        alt2 = alt_vector_orig[idx]
+        Sig_NE2 = Sig_NE[np.ix_(idx,idx)] # awkward indexing to get covariance-matrix of subset
+        hmF2_vec = np.zeros(Nmc)
+        NmF2_vec = np.zeros(Nmc)
+        for n in range(Nmc):
+            # Generate a new random profile by sampling from a multivariate Gaussian
+            NE_n = multivariate_normal(NE2, Sig_NE2)
+            # Calculate and store the hmF2 and NmF2 of this random profile.
+            h,N = find_hm_Nm_F2(NE_n, alt2, interpolate_F2, interval_increase, kind, Sig_NE=None)
+            hmF2_vec[n] = h
+            NmF2_vec[n] = N
+        
+        sigma_hmF2 = np.std(hmF2_vec)
+        sigma_NmF2 = np.std(NmF2_vec)
+        
+        return hmF2, NmF2, sigma_hmF2, sigma_NmF2
+    
+    else:
+        return hmF2, NmF2
 
 # Perform interpolation in the F2-region
-def hmF2_region_interpolate(Ne,alt_vector,interval_increase = 5.,kind ='cubic'):
+def hmF2_region_interpolate(Ne,alt_vector,interval_increase = 20.,kind ='cubic'):
     '''
     Interpolates the values around the hmF2 region in order to increase altitude vector interval which helps in minimizing the hmF2 error
     INPUTS:
@@ -664,7 +829,7 @@ L2 Calculation top-level function
 
 '''
 
-def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze,limb = 150.,Spherical = True,reg_method='Tikhonov',regu_order = 2,reg_param=0,contribution='RRMN', VER_mean=0.,VER_profiles=0,dn = datetime.datetime(2012, 9, 26, 20, 0, 0)):                                  
+def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze, Sig_Bright = None, weight_resid = False, limb = 150.,Spherical = True,reg_method='Tikhonov',regu_order = 2,reg_param=0,contribution='RRMN', VER_mean=0.,VER_profiles=0,dn = datetime.datetime(2012, 9, 26, 20, 0, 0)):                                  
     '''
     Within this function, given data from LVL1 Input file, the VER and Ne profiles for the tangent altitude point are
     calculated
@@ -674,6 +839,8 @@ def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze,limb = 
         satlatlonalt- Satellite Coordinates [degrees,degrees,km]
         az          - Azimuth [degrees]
         ze          - Zenith [degrees]
+        Sig_Bright  - Covariance matrix of Bright [Rayleigh**2]. If not None, the covariance of VER and Ne are also returned.
+        weight_resid- Whether to weight the data by the uncertainties. Passed to Tikhonov or MAP_Estimation function.
         limb        - Defines the lower bound that defines the limb [km]
         Spherical   - Flag indicating whether Sperical or Non-Spherical Earth is assumed [True, False]
         reg_method  - Regularization method selection [Tikhonov, MAP]
@@ -682,42 +849,60 @@ def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze,limb = 
         contribution- contributions to the 135.6nm emission, RR: Radiative Recombination, RRMN: Radiative Recombination and Mutual Neutralization 
         VER_mean    - Prior mean [len(altitudes)](ph/cm^{-3}/s)
         VER_profiles- Prior ver profiles [len(altitudes)xnum_of_profiles](ph/cm^{-3}/s) 
-        dn          - Datetime vector of the measurement; is needed to calculate the [O] density from MSIS to calculate the MN effect
+        dn          - Datetime object of the measurement; is needed to calculate the [O] density from MSIS to calculate the MN effect
     OUTPUT:
         VER         - Volume Emission Rate tangent altitude profile (ph/cm^{-3}/s)
         Ne          - Electron Density tangent altitude profile (cm^{-3})
         h           - Truncated tangent altitude vector [km]
+        Sig_VER     - (OPTIONAL) Returned if Sig_Bright is not None. Covariance matrix of VER.
+        Sig_Bright  - (OPTIONAL) Returned if Sig_Bright is not None. Covariance matrix of Ne.
     NOTES:
 
     HISTORY:
         16-Jun-2016: Written by Dimitrios Iliou (iliou2@illinois.edu)
+        24-Apr-2017: Uncertainty propagation added by Brian Harding (bhardin2@illinois.edu)
     '''
+    
+    
+    # Determine if covariances should be returned
+    ret_cov = True
+    if Sig_Bright is None:
+        ret_cov = False
+        Sig_Bright = np.eye(len(Bright)) # dummy variable
     
     # Truncate the tangent altitude vector to include only limb measurements
     h = alt_vector[np.where(alt_vector>limb)]
+    Bright= Bright[0:len(h)]
+    Sig_Bright = Sig_Bright[:len(h),:len(h)]
+    ze = ze[:len(h)]
+    az = az[:len(h)]
     
+            
     # Check of we are estimating the distance matrix for a spherical or ellipsoid earth
     # Spherical earth calculations need ~0.26 secs
     # Non-Spherical earth calculations need ~240 secs. Using Non-Spherical earth will create a bottleneck for the data pipeline
     if Spherical:
-        S =create_cells_Matrix_spherical_symmetry(ze[:len(h)],satlatlonalt[2])
+        S = create_cells_Matrix_spherical_symmetry(ze,satlatlonalt[2])
     else:
-        S = Calculate_D_Matrix_WGS84(satlatlonalt,az[:len(h)],ze[:len(h)])    
+        S = Calculate_D_Matrix_WGS84(satlatlonalt,az,ze)    
   
-    # Truncate the brightness altitude profile to include only lowest tangent altitude input
-    Bright= Bright[0:len(h)]
 
     if reg_method=='Tikhonov':
-        VER = Tikhonov(S,Bright,regu_order,reg_param)
+        VER, Sig_VER = Tikhonov(S,Bright,regu_order,reg_param=reg_param,Sig_Bright=Sig_Bright,weight_resid=weight_resid)
     elif reg_method =='MAP':
-        VER = MAP_Estimation(S,Bright,VER_mean=VER_mean,VER_profiles=VER_profiles)
+        # BJH: I don't think MAP will be used in practice, but if so, uncertainty propagation
+        # will need to be added before we can use it. 
+        raise Exception('Uncertainty propagation not yet implemented for MAP Estimation.')
+        VER = MAP_Estimation(S,Bright,VER_mean=VER_mean,VER_profiles=VER_profiles,weight_resid=weight_resid)
     else:
-        print 'Incorrect regularization method chosen. Choices are: Tikhonov or MAP'
-        raise Exception
+        raise Exception('Incorrect regularization method chosen. Choices are: Tikhonov or MAP')
         
-    Ne= calculate_electron_density(VER = VER, satlatlonalt = satlatlonalt,tang_altitude = h,dt = dn,contribution = contribution)         
+    Ne, Sig_Ne = calculate_electron_density(VER=VER, satlatlonalt=satlatlonalt, tang_altitude=h, dt=dn, Sig_VER=Sig_VER, contribution=contribution)         
    
-    return VER,Ne,h
+    if ret_cov:
+        return VER, Ne, h, Sig_VER, Sig_Ne
+    else:
+        return VER,Ne,h
     
 '''
 
@@ -1147,6 +1332,8 @@ def Get_lvl2_5_product(path_input='/home/dimitris/Data_Files/ICON_FUV_ray_UT_15s
         is elementary. No actual LVL1 file has been given yet.
     HISTORY:
         24-Jul-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
+    TODO:
+        Add uncertainty propagation, once the input uncertainties are specified
     '''
     # Open input NetCDF file
     data = io.netcdf.netcdf_file(path_input,mode='r')
