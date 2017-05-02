@@ -388,7 +388,7 @@ def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,sym
         TE =  params['Sensitivity']
     if stripes_used==0:
         stripes_used = params['stripes_usedl']
-
+        
     # Get Brightness for a given zenith angle 
     if shperical == 0:
         Brightness = calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont,Ne_scaling,step,testing)
@@ -500,7 +500,7 @@ def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satal
     return Rayl,photons
 
 # ICON FUV
-def add_noise_to_photon_and_brightness(photons,exposure=0.,TE=0.,stripes_used = 0,reps=1):
+def add_noise_to_photon_and_brightness(photons,exposure=0., TE=0., stripes_used = 0, reps=1, ret_cov=False):
     '''
     Returns Brightness and Electron Density profile(s) after adding shot noise
     INPUTS:
@@ -509,9 +509,11 @@ def add_noise_to_photon_and_brightness(photons,exposure=0.,TE=0.,stripes_used = 
         TE          - Total Efficiency        [if zero on input loads default value]
         stripes_used- number of stripes used of the CCD [default 1] [if zero on input loads default value]
         reps        - Number of noise realizations to return [default = 1]
+        ret_cov     - If True, also return the covariance matrix of Brightness
     OUTPUTS:
         Brightness- Noisy Brightess Profile(s) [Rayleighs]
         Shot_noise- Noisy Photon Profile(s) [count]
+        ret_cov   - (OPTIONAL) covariance matrix of Brightness. Only outputted if ret_cov == True
     Comments:
         noise - input noise, Poisson Dist (counts)
     HISTORY:
@@ -531,6 +533,7 @@ def add_noise_to_photon_and_brightness(photons,exposure=0.,TE=0.,stripes_used = 
 
     shot_noise = np.zeros((reps,np.size(photons))) 
     Rayl_ = np.zeros((reps,np.size(photons)))
+    sigma_Rayl = np.zeros(np.size(photons)) # 1-sigma uncertainty
     
     for rep in range(0,reps):
         for i in range(0,np.size(photons)):
@@ -547,8 +550,15 @@ def add_noise_to_photon_and_brightness(photons,exposure=0.,TE=0.,stripes_used = 
                 shot_noise[rep,i] = stats.poisson.rvs(photons[i])
 
         Rayl_[rep,:] = shot_noise[rep,:]/(TE*exposure*stripes_used)
+        
+    for i in range(np.size(photons)):
+        sigma_Rayl[i] = np.sqrt(photons[i]) / (TE*exposure*stripes_used)
+    cov_Rayl = np.diag(sigma_Rayl**2)
     
-    return Rayl_,shot_noise
+    if ret_cov:
+        return Rayl_, shot_noise, cov_Rayl
+    else:
+        return Rayl_,shot_noise
 
 def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=1, exp=12,reps=1000,sens=0,cont=2,testing = 0,Ne_sc=1.,step=10,total_distance = 6000.,stripes_used=0,proc=16,low_ta = 150.):
     '''
