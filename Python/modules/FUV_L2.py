@@ -1450,10 +1450,8 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
     FUV_1356_IMAGE = np.zeros(np.shape(FUV_AZ))
     FUV_1356_ERROR = np.zeros(np.shape(FUV_AZ))
     for ind, d in enumerate(mirror_dir):
-        temp = data.variables['ICON_L1_FUVA_SWP_PROF_%s' % d][:]
-        temp2 = data.variables['ICON_L1_FUVA_SWP_PROF_%s_ERROR' % d][:]
-        FUV_1356_IMAGE[:,:,ind] = temp
-        FUV_1356_ERROR[:,:,ind] = temp
+        FUV_1356_IMAGE[:,:,ind] = data.variables['ICON_L1_FUVA_SWP_PROF_%s' % d][:]
+        FUV_1356_ERROR[:,:,ind] = data.variables['ICON_L1_FUVA_SWP_PROF_%s_ERROR' % d][:]
 
     # Get observation times from file and store in a datetime variable
     temp = data.variables['ICON_L1_FUVA_SWP_CENTER_TIMES']
