@@ -168,7 +168,7 @@ def analyze_spectrum(v, spectrum):
 
 
 def white_light_scatter(dhf, tau0, P, h, om=1., M=20, N=20, R=20, N_int=30, R_int=30,
-                        tol=1e-4, K=20, verbose=True):
+                        tol=1e-4, K=20, verbose=True, return_J=False):
     '''
     This function calculates the scattered light distribution for a given source.
     
@@ -185,9 +185,12 @@ def white_light_scatter(dhf, tau0, P, h, om=1., M=20, N=20, R=20, N_int=30, R_in
     tol: stop iterating when the relative change in the solution is less than this
     K: maximum iterations
     verbose: whether to print progress
+    return_J: optional flag (default False) which will return source function J
+              instead of intensity I, for debugging purposes.
     
     Returns:
-    I: (MxNxR) scattered light distribution
+    I: (MxNxR) scattered light distribution (or, if return_J==True, returns source
+               function, which is size (M-1)xNxR
     tau_bounds: (M) the bounds of the cells in tau
     u_bounds:   (N+1) the bounds of the cells in u
     phi_bounds: (R+1) the bounds of the cells in phi
@@ -340,6 +343,7 @@ def white_light_scatter(dhf, tau0, P, h, om=1., M=20, N=20, R=20, N_int=30, R_in
             break
             
     Ifull = sum(I,axis=3) # All scattering orders
+    Jfull = sum(I,axis=3) 
     
     return Ifull, tau, u_bounds, phi_bounds
 
@@ -388,9 +392,9 @@ def scatter_along_los(dhf, tau0, P, h, th_look, phi_look, om=1., q=None, full_fo
     phii = (phi_bounds[1:] + phi_bounds[:-1])/2
     thi = arccos(ui)[::-1]
     
+ 
     
-    ######### VERSION USING RectSphereBivariateSpline ##############
-    
+    ######## VERSION USING ROTATED COORDINATES #############
     Ii = Ifull[-1,::-1,:]
     
     # There is a discontinuity at u=0 (th=pi/2), so interpolate over either
@@ -398,62 +402,27 @@ def scatter_along_los(dhf, tau0, P, h, th_look, phi_look, om=1., q=None, full_fo
     # Another detail is that we should specify a point at zenith, otherwise
     # it's extrapolating.
     zenith_val = np.mean(Ii[0,:])
-    # Because this interpolator is not ideal, create a ghost data point to
-    # enforce linear interpolation across 0-2pi jump in phi
-    phii_new = concatenate(([0],phii,))
-    Ii_new = zeros((N,R+1))
-    Ii_new[:,0] = (Ii[:,-1] + Ii[:,0])/2
-    Ii_new[:,1:] = Ii
-    Iint = RectSphereBivariateSpline(thi[:N/2], phii_new, Ii_new[:N/2,:], pole_values=(zenith_val, None))
+    # Define interpolation for phi in 90 to 270
+    Iint0 = RectSphereBivariateSpline(thi[:N/2], phii, Ii[:N/2,:], pole_values=(zenith_val, None))
+    # Define interpolation for phi in 270 to 90, using a rotated coordinate system to avoid problems at phi=0
+    r0 = sum(phii < pi/2) + 1 # index just after 90 deg
+    r1 = sum(phii < 3*pi/2) - 1 # index just before 270 deg
+    phii_rot = np.concatenate((phii[r1:]-2*pi, phii[:r0+1])) + pi
+    Ii_rot = np.concatenate((Ii[:,r1:], Ii[:,:r0+1]),axis=1)
+    Iint1 = RectSphereBivariateSpline(thi[:N/2], phii_rot, Ii_rot[:N/2,:], pole_values=(zenith_val, None))
+
     def I_sc(u,phi):
-        # Given a calculated, discretized, scattered intensity (Ifull), evaluate it 
-        # at the given u, phi. Use linear interpolation on a sphere.
-        # Global variables: Iint
-        return Iint(arccos(u),phi).item()
-    '''
-    ######## VERSION USING BILIINEAR INTERPOLATION ############
-   
-    Ii = Ifull[-1,:,:]
+        '''
+        Given a calculated, discretized, scattered intensity (Ifull), evaluate it 
+        at the given u, phi. Use linear interpolation on a sphere.
+        Global variables: Iint0, Iint1
+        '''
+        if phi > np.pi/2 and phi < 3*np.pi/2:
+            return Iint0(arccos(u),phi).item()
+        else:
+            phi_rot = np.mod(phi+pi, 2*pi)
+            return Iint1(arccos(u),phi_rot).item()
     
-    # Define ghost phi points at beginning and end to satisfy periodicity
-    dp = phii[1]-phii[0]
-    phii_new = concatenate(([phii[0]-dp],phii,[phii[-1]+dp]))
-    Ii_new = zeros((N,R+2))
-    Ii_new[:,0]  = Ii[:,-1]
-    Ii_new[:,-1] = Ii[:,0]
-    Ii_new[:,1:-1] = Ii
-
-    def I_sc(u,phi):
-        # Given a calculated, discretized, scattered intensity (Ifull), evaluate it 
-        # at the given u, phi. Use linear interpolation on a sphere.
-        
-        
-        # Find u grid points which straddle the desired u
-        n0 = bisect.bisect(ui,u)-1 # index to left
-        n1 = n0 + 1 
-
-        # Handle edge case at North pole
-        if n0 >= 0: # Normal
-            un0 = ui[n0]
-            I0 = interpolate_linear(phii_new, Ii_new[n0,:], phi, extrapolation='none')
-        else: # Edge case: Use "ghost" data point
-            un0 = -1.
-            I0 = np.mean(Ii[0,:])
-
-        # Handle edge case at South pole
-        if n1 <= N-1: # Normal
-            un1 = ui[n1]
-            I1 = interpolate_linear(phii_new, Ii_new[n1,:], phi, extrapolation='none')
-        else: # Edge case: Use "ghost" data point
-            un1 = 1.
-            I1 = np.mean(Ii[-1,:])    
-
-        # Then interpolate to the desired u
-        I01 = interpolate_linear([un0,un1],[I0,I1],u, extrapolation='none')
-        
-        return I01
-    '''
-      
     
     def I_dir(dhf,tau0,u,phi):
         '''
