@@ -1,6 +1,9 @@
 # See http://www.pythonware.com/library/pil/handbook/decoder.htm
 
-import Image, ImageFile
+try:
+    import Image, ImageFile
+except ImportError:
+    from PIL import Image, ImageFile
 import string
 import struct
 import datetime
