@@ -5,6 +5,8 @@ Includes:
     - the reading and writing of NetCDF files
     - the regularization algorithms to estimate the volume emission rate for the 135.6nm O+ emission during nighttime
     - the calculation of the electron density content assuming radiative recombination and mutual neutralization
+Todo:
+    - error flags (e.g., chi^2, ill-defined hmF2-finding)
 '''
 
 # Basic numerical python and math modules
@@ -441,22 +443,33 @@ def create_alpha_values(A,npoints = 100):
     NOTES:
     HISTORY:
         17-Sep-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
+        03-May-2017: Simplified by Brian Harding (bhardin2@illinois.edu)
     CALLS:
     '''
-    # SVD Decomposition of matrix A (Distance matrix)
-    U, s, V = np.linalg.svd(A, full_matrices=True)
 
+    
+    
+    # Old code from Dimitris. It scales nicely with A, but doesn't scale
+    # with changes in brightness. 
+    ## SVD Decomposition of matrix A (Distance matrix)
+    #U, s, V = np.linalg.svd(A, full_matrices=True)
+    
     # multiplication ratio
-    smin_ratio = 16*np.spacing(1)
-    #smin_ratio = 16*np.finfo(np.float32).eps
-    reg_param = np.zeros(npoints)
-    reg_param[npoints-1] = max([s[np.size(s,0)-1],s[1]*smin_ratio])
-    ratio = (s[0]*100/reg_param[npoints-1])**(1./(npoints-1));
+    #smin_ratio = 16*np.spacing(1)
+    ##smin_ratio = 16*np.finfo(np.float32).eps
+    #reg_param = np.zeros(npoints)
+    #reg_param[npoints-1] = max([s[np.size(s,0)-1],s[1]*smin_ratio])
+    #ratio = (s[0]*100/reg_param[npoints-1])**(1./(npoints-1));
 
-    # Put regularization parameters in descending order
-    for i in np.arange(npoints-2,-1,-1):
-        reg_param[i] = ratio*reg_param[i+1]
+    ## Put regularization parameters in descending order
+    #for i in np.arange(npoints-2,-1,-1):
+    #    reg_param[i] = ratio*reg_param[i+1]
 
+        
+    
+    # Updated by Brian. Will we ever need a larger range?
+    reg_param = np.logspace(5.5,1,npoints)
+        
     return reg_param
 
 # Create matrix to define regularization order
