@@ -1548,9 +1548,13 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + '%s is invalid and not analyzed\n' % fname)
 
     # Warn again if the CCD was too hot
-
     if Novertemp > 0:
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'WARNING: %i/%i sky exposures were taken with a CCD temperature that was too hot. They were flagged with the quality flag.\n' % (Novertemp, len(sky)))
+        
+    # Warn if dynamic exposure time wasn't working:
+    if np.std(sky_intT) == 0.0:
+        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'WARNING: Exposure time is not changing.\n'
+        notify_the_humans = True
 
     # Convert sky_params to array
     n = len(sky_out)
