@@ -106,6 +106,8 @@ def create_cells_Matrix_spherical_symmetry(theta,Horbit,RE=6371.):
     HISTORY:
         16-Jun-2016: Written by Dimitrios Iliou (iliou2@illinois.edu) and Brian J. Harding
                      (bhardin2@illinois.edu)
+        31-May-2017: Recast calclation of S using np matrix math, rather than nested
+                     for loops (Jonathan J. Makela; jmakela@illinois.edu)
     '''
 
     # Calculate the number of observation zenith angles
@@ -130,31 +132,25 @@ def create_cells_Matrix_spherical_symmetry(theta,Horbit,RE=6371.):
     # Define middle bound of each layer
     rmid = (rbot + rtop)/2
 
-    # Build observation matrix
+    # Build observation matrix and other required matrix variables
     S = np.zeros((Ntheta, len(rmid)))
+    th = np.tile(theta,(len(theta),1)).T
+    rb = np.tile(rbot,(len(rbot),1))
+    rt = np.tile(rtop,(len(rtop),1))
+    sb2 = -np.sin(th)**2 + ((RE+rb)/(RE+Horbit))**2
+    st2 = -np.sin(th)**2 + ((RE+rt)/(RE+Horbit))**2
 
-    # For each observation zenith angle
-    for i in range(Ntheta):
-        # For each defined altitude shell
-        for j in range(len(rmid)):
+    sb2[sb2<0] = 0. # there is no intersection of LOS with altitude rb. Set term to 0.
+    st2[st2<0] = 0. # there is no intersection of LOS with altitude rt. Set term to 0.
 
-            th = theta[i]
-            rb = rbot[j]
-            rt = rtop[j]
-            sb2 = -math.sin(th)**2  + ((RE+rb)/(RE+Horbit))**2
-            st2 = -math.sin(th)**2  + ((RE+rt)/(RE+Horbit))**2
+    # Calculate path length
+    path_len_km = 2.*(RE+Horbit) * (np.sqrt(st2) - np.sqrt(sb2))
 
-            if sb2 < 0: # there is no intersection of LOS with altitude rb. Set term to 0.
-                sb2 = 0.
-            if st2 < 0: # there is no intersection of LOS with altitude rt. Set term to 0.
-                st2 = 0.
+    # Go to cm
+    path_len_cm = path_len_km*1e5
 
-            path_len_km = 2*(RE+Horbit) * ( math.sqrt(st2) - math.sqrt(sb2) )
-
-            # Go to cm
-            path_len_cm = path_len_km*1e5
-            # Result should be a conversion from VER to Rayleighs. path_length_cm * 10^-6 to match paper
-            S[i,j] = path_len_cm * 1e-6
+    # Result should be a conversion from VER to Rayleighs. path_length_cm * 10^-6 to match paper
+    S = path_len_cm * 1e-6
 
     return S
 
