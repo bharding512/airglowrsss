@@ -44,6 +44,10 @@ from numpy.random import multivariate_normal
 
 from scipy.linalg import sqrtm # matrix square root
 
+# For plotting
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
 '''
 From the multiprocssing tool we need Pool.
 This might not be used since we dont know how many cores we are going to have in our disposal.
@@ -443,13 +447,13 @@ def create_alpha_values(A,npoints = 100):
     CALLS:
     '''
 
-    
-    
+
+
     # Old code from Dimitris. It scales nicely with A, but doesn't scale
-    # with changes in brightness. 
+    # with changes in brightness.
     ## SVD Decomposition of matrix A (Distance matrix)
     #U, s, V = np.linalg.svd(A, full_matrices=True)
-    
+
     # multiplication ratio
     #smin_ratio = 16*np.spacing(1)
     ##smin_ratio = 16*np.finfo(np.float32).eps
@@ -461,11 +465,11 @@ def create_alpha_values(A,npoints = 100):
     #for i in np.arange(npoints-2,-1,-1):
     #    reg_param[i] = ratio*reg_param[i+1]
 
-        
-    
+
+
     # Updated by Brian. Will we ever need a larger range?
     reg_param = np.logspace(5.5,1,npoints)
-        
+
     return reg_param
 
 # Create matrix to define regularization order
@@ -601,7 +605,7 @@ CALCULATE ELECTRON DENSITY
 '''
 
 # Calculate the electron density given VER
-def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,Sig_VER=None,contribution='RR'):
+def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,Sig_VER=None,contribution='RR',f107=None, f107a=None,apmsis=None):
     '''
     Given a VER profile the electron density is calculated. The physical process for the VER must be defined.
     INPUTS:
@@ -611,6 +615,9 @@ def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,Sig_VER=None,co
         dt              - datetime (python datetime)
         Sig_VER         - Covariance matrix of VER. If None, Ne will be the only output. [(ph/cm^-3)**2]
         contribution    - contributions to the 135.6nm emission, RR: Radiative Recombination, RRMN: Radiative Recombination and Mutual Neutralization
+        f107        - f107 value for the date of interest (None is use values in PyGlow)
+        f107a       - f107a value for the date of interest (None is use values in PyGlow)
+        apmsis      - apmsis vector for the date of interest (None is use values in PyGlow)
     OUTPUTS:
         Ne              - The estimated Electron Density profile (1/cm^3/s)
         Sig_Ne          - (OPTIONAL) covariance matrix of Ne. If Sig_VER is None, this is not returned.
@@ -621,6 +628,7 @@ def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,Sig_VER=None,co
     HISTORY:
         17-Sep-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
         24-Apr-2017: Uncertainty propagation added by Brian Harding (bhardin2@illinois.edu)
+        02-Jun-2017: Added GPI values by Jonathan Makela (jmakela@illinois.edu)
     CALLS:
         Pyglow
 
@@ -650,9 +658,16 @@ def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,Sig_VER=None,co
         O = np.zeros(len(VER))
         for i,height in enumerate(tang_altitude):
 
-            # Create pyglow point
-            pt = pyglow.pyglow.Point(dt, satlatlonalt[0], satlatlonalt[1], height)
-            # Run MSIS-00 to get O density
+            # Create pyglow point, either use the default GPI or the passed in GPI
+            if apmsis is None:
+                pt = pyglow.pyglow.Point(dt, satlatlonalt[0], satlatlonalt[1], height)
+                # Run MSIS-00 to get O density
+            else:
+                pt = pyglow.pyglow.Point(dt, satlatlonalt[0], satlatlonalt[1], height,user_ind=True)
+                pt.f107 = f107
+                pt.f107a = f107a
+                pt.apmsis = apmsis
+
             pt.run_msis()
 
             # Store the Oxygen density for every line of sight - tangent altitude
@@ -845,7 +860,7 @@ L2 Calculation top-level function
 
 '''
 
-def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze, Sig_Bright = None, weight_resid = False, limb = 150.,Spherical = True,reg_method='Tikhonov',regu_order = 2,reg_param=0,contribution='RRMN', VER_mean=0.,VER_profiles=0,dn = datetime.datetime(2012, 9, 26, 20, 0, 0)):
+def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze, Sig_Bright = None, weight_resid = False, limb = 150.,Spherical = True,reg_method='Tikhonov',regu_order = 2,reg_param=0,contribution='RRMN', VER_mean=0.,VER_profiles=0,dn = datetime.datetime(2012, 9, 26, 20, 0, 0), f107=None, f107a=None, apmsis=None):
     '''
     Within this function, given data from LVL1 Input file, the VER and Ne profiles for the tangent altitude point are
     calculated
@@ -866,6 +881,9 @@ def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze, Sig_Br
         VER_mean    - Prior mean [len(altitudes)](ph/cm^{-3}/s)
         VER_profiles- Prior ver profiles [len(altitudes)xnum_of_profiles](ph/cm^{-3}/s)
         dn          - Datetime object of the measurement; is needed to calculate the [O] density from MSIS to calculate the MN effect
+        f107        - f107 value for the date of interest (None is use values in PyGlow)
+        f107a       - f107a value for the date of interest (None is use values in PyGlow)
+        apmsis      - apmsis vector for the date of interest (None is use values in PyGlow)
     OUTPUT:
         VER         - Volume Emission Rate tangent altitude profile (ph/cm^{-3}/s)
         Ne          - Electron Density tangent altitude profile (cm^{-3})
@@ -877,6 +895,7 @@ def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze, Sig_Br
     HISTORY:
         16-Jun-2016: Written by Dimitrios Iliou (iliou2@illinois.edu)
         24-Apr-2017: Uncertainty propagation added by Brian Harding (bhardin2@illinois.edu)
+        02-Jun-2017: Added GPI values by Jonathan Makela (jmakela@illinois.edu)
     '''
 
     # Determine if covariances should be returned
@@ -912,7 +931,7 @@ def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze, Sig_Br
     else:
         raise Exception('Incorrect regularization method chosen. Choices are: Tikhonov or MAP')
 
-    Ne, Sig_Ne = calculate_electron_density(VER=VER, satlatlonalt=satlatlonalt, tang_altitude=h, dt=dn, Sig_VER=Sig_VER, contribution=contribution)
+    Ne, Sig_Ne = calculate_electron_density(VER=VER, satlatlonalt=satlatlonalt, tang_altitude=h, dt=dn, Sig_VER=Sig_VER, contribution=contribution,f107=f107, f107a=f107a, apmsis=apmsis)
 
     if ret_cov:
         return VER, Ne, h, Sig_VER, Sig_Ne
@@ -1397,9 +1416,9 @@ def set_variable_attributes(var, catdesc, depend, displayType, Fieldname, form, 
 FUV LEVEL 2 TOP LEVEL FUNCTION
 
 '''
-
 def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r006.NC',
                        file_ancillary='/home/jmakela/ICON_L0P_FUV_ANCILLARY_2009-03-20_v001_r003.nc',
+                       file_GPI=None,
                        path_output='/home/jmakela/',
                        limb = 150.,Spherical = True,
                        reg_method = 'Tikhonov',regu_order = 2, contribution ='RR'):
@@ -1408,6 +1427,7 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
     INPUTS:
         file_input  - Input file path
         file_ancillary - Ancillary file path
+        file_GPI - GPI file path; default to None which uses GPIs saved in PyGlow
         path_output - Output file path
         limb        - Defines the lower bound that defines the limb [km]
         Spherical   - Flag indicating whether Sperical or Non-Spherical Earth is assumed [True, False]
@@ -1422,12 +1442,29 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
     HISTORY:
         24-Jul-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
         04-May-2017: Revised by Jonathan Makela to use L1 and ancillary data files (jmakela@illinois.edu)
+        02-Jun-2017: Revised by Jonathan Makela to read GPI files (jmakela@illinois.edu)
     TODO:
         1) Variable names in L1 and ancillary data files may change
     '''
     # Open input Level 1 and ancillary NetCDF files
     data = netCDF4.Dataset(file_input,mode='r')
     ancillary = netCDF4.Dataset(file_ancillary,mode='r')
+
+    if file_GPI is not None:
+        gpi = netCDF4.Dataset(file_GPI,mode='r')
+
+        # Read the geophysical indeces
+        ap3 = gpi['ap3'][:]
+        ap = gpi['ap'][:]
+        year_day = gpi['year_day'][:]
+        f107 = gpi['f107d'][:]
+        f107a = gpi['f107a'][:]
+    else:
+        ap3 = None
+        ap = None
+        year_day = None
+        f107 = None
+        f107a = None
 
     # The tangent point WGS-84 coordinates at the center of the integration time
     FUV_TANGENT_WGS = ancillary.variables['ICON_ANCILLARY_FUV_TANGENTPOINTS_LATLONALT'][:,:,:,:]
@@ -1497,7 +1534,7 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
 
     # Work on each individual stripe
     for stripe, d in enumerate(mirror_dir):
-        print stripe
+#        print stripe
         night_ind = []
         for ind, mode in enumerate(FUV_mode):
             # Check if we are in night mode
@@ -1539,11 +1576,15 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
                 dn = FUV_dn[ind]
 
                 try:
+                    # Get the GPI needed to run MSIS
+                    my_f107, my_f107a, my_apmsis = get_msisGPI(dn, year_day, f107, f107a, ap, ap3)
+
                     # Run the inversion
                     ver,Ne,h,Sig_ver,Sig_Ne = FUV_Level_2_Density_Calculation(bright,h,satlatlonalt,az,ze,
                                                        Sig_Bright = np.diag(err**2), weight_resid=False,
                                                        limb = limb,Spherical = Spherical, reg_method = reg_method,
-                                                       regu_order = regu_order, contribution =contribution,dn = dn)
+                                                       regu_order = regu_order, contribution =contribution,dn = dn,
+                                                       f107=my_f107, f107a=my_f107a,apmsis=my_apmsis)
 
                     # Save the values to output arrays
                     FUV_ver[ind,limb_i,stripe] = ver
@@ -1555,8 +1596,6 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
                     FUV_tangent_lon[ind,limb_i,stripe] = tan_lo[::-1]
                     FUV_tangent_alt[ind,limb_i,stripe] = tan_al[::-1]
 
-
-
                     # Calculate hmF2 and NmF2
                     hm,Nm,sig_hm,sig_Nm = find_hm_Nm_F2(Ne,h,Sig_NE=Sig_Ne)
                     FUV_hmF2[ind,stripe] = hm
@@ -1564,8 +1603,10 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
                     FUV_NmF2[ind,stripe] = Nm
                     FUV_sigma_NmF2[ind,stripe]= sig_Nm
                     FUV_quality[ind,stripe] = 0
-
+                except ImportError as error:
+                    print "You don't have module {0} installed".format(error.message[16:])
                 except:
+                    print 'ind: %d, stripe: %d, error: %s' %(ind,stripe,sys.exc_info()[0])
                     FUV_quality[ind,stripe] = 1
 
     # The master index for limb scan indexes
@@ -1605,7 +1646,244 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
     # Close the input netCDF files
     ancillary.close()
     data.close()
+    gpi.close()
 
     # Write the output
     print 'writing netcdf'
     FUV_Level_2_OutputProduct_NetCDF(path_output, L25_dict)
+
+def get_GPI(dn, year_day, f107, f107a, ap, ap3):
+    '''
+    Operational Code to pull the geophysical indices from the standard GPI
+    ancillary file.
+    INPUTS:
+        dn - datetime to be used
+        year_day - vector containing the year/day of the GPIs (yyyddd)
+        f107 - vector containing the f107 index
+        f107a - vector containing the proxy for f107a average
+        ap - vector containing the daily ap index
+        ap3 - array containing the 3-hour ap index
+    OUTPUT:
+        returns the f107, f107a, ap, and ap3 for the requested time (dn)
+    NOTES:
+        Can be used in conjunction with get_msisGPI to generate the msis ap vector.
+    HISTORY:
+        02-Jun-2017: Written by Jonathan Makela (jmakela@illinois.edu)
+    '''
+
+    yd = dn.year*1000+dn.timetuple().tm_yday
+
+    # Check bounds
+    if (yd < year_day.min()) or (yd > year_day.max()):
+        return np.nan, np.nan, np.nan, np.nan
+
+    # Get the index into the year_day dimension
+    i = np.argwhere(year_day == yd).flatten()[0]
+
+    # Get the index into the 3 hour dimension
+    j = dn.hour/3
+
+    return f107[i], f107a[i], ap[i], ap3[j,i]
+
+def get_msisGPI(dn, year_day, f107, f107a, ap, ap3):
+    '''
+    Operational Code to pull the geophysical indices from the standard GPI
+    ancillary file and generate the ap vector required by MSIS.
+    INPUTS:
+        dn - datetime to be used
+        year_day - vector containing the year/day of the GPIs (yyyddd)
+        f107 - vector containing the f107 index
+        f107a - vector containing the proxy for f107a average
+        ap - vector containing the daily ap index
+        ap3 - array containing the 3-hour ap index
+    OUTPUT:
+        returns the f107, f107a, msis ap for the requested time (dn)
+    NOTES:
+        As defined in the MSIS code the msis ap is a vector containing:
+             (1) DAILY AP
+             (2) 3 HR AP INDEX FOR CURRENT TIME
+             (3) 3 HR AP INDEX FOR 3 HRS BEFORE CURRENT TIME
+             (4) 3 HR AP INDEX FOR 6 HRS BEFORE CURRENT TIME
+             (5) 3 HR AP INDEX FOR 9 HRS BEFORE CURRENT TIME
+             (6) AVERAGE OF EIGHT 3 HR AP INDICIES FROM 12 TO 33 HRS
+                 PRIOR   TO CURRENT TIME
+             (7) AVERAGE OF EIGHT 3 HR AP INDICIES FROM 36 TO 57 HRS
+                 PRIOR  TO CURRENT TIME
+    HISTORY:
+        02-Jun-2017: Written by Jonathan Makela (jmakela@illinois.edu)
+    '''
+
+    # Where to store the
+    my_apmsis = np.zeros(7)
+
+    # Get f107, f107a, daily ap, and 3-hour ap
+
+    my_f107, my_f107a, my_apmsis[0], my_apmsis[1] = get_GPI(dn+datetime.timedelta(hours=0),year_day,f107,f107a,ap,ap3)
+
+    # Get 3-hour ap for -3, -6, and -9 hours
+    _, _, _, my_apmsis[2] = get_GPI(dn+datetime.timedelta(hours = -3),year_day,f107,f107a,ap,ap3)
+    _, _, _, my_apmsis[3] = get_GPI(dn+datetime.timedelta(hours = -6),year_day,f107,f107a,ap,ap3)
+    _, _, _, my_apmsis[4] = get_GPI(dn+datetime.timedelta(hours = -9),year_day,f107,f107a,ap,ap3)
+
+    # Get average 3-hour ap for -12 to -33 hours
+    temp_ap = 0
+    for delta in range(-12,-33-1,-3):
+        _, _, _, temp = get_GPI(dn+datetime.timedelta(hours = delta),year_day,f107,f107a,ap,ap3)
+        temp_ap += temp
+    my_apmsis[5] = temp_ap/8.
+
+    # Get average 3-hour ap for -36 to -57 hours
+    temp_ap = 0
+    for delta in range(-36,-57-1,-3):
+        _, _, _, temp = get_GPI(dn+datetime.timedelta(hours = delta),year_day,f107,f107a,ap,ap3)
+        temp_ap += temp
+    my_apmsis[6] = temp_ap/8.
+
+    return my_f107, my_f107a, my_apmsis
+
+def CreateSummaryPlot(file_netcdf, file_png, stripe=2, min_alt=None, max_alt=None,
+                      min_dn=None, max_dn=None, min_ne=None, max_ne=None, min_dne=None, max_dne=None):
+    '''
+    Operational Code to generate the standard summary file for the nighttime FUV 2.5 dataproduct.
+    INPUTS:
+        file_netcdf - full path to the netCDF4 file
+        file_png - full path to the png file to be generated
+        stripe - which stripe to plot profiles for (default = 2)
+        min_alt, max_alt - min/max range of altitude to plot (km). If no value passed, figure this
+                           out from the range of altitudes in the file.
+        min_dn, max_dn - min/max date range to plot (datenum). If no value passed, figure this
+                         out from the range of altitudes in the file.
+        min_ne, max_ne - min/max of electron density to plot (cm^-3). If no value passed, figure this
+                         out from the range of altitudes in the file.
+        min_dne, max_dne - min/max of electron density error to plot (cm^-3). If no value passed,
+                           figure this out from the range of altitudes in the file.
+    OUTPUT:
+        generates a png file and saves it to disk
+    NOTES:
+    HISTORY:
+        05-Jun-2017: Written by Jonathan Makela (jmakela@illinois.edu)
+    '''
+
+    # open the netCDF file
+    f = netCDF4.Dataset(file_netcdf)
+
+    # Get variables from netCDF file
+    dn = []
+    for d in f.variables['ICON_L2_FUVA_SWP_CENTER_TIMES']:
+        dn.append(parser.parse(d))
+    dn = np.array(dn)
+
+    X = np.transpose([dn,]*f.dimensions['Vertical'].size)
+    Y = f.variables['ICON_L2_FUVA_TANGENT_ALT'][:,:,stripe]
+    Z = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ALTITUDE_PROFILE'][:,:,stripe]
+    Ze = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ERROR_ALTITUDE_PROFILE'][:,:,stripe]
+
+    # Min/max ranges for plots
+    if min_alt is None:
+        min_alt = Y.min()
+    if max_alt is None:
+        max_alt = Y.max()
+
+    if min_dn is None:
+        min_dn = dn[0]
+    if max_dn is None:
+        max_dn = dn[-1]
+
+    if min_ne is None:
+        min_ne = Z.min()
+    if max_ne is None:
+        max_ne = Z.max()
+
+    if min_dne is None:
+        min_dne = np.log10(Ze.min())
+    if max_dne is None:
+        max_dne = np.log10(Ze.max())
+
+    # generate the plot
+    fig, axes = plt.subplots(nrows=5, sharex=True, figsize=(8,11))
+
+    # The electron density estimates
+    im = axes[0].pcolormesh(X,Y,Z,vmin=min_ne,vmax=max_ne)
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+    axes[0].set_ylim([min_alt,max_alt])
+    axes[0].set_title('Estimated Ne; Stripe #%d' % stripe)
+    axes[0].set_ylabel('Altitude [km]')
+    axes[0]
+
+    # The electron density error estimates
+    im2 = axes[1].pcolormesh(X,Y,np.log10(Ze),vmin=min_dne,vmax=max_dne)
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+    axes[1].set_ylim([min_alt,max_alt])
+    axes[1].set_title('Estimated Ne Error; Stripe #%d' % stripe)
+    axes[1].set_ylabel('Altitude [km]')
+
+    # The hmF2 estimates
+    for stripe in range(0,6):
+        Y = f.variables['ICON_L2_FUVA_SWP_HMF2'][:,stripe]
+        Ye = f.variables['ICON_L2_FUVA_SWP_HMF2_ERROR'][:,stripe]
+        axes[2].plot(dn,Y,'-')
+        axes[2].fill_between(dn,Y-Ye,Y+Ye,alpha=.25)
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+    plt.xlim([min_dn,max_dn])
+    axes[2].set_ylim([min_alt,max_alt])
+    axes[2].set_title('Estimated hmF2')
+    axes[2].set_ylabel('Altitude [km]')
+
+    # The NmF2 estimates
+    for stripe in range(0,6):
+        Y = f.variables['ICON_L2_FUVA_SWP_NMF2'][:,stripe]
+        Ye = f.variables['ICON_L2_FUVA_SWP_NMF2_ERROR'][:,stripe]
+        axes[3].plot(dn,Y,'-')
+        axes[3].fill_between(dn,Y-Ye,Y+Ye,alpha=.25)
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+    plt.xlim([min_dn,max_dn])
+    axes[3].set_title('Estimated NmF2')
+    axes[3].set_ylabel('Ne [cm^-3]')
+
+    # The quality flag
+    for stripe in range(0,6):
+        quality = f.variables['ICON_L2_FUVA_QUALITY'][:]
+        axes[4].plot(dn,quality[:,stripe],'.',label=stripe)
+    axes[4].set_ylim([-.25,2])
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+    axes[4].set_title('Inversion quality flag')
+    axes[4].set_xlabel('UTC')
+    lgd = plt.legend(ncol=6,numpoints=1,loc=9, bbox_to_anchor=(0.6, -0.23))
+
+    # labels
+    axes[4].annotate('(%s, %s)' % (f.variables['ICON_L2_1356_CONTRIBUTION'][:],
+                                  f.variables['ICON_L2_REGULARIZATION_METHOD'][:]),
+                     xy=(1, 0.05), xytext=(0, 10),
+                     xycoords=('axes fraction', 'figure fraction'),
+                     textcoords='offset points',
+                     ha='right', va='top')
+
+    an = axes[0].annotate('%s' % (dn[0].strftime('%d %b %Y')),
+                     xy=(.5, .95), xytext=(0, 10),
+                     xycoords=('axes fraction', 'figure fraction'),
+                     textcoords='offset points',
+                     size=12,ha='center', va='top')
+
+    # Make some room for the colorbar
+    fig.subplots_adjust(left=0.07, right=0.87)
+
+    # Add the colorbar outside...
+    box = axes[0].get_position()
+    pad, width = 0.02, 0.02
+    cax = fig.add_axes([box.xmax + pad, box.ymin, width, box.height])
+    fig.colorbar(im, cax=cax,format='%.0e',label='Ne [cm^-3]',extend='max')
+
+    box = axes[1].get_position()
+    pad, width = 0.02, 0.02
+    cax = fig.add_axes([box.xmax + pad, box.ymin, width, box.height])
+    fig.colorbar(im2, cax=cax, label='log10(Ne_error) [cm^-3]', extend='max')
+    #fig.tight_layout()
+    fig.savefig(file_png, bbox_extra_artists=(lgd,an), bbox_inches='tight')
+
+    # Close the netCDF file
+    f.close()
