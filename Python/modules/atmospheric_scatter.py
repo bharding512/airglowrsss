@@ -167,7 +167,7 @@ def analyze_spectrum(v, spectrum):
 
 
 
-def white_light_scatter(dhf, tau0, P, h, om=1., M=20, N=20, R=20, N_int=30, R_int=30,
+def white_light_scatter(dhf, tau0, P, h, om=1., alpha=0., M=20, N=20, R=20, N_int=30, R_int=30,
                         tol=1e-4, K=20, verbose=True, return_J=False):
     '''
     This function calculates the scattered light distribution for a given source.
@@ -177,6 +177,7 @@ def white_light_scatter(dhf, tau0, P, h, om=1., M=20, N=20, R=20, N_int=30, R_in
     P: scattering phase function P(u0,u1,phi0,phi1)
     h: height of airglow layer [m]
     om: single-scattering albedo (default 1)
+    alpha: ground albedo (0-1, default 0)
     M: number of tau grid points
     N: number of u grid points
     R: number of phi grid points
@@ -298,7 +299,10 @@ def white_light_scatter(dhf, tau0, P, h, om=1., M=20, N=20, R=20, N_int=30, R_in
     for n in range(N):
         for r in range(R):
             # Perform calculation in a vectorized way to avoid expensive for loops.
-            # Capitalized variables indicate 3-D variables (tau, u, phi)
+            # Capitalized variables indicate 3-D variables (tau, u, phi).
+            # In including the ground albedo effect in J0, it is assumed that
+            # most scattering happens near the ground, in order to simplify
+            # the geometry of ground reflections.
             TAU,U,PHI = meshgrid(tau_mid, u_int, phi_int, indexing='ij')
             _,DU,DPHI = meshgrid(tau_mid, du_int, dphi_int, indexing='ij')
             TH = arccos(U)
@@ -306,7 +310,8 @@ def white_light_scatter(dhf, tau0, P, h, om=1., M=20, N=20, R=20, N_int=30, R_in
             RHO = (TH - GAMMA) * (RE+h)
             X = -RHO * cos(PHI)
             Y = -RHO * sin(PHI)
-            dJ = om/(4*pi) * P(u[n], U, phi[r], PHI) * exp(-TAU/U) * dhf(X,Y) * sec(GAMMA) * DU*DPHI
+            dJ = om/(4*pi) * (P(u[n], U, phi[r], PHI) * exp(-TAU/U) + alpha * P(u[n], -U, phi[r], PHI) * exp(-(2*tau0 - TAU)/U)) * \
+                             dhf(X,Y) * sec(GAMMA) * DU*DPHI
             J[:,n,r,0] = sum(dJ, axis=(1,2))
             
         if verbose:
@@ -324,6 +329,11 @@ def white_light_scatter(dhf, tau0, P, h, om=1., M=20, N=20, R=20, N_int=30, R_in
         # Compute I
         Iflat = A.dot(J[:,:,:,k].flatten())
         I[:,:,:,k] = reshape(Iflat, (M,N,R))
+        
+        # If the ground is reflective, add the extra contribution
+        if alpha > 0.0:
+            nlt0 = arange(N/2) # n values less than zero
+            I[:,nlt0,:] += alpha*I[M-1,N-1-nlt0,:]
 
         # Compute J for next iteration
         Jflat = B.dot(I[:,:,:,k].flatten())
