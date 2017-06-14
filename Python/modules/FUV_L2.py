@@ -39,6 +39,8 @@ from dateutil import parser
 
 import getpass
 
+import os
+
 # For Monte Carlo processing:
 from numpy.random import multivariate_normal
 
@@ -1046,11 +1048,11 @@ def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', di
 CREATE NETCDF FILE
 
 '''
-def FUV_Level_2_OutputProduct_NetCDF(output_path, L25_dict):
+def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
     '''
     This function takes as input all the necessary outputs from LVL2.5 processing and writes them on a NetCDF file
     INPUTS:
-        output_path        - Pathname where the NetCDF file is saved
+        L25_full_fn        - Full file name where the NetCDF file is saved
         L25_dict           - Dictionary containing data to be written (see Get_lvl2_5_product for dictionary definition)
     OUTPUT:
         Creates a NetCDF file on the desired path
@@ -1059,11 +1061,18 @@ def FUV_Level_2_OutputProduct_NetCDF(output_path, L25_dict):
     HISTORY:
         24-Jul-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
         4-May-2017: Rewritten by Jonathan Makela to conform to L25 format (jmakela@illinois.edu)
+        13-Jun-2017: Send in full file path, rather than generating on own (jmakela@illinois.edu)
+        14-Jun-2017: Pull version and revision information from the provided filename
     '''
-    data_version = 1 # TODO: how will this be calculated? It goes into global attr Data_Version
-    software_version = 0.01 # TODO: how will this be determined and stored? It goes into global attr Software_Version
-    version_for_filename = 1 # TODO: How is this related to the two above? Rec'd major software version number
-    revision_for_filename = 0 # TODO: How to determine this?
+
+    # Parse the filename for version and revision. Assumes the provided filename conforms to
+    # the ICON conventions: ICON_<LEVEL>_<INSTRUMENT>[_<DESCRIPTION>]_<DATE>[_<TOD>]_v<VERSION>r<REVISION>.NC
+    data_versionmajor = np.int(L25_full_fn[-9:-7])
+    data_revsision = np.int(L25_full_fn[-6:-3])
+    data_version =  np.float(data_versionmajor)+data_revsision/1000.# TODO: how will this be calculated? It goes into global attr Data_Version
+    software_versionmajor = data_versionmajor
+    software_revision = 0   # Increment this when making a revision!
+    software_version =  np.float(software_versionmajor)+software_revision/1000.
 
     # TODO: How will sensor be determined? Will it be in L1 file?
     source_files = ' '.join(L25_dict['source_files'])
@@ -1086,12 +1095,11 @@ def FUV_Level_2_OutputProduct_NetCDF(output_path, L25_dict):
     if param_fn is None:
         param_fn = ''
 
-
-    ######################### Open file for writing ##############################
-    L25_fn = 'ICON_L2_5_FUV-%s_v%02i_r%02i.NC' % (L25_dict['FUV_dn'][0].strftime('%Y-%m-%d_%H.%M.%S'),
-                                                  version_for_filename, revision_for_filename)
-    L25_full_fn = '%s%s'%(output_path, L25_fn)
+    ########################## Open file for writing #############################
     ncfile = netCDF4.Dataset(L25_full_fn,mode='w',format='NETCDF4')
+
+    # Parse out the short filename
+    L25_fn = os.path.basename(L25_full_fn)
 
     ########################## Global Attributes #################################
     ncfile.Acknowledgement =       ''.join(("This is a data product from the NASA Ionospheric Connection Explorer mission, ",
@@ -1132,7 +1140,9 @@ def FUV_Level_2_OutputProduct_NetCDF(output_path, L25_dict):
     ncfile.Conventions =                    'SPDF ISTP/IACG Modified for NetCDF'
     ncfile.Data_Level =                     'L2.5'
     ncfile.Data_Type =                      'DP25 > Data Product 2.5: FUV Nighttime O+ profile'
-    ncfile.Data_Version =                   np.uint16(data_version)
+    ncfile.Data_Version =                   np.float32(data_version)
+    ncfile.Data_VersionMajor =              np.ubyte(data_versionmajor)
+    ncfile.Data_Revision =                  np.ushort(data_revsision)
     ncfile.Date_Stop =                      L25_dict['FUV_dn'][0].strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC' # single measurement: use midpoint
     ncfile.Date_Start =                     L25_dict['FUV_dn'][-1].strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC' # single measurement: use midpoint
     ncfile.Description =                    'ICON FUV Nighttime O+ profiles (DP 2.5)'
@@ -1160,7 +1170,7 @@ def FUV_Level_2_OutputProduct_NetCDF(output_path, L25_dict):
     ncfile.PI_Name =                        'T. J. Immel'
     ncfile.Project =                        'NASA > ICON'
     ncfile.Rules_of_Use =                   'Public Data for Scientific Use'
-    ncfile.Software_Version =               'ICON SDC > ICON UIUC FUV L2.5 Processor v%.2f' % software_version
+    ncfile.Software_Version =               'ICON SDC > ICON UIUC FUV L2.5 Processor v%.3f' % software_version
     ncfile.Source_Name =                    'ICON > Ionospheric Connection Explorer'
     ncfile.Spacecraft_ID =                  'NASA > ICON - 493'
     ncfile.Text =                           'ICON explores the boundary between Earth and space - the ionosphere - ' +\
@@ -1348,11 +1358,27 @@ def FUV_Level_2_OutputProduct_NetCDF(output_path, L25_dict):
                           units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
                           notes='')
 
+    # Regularization order
+    var = _create_variable(ncfile, 'ICON_L2_REGULARIZATION_ORDER', L25_dict['regu_order'],
+                          dimensions=(),
+                          format_nc='i1', format_fortran='I', desc='Regularization order',
+                          display_type='scalar', field_name='Regularzation Order', fill_value=None, label_axis='Order', bin_location=0.5,
+                          units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
+                          notes='')
+
     # Contribution type
     var = _create_variable(ncfile, 'ICON_L2_1356_CONTRIBUTION', L25_dict['contribution'],
                           dimensions=(),
                           format_nc=str, format_fortran='A', desc='Chemestry considered in 135.6-nm emission: RR or RRMN',
                           display_type='scalar', field_name='1356 Contribution', fill_value=None, label_axis='Contrib', bin_location=0.5,
+                          units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
+                          notes='')
+
+    # Limb value used in inversion
+    var = _create_variable(ncfile, 'ICON_L2_INVERSION_LIMB', L25_dict['limb'],
+                          dimensions=(),
+                          format_nc='f4', format_fortran='F', desc='Limb altitude used in inversion',
+                          display_type='scalar', field_name='Inversion Limb Alt', fill_value=None, label_axis='Alt', bin_location=0.5,
                           units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
                           notes='')
 
@@ -1419,7 +1445,7 @@ FUV LEVEL 2 TOP LEVEL FUNCTION
 def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r006.NC',
                        file_ancillary='/home/jmakela/ICON_L0P_FUV_ANCILLARY_2009-03-20_v001_r003.nc',
                        file_GPI=None,
-                       path_output='/home/jmakela/',
+                       file_output='/home/jmakela/ICON_L2-5_FUV-2009-03-20_00.18.54_v01_r00.nc',
                        limb = 150.,Spherical = True,
                        reg_method = 'Tikhonov',regu_order = 2, contribution ='RR'):
     '''
@@ -1428,14 +1454,15 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
         file_input  - Input file path
         file_ancillary - Ancillary file path
         file_GPI - GPI file path; default to None which uses GPIs saved in PyGlow
-        path_output - Output file path
+        file_output - Full output file path for the resultant netCDF4 file
         limb        - Defines the lower bound that defines the limb [km]
         Spherical   - Flag indicating whether Sperical or Non-Spherical Earth is assumed [True, False]
         reg_method  - Regularization method selection [Tikhonov, MAP]
         regu_order  - Regularization Order [int] (0,1,2 Possible Values)
         contribution- contributions to the 135.6nm emission, RR: Radiative Recombination, RRMN: Radiative Recombination and Mutual Neutralization
     OUTPUT:
-        Creates a NetCDF file on the desired output_path
+        Creates a NetCDF file on the desired file_outpu
+        Returns 0 on success
     NOTES:
         This versions uses paths as input and output. That can change in case needed. Also, the lvl1 file that is used
         is elementary. No actual LVL1 file has been given yet.
@@ -1443,94 +1470,107 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
         24-Jul-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
         04-May-2017: Revised by Jonathan Makela to use L1 and ancillary data files (jmakela@illinois.edu)
         02-Jun-2017: Revised by Jonathan Makela to read GPI files (jmakela@illinois.edu)
+        13-Jun-2017: Revised by Jonathan Makela to pass in full file output path (jmakela@illinois.edu)
     TODO:
         1) Variable names in L1 and ancillary data files may change
     '''
-    # Open input Level 1 and ancillary NetCDF files
-    data = netCDF4.Dataset(file_input,mode='r')
-    ancillary = netCDF4.Dataset(file_ancillary,mode='r')
 
-    if file_GPI is not None:
-        gpi = netCDF4.Dataset(file_GPI,mode='r')
+    try:
+        # Open input Level 1 and ancillary NetCDF files
+        data = netCDF4.Dataset(file_input,mode='r')
+        ancillary = netCDF4.Dataset(file_ancillary,mode='r')
 
-        # Read the geophysical indeces
-        ap3 = gpi['ap3'][:]
-        ap = gpi['ap'][:]
-        year_day = gpi['year_day'][:]
-        f107 = gpi['f107d'][:]
-        f107a = gpi['f107a'][:]
-    else:
-        ap3 = None
-        ap = None
-        year_day = None
-        f107 = None
-        f107a = None
+        if file_GPI is not None:
+            gpi = netCDF4.Dataset(file_GPI,mode='r')
 
-    # The tangent point WGS-84 coordinates at the center of the integration time
-    FUV_TANGENT_WGS = ancillary.variables['ICON_ANCILLARY_FUV_TANGENTPOINTS_LATLONALT'][:,:,:,:]
-    FUV_TANGENT_LATITUDES = ancillary.variables['ICON_ANCILLARY_FUV_TANGENTPOINTS_LATLONALT'][:,:,:,0]
-    FUV_TANGENT_LONGITUDES = ancillary.variables['ICON_ANCILLARY_FUV_TANGENTPOINTS_LATLONALT'][:,:,:,1]
-    FUV_TANGENT_ALTITUDES = ancillary.variables['ICON_ANCILLARY_FUV_TANGENTPOINTS_LATLONALT'][:,:,:,2]
+            # Read the geophysical indeces
+            ap3 = gpi['ap3'][:]
+            ap = gpi['ap'][:]
+            year_day = gpi['year_day'][:]
+            f107 = gpi['f107d'][:]
+            f107a = gpi['f107a'][:]
+        else:
+            ap3 = None
+            ap = None
+            year_day = None
+            f107 = None
+            f107a = None
 
-    # The az/el of the look vector
-    FUV_AZ = ancillary.variables['ICON_ANCILLARY_FUV_FOV_AZIMUTH_ANGLE'][:,:,:]
-    FUV_ZE = ancillary.variables['ICON_ANCILLARY_FUV_FOV_ZENITH_ANGLE'][:,:,:]
+        # The tangent point WGS-84 coordinates at the center of the integration time
+        FUV_TANGENT_WGS = ancillary.variables['ICON_ANCILLARY_FUV_TANGENTPOINTS_LATLONALT'][:,:,:,:]
+        FUV_TANGENT_LATITUDES = ancillary.variables['ICON_ANCILLARY_FUV_TANGENTPOINTS_LATLONALT'][:,:,:,0]
+        FUV_TANGENT_LONGITUDES = ancillary.variables['ICON_ANCILLARY_FUV_TANGENTPOINTS_LATLONALT'][:,:,:,1]
+        FUV_TANGENT_ALTITUDES = ancillary.variables['ICON_ANCILLARY_FUV_TANGENTPOINTS_LATLONALT'][:,:,:,2]
 
-    # The ICON WGS-84 location at the center of the integration time
-    ICON_WGS = ancillary.variables['ICON_ANCILLARY_FUV_SC_WGS'][:,:]
-    ICON_WGS84_LATITUDE = ancillary.variables['ICON_ANCILLARY_FUV_SC_WGS'][:,0]
-    ICON_WGS84_LONGITUDE = ancillary.variables['ICON_ANCILLARY_FUV_SC_WGS'][:,1]
-    ICON_WGS84_ALTITUDE = ancillary.variables['ICON_ANCILLARY_FUV_SC_WGS'][:,2]
+        # The az/el of the look vector
+        FUV_AZ = ancillary.variables['ICON_ANCILLARY_FUV_FOV_AZIMUTH_ANGLE'][:,:,:]
+        FUV_ZE = ancillary.variables['ICON_ANCILLARY_FUV_FOV_ZENITH_ANGLE'][:,:,:]
 
-    # Read the UTC of all measurements and store in a datetime variable
-    temp = ancillary.variables['ICON_ANCILLARY_FUV_TIME_UTC']
-    ANC_dn = []
-    for d in temp:
-        ANC_dn.append(parser.parse(d))
-    ANC_dn = np.array(ANC_dn)
+        # The ICON WGS-84 location at the center of the integration time
+        ICON_WGS = ancillary.variables['ICON_ANCILLARY_FUV_SC_WGS'][:,:]
+        ICON_WGS84_LATITUDE = ancillary.variables['ICON_ANCILLARY_FUV_SC_WGS'][:,0]
+        ICON_WGS84_LONGITUDE = ancillary.variables['ICON_ANCILLARY_FUV_SC_WGS'][:,1]
+        ICON_WGS84_ALTITUDE = ancillary.variables['ICON_ANCILLARY_FUV_SC_WGS'][:,2]
 
-    # Get Data from file.
-    # L1 data stores the individual stripes in different variables. Read them
-    # all stripes and combine into a single variable
-    mirror_dir = ['M9','M6','M3','P0','P3','P6']
-    FUV_1356_IMAGE = np.zeros(np.shape(FUV_AZ))
-    FUV_1356_ERROR = np.zeros(np.shape(FUV_AZ))
-    for ind, d in enumerate(mirror_dir):
-        FUV_1356_IMAGE[:,:,ind] = data.variables['ICON_L1_FUVA_SWP_PROF_%s' % d][:]
-        FUV_1356_ERROR[:,:,ind] = data.variables['ICON_L1_FUVA_SWP_PROF_%s_ERROR' % d][:]
+        # Read the UTC of all measurements and store in a datetime variable
+        temp = ancillary.variables['ICON_ANCILLARY_FUV_TIME_UTC']
+        ANC_dn = []
+        for d in temp:
+            ANC_dn.append(parser.parse(d))
+        ANC_dn = np.array(ANC_dn)
 
-    # Get observation times from file and store in a datetime variable
-    temp = data.variables['ICON_L1_FUVA_SWP_CENTER_TIMES']
-    FUV_dn = []
-    for d in temp:
-        FUV_dn.append(parser.parse(d))
-    FUV_dn = np.array(FUV_dn)
+        # Get Data from file.
+        # L1 data stores the individual stripes in different variables. Read them
+        # all stripes and combine into a single variable
+        mirror_dir = ['M9','M6','M3','P0','P3','P6']
+        FUV_1356_IMAGE = np.zeros(np.shape(FUV_AZ))
+        FUV_1356_ERROR = np.zeros(np.shape(FUV_AZ))
+        for ind, d in enumerate(mirror_dir):
+            FUV_1356_IMAGE[:,:,ind] = data.variables['ICON_L1_FUVA_SWP_PROF_%s' % d][:]
+            FUV_1356_ERROR[:,:,ind] = data.variables['ICON_L1_FUVA_SWP_PROF_%s_ERROR' % d][:]
 
-    # The FUV epoch
-    FUV_EPOCH = data.variables['EPOCH'][:]
+        # Get observation times from file and store in a datetime variable
+        temp = data.variables['ICON_L1_FUVA_SWP_CENTER_TIMES']
+        FUV_dn = []
+        for d in temp:
+            FUV_dn.append(parser.parse(d))
+        FUV_dn = np.array(FUV_dn)
 
-    # Get science mode
-    FUV_mode = data.variables['ICON_L1_FUVA_SWP_MODE'][:]
+        # The FUV epoch
+        FUV_EPOCH = data.variables['EPOCH'][:]
 
-    # Pre-allocate arrays for output variables
-    FUV_ver = np.zeros(np.shape(FUV_1356_IMAGE))*np.nan
-    FUV_sigma_ver = np.zeros(np.shape(FUV_1356_IMAGE))*np.nan
-    FUV_Ne = np.zeros(np.shape(FUV_1356_IMAGE))*np.nan
-    FUV_sigma_Ne = np.zeros(np.shape(FUV_1356_IMAGE))*np.nan
-    FUV_h = np.zeros(np.shape(FUV_1356_IMAGE))*np.nan
-    FUV_b = np.zeros(np.shape(FUV_1356_IMAGE))*np.nan
-    FUV_hmF2 = np.zeros((len(FUV_dn),len(mirror_dir)))*np.nan
-    FUV_sigma_hmF2 = np.zeros((len(FUV_dn),len(mirror_dir)))*np.nan
-    FUV_NmF2 = np.zeros((len(FUV_dn),len(mirror_dir)))*np.nan
-    FUV_sigma_NmF2 = np.zeros((len(FUV_dn),len(mirror_dir)))*np.nan
-    FUV_quality = np.zeros((len(FUV_dn),len(mirror_dir)))*np.nan
-    FUV_tangent_lat = np.zeros(np.shape(FUV_TANGENT_LATITUDES))*np.nan
-    FUV_tangent_lon = np.zeros(np.shape(FUV_TANGENT_LONGITUDES))*np.nan
-    FUV_tangent_alt = np.zeros(np.shape(FUV_TANGENT_ALTITUDES))*np.nan
+        # Get science mode
+        FUV_mode = data.variables['ICON_L1_FUVA_SWP_MODE'][:]
 
-    # Variables to keep track of the indices of the valid range of limb pixels
-    min_li = 9999
-    max_li = -9999
+        # Pre-allocate arrays for output variables
+        FUV_ver = np.zeros(np.shape(FUV_1356_IMAGE))*np.nan
+        FUV_sigma_ver = np.zeros(np.shape(FUV_1356_IMAGE))*np.nan
+        FUV_Ne = np.zeros(np.shape(FUV_1356_IMAGE))*np.nan
+        FUV_sigma_Ne = np.zeros(np.shape(FUV_1356_IMAGE))*np.nan
+        FUV_h = np.zeros(np.shape(FUV_1356_IMAGE))*np.nan
+        FUV_b = np.zeros(np.shape(FUV_1356_IMAGE))*np.nan
+        FUV_hmF2 = np.zeros((len(FUV_dn),len(mirror_dir)))*np.nan
+        FUV_sigma_hmF2 = np.zeros((len(FUV_dn),len(mirror_dir)))*np.nan
+        FUV_NmF2 = np.zeros((len(FUV_dn),len(mirror_dir)))*np.nan
+        FUV_sigma_NmF2 = np.zeros((len(FUV_dn),len(mirror_dir)))*np.nan
+        FUV_quality = np.zeros((len(FUV_dn),len(mirror_dir)))*np.nan
+        FUV_tangent_lat = np.zeros(np.shape(FUV_TANGENT_LATITUDES))*np.nan
+        FUV_tangent_lon = np.zeros(np.shape(FUV_TANGENT_LONGITUDES))*np.nan
+        FUV_tangent_alt = np.zeros(np.shape(FUV_TANGENT_ALTITUDES))*np.nan
+
+        # Variables to keep track of the indices of the valid range of limb pixels
+        min_li = 9999
+        max_li = -9999
+    except Exception as e:
+        if hasattr(e, 'message'):
+            print 'Error setting up reading files and setting up L2.5 inversion: (%s)' % e.message
+        else:
+            print 'Error setting up reading files and setting up L2.5 inversion'
+        # Close the input netCDF files
+        ancillary.close()
+        data.close()
+        gpi.close()
+        return 1
 
     # Work on each individual stripe
     for stripe, d in enumerate(mirror_dir):
@@ -1605,9 +1645,16 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
                     FUV_quality[ind,stripe] = 0
                 except ImportError as error:
                     print "You don't have module {0} installed".format(error.message[16:])
-                except:
+                    return 2
+                except ValueError as error:
+                    # Just an error in the inversion
                     print 'ind: %d, stripe: %d, error: %s' %(ind,stripe,sys.exc_info()[0])
                     FUV_quality[ind,stripe] = 1
+                except Exception as e:
+                    if hasattr(e, 'message'):
+                        print 'Unknown inversion error: (%s)' % e.message
+                    else:
+                        print "Unknown inversion error"
 
     # The master index for limb scan indexes
     master_li = np.arange(min_li,max_li+1)
@@ -1639,6 +1686,9 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
         'FUV_Quality': FUV_quality[night_ind,:],
         'reg_method': reg_method,
         'contribution': contribution,
+        'limb': limb,
+        'Spherical': Spherical,
+        'regu_order': regu_order,
         'source_files': [file_input,file_ancillary],
         'param_fn': None,
     }
@@ -1649,8 +1699,18 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
     gpi.close()
 
     # Write the output
-    print 'writing netcdf'
-    FUV_Level_2_OutputProduct_NetCDF(path_output, L25_dict)
+    print 'Writing netcdf %s' % file_output
+    try:
+        FUV_Level_2_OutputProduct_NetCDF(file_output, L25_dict)
+    except Exception as e:
+        if hasattr(e, 'message'):
+            print 'Error writing netCDF output file: (%s)' % e.message
+        else:
+            print 'Error writing netCDF output file: %s (%s)' % (file_output, sys.exc_info()[0])
+
+    print 'Successfully wrote %s' % file_output
+
+    return 0
 
 def get_GPI(dn, year_day, f107, f107a, ap, ap3):
     '''
@@ -1764,126 +1824,138 @@ def CreateSummaryPlot(file_netcdf, file_png, stripe=2, min_alt=None, max_alt=Non
         05-Jun-2017: Written by Jonathan Makela (jmakela@illinois.edu)
     '''
 
-    # open the netCDF file
-    f = netCDF4.Dataset(file_netcdf)
+    # Use viridis if it exists
+    try:
+        cm = plt.get_cmap('viridis')
+    except:
+        cm = plt.get_cmap(plt.rcParams['image.cmap'])
 
-    # Get variables from netCDF file
-    dn = []
-    for d in f.variables['ICON_L2_FUVA_SWP_CENTER_TIMES']:
-        dn.append(parser.parse(d))
-    dn = np.array(dn)
+    try:
+        # open the netCDF file
+        f = netCDF4.Dataset(file_netcdf)
 
-    X = np.transpose([dn,]*f.dimensions['Vertical'].size)
-    Y = f.variables['ICON_L2_FUVA_TANGENT_ALT'][:,:,stripe]
-    Z = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ALTITUDE_PROFILE'][:,:,stripe]
-    Ze = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ERROR_ALTITUDE_PROFILE'][:,:,stripe]
+        # Get variables from netCDF file
+        dn = []
+        for d in f.variables['ICON_L2_FUVA_SWP_CENTER_TIMES']:
+            dn.append(parser.parse(d))
+        dn = np.array(dn)
 
-    # Min/max ranges for plots
-    if min_alt is None:
-        min_alt = Y.min()
-    if max_alt is None:
-        max_alt = Y.max()
+        X = np.transpose([dn,]*f.dimensions['Vertical'].size)
+        Y = f.variables['ICON_L2_FUVA_TANGENT_ALT'][:,:,stripe]
+        Z = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ALTITUDE_PROFILE'][:,:,stripe]
+        Ze = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ERROR_ALTITUDE_PROFILE'][:,:,stripe]
 
-    if min_dn is None:
-        min_dn = dn[0]
-    if max_dn is None:
-        max_dn = dn[-1]
+        # Min/max ranges for plots
+        if min_alt is None:
+            min_alt = Y.min()
+        if max_alt is None:
+            max_alt = Y.max()
 
-    if min_ne is None:
-        min_ne = Z.min()
-    if max_ne is None:
-        max_ne = Z.max()
+        if min_dn is None:
+            min_dn = dn[0]
+        if max_dn is None:
+            max_dn = dn[-1]
 
-    if min_dne is None:
-        min_dne = np.log10(Ze.min())
-    if max_dne is None:
-        max_dne = np.log10(Ze.max())
+        if min_ne is None:
+            min_ne = Z.min()
+        if max_ne is None:
+            max_ne = Z.max()
 
-    # generate the plot
-    fig, axes = plt.subplots(nrows=5, sharex=True, figsize=(8,11))
+        if min_dne is None:
+            min_dne = np.log10(Ze.min())
+        if max_dne is None:
+            max_dne = np.log10(Ze.max())
 
-    # The electron density estimates
-    im = axes[0].pcolormesh(X,Y,Z,vmin=min_ne,vmax=max_ne)
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-    plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
-    axes[0].set_ylim([min_alt,max_alt])
-    axes[0].set_title('Estimated Ne; Stripe #%d' % stripe)
-    axes[0].set_ylabel('Altitude [km]')
-    axes[0]
+        # generate the plot
+        fig, axes = plt.subplots(nrows=5, sharex=True, figsize=(8,11))
 
-    # The electron density error estimates
-    im2 = axes[1].pcolormesh(X,Y,np.log10(Ze),vmin=min_dne,vmax=max_dne)
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-    plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
-    axes[1].set_ylim([min_alt,max_alt])
-    axes[1].set_title('Estimated Ne Error; Stripe #%d' % stripe)
-    axes[1].set_ylabel('Altitude [km]')
+        # The electron density estimates
+        im = axes[0].pcolormesh(X,Y,Z,vmin=min_ne,vmax=max_ne,cmap=cm)
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+        axes[0].set_ylim([min_alt,max_alt])
+        axes[0].set_title('Estimated Ne; Stripe #%d' % stripe)
+        axes[0].set_ylabel('Altitude [km]')
+        axes[0]
 
-    # The hmF2 estimates
-    for stripe in range(0,6):
-        Y = f.variables['ICON_L2_FUVA_SWP_HMF2'][:,stripe]
-        Ye = f.variables['ICON_L2_FUVA_SWP_HMF2_ERROR'][:,stripe]
-        axes[2].plot(dn,Y,'-')
-        axes[2].fill_between(dn,Y-Ye,Y+Ye,alpha=.25)
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-    plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
-    plt.xlim([min_dn,max_dn])
-    axes[2].set_ylim([min_alt,max_alt])
-    axes[2].set_title('Estimated hmF2')
-    axes[2].set_ylabel('Altitude [km]')
+        # The electron density error estimates
+        im2 = axes[1].pcolormesh(X,Y,np.log10(Ze),vmin=min_dne,vmax=max_dne,cmap=cm)
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+        axes[1].set_ylim([min_alt,max_alt])
+        axes[1].set_title('Estimated Ne Error; Stripe #%d' % stripe)
+        axes[1].set_ylabel('Altitude [km]')
 
-    # The NmF2 estimates
-    for stripe in range(0,6):
-        Y = f.variables['ICON_L2_FUVA_SWP_NMF2'][:,stripe]
-        Ye = f.variables['ICON_L2_FUVA_SWP_NMF2_ERROR'][:,stripe]
-        axes[3].plot(dn,Y,'-')
-        axes[3].fill_between(dn,Y-Ye,Y+Ye,alpha=.25)
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-    plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
-    plt.xlim([min_dn,max_dn])
-    axes[3].set_title('Estimated NmF2')
-    axes[3].set_ylabel('Ne [cm^-3]')
+        # The hmF2 estimates
+        for stripe in range(0,6):
+            Y = f.variables['ICON_L2_FUVA_SWP_HMF2'][:,stripe]
+            Ye = f.variables['ICON_L2_FUVA_SWP_HMF2_ERROR'][:,stripe]
+            axes[2].plot(dn,Y,'-')
+            axes[2].fill_between(dn,Y-Ye,Y+Ye,alpha=.25)
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+        plt.xlim([min_dn,max_dn])
+        axes[2].set_ylim([min_alt,max_alt])
+        axes[2].set_title('Estimated hmF2')
+        axes[2].set_ylabel('Altitude [km]')
 
-    # The quality flag
-    for stripe in range(0,6):
-        quality = f.variables['ICON_L2_FUVA_QUALITY'][:]
-        axes[4].plot(dn,quality[:,stripe],'.',label=stripe)
-    axes[4].set_ylim([-.25,2])
-    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-    plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
-    axes[4].set_title('Inversion quality flag')
-    axes[4].set_xlabel('UTC')
-    lgd = plt.legend(ncol=6,numpoints=1,loc=9, bbox_to_anchor=(0.6, -0.23))
+        # The NmF2 estimates
+        for stripe in range(0,6):
+            Y = f.variables['ICON_L2_FUVA_SWP_NMF2'][:,stripe]
+            Ye = f.variables['ICON_L2_FUVA_SWP_NMF2_ERROR'][:,stripe]
+            axes[3].plot(dn,Y,'-')
+            axes[3].fill_between(dn,Y-Ye,Y+Ye,alpha=.25)
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+        plt.xlim([min_dn,max_dn])
+        axes[3].set_title('Estimated NmF2')
+        axes[3].set_ylabel('Ne [cm^-3]')
 
-    # labels
-    axes[4].annotate('(%s, %s)' % (f.variables['ICON_L2_1356_CONTRIBUTION'][:],
-                                  f.variables['ICON_L2_REGULARIZATION_METHOD'][:]),
-                     xy=(1, 0.05), xytext=(0, 10),
-                     xycoords=('axes fraction', 'figure fraction'),
-                     textcoords='offset points',
-                     ha='right', va='top')
+        # The quality flag
+        for stripe in range(0,6):
+            quality = f.variables['ICON_L2_FUVA_QUALITY'][:]
+            axes[4].plot(dn,quality[:,stripe],'.',label=stripe)
+        axes[4].set_ylim([-.25,2])
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+        axes[4].set_title('Inversion quality flag')
+        axes[4].set_xlabel('UTC')
+        lgd = plt.legend(ncol=6,numpoints=1,loc=9, bbox_to_anchor=(0.6, -0.23))
 
-    an = axes[0].annotate('%s' % (dn[0].strftime('%d %b %Y')),
-                     xy=(.5, .95), xytext=(0, 10),
-                     xycoords=('axes fraction', 'figure fraction'),
-                     textcoords='offset points',
-                     size=12,ha='center', va='top')
+        # labels
+        axes[4].annotate('(%s, %s)' % (f.variables['ICON_L2_1356_CONTRIBUTION'][:],
+                                      f.variables['ICON_L2_REGULARIZATION_METHOD'][:]),
+                         xy=(1, 0.05), xytext=(0, 10),
+                         xycoords=('axes fraction', 'figure fraction'),
+                         textcoords='offset points',
+                         ha='right', va='top')
 
-    # Make some room for the colorbar
-    fig.subplots_adjust(left=0.07, right=0.87)
+        an = axes[0].annotate('%s' % (dn[0].strftime('%d %b %Y')),
+                         xy=(.5, .95), xytext=(0, 10),
+                         xycoords=('axes fraction', 'figure fraction'),
+                         textcoords='offset points',
+                         size=12,ha='center', va='top')
 
-    # Add the colorbar outside...
-    box = axes[0].get_position()
-    pad, width = 0.02, 0.02
-    cax = fig.add_axes([box.xmax + pad, box.ymin, width, box.height])
-    fig.colorbar(im, cax=cax,format='%.0e',label='Ne [cm^-3]',extend='max')
+        # Make some room for the colorbar
+        fig.subplots_adjust(left=0.07, right=0.87)
 
-    box = axes[1].get_position()
-    pad, width = 0.02, 0.02
-    cax = fig.add_axes([box.xmax + pad, box.ymin, width, box.height])
-    fig.colorbar(im2, cax=cax, label='log10(Ne_error) [cm^-3]', extend='max')
-    #fig.tight_layout()
-    fig.savefig(file_png, bbox_extra_artists=(lgd,an), bbox_inches='tight')
+        # Add the colorbar outside...
+        box = axes[0].get_position()
+        pad, width = 0.02, 0.02
+        cax = fig.add_axes([box.xmax + pad, box.ymin, width, box.height])
+        fig.colorbar(im, cax=cax,format='%.0e',label='Ne [cm^-3]',extend='max')
 
-    # Close the netCDF file
-    f.close()
+        box = axes[1].get_position()
+        pad, width = 0.02, 0.02
+        cax = fig.add_axes([box.xmax + pad, box.ymin, width, box.height])
+        fig.colorbar(im2, cax=cax, label='log10(Ne_error) [cm^-3]', extend='max')
+        #fig.tight_layout()
+        fig.savefig(file_png, bbox_extra_artists=(lgd,an), bbox_inches='tight')
+
+        # Close the netCDF file
+        f.close()
+    except:
+        print 'Error generating L2.5 summary file'
+        return 1
+
+    return 0
