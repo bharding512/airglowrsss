@@ -1063,13 +1063,14 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
         4-May-2017: Rewritten by Jonathan Makela to conform to L25 format (jmakela@illinois.edu)
         13-Jun-2017: Send in full file path, rather than generating on own (jmakela@illinois.edu)
         14-Jun-2017: Pull version and revision information from the provided filename
+        30-Jun-2017: Save out orbit numbers
     '''
 
     # Parse the filename for version and revision. Assumes the provided filename conforms to
     # the ICON conventions: ICON_<LEVEL>_<INSTRUMENT>[_<DESCRIPTION>]_<DATE>[_<TOD>]_v<VERSION>r<REVISION>.NC
     data_versionmajor = np.int(L25_full_fn[-9:-7])
-    data_revsision = np.int(L25_full_fn[-6:-3])
-    data_version =  np.float(data_versionmajor)+data_revsision/1000.# TODO: how will this be calculated? It goes into global attr Data_Version
+    data_revision = np.int(L25_full_fn[-6:-3])
+    data_version =  np.float(data_versionmajor)+data_revision/1000.# TODO: how will this be calculated? It goes into global attr Data_Version
     software_versionmajor = data_versionmajor
     software_revision = 0   # Increment this when making a revision!
     software_version =  np.float(software_versionmajor)+software_revision/1000.
@@ -1142,7 +1143,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
     ncfile.Data_Type =                      'DP25 > Data Product 2.5: FUV Nighttime O+ profile'
     ncfile.Data_Version =                   np.float32(data_version)
     ncfile.Data_VersionMajor =              np.ubyte(data_versionmajor)
-    ncfile.Data_Revision =                  np.ushort(data_revsision)
+    ncfile.Data_Revision =                  np.ushort(data_revision)
     ncfile.Date_Stop =                      L25_dict['FUV_dn'][0].strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC' # single measurement: use midpoint
     ncfile.Date_Start =                     L25_dict['FUV_dn'][-1].strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC' # single measurement: use midpoint
     ncfile.Description =                    'ICON FUV Nighttime O+ profiles (DP 2.5)'
@@ -1233,6 +1234,14 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
                           display_type='Time_Series', field_name='Spacecraft location in WGS84', fill_value=-999, label_axis='Time', bin_location=0.5,
                           units='', valid_min=-180., valid_max=1000., var_type='support_data', chunk_sizes=[1,1],
                           depend_0 = 'Epoch', depend_1 = 'Vector', notes='')
+
+    # ICON Orbit number
+    var = _create_variable(ncfile, 'ICON_L2_ORBIT_NUMBER', L25_dict['ICON_ORBIT'],
+                          dimensions=('Epoch'),
+                          format_nc='i4', format_fortran='I', desc='ICON Orbit Number',
+                          display_type='Time_Series', field_name='ICON Orbit Number', fill_value=-999, label_axis='Time', bin_location=0.5,
+                          units='', valid_min=0, valid_max=105000, var_type='support_data', chunk_sizes=[1],
+                          depend_0 = 'Epoch', notes='')
 
     # FUV tangent point locations in WGS
     var = _create_variable(ncfile, 'ICON_L2_%s_TANGENT_LAT' % inst, L25_dict['FUV_TANGENT_LAT'],
@@ -1471,6 +1480,7 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
         04-May-2017: Revised by Jonathan Makela to use L1 and ancillary data files (jmakela@illinois.edu)
         02-Jun-2017: Revised by Jonathan Makela to read GPI files (jmakela@illinois.edu)
         13-Jun-2017: Revised by Jonathan Makela to pass in full file output path (jmakela@illinois.edu)
+        30-Jun-2017: Revised by Jonathan Makela to work with orbit numbers (jmakela@illinois.edu)
     TODO:
         1) Variable names in L1 and ancillary data files may change
     '''
@@ -1518,6 +1528,9 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
         for d in temp:
             ANC_dn.append(parser.parse(d))
         ANC_dn = np.array(ANC_dn)
+
+        # Read the orbit number
+        ICON_ORBIT = ancillary.variables['ICON_ANCILLARY_FUV_ORBIT_NUMBER'][:]
 
         # Get Data from file.
         # L1 data stores the individual stripes in different variables. Read them
@@ -1674,6 +1687,7 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
         'FUV_AZ': FUV_AZ[night_ind,min_li:max_li+1,:],
         'FUV_ZE': FUV_ZE[night_ind,min_li:max_li+1,:],
         'ICON_WGS': ICON_WGS[night_ind,:],
+        'ICON_ORBIT': ICON_ORBIT[night_ind],
         'FUV_ver': FUV_ver[night_ind,min_li:max_li+1,:],
         'FUV_ver_error': FUV_sigma_ver[night_ind,min_li:max_li+1,:],
         'FUV_Ne': FUV_Ne[night_ind,min_li:max_li+1,:],

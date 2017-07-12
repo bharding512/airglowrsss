@@ -1,4 +1,4 @@
-# Code containing the forward model for the ICON FUV instrument. Includes options for (non)spherical (non)symmetric earth-atmosphere. 
+# Code containing the forward model for the ICON FUV instrument. Includes options for (non)spherical (non)symmetric earth-atmosphere.
 
 # NOTE OF CAUTION: for the calculation of the Brightness multiple cores are used. Need to fix that option if running in a single core machine!
 
@@ -17,7 +17,7 @@ from time import gmtime, strftime
 from sys import exit
 from scipy.interpolate import interp1d,interp2d
 
-import FUV as fuv 
+import FUV as fuv
 from scipy.io import netcdf
 import FUV_Distance_Matrix as dmat
 
@@ -27,7 +27,7 @@ import FUV_Distance_Matrix as dmat
 def get_FUV_instrument_constants():
     '''
     Notes:
-        12-Dec-2014: Last known parameters for ICON FUV   
+        12-Dec-2014: Last known parameters for ICON FUV
     HISTORY:
         12-Dec-2014: Written by Dimitrios Iliou (iliou2@illinois.edu)
         01-Apr-2015: Last known parameters for ICON FUV - Rescell Dimensions
@@ -59,7 +59,7 @@ def calc_1356_nighttime(lat,lon,alt,dn,Ne_scaling = 1.,testing=0):
     '''
     Return the radiative recombination (RR) and mutual neutralization (MN) for the
     135.6-nm emission according to a requested location and time using IRI and MSIS
-    and the emission chemistry from Melendez-Alvira, 1999 
+    and the emission chemistry from Melendez-Alvira, 1999
     (http://onlinelibrary.wiley.com/doi/10.1029/1999JA900136/abstract)
     INPUTS:
         lat -  latitude (deg)
@@ -114,7 +114,7 @@ def calc_1356_nighttime(lat,lon,alt,dn,Ne_scaling = 1.,testing=0):
         RR = a1356*Ne**2  # radiatvie recombination (1/cm^3/s)
         MN = 0
         O = 0
-        
+
     return RR,MN,Ne,O
 
 def calculate_VER_1356_nighttime(satlat,satlon,satalt,dn,Ne_scaling = 1.,testing = 0,cont =2):
@@ -138,7 +138,7 @@ def calculate_VER_1356_nighttime(satlat,satlon,satalt,dn,Ne_scaling = 1.,testing
     NOTES:
 
     HISTORY:
-        12-Dec-2014: Written by Dimitrios Iliou (iliou2@illinois.edu) 
+        12-Dec-2014: Written by Dimitrios Iliou (iliou2@illinois.edu)
         08-Jul-2015: Added check for satalt scalar values (Dimitrios Iliou)
         13-Jul-2015: Add O to calc_1356_nighttime to have O tanget altitude profile
         02-Sep-2015: Add testing input - Gaussian Ne instead of IRI
@@ -146,13 +146,13 @@ def calculate_VER_1356_nighttime(satlat,satlon,satalt,dn,Ne_scaling = 1.,testing
     CALLS:
         - calc_1356_nighttime
     '''
-    
+
     VER = np.zeros(np.size(satalt))
     MN = np.zeros(np.size(satalt))
     VER_true = np.zeros(np.size(satalt))
     NE = np.zeros(np.size(satalt))
     O = np.zeros(np.size(satalt))
-    
+
     if (np.size(satalt)==1):
         VER,MN,NE,O= calc_1356_nighttime(satlat,satlon,satalt,dn,Ne_scaling,testing)
     else:
@@ -189,8 +189,8 @@ def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scali
         routine are done at the lat/lon of the satellite.  This needs to be generalized at some point.
     HISTORY:
         12-Dec-2014: Written by Dimitrios Iliou (iliou2@illinois.edu) and Brian J. Harding
-       (bhardin2@illinois.edu) 
-        03-Jun-2015: Changed Limb altitude from 90 to 150km (Dimitrios Iliou) 
+       (bhardin2@illinois.edu)
+        03-Jun-2015: Changed Limb altitude from 90 to 150km (Dimitrios Iliou)
         13-Jul-2015: Add _ to calc_1356_nighttime since O is not needed for the fwd model
         02-Sep-2015: Add testing input - Gaussian Ne instead of IRI
     CALLS:
@@ -202,31 +202,31 @@ def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scali
     y = RE + satalt # This measures parallel to satellite nadir
     dx = np.sin(ze) # unit step in x
     dy = np.cos(ze) # unit step in y
-      
+
     IRR = 0.
     IMN = 0.
     Ne = 0
-    Rayleigh = 0.   
+    Rayleigh = 0.
     alti =[]
     # We will trace along the ray path until we get back to the satellite altitude
     # NOTE: (1) Generalize this by calculating points and using a for loop.
     #       (2) Generalize this by allowing a ray path to be passed in.
     while (np.sqrt(x**2 + y**2) <= RE+satalt): # until you get far enough away from earth that it doesn't matter
-             
+
         alt = np.sqrt(x**2 + y**2) - RE
         lat = np.nan # for now, this doesn't matter
-        lon = np.nan # for now, this doesn't matter    
+        lon = np.nan # for now, this doesn't matter
         alti.append(alt)
         # After this altitude the Raypath goes through the disk so no calculation is done for these altitudes
         #if alt < 150:    # 150 USUALLY 100
             #break
-       
+
         # Calculate 1356 Emission for a single point
         VER,MN,Ne,_ = calc_1356_nighttime(satlat,satlon,alt,dn,Ne_scaling,testing)
-        
+
         IRR = IRR + VER * step*10**5
         IMN = IMN + MN * step*10**5
-        
+
         # take the next step
         x += step*dx
         y += step*dy
@@ -242,11 +242,11 @@ def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scali
         Rayleigh = IRR + IMN
     # Contribution only from Radiative Recombination
     elif cont ==2:
-        Rayleigh = IRR # This is needed only when we need RR 
+        Rayleigh = IRR # This is needed only when we need RR
     else:
         print 'Invalid Choice of contribution. 1 for RR+MN or 2 for RR'
         return 0,0
-    
+
     return Rayleigh
 
 # ICON FUV WGS84
@@ -270,57 +270,57 @@ def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry 
     OUTPUTS:
         Brightness  - the intensity of the integrated emission (R) or 0 if the contribution is not set correctly
     NOTES:
-        
+
     HISTORY:
-        08-Jul-2015: Written by Dimitrios Iliou (iliou2@illinois.edu) 
+        08-Jul-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
         02-Sep-2015: Add testing input - Gaussian Ne instead of IRI
         04-Sep-2015: Add total_distance input - goes to the WGS84 raypath calculations
     CALLS:
         -calc_1356_nighttime
         -ICON.project_line_of_sight
     '''
-    
+
     # Initialize the integration variables to zeros
     IRR = 0.
     IMN = 0.
     Ne = 0
-    Rayleigh = 0.   
+    Rayleigh = 0.
 
     satlatlonalt = [satlat,satlon,satalt]
     #print '%f,%f'%(az,ze)
     # Call the function for a single az and ze angle. It returns all the stepping points along the line
     xyz, latlonalt = ic.project_line_of_sight(satlatlonalt, az,ze,step,total_distance)
-   
-    # For all the points on the line   
+
+    # For all the points on the line
     for j in range(0,np.size(latlonalt,1)):
-        
+
         # Continue iterating till you reach the conjugate point of the satellite.
         # This is not necessery since for high altitudes the contributions are not significant.
         #if (latlonalt[2,j]>latlonalt[2,0]):
             #break
-        
-        # Calculate 1356 Emission for a single point        
+
+        # Calculate 1356 Emission for a single point
         # Return Radiative Recombination, Mutual Neutralization and Ne value for each point on the line
         # The Ne can be scalled to test algorithm for various pertubations
-        # The symmetry check changes the call so the lat lon coordinates will be the same as nadir direction or not. 
+        # The symmetry check changes the call so the lat lon coordinates will be the same as nadir direction or not.
         if symmetry == 0:
             VER,MN,Ne,_ = calc_1356_nighttime(satlat,satlon,latlonalt[2,j],dn,Ne_scaling,testing)
         elif symmetry == 1:
             VER,MN,Ne,_ = calc_1356_nighttime(latlonalt[0,j],latlonalt[1,j],latlonalt[2,j],dn,Ne_scaling,testing)
-        
+
         #print '%f,%f,%f' %(latlonalt[0,j],latlonalt[1,j],latlonalt[2,j])
-        
-        # Iterative summation (integration of raypath) 
+
+        # Iterative summation (integration of raypath)
         # step is multipled with 10**5 because we want the results in cm(^3)
         IRR = IRR + VER * step*10**5
         IMN = IMN + MN * step*10**5
 
     # WE dont divide with 4*pi
-    # 10**(-6) is in the formula of calculating Brightness in Rayleigh. 
+    # 10**(-6) is in the formula of calculating Brightness in Rayleigh.
     IRR = 10**(-6) * IRR
     IMN = 10**(-6) * IMN
-    
-    
+
+
     # Calculate Brightness depending on the contribution
     # Other contribution may be added here in the future
     # Contribution from Radiative Recombination and Mutual Nutralization
@@ -328,7 +328,7 @@ def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry 
         Rayleigh = IRR + IMN
     # Contribution only from Radiative Recombination
     elif cont ==2:
-        Rayleigh = IRR # This is needed only when we need RR 
+        Rayleigh = IRR # This is needed only when we need RR
     else:
         print 'Invalid Choice of contribution. 1 for RR+MN or 2 for RR'
         return 0,0
@@ -364,12 +364,12 @@ def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,sym
         routine are done at the lat/lon of the satellite.  This needs to be generalized at some point.
 
         Brightness and Photons are calculated for a specified number of pixel in a rescell: Default = 8 (One rescell)
-        
+
         photon can be also calculated by multipling the radiance with the above parameters
         photons = r * solidangle * aperture * exposure * OE *0.03
     HISTORY:
-        12-Dec-2014: Written by Dimitrios Iliou (iliou2@illinois.edu) 
-        01-Apr-2015: pixels_per_rescell -> stripes used 
+        12-Dec-2014: Written by Dimitrios Iliou (iliou2@illinois.edu)
+        01-Apr-2015: pixels_per_rescell -> stripes used
         08-Jul-2015: Changed the calculate_pixel_1356_nighttime to calculate_pixel_1356_nighttime_WGS84 to include non-spherical non-symmetric earth
         26-Jul-2015: Added the spherical and symmetry parameters on the function
         02-Sep-2015: Add testing input - Gaussian Ne instead of IRI
@@ -379,7 +379,7 @@ def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,sym
         -calculate_pixel_1356_nighttime
         -calculate_pixel_1356_nighttime_WGS84
     '''
-    
+
     # Check if instrument parameters are zero from input to load default values
     params = get_FUV_instrument_constants()
     if exposure==0:
@@ -388,18 +388,18 @@ def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,sym
         TE =  params['Sensitivity']
     if stripes_used==0:
         stripes_used = params['stripes_usedl']
-        
-    # Get Brightness for a given zenith angle 
+
+    # Get Brightness for a given zenith angle
     if shperical == 0:
         Brightness = calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont,Ne_scaling,step,testing)
     elif shperical == 1:
         Brightness = calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry,cont,Ne_scaling,step,testing,total_distance)
-    
+
     # Number of pixels in rescell = 8
     r = TE * exposure * stripes_used
-  
+
     photons = r*Brightness
-      
+
     return Brightness,photons
 
 #Multiprocessing
@@ -440,7 +440,7 @@ def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satal
 
     HISTORY:
         12-Dec-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
-        01-Apr-2015: pixels_per_rescell -> stripes used 
+        01-Apr-2015: pixels_per_rescell -> stripes used
         26-Jul-2015: Added the spherical and symmetry parameters on the function
         26-Aug-2015: Exception for Pool added.
         02-Sep-2015: Add testing input - Gaussian Ne instead of IRI
@@ -461,14 +461,14 @@ def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satal
 
         photons = np.zeros(np.size(ze)) # Number of Counts without Noise
         Rayl = np.zeros(np.size(ze))
-        
+
         # i put index on azimuth
         job_args = [(ze[i],az[i] ,satlat,satlon,satalt, dn,symmetry,shperical,exposure,testing,cont,TE,Ne_scaling,step,total_distance,stripes_used) for i in range(0,len(ze))]
         N = multiprocessing.cpu_count()
 
         # Create the pool.  Be nice.  Don't use all the cores!
         pool = Pool(processes=16)
-        
+
         t0 = time.time()
         results = pool.map(get_Photons_from_Brightness_1356_nighttime_star,job_args)
         for i in range(0,len(results)):
@@ -481,21 +481,21 @@ def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satal
         #print t1-t0
 
     except (KeyboardInterrupt,SystemExit,ZeroDivisionError,BaseException) as inst :
-        
+
         if 'pool' in vars():
             pool.terminate()
-            
+
         #print "You cancelled the program!"
         print type(inst)
         print inst
-        exit(1) 
+        exit(1)
 
     except Exception:
-    
+
         print "Something Happened :("
         print type(inst)
         print inst
-        exit(1) 
+        exit(1)
 
     return Rayl,photons
 
@@ -517,11 +517,11 @@ def add_noise_to_photon_and_brightness(photons,exposure=0., TE=0., stripes_used 
     Comments:
         noise - input noise, Poisson Dist (counts)
     HISTORY:
-        12-Dec-2015: Written by Dimitrios Iliou (iliou2@illinois.edu) 
-        01-Apr-2015: pixels_per_rescell -> stripes used 
+        12-Dec-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
+        01-Apr-2015: pixels_per_rescell -> stripes used
         08-Oct-2015: changed the svs.poisson. removed the second argument
     '''
-    
+
      # Load default FUV parameters in case are not given in the input
     params = get_FUV_instrument_constants()
     if exposure==0:
@@ -531,16 +531,16 @@ def add_noise_to_photon_and_brightness(photons,exposure=0., TE=0., stripes_used 
     if stripes_used==0:
         stripes_used = params['stripes_used']
 
-    shot_noise = np.zeros((reps,np.size(photons))) 
+    shot_noise = np.zeros((reps,np.size(photons)))
     Rayl_ = np.zeros((reps,np.size(photons)))
     sigma_Rayl = np.zeros(np.size(photons)) # 1-sigma uncertainty
-    
+
     for rep in range(0,reps):
         for i in range(0,np.size(photons)):
             '''
-            The variance of the photon noise, which is a measure of the expected difference 
-            between the number of photons collected and the average number, is equal to the 
-            square root of the average number of photons 
+            The variance of the photon noise, which is a measure of the expected difference
+            between the number of photons collected and the average number, is equal to the
+            square root of the average number of photons
             '''
             if photons[i]==0:
                 shot_noise[rep,i]
@@ -550,11 +550,11 @@ def add_noise_to_photon_and_brightness(photons,exposure=0., TE=0., stripes_used 
                 shot_noise[rep,i] = stats.poisson.rvs(photons[i])
 
         Rayl_[rep,:] = shot_noise[rep,:]/(TE*exposure*stripes_used)
-        
+
     for i in range(np.size(photons)):
         sigma_Rayl[i] = np.sqrt(photons[i]) / (TE*exposure*stripes_used)
     cov_Rayl = np.diag(sigma_Rayl**2)
-    
+
     if ret_cov:
         return Rayl_, shot_noise, cov_Rayl
     else:
@@ -562,13 +562,13 @@ def add_noise_to_photon_and_brightness(photons,exposure=0., TE=0., stripes_used 
 
 def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=1, exp=12,reps=1000,sens=0,cont=2,testing = 0,Ne_sc=1.,step=10,total_distance = 6000.,stripes_used=0,proc=16,low_ta = 150.):
     '''
-    Top forward model modules. Creates brightness profile and adds noise returning the noisy Brighntess profile(s) to 
-    be used for the inversion process. 
+    Top forward model modules. Creates brightness profile and adds noise returning the noisy Brighntess profile(s) to
+    be used for the inversion process.
     INPUTS:
         satlatlonalt - vector containing the satellite coordinates [lat-lon-alt] (km)
         date         - datetime input
         ze           - zenith angle of look direction (degrees)
-        az           - azimuth angle of look direction (degrees) 
+        az           - azimuth angle of look direction (degrees)
         symmetry     - flag indicating if symmetry [0] or non-symmetry[1] will be used
         shperical    - flag indicating if spherical [0] or WGS84 model[1] will be used
         exp          - exposude time in order to be used as proxy for SNR increase or decrease (s)
@@ -580,8 +580,8 @@ def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=
         step         - resolution of the integration along the line of sight (km, default = 10 km)
         total_distance - length of the projected line for each raypath(km).
         stripes_used - number of stripes used of the CCD [default 1] [if zero on input loads default value]
-        proc         - Number of cores used for multiprocessing [default 16 cores]  
-        low_ta       - Lower tangent altitude that we need to consider for our measurements (km)[default = 150 km :limb, for sublimb we can put -500 to cover all zenith]      
+        proc         - Number of cores used for multiprocessing [default 16 cores]
+        low_ta       - Lower tangent altitude that we need to consider for our measurements (km)[default = 150 km :limb, for sublimb we can put -500 to cover all zenith]
     OUTPUT:
         NE           - Electron Density profile corresponding the the specified datetime and tangent altitude (cm^-3)
         Bright       - Brightness profile (Rayleigh)
@@ -594,12 +594,12 @@ def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=
         h_loc_bot    - Location of bot tangent altitudes [lat,lon,alt](degrees,degrees,km)
         Sigma        - Covariance matrix from photons
     NOTES:
-        - Currently the forward model doesnt account for different azimuth angles. Azimuth is constant at 0 degrees 
+        - Currently the forward model doesnt account for different azimuth angles. Azimuth is constant at 0 degrees
           (S/C looking north)
         - Azimuth calculation to be added
-        - Current ICON.py "calculate_pixel_1356" function assumes shperical symmetric earth instead of WGS84 needs to 
+        - Current ICON.py "calculate_pixel_1356" function assumes shperical symmetric earth instead of WGS84 needs to
           be changed
-        - NmF2 Difference between tangents points calculated for WGS84 and Spherical Symmetric Earth is 0.0016% 
+        - NmF2 Difference between tangents points calculated for WGS84 and Spherical Symmetric Earth is 0.0016%
           and hmF2 -1.12
         - VER and NE are calculated for fixed lat,lon-> Need to change to follow the WGS84 model
     HISTORY:
@@ -621,12 +621,12 @@ def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=
         -calculate_VER_1356_nighttime
         -find_mid_cell
     '''
-    
+
     # Satellite coordinates
     satlat = satlatlonalt[0]
     satlon = satlatlonalt[1]
     satalt = satlatlonalt[2]
-    
+
     if np.size(ze)==1 and np.size(az)==1:
         if ze==0 and az ==0:
             # Load default az and ze angles from the fov of the instrument
@@ -643,32 +643,32 @@ def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=
             az = az[0:len(ze)]
     elif np.size(ze)==1:
         if ze==0:
-            _,ze = get_azze_default()    
+            _,ze = get_azze_default()
             ze = ze[0:len(az)]
 
     az_v = np.deg2rad(az)
     ze_v = np.deg2rad(ze)
 
-    
+
     '''
-    Locate limb lower bound ~150km 
+    Locate limb lower bound ~150km
     '''
-        
+
     check = 0
     '''
-    # Locate limb lower bound ~130km 
+    # Locate limb lower bound ~130km
     limb = 130
-    
+
     if (shperical==0):
         h = np.zeros(np.size(ze))
         RE = 6371.
-        h = ic.angle2tanht(ze_v, satalt, RE) 
+        h = ic.angle2tanht(ze_v, satalt, RE)
         h = h[np.where(h>limb)]
         disk = len(h)
     else:
         # Tangent_poing function returns coordinates [lat-lon-lat] for the tangent point
         h_coord = np.zeros((len(ze),3))
-        # Locate limb lower bound ~150km 
+        # Locate limb lower bound ~150km
         for i in range(0,len(ze)):
             h_coord[i,:] = ic.tangent_point(satlatlonalt,az[i],ze[i])
         h_loc = h_coord[np.where(h_coord[:,2]>=limb),:]
@@ -676,30 +676,30 @@ def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=
         h = h[0,:]
         disk = len(h)
 
-    
+
     # Resize vectors for limb FOV
     ze = ze[0:disk]
     az = az[0:disk]
-    
+
     ze_v = ze_v[0:disk]
     az_v = az_v[0:disk]
-    
+
     '''
     try:
         h,rbot,_,h_loc_bot,h_loc = find_mid_cell(satlatlonalt,ze,az,shperical,low_ta)
         #h,rbot,_,h_loc_bot,h_loc = find_mid_cell(satlatlonalt,ze,az,shperical,150.)
-        
+
         ze = ze[0:len(h)]
         az = az[0:len(h)]
-        
+
         ze_v = ze_v[0:len(h)]
         az_v = az_v[0:len(h)]
-            
+
         # Initialize vectors
         photons = np.zeros(np.size(ze_v)) # Number of Counts without Noise
         Bright = np.zeros(np.size(ze_v))
         #Bright_n = np.zeros(np.size(ze_v))
-        Counts = np.zeros(np.size(ze_v)) # Number of Counts with Noise    
+        Counts = np.zeros(np.size(ze_v)) # Number of Counts with Noise
 
         '''
         Multicore Processing for Calculate Brighness
@@ -711,7 +711,7 @@ def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=
             Bright,photons = get_Photons_from_Brightness_Profile_1356_nighttime(ze_v,az_v,satlat,satlon,satalt,date,symmetry,shperical,exp,testing,cont,sens,Ne_sc,step,total_distance,stripes_used,proc)
         else:
             Bright,photons = get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satalt,date,symmetry,shperical,exp,testing,cont,sens,Ne_sc,step,total_distance,stripes_used,proc)
-        
+
         '''
         Calculate Noisy Counts
         reps determines the number of noise profiles that the function will produce
@@ -721,10 +721,10 @@ def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=
         Bright_n = np.transpose(Bright_n)
 
         Sigma = np.diag(1/np.sqrt(photons))
-        
+
         '''
-        Caclulate VER 
-        '''    
+        Caclulate VER
+        '''
         VER_true = np.zeros(np.size(h,0))
         MN = np.zeros(np.size(h,0))
         VER = np.zeros(np.size(h,0))
@@ -745,15 +745,15 @@ def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=
                 for i in range(0,len(h)):
                     VER_true[i],_,_,NE[i],O[i] = calculate_VER_1356_nighttime(h_loc[i,0],h_loc[i,1],h_loc[i,2],date,Ne_sc,testing,cont)
 
-        
+
     except Exception:
         print "Something Happened :("
         print type(inst)
         print inst
-        exit(1) 
+        exit(1)
     return NE,Bright,Bright_n,h,rbot,O,VER_true,h_loc,h_loc_bot,Sigma
-    
-    
+
+
 def get_azze_default():
     '''
     Load the default fov parameters for FUV and calculates ze and az by evenly distributing the FOV over the size
@@ -764,7 +764,7 @@ def get_azze_default():
         az -  azimuth vector (deg)
         ze -  zenith vector (deg)
     NOTES:
-        This function is used only if we want to load the default values when dealing with the forward modelling. When 
+        This function is used only if we want to load the default values when dealing with the forward modelling. When
         data are give we will have to calculate the ze and az angle depending on that data.
     HISTORY:
         03-Jun-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
@@ -778,13 +778,13 @@ def get_azze_default():
     fovr_l =  params['fovr_l']
     fovr_u =  params['fovr_u']
     npixely = params['npixely']
-    
+
     fov_az = params['coneangle1']
     npixelx = params['npixelx']
 
-    # Create zenith angle vector by evenly distributing the FUV FOV angles 
+    # Create zenith angle vector by evenly distributing the FUV FOV angles
     # For the azimuth angle we just assume that the satellite is facing north
-    az = np.zeros(npixely) 
+    az = np.zeros(npixely)
     az[:] = 0.
     ze = np.linspace(fov_l,fov_u,npixely)
 
@@ -800,7 +800,7 @@ def find_mid_cell(satlatlonalt,ze,az,spherical,limb = 130.):
     INPUTS:
         satlatlonalt - vector containing the satellite coordinates [lat-lon-alt] (km)
         ze           - zenith angle of look direction (degrees)
-        az           - azimuth angle of look direction (degrees) 
+        az           - azimuth angle of look direction (degrees)
         shperical    - flag indicating if spherical [0] or WGS84 model[1] will be used
         limb         - altitude where the limb starts [default 130km]
     OUTPUT:
@@ -814,30 +814,30 @@ def find_mid_cell(satlatlonalt,ze,az,spherical,limb = 130.):
         02-Sep-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
     CALLS:
     '''
-    
+
     az_v = np.deg2rad(az)
     ze_v = np.deg2rad(ze)
-    
+
     if (spherical==0):
         h = np.zeros(np.size(ze))
         RE = 6371.
-        h = ic.angle2tanht(ze_v, satlatlonalt[2], RE) 
+        h = ic.angle2tanht(ze_v, satlatlonalt[2], RE)
         h = h[np.where(h>limb)]
         h_loc_bot = 0
         h_loc_mid = 0
     else:
         # Tangent_poing function returns coordinates [lat-lon-alt] for the tangent point
         h_coord = np.zeros((len(ze),3))
-       
+
         for i in range(0,len(ze)):
             h_coord[i,:] = ic.tangent_point(satlatlonalt,az[i],ze[i])
-            
+
         # Initialize matrix to make sure dimensions are correct
         h_loc_bot = np.zeros((np.size(np.where(h_coord[:,2]>=limb)),3))
         h_loc_bot[:,:] = h_coord[np.where(h_coord[:,2]>=limb),:]
         h = h_coord[np.where(h_coord[:,2]>=limb),2]
         h = h[0,:]
-    
+
     rbot = h
     rtop = rbot.copy()
 
@@ -846,12 +846,12 @@ def find_mid_cell(satlatlonalt,ze,az,spherical,limb = 130.):
     #rtop[0] = Horbit -1
     rtop[0] = satlatlonalt[2]
     # Define midpt of each layer
-    rmid = (rbot + rtop)/2  
+    rmid = (rbot + rtop)/2
     h_loc_mid = h_loc_bot
-    
+
     if np.size(h_loc_mid)!=1:
         h_loc_mid[:,2] = rmid
-    
+
     return rmid,rbot,rtop, h_loc_bot, h_loc_mid
 
 
@@ -877,29 +877,29 @@ def TIEGCM_Altitude_interpolate(Ne,rbot,xnew):
     x_true = rbot
 
     # Create two interpolators, one linear for the extrapolation and one cubic for the intepolation
-    # Cubic is more preferable since we want smoothness 
+    # Cubic is more preferable since we want smoothness
     f_linear = interp1d(x_true, y_true, kind='linear',fill_value='extrapolate')
-    f_cubic = interp1d(x_true,y_true,kind ='cubic')    
-        
+    f_cubic = interp1d(x_true,y_true,kind ='cubic')
+
     # Calculate the intepolations
     linear = f_linear(xnew)
     #cubic = f_cubic(xnew[np.where(xnew<max(x_true))])
-            
+
     ## HERE I NEED TO ADD LINEAR INTERPOLATION BENEATH THE TANGENT POINT. MAYBE EXTRAPOLATE BELOW THE MIN VALUE OF TIEGCM
     cubic_indices = np.intersect1d(np.where(xnew>min(x_true)),np.where(xnew<max(x_true)))
-    cubic = f_cubic(xnew[cubic_indices])    
-    
+    cubic = f_cubic(xnew[cubic_indices])
+
     # Replace the values in the linear vector with the corresponding values of the cubic one to get the correct dimensions for the altitude vector wanted
-    # I need to find the indices that correspond to the the cubic and 
+    # I need to find the indices that correspond to the the cubic and
     #linear[len(linear)-len(cubic):] = cubic
     linear[cubic_indices] = cubic
 
     linear[np.where(linear<=0)]=0
-    
+
     return linear,xnew
 
 def fix_lat_lon_interp_indices(x,value):
-    
+
     xnew = np.zeros(len(x)+1)
 
     les = np.where(x<value)[0][-1]
@@ -908,7 +908,7 @@ def fix_lat_lon_interp_indices(x,value):
     xnew[:les+1] = x[:les+1]
     xnew[les+1] = value
     xnew[les+2:] = x[mor:]
-    
+
     return xnew
 
 def TIEGCM_LatLon_2Dinterpolate(Ne,alt,lat_vec,lon_vec,lat,lon):
@@ -930,7 +930,7 @@ def TIEGCM_LatLon_2Dinterpolate(Ne,alt,lat_vec,lon_vec,lat,lon):
     HISTORY:
         16-May-2016: Written by Dimitrios Iliou (iliou2@illinois.edu)
     '''
-    
+
     if lat in lat_vec:
         lat_new = lat_vec
     else:
@@ -939,25 +939,25 @@ def TIEGCM_LatLon_2Dinterpolate(Ne,alt,lat_vec,lon_vec,lat,lon):
         lon_new = lon_vec
     else:
         lon_new = fix_lat_lon_interp_indeces(lon_vec,lon)
-    
+
     Ne_interp = np.zeros((np.size(Ne,0),len(lat_new),len(lon_new)))
-    
+
     alt_interp = np.zeros((np.size(alt,0),len(lat_new),len(lon_new)))
-    
+
     for i in range(0,np.size(Ne,0)):
         f = interp2d( lon_vec,lat_vec,Ne[i,:,:], kind='cubic')
         Ne_interp[i,:,:] = f(lon_new,lat_new)
-        
+
         f_alt = interp2d( lon_vec,lat_vec,alt[i,:,:], kind='cubic')
         alt_interp[i,:,:] = f_alt(lon_new,lat_new)
-        
+
     return Ne_interp,alt_interp,lat_new,lon_new
 
 
 def find_nearest(array,value):
     '''
-    Function that finds the closest value in the array. 
-    This will be used to find the interval in which we want to interpolate 
+    Function that finds the closest value in the array.
+    This will be used to find the interval in which we want to interpolate
     in when we call TIEGCM
     INPUTS:
         array  - array that contains the values that we have
@@ -966,18 +966,18 @@ def find_nearest(array,value):
         inx    - index position of the matrix
     HISTORY:
         16-May-2016: Written by Dimitrios Iliou (iliou2@illinois.edu)
-    
+
     '''
     idx = (np.abs(array-value)).argmin()
     return idx
-   
-    
+
+
 def TIEGCM_Brightness_Calculation(satlatlonalt,ze,az,hour = 0,spherical=0,limb = -500.,path = '/home/dimitris/public_html/Datafiles/TIEGMC/tiegcm_icon_merg2.0_DpertCbgrd.s_081.nc'):
 
     '''
     Foward model for  simulated Brightness measurements using TIEGCM files
     INPUTS:
-        satlatlonalt    - Satellite coordinates [lat,lon,alt] 
+        satlatlonalt    - Satellite coordinates [lat,lon,alt]
         ze              - zenith viewing geometry to calculate tangent altitudes
         az              - azimuth viewing geometry to calculate tangent altitudes
         hour            - Hour index for the TIEGCM model
@@ -992,12 +992,12 @@ def TIEGCM_Brightness_Calculation(satlatlonalt,ze,az,hour = 0,spherical=0,limb =
     HISTORY:
         18-May-2016: Written by Dimitrios Iliou (iliou2@illinois.edu)
     NOTES:
-        
-    
+
+
     '''
 
     # Read the NETCDF file containing the TIEGCM model
-        
+
     data = netcdf.netcdf_file(path, 'r')
 
     Ne = data.variables['NE'][:]
@@ -1016,29 +1016,27 @@ def TIEGCM_Brightness_Calculation(satlatlonalt,ze,az,hour = 0,spherical=0,limb =
     f107d = data.variables['f107d'][0]
 
     data.close()
-    
+
     # Assumes that the start date is first month and first date of the year declared on the TIEGCM file
     start_date = datetime(year[0],1,1,0,0,0)
     dn =  start_date + timedelta(minutes=time_[hour])
 
     a1356 = 7.3e-13
-    
+
     h_temp,_,_,_,_ = fuv.find_mid_cell(satlatlonalt = satlatlonalt,ze = ze,az =az,spherical = spherical,limb=limb)
 
-    if spherical == 0: 
+    if spherical == 0:
         S,_,_,_ = dmat.create_cells_Matrix_spherical_symmetry(np.deg2rad(ze),satlatlonalt[2])
     else:
         S,rmid = dmat.Calculate_D_Matrix_WGS84_mp(satlatlonalt,az,ze)
 
     Ne_interp,Z_interp,lat_new,lon_new = TIEGCM_LatLon_2Dinterpolate(Ne[hour,:,:,:],Z[hour,:,:,:],lat,lon,satlatlonalt[0],satlatlonalt[1])
-        
+
     lat_index = np.where(lat_new==satlatlonalt[0])[0][0]
     lon_index = np.where(lon_new==satlatlonalt[1])[0][0]
 
     Ne_tiegcm,tan_alt = TIEGCM_Altitude_interpolate(Ne_interp[:,lat_index,lon_index],Z_interp[:,lat_index,lon_index],h_temp)
     ver_tiegcm = a1356*Ne_tiegcm**2
     Brightness_tiegcm= S.dot(ver_tiegcm)
-        
-    return Brightness_tiegcm,ver_tiegcm,Ne_tiegcm,tan_alt  
 
-
+    return Brightness_tiegcm,ver_tiegcm,Ne_tiegcm,tan_alt
