@@ -10,7 +10,6 @@ Included functions are:
     **CreateL2ASCII
     **CreateL2ASCII_Legacy
     CreateMonthlyASCII
-    FilterData
     GetModels
     PlotAverages
     PlotClimatology
@@ -20,7 +19,6 @@ Included functions are:
     PlotSpaghetti
     SetBinTime
     SetFilter
-    WeightedAverage
         
 '''
 import matplotlib as _mpl
@@ -32,7 +30,7 @@ import calendar as _cal
 import numpy as _np
 from scipy import stats as _stats
 import pytz as _pytz
-import FPIprocessLevel2_Legacy as L2
+import FPIprocessLevel2 as L2
 import fpiinfo as _fpiinfo
 from multiprocessing import Pool as _pool
 from functools import partial as _partial
@@ -66,7 +64,7 @@ def SetBinTime(MIN):
 
 
 def SetFilter(UMIN=-250.,UMAX=250.,VMIN=-250.,VMAX=250.,WMIN=-75.,WMAX=75.,TMIN=600.,TMAX=1400., \
-        TERR=50.,WERR=25.,CERR=300.,VERBOSE=True):
+        TERR=50.,WERR=50.,VERBOSE=True):
     '''
     Summary:
         Returns filter limits for averages. This is used because the Level0 automated processing \
@@ -83,7 +81,6 @@ def SetFilter(UMIN=-250.,UMAX=250.,VMIN=-250.,VMAX=250.,WMIN=-75.,WMAX=75.,TMIN=
         TMAX = Temperature maximum
         TERR = Temperature uncertainity (error) limit
         WERR = Wind uncertainty (error) limit
-        CERR = Calibration error limit
 
     History:
         4/18/16 -- Written by DJF (dfisher2@illinois.edu)
@@ -92,9 +89,9 @@ def SetFilter(UMIN=-250.,UMAX=250.,VMIN=-250.,VMAX=250.,WMIN=-75.,WMAX=75.,TMIN=
     # physical limits for data
     global lim
     lim = {'Tmax':TMAX,'Tmin':TMIN,'Te':TERR, \
-           'umax':UMAX,'umin':UMIN,'uef':WERR, 'uec':CERR,\
-           'vmax':VMAX,'vmin':VMIN,'vef':WERR, 'vec':CERR,\
-           'wmax':WMAX,'wmin':WMIN,'wef':WERR, 'wec':CERR}
+           'umax':UMAX,'umin':UMIN,'ue':WERR, \
+           'vmax':VMAX,'vmin':VMIN,'ve':WERR, \
+           'wmax':WMAX,'wmin':WMIN,'we':WERR}
    
     if VERBOSE:
         print 'The following limits are set:'
@@ -155,18 +152,15 @@ def FilterData(DATA,QF=1):
             if len(r1.u) >= 1:
                 ind1 = _np.delete(ind1, _np.where(lim['umin'] > r1.u[ind1]))
                 ind1 = _np.delete(ind1, _np.where(r1.u[ind1] > lim['umax']))
-                ind1 = _np.delete(ind1, _np.where(r1.uef[ind1] > lim['uef']))
-                ind1 = _np.delete(ind1, _np.where(r1.uec[ind1] > lim['uec']))
+                ind1 = _np.delete(ind1, _np.where(r1.ue[ind1] > lim['ue']))
             if len(r1.v) >= 1:
                 ind1 = _np.delete(ind1, _np.where(lim['vmin'] > r1.v[ind1]))
                 ind1 = _np.delete(ind1, _np.where(r1.v[ind1] > lim['vmax']))
-                ind1 = _np.delete(ind1, _np.where(r1.vef[ind1] > lim['vef']))
-                ind1 = _np.delete(ind1, _np.where(r1.vec[ind1] > lim['vec']))
+                ind1 = _np.delete(ind1, _np.where(r1.ve[ind1] > lim['ve']))
             if len(r1.w) >= 1:
                 ind1 = _np.delete(ind1, _np.where(lim['wmin'] > r1.w[ind1]))
                 ind1 = _np.delete(ind1, _np.where(r1.w[ind1] > lim['wmax']))
-                ind1 = _np.delete(ind1, _np.where(r1.wef[ind1] > lim['wef']))
-                ind1 = _np.delete(ind1, _np.where(r1.wec[ind1] > lim['wec']))
+                ind1 = _np.delete(ind1, _np.where(r1.we[ind1] > lim['we']))
 
             r1.cut(arbdate,arbdate+_dt.timedelta(days=1),ind1)
             bcnt += alld - len(ind1)
@@ -244,7 +238,7 @@ def WeightedAverage(VAL,STD,CNT=None,AXIS=0,test=False):
     
     
 
-def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
+def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1,WIS0=False):
     '''
     Summary:
         Returns filted and binned single data for a single instrument over one night.
@@ -257,7 +251,8 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
         KP    = Filter days by KP [default = [0,10] - all kp]
         CV    = Include CV directions [default = True]
         QF    = Quality Flag Limit Allowed [default = 1]
-
+        WIS0  = Flag to use w=0 in processing [default = False]
+        
     Outputs:
         DATA  = Object with winds, Temps, and more
 
@@ -283,7 +278,7 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
         siteinfo = _fpiinfo.get_site_info(sites[0])
         project = siteinfo['Network']
         lla = siteinfo['Location']
-    data = L2.GetLevel2(project,dn)
+    data = L2.GetLevel2(project,dn,w_is_0=WIS0)
     bc = FilterData(data,QF)
     
     # Get Empty
@@ -350,7 +345,6 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
                             else:
                                 uData[bin,count[bin]] = r1.u[zelda]
                                 ueData[bin,count[bin]] = r1.ue[zelda]
-                                uefData[bin,count[bin]] = r1.uef[zelda]
                         if len(r1.v) > 0:
                             if SPLIT and ('south' in r1.key.lower() or '_2' in r1.key.lower()):
                             # Split N&S
@@ -359,12 +353,10 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
                             else:
                                 vData[bin,count[bin]] = r1.v[zelda]
                                 veData[bin,count[bin]] = r1.ve[zelda]
-                                vefData[bin,count[bin]] = r1.vef[zelda]
                         #if len(r1.w) > 0 and ('zenith' in r1.key.lower() or 'in' in r1.key.lower()) and r1.parent[0].reference == 'laser':
                         if len(r1.w) > 0 and r1.parent[0].reference == 'laser':
                             wData[bin,count[bin]] = r1.w[zelda]
                             weData[bin,count[bin]] = r1.we[zelda]
-                            wefData[bin,count[bin]] = r1.wef[zelda]
                         if len(r1.T) > 0:
                             TData[bin,count[bin]] = r1.T[zelda]
                             TeData[bin,count[bin]] = r1.Te[zelda]
@@ -391,14 +383,6 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
         u2D,u2eD = WeightedAverage(u2Data,u2eData)
         # Meridional2 - South
         v2D,v2eD = WeightedAverage(v2Data,v2eData) 
-
-    # Weighted error of cal only (for harmonic testing) 
-    ufD,ufD = WeightedAverage(uData,uefData)
-    vfD,vfD = WeightedAverage(vData,vefData)
-    wfD,wfD = WeightedAverage(wData,wefData)
-    d.uef= ufD
-    d.vef= vfD
-    d.wef= wfD
 
     # Save Averages
     d.u = uD
@@ -434,7 +418,7 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1):
 def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIET=False,MULTICORE=True):
     '''
     Summary:
-        Returns HWMfor a single instrument over one night.
+        Returns HWM for a single instrument over one night.
 
     Inputs:
         SITELLA   = site latitude, longitude, altitude
@@ -1069,7 +1053,7 @@ def _MPsingleday(SITE_YEAR_DOY,SPLIT,KP,CV,QF,SITELLA,TMODEL,ALT,WEIGHTED,QUIET)
 def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=True,QF=1,VERBOSE=True):
     '''
     Summary:
-        Plots monthly averages in a 2x6 month plot
+        Plots monthly averages in a 2x6 month plot, binning by year
     
     Inputs:
         SITE = sites of interest, e.g. 'UAO'
@@ -1915,7 +1899,7 @@ def PlotAverages(SITE,YEAR,MONTH,WMODEL=[],TMODEL='msis',SPLIT=False,KP=[0,10],U
     return(MD)
 
 
-def PlotSpaghetti(SITE,YEAR,MONTH,SPLIT=False,LIST=[],CV=False,KP=[0,10],QF=1):
+def PlotSpaghetti(SITE,YEAR,MONTH,SPLIT=False,LIST=[],CV=False,KP=[0,10],QF=1,WIS0=False):
     '''
     Summary:
         Plots all raw data for one month in spaghetti plot!
@@ -1930,6 +1914,7 @@ def PlotSpaghetti(SITE,YEAR,MONTH,SPLIT=False,LIST=[],CV=False,KP=[0,10],QF=1):
         CV = Include CV directions [default = False]
         KP = Filter days by KP [default = [0,10] - all kp]
         QF = Quality Flag Allowed [default = 1]
+        WIS0  = Flag to use w=0 in processing [default = False]
 
     History:
         10/17/14 -- Written by DJF (dfisher2@illinois.edu)
@@ -1940,11 +1925,11 @@ def PlotSpaghetti(SITE,YEAR,MONTH,SPLIT=False,LIST=[],CV=False,KP=[0,10],QF=1):
     dn = _dt.datetime(YEAR,MONTH,1)
     if not LIST:
         for k,d in enumerate(range(_cal.monthrange(YEAR,MONTH)[1])):
-            L = L2.GetLevel2(SITE,dn+_dt.timedelta(days=d))
+            L = L2.GetLevel2(SITE,dn+_dt.timedelta(days=d),w_is_0=WIS0)
             FilterData(L,QF); D[k] = L
     else:
         for k,d in enumerate(LIST):
-            L = L2.GetLevel2(SITE,_dt.datetime(YEAR,1,1)+_dt.timedelta(days=d-1))
+            L = L2.GetLevel2(SITE,_dt.datetime(YEAR,1,1)+_dt.timedelta(days=d-1),w_is_0=WIS0)
             FilterData(L,QF); D[k] = L
     M = BinMonthlyData(SITE,YEAR,MONTH,SPLIT=SPLIT,CV=CV,DLIST=LIST,KP=KP,QF=QF)
     M.t = M.t + _dt.timedelta(days=(_dt.datetime(YEAR-1,1,2+_cal.isleap(YEAR-1))-_dt.datetime(M.t[0].year,1,1)).days)
@@ -2052,7 +2037,7 @@ def PlotSpaghetti(SITE,YEAR,MONTH,SPLIT=False,LIST=[],CV=False,KP=[0,10],QF=1):
 
 
 
-def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True):
+def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True,WIS0=False):
     '''
     Summary:
         Plots all raw cardinal data for one month in 5x7 plot! 
@@ -2062,6 +2047,7 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True):
         YEAR = year, e.g. 2013
         MONTH = month to plot, e.g. 4
         SPLIT = Split look directions in binning [default = True]
+        WIS0  = Flag to use w=0 in processing [default = False]
 
     History:
         10/17/14 -- Written by DJF (dfisher2@illinois.edu)
@@ -2071,7 +2057,7 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True):
     D = {}
     dn = _dt.datetime(YEAR,MONTH,1)
     for k,d in enumerate(range(_cal.monthrange(YEAR,MONTH)[1])):
-        D[k] = L2.GetLevel2(SITE,dn+_dt.timedelta(days=d))
+        D[k] = L2.GetLevel2(SITE,dn+_dt.timedelta(days=d),w_is_0=WIS0)
     #M = BinMonthlyData(SITE,YEAR,MONTH,SPLIT=SPLIT)
     #M.t = M.t + _dt.timedelta(seconds=(_dt.datetime(YEAR-1,1,1)-_dt.datetime(M.t[0].year,1,1)).total_seconds())
 
@@ -2308,7 +2294,7 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True):
        
 
 
-def CreateL2ASCII(PROJECT,YEAR,DOY):
+def CreateL2ASCII(PROJECT,YEAR,DOY,WIS0=False):
     '''
     Summary:
         Script to save out ASCII of all L2 winds for a Project.  Filtered, w=0 assumed.
@@ -2317,6 +2303,7 @@ def CreateL2ASCII(PROJECT,YEAR,DOY):
         PROJECT - Name of project for sites, ex: 'NATION'
         YEAR = year, e.g. 2013
         DOY = day of year, e.g. 64
+        WIS0  = Flag to use w=0 in processing [default = False]
 
     Outputs:
         ASCII text file of data in /mnt/FPIData/Results/ASCII
@@ -2335,7 +2322,7 @@ def CreateL2ASCII(PROJECT,YEAR,DOY):
     # Create Folder/file labels
     results_stub = '/rdata/airglow/database/L2/'
     notename = results_stub + PROJECT + '_' + date + '.txt'
-    D = L2.GetLevel2(PROJECT,process_dn)
+    D = L2.GetLevel2(PROJECT,process_dn,w_is_0=WIS0)
 
     # Write out ASCII
     note = open(notename,'w')
@@ -2372,7 +2359,7 @@ def CreateL2ASCII(PROJECT,YEAR,DOY):
     
     
 
-def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1):
+def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1,WIS0=False):
     '''
     Summary:
         Script to save out Legacy ASCII of all L2 date for a Project. [for Meriwether]
@@ -2382,6 +2369,7 @@ def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1):
         YEAR = year, e.g. 2013
         DOY = day of year, e.g. 64
         QF = Quality Flag Limit Allowed [default = 1]
+        WIS0  = Flag to use w=0 in processing [default = False]
 
     Outputs:
         ASCII text file of data in /mnt/FPIData/Results/ASCII
@@ -2400,7 +2388,7 @@ def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1):
     # Create Folder/file labels
     results_stub = '/rdata/airglow/database/L2/'
     notename = results_stub + PROJECT + '_' + date + 'L.txt'
-    D = L2.GetLevel2(PROJECT,process_dn)
+    D = L2.GetLevel2(PROJECT,process_dn,w_is_0=WIS0)
     FilterData(D,QF)
 
     # Write out ASCII
