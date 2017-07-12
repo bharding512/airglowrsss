@@ -1,7 +1,6 @@
 # Common code for ICON users at Illinois. Geometrical transformations, airglow code, etc.
 
 import numpy as np
-from pyglow import pyglow
 from datetime import datetime, timedelta
 from scipy import stats
 import multiprocessing
@@ -9,6 +8,7 @@ from multiprocessing import Pool
 import time
 import math
 from scipy import optimize
+import ephem
 
 
 def wgs84constants():
@@ -662,13 +662,16 @@ def azze_to_lla(satlatlonalt, az, ze, ht):
     
     
     
-def get_solar_zenith_angle(pt):
+def get_solar_zenith_angle(t, lat, lon, alt):
     '''
     Calculate the angle from zenith to the sun at the time and
-    location of the pyglow.Point pt.
+    specified location
     INPUT:
     
-       * pt - pyglow.Point
+       * t   - Time (datetime.datetime object)
+       * lat - Latitude (deg)
+       * lon - Longitude (deg)
+       * alt - Altitude (km)
        
     OUTPUT:
     
@@ -679,14 +682,13 @@ def get_solar_zenith_angle(pt):
        * 13-Oct-2015: Written by Brian J. Harding
        
     '''
-    import ephem
     sun = ephem.Sun()
     obs = ephem.Observer()
-    obs.lon = str(pt.lon)
-    obs.lat = str(pt.lat)
-    obs.date = pt.dn.strftime('%Y/%m/%d %H:%M:%S')
+    obs.lon = str(lon)
+    obs.lat = str(lat)
+    obs.date = t.strftime('%Y/%m/%d %H:%M:%S')
     obs.pressure = 0. # ignore refraction. This makes a negligible difference.
-    obs.elevation = 1000*pt.alt
+    obs.elevation = 1000*alt
     sun.compute(obs)
     sza = np.pi/2 - float(sun.alt) # radians
     return sza*180./np.pi

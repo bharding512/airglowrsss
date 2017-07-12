@@ -193,7 +193,7 @@ def Calculate_D_Matrix_WGS84(satlatlonalt,az,ze):
     rbot = np.zeros(len(ze))
 
     # For each observation zenith and azimuth angles calculate the lower bound tangent altitudes
-    rbot = [ic.tangent_point(satlatlonalt,az_i,ze_i)[2] for az_i,ze_i in zip(az,ze)]
+    rbot = np.array([ic.tangent_point(satlatlonalt,az_i,ze_i)[2] for az_i,ze_i in zip(az,ze)])
 
     # Calculate the top boundary for each shell
     rtop = rbot.copy()

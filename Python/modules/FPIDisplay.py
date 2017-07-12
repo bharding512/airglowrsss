@@ -1084,7 +1084,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
     # Calculate the vertical wind and interpolate it
     ind = FPI.all_indices('Zenith',FPI_Results['direction'])
     w = (FPI_Results['LOSwind'][ind]-ref_Dop[ind]) # LOS is away from instrument
-    sigma_w = FPI_Results['sigma_fit_LOSwind'][ind]
+    sigma_w = FPI_Results['sigma_LOSwind'][ind]
     dt = []
     for x in FPI_Results['sky_times'][ind]:
         diff = (x - FPI_Results['sky_times'][0])
@@ -1127,10 +1127,10 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
 
         if x == 'Zenith':
             Doppler_Wind = (FPI_Results['LOSwind'][ind]-ref_Dop[ind])
-            Doppler_Error = np.sqrt(FPI_Results['sigma_fit_LOSwind'][ind]**2)
+            Doppler_Error = np.sqrt(FPI_Results['sigma_LOSwind'][ind]**2)
         else:
             Doppler_Wind = (FPI_Results['LOSwind'][ind]-ref_Dop[ind]-w[ind]*np.cos(FPI_Results['ze'][ind]*np.pi/180.))/np.sin(FPI_Results['ze'][ind]*np.pi/180.)
-            Doppler_Error = np.sqrt(FPI_Results['sigma_fit_LOSwind'][ind]**2+sigma_w[ind]**2)
+            Doppler_Error = np.sqrt(FPI_Results['sigma_LOSwind'][ind]**2+sigma_w[ind]**2)
         if x == 'South' or x == 'West':
             Doppler_Wind = -Doppler_Wind
             

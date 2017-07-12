@@ -956,18 +956,25 @@ def level1_to_dict(L1_fn, emission_color):
     
     f = netCDF4.Dataset(L1_fn)
     
-    # Is this A or B? There's no variable that says it (yet?) so we have to infer it from
-    # the variable names
-    var_names = f.variables.keys()
-    sensor = var_names[0][15]
+    # Is this A or B? There's no variable that says it (yet?) so we have to infer it from the file name
+    sensor = None
+    if 'MIGHTI-A' in L1_fn:
+        sensor = 'A'
+    elif 'MIGHTI-B' in L1_fn:
+        sensor = 'B'
+    else:
+        raise Exception('Cannot determine sensor (A or B) from %s' % L1_fn)
+        
+    # Note that as of v04 of the L1 files, the altitude array is now decreasing. This is why some of the
+    # arrays are reversed as follows:
     
     L1_dict = {}
     L1_dict['L1_fn']                       = L1_fn
-    L1_dict['I_amp']                       = f['ICON_L1_MIGHTI_%s_%s_ENVELOPE_NOISY' % (sensor, emission_color.upper())][0,:,:]
-    L1_dict['I_phase']                     = f['ICON_L1_MIGHTI_%s_%s_PHASE_NOISY' % (sensor, emission_color.upper())][0,:,:]
-    L1_dict['I_amp_uncertainty']           = f['ICON_L1_MIGHTI_%s_%s_ENVELOPE_UNCERTAINTY' % (sensor, emission_color.upper())][0,:]
-    L1_dict['I_phase_uncertainty']         = f['ICON_L1_MIGHTI_%s_%s_PHASE_UNCERTAINTY' % (sensor, emission_color.upper())][0,:]
-    tang_lla                               = f['ICON_L1_MIGHTI_%s_TANGENT_LATLONALT' % sensor][0,:,:,:] 
+    L1_dict['I_amp']                       = f['ICON_L1_MIGHTI_%s_%s_ENVELOPE' % (sensor, emission_color.upper())][0,::-1,:]
+    L1_dict['I_phase']                     = f['ICON_L1_MIGHTI_%s_%s_PHASE' % (sensor, emission_color.upper())][0,::-1,:]
+    L1_dict['I_amp_uncertainty']           = f['ICON_L1_MIGHTI_%s_%s_ENVELOPE_UNCERTAINTIES' % (sensor, emission_color.upper())][0,::-1]
+    L1_dict['I_phase_uncertainty']         = f['ICON_L1_MIGHTI_%s_%s_PHASE_UNCERTAINTIES' % (sensor, emission_color.upper())][0,::-1]
+    tang_lla                               = f['ICON_L1_MIGHTI_%s_TANGENT_LATLONALT' % sensor][0,:,:,::-1] 
     L1_dict['tang_alt_start']              = tang_lla[0,2,:]
     L1_dict['tang_alt_stop']               = tang_lla[2,2,:]
     L1_dict['tang_lat_start']              = tang_lla[0,0,:]
@@ -975,33 +982,24 @@ def level1_to_dict(L1_fn, emission_color):
     L1_dict['tang_lon_start']              = tang_lla[0,1,:]
     L1_dict['tang_lon_stop']               = tang_lla[2,1,:]
     L1_dict['emission_color']              = emission_color
-    tmp                                    = f['ICON_L1_MIGHTI_%s_%s_ECEF_VECTORS'% (sensor, emission_color.upper())][0,:,:,:,:] # time x vector x V x H
-    L1_dict['mighti_ecef_vectors_start']   = np.transpose(tmp[0,:,:,:], (1,2,0)) # V x H x vector
-    L1_dict['mighti_ecef_vectors_stop']    = np.transpose(tmp[2,:,:,:], (1,2,0)) # V x H x vector
-    #L1_dict['mighti_ecef_vectors_start']   = f['ICON_L1_MIGHTI_%s_%s_ECEF_VECTORS_START'% (sensor, emission_color.upper())][0,:,:,:]
-    #L1_dict['mighti_ecef_vectors_stop']    = f['ICON_L1_MIGHTI_%s_%s_ECEF_VECTORS_STOP'% (sensor, emission_color.upper())][0,:,:,:]
-    L1_dict['icon_ecef_ram_vector_start']  = f['ICON_L0_MIGHTI_%s_RAM_ECEF_VECTOR_START'% sensor][0,:]
-    L1_dict['icon_ecef_ram_vector_stop']   = f['ICON_L0_MIGHTI_%s_RAM_ECEF_VECTOR_STOP'% sensor][0,:]
-    L1_dict['icon_velocity_start']         = f['ICON_L0_MIGHTI_%s_ICON_VELOCITY_START'% sensor][:].item()
-    L1_dict['icon_velocity_stop']          = f['ICON_L0_MIGHTI_%s_ICON_VELOCITY_STOP'% sensor][:].item()
-    L1_dict['source_files']                = [f.SOURCE_FILE]
-    tsec_start                             = f['ICON_L1_MIGHTI_%s_IMAGE_TIME'% sensor][0,0]
-    tsec_stop                              = f['ICON_L1_MIGHTI_%s_IMAGE_TIME'% sensor][0,2]
-    L1_dict['time_start']                  = datetime(2016,1,1) + timedelta(seconds=tsec_start) # TODO: absolute time
-    L1_dict['time_stop']                   = datetime(2016,1,1) + timedelta(seconds=tsec_stop)  # TODO: absolute time
+    # In the L1 file, the ECEF vectors are stored in multidimensional array: (time, start/mid/stop, vector_xyz, vert, horz)
+    tmp                                    = f['ICON_L1_MIGHTI_%s_%s_ECEF_UNIT_VECTORS'% (sensor, emission_color.upper())][0,:,:,:,:]
+    L1_dict['mighti_ecef_vectors_start']   = np.transpose(tmp[0,::-1,:,:], (1,2,0)) # V x H x vector
+    L1_dict['mighti_ecef_vectors_stop']    = np.transpose(tmp[2,::-1,:,:], (1,2,0)) # V x H x vector
+    icon_vel_vec_start                     = f['ICON_L1_MIGHTI_%s_SC_VELOCITY_ECEF'% sensor][0,0,:]
+    icon_vel_vec_stop                      = f['ICON_L1_MIGHTI_%s_SC_VELOCITY_ECEF'% sensor][0,2,:]
+    L1_dict['icon_ecef_ram_vector_start']  = icon_vel_vec_start/np.linalg.norm(icon_vel_vec_start)
+    L1_dict['icon_ecef_ram_vector_stop']   = icon_vel_vec_stop/np.linalg.norm(icon_vel_vec_stop)
+    L1_dict['icon_velocity_start']         = np.linalg.norm(icon_vel_vec_start)
+    L1_dict['icon_velocity_stop']          = np.linalg.norm(icon_vel_vec_stop)
+    L1_dict['source_files']                = [f.Parents]
+    tsec_start                             = f['ICON_L1_MIGHTI_%s_IMAGE_TIMES'% sensor][0,0]*1e-3
+    tsec_stop                              = f['ICON_L1_MIGHTI_%s_IMAGE_TIMES'% sensor][0,2]*1e-3
+    L1_dict['time_start']                  = datetime(1970,1,1) + timedelta(seconds=tsec_start) # TODO: ms or s?
+    L1_dict['time_stop']                   = datetime(1970,1,1) + timedelta(seconds=tsec_stop)
     L1_dict['exp_time']                    = tsec_stop - tsec_start
-    L1_dict['optical_path_difference']     = f['ICON_L1_MIGHTI_%s_OPD_BY_PIXEL_%s' % (sensor, emission_color.upper())][0,:]*1e-2 # convert to m
-    
-    # S/C position: TBD
-    # OLD:
-    #L1_dict['icon_alt_start']              = f['ICON_L0_MIGHTI_%s_ICON_ALTITUDE_START'% sensor][:].item()
-    #L1_dict['icon_alt_stop']               = f['ICON_L0_MIGHTI_%s_ICON_ALTITUDE_STOP'% sensor][:].item()
-    #L1_dict['icon_lat_start']              = f['ICON_L0_MIGHTI_%s_ICON_LATITUDE_START'% sensor][:].item()
-    #L1_dict['icon_lat_stop']               = f['ICON_L0_MIGHTI_%s_ICON_LATITUDE_STOP'% sensor][:].item()
-    #L1_dict['icon_lon_start']              = f['ICON_L0_MIGHTI_%s_ICON_LONGITUDE_START'% sensor][:].item()
-    #L1_dict['icon_lon_stop']               = f['ICON_L0_MIGHTI_%s_ICON_LONGITUDE_STOP'% sensor][:].item()
-    # NEW:
-    icon_ecef                              = f['ICON_L1_MIGHTI_%s_SC_ECEF'% sensor][:][0,:,:] # timetable x [x,y,z]
+    L1_dict['optical_path_difference']     = f['ICON_L1_MIGHTI_%s_%s_ARRAY_OPD' % (sensor, emission_color.upper())][0,:]*1e-2 # convert to m
+    icon_ecef                              = f['ICON_L1_MIGHTI_%s_SC_POSITION_ECEF'% sensor][:][0,:,:] # timetable x [x,y,z]
     icon_latlonalt = np.zeros((3,3))
     for i in range(3):
         icon_latlonalt[i,:] = ICON.ecef_to_wgs84(icon_ecef[i,:])
@@ -1014,8 +1012,6 @@ def level1_to_dict(L1_fn, emission_color):
     
     # Dummy placeholder code for reading global attributes, if that matters
     nc_attrs = f.ncattrs()
-    for nc_attr in nc_attrs:
-        a = f.getncattr(nc_attr)
     
     
     f.close()
@@ -1226,7 +1222,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma, zero_phase, phase_offset, top_la
     L1_fn = L1_dict['L1_fn']
     opd = L1_dict['optical_path_difference']
     sigma_opd = sigma * opd # Optical path difference, in units of wavelengths
-
+    
     # Load parameters which are averaged from start to stop of exposure.
     icon_alt = (L1_dict['icon_alt_start'] + L1_dict['icon_alt_stop'])/2
     icon_lat = (L1_dict['icon_lat_start'] + L1_dict['icon_lat_stop'])/2
@@ -1249,9 +1245,12 @@ def level1_dict_to_level21_dict(L1_dict, sigma, zero_phase, phase_offset, top_la
     tang_lat = bin_array(bin_size, tang_lat)
     tang_lon = bin_array(bin_size, tang_lon, lon=True)
     tang_alt = bin_array(bin_size, tang_alt)
-    mighti_ecef_vectors[:,:,0] = bin_image(bin_size, mighti_ecef_vectors[:,:,0]) # bin each component separately
-    mighti_ecef_vectors[:,:,1] = bin_image(bin_size, mighti_ecef_vectors[:,:,1]) # bin each component separately
-    mighti_ecef_vectors[:,:,2] = bin_image(bin_size, mighti_ecef_vectors[:,:,2]) # bin each component separately
+    ny, nx = np.shape(I)
+    mighti_ecef_vectors_new = np.zeros((ny,nx,3))
+    mighti_ecef_vectors_new[:,:,0] = bin_image(bin_size, mighti_ecef_vectors[:,:,0]) # bin each component separately
+    mighti_ecef_vectors_new[:,:,1] = bin_image(bin_size, mighti_ecef_vectors[:,:,1]) # bin each component separately
+    mighti_ecef_vectors_new[:,:,2] = bin_image(bin_size, mighti_ecef_vectors[:,:,2]) # bin each component separately
+    mighti_ecef_vectors = mighti_ecef_vectors_new
     I_amp_uncertainty   = bin_uncertainty(bin_size, I_amp_uncertainty)
     I_phase_uncertainty = bin_uncertainty(bin_size, I_phase_uncertainty)
     
@@ -1284,7 +1283,6 @@ def level1_dict_to_level21_dict(L1_dict, sigma, zero_phase, phase_offset, top_la
     v_uncertainty = v_inertial_uncertainty.copy() # No appreciable uncertainty added in this process
     
     #### For reporting in output file, determine ecef vector at center of row
-    _, nx, _ = np.shape(mighti_ecef_vectors)
     mighti_ecef_vectors_center = mighti_ecef_vectors[:,nx/2,:]
     
     # Make a L2.1 dictionary
@@ -1523,7 +1521,7 @@ def save_nc_level21(path, L21_dict):
                                                 "  * O/N2  Dr. Andrew Stephan\n",
                                                 "  * Daytime (EUV) O+ profiles  Dr. Andrew Stephan\n",
                                                 "  * Nighttime (FUV) O+ profiles  Dr. Farzad Kamalabadi\n",
-                                                "  * Neutral Wind profiles  Dr. Jon Makela\n",
+                                                "  * Neutral Wind profiles  Dr. Jonathan Makela\n",
                                                 "  * Neutral Temperature profiles  Dr. Chris Englert\n",
                                                 "\n",
                                                 "Responsibility for Level 4 products are detailed on the ICON website ",
@@ -2710,7 +2708,7 @@ def save_nc_level22(path, L22_dict):
                                                 "  * O/N2  Dr. Andrew Stephan\n",
                                                 "  * Daytime (EUV) O+ profiles  Dr. Andrew Stephan\n",
                                                 "  * Nighttime (FUV) O+ profiles  Dr. Farzad Kamalabadi\n",
-                                                "  * Neutral Wind profiles  Dr. Jon Makela\n",
+                                                "  * Neutral Wind profiles  Dr. Jonathan Makela\n",
                                                 "  * Neutral Temperature profiles  Dr. Chris Englert\n",
                                                 "\n",
                                                 "Responsibility for Level 4 products are detailed on the ICON website ",
