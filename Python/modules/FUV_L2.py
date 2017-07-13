@@ -607,7 +607,7 @@ CALCULATE ELECTRON DENSITY
 '''
 
 # Calculate the electron density given VER
-def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,Sig_VER=None,contribution='RR',f107=None, f107a=None,apmsis=None):
+def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,Sig_VER=None,contribution='RR',f107=None, f107a=None,apmsis=None, az=None, ze=None):
     '''
     Given a VER profile the electron density is calculated. The physical process for the VER must be defined.
     INPUTS:
@@ -620,6 +620,8 @@ def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,Sig_VER=None,co
         f107        - f107 value for the date of interest (None is use values in PyGlow)
         f107a       - f107a value for the date of interest (None is use values in PyGlow)
         apmsis      - apmsis vector for the date of interest (None is use values in PyGlow)
+	az		- azimuth angles [deg]
+	ze		- zenith angles [deg
     OUTPUTS:
         Ne              - The estimated Electron Density profile (1/cm^3/s)
         Sig_Ne          - (OPTIONAL) covariance matrix of Ne. If Sig_VER is None, this is not returned.
@@ -631,7 +633,8 @@ def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,Sig_VER=None,co
         17-Sep-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
         24-Apr-2017: Uncertainty propagation added by Brian Harding (bhardin2@illinois.edu)
         02-Jun-2017: Added GPI values by Jonathan Makela (jmakela@illinois.edu)
-    CALLS:
+	12-Jul-2017: For RRMN calculation, no longer assumes spherical symmetry of O density (jmakela@illinois.edu) 
+   CALLS:
         Pyglow
 
     '''
@@ -658,14 +661,19 @@ def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,Sig_VER=None,co
 
     if contribution=='RRMN':
         O = np.zeros(len(VER))
-        for i,height in enumerate(tang_altitude):
-
-            # Create pyglow point, either use the default GPI or the passed in GPI
+#        for i,height in enumerate(tang_altitude):
+	for i, (azim, zen) in enumerate(zip(az,ze)):
+	    # calculate the tangent point
+	    tp = ic.tangent_point(satlatlonalt,azim,zen)
+#            print tp, tang_altitude[i]
+	    # Create pyglow point, either use the default GPI or the passed in GPI
             if apmsis is None:
-                pt = pyglow.pyglow.Point(dt, satlatlonalt[0], satlatlonalt[1], height)
+#                pt = pyglow.pyglow.Point(dt, satlatlonalt[0], satlatlonalt[1], height)
+		pt = pyglow.pyglow.Point(dt, tp[0], tp[1], tp[2])
                 # Run MSIS-00 to get O density
             else:
-                pt = pyglow.pyglow.Point(dt, satlatlonalt[0], satlatlonalt[1], height,user_ind=True)
+#                pt = pyglow.pyglow.Point(dt, satlatlonalt[0], satlatlonalt[1], height,user_ind=True)
+		pt = pyglow.pyglow.Point(dt, tp[0], tp[1], tp[2], user_ind=True)
                 pt.f107 = f107
                 pt.f107a = f107a
                 pt.apmsis = apmsis
@@ -933,7 +941,7 @@ def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze, Sig_Br
     else:
         raise Exception('Incorrect regularization method chosen. Choices are: Tikhonov or MAP')
 
-    Ne, Sig_Ne = calculate_electron_density(VER=VER, satlatlonalt=satlatlonalt, tang_altitude=h, dt=dn, Sig_VER=Sig_VER, contribution=contribution,f107=f107, f107a=f107a, apmsis=apmsis)
+    Ne, Sig_Ne = calculate_electron_density(VER, satlatlonalt, h, dn, Sig_VER=Sig_VER, contribution=contribution,f107=f107, f107a=f107a, apmsis=apmsis, az=az, ze=ze)
 
     if ret_cov:
         return VER, Ne, h, Sig_VER, Sig_Ne
