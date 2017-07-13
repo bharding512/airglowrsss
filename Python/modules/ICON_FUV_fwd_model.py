@@ -172,8 +172,8 @@ def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scali
     Step along a desired look direction from a given observing location and
     calculate the 135.6-nm intensity. Lines-of-sight are calculated using a spherical earth.
     INPUTS:
-        ze          - zenith angle of look direction (radians)
-        az          - azimuth angle of look direction (0 is north, pi/4 is east) (radians)
+        ze          - zenith angle of look direction (deg)
+        az          - azimuth angle of look direction (0 is north, 90 is east) (deg)
         satlat      - latitude of satellite (deg)
         satlon      - longitude of satellite (deg)
         satalt      - altitude of satellite (km)
@@ -193,6 +193,7 @@ def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scali
         03-Jun-2015: Changed Limb altitude from 90 to 150km (Dimitrios Iliou)
         13-Jul-2015: Add _ to calc_1356_nighttime since O is not needed for the fwd model
         02-Sep-2015: Add testing input - Gaussian Ne instead of IRI
+	12-Jul-2017: Changed ze/az input to deg
     CALLS:
         -calc_1356_nighttime
     '''
@@ -200,8 +201,8 @@ def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scali
     RE = 6371.      # radius of earth (km)
     x = 0.          # This measures perpendicular to the satellite nadir
     y = RE + satalt # This measures parallel to satellite nadir
-    dx = np.sin(ze) # unit step in x
-    dy = np.cos(ze) # unit step in y
+    dx = np.sin(ze*np.pi/180.) # unit step in x
+    dy = np.cos(ze*np.pi/180.) # unit step in y
 
     IRR = 0.
     IMN = 0.
@@ -256,7 +257,7 @@ def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry 
     calculate the 135.6-nm intensity. Lines-of-sight are calculated using a non-spherical non-symmetric earth.
     INPUTS:
         ze          - zenith angle of look direction (deg)
-        az          - azimuth angle of look direction (0 is north, pi/4 is east) (deg)
+        az          - azimuth angle of look direction (0 is north, 90 is east) (deg)
         satlat      - latitude of satellite (deg)
         satlon      - longitude of satellite (deg)
         satalt      - altitude of satellite (km)
@@ -288,6 +289,7 @@ def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry 
 
     satlatlonalt = [satlat,satlon,satalt]
     #print '%f,%f'%(az,ze)
+    
     # Call the function for a single az and ze angle. It returns all the stepping points along the line
     xyz, latlonalt = ic.project_line_of_sight(satlatlonalt, az,ze,step,total_distance)
 
@@ -340,8 +342,8 @@ def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,sym
     '''
     Calls 'calculate_pixel_1356_nighttime' which calculates the Brightness through integrated VER for a given zenith angle.
     INPUTS:
-        ze          - zenith angle of look direction (radians)
-        az          - azimuth angle of look direction (0 is north, pi/4 is east) (radians)
+        ze          - zenith angle of look direction (deg)
+        az          - azimuth angle of look direction (0 is north, 90 is east) (deg)
         satlat      - latitude of satellite (deg)
         satlon      - longitude of satellite (deg)
         satalt      - altitude of satellite (km)
@@ -374,6 +376,7 @@ def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,sym
         26-Jul-2015: Added the spherical and symmetry parameters on the function
         02-Sep-2015: Add testing input - Gaussian Ne instead of IRI
         04-Sep-2015: Add total_distance input - goes to the WGS84 raypath calculations
+	12-Jul-2017: Changed ze/az input to degrees
     CALLS:
         -get_FUV_instrument_constants
         -calculate_pixel_1356_nighttime
