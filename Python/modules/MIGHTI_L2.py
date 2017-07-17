@@ -1,6 +1,58 @@
-# A module for functions used for the conversion of MIGHTI Level 1 files to Level 2.1 and 2.2 files
+# A module for functions used for the conversion of MIGHTI Level 1 files to Level 2.1 and 2.2 files.
+# Level 1 files - Calibrated MIGHTI interferograms
+# Level 2.1 files - Line-of-sight wind profiles (this is where the onion-peeling inversion happens)
+# Level 2.2 files - Vector wind profiles (this is where the A/B matchup happens)
 # Altitudes and distances are expressed in km everywhere in the code, except when it's about to be
-# saved in a netCDF file.
+# saved in a netCDF file in meters.
+
+
+####################################### VERSION CONTROL ############################################
+# These need to be manually changed, when necessary.
+# NOTE: When the major version is updated, you should change the History global attribute
+# in both the L2.1 and L2.2 netcdf files.
+software_version_major = 0 # When this changes, the data version will automatically change as well
+software_version_minor = 2 # [0-99], resetting when the major version changes
+__version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
+####################################################################################################
+
+
+############################## GLOBAL PROCESSING PARAMETERS ########################################
+# Unless overridden by the user, the following parameters will be used:
+global_params = {}
+
+global_params['red'] = {
+    'sigma'             : 1.0/630.0304e-9, # reciprocal of center wavelength of emission [m^-1] 
+                                           # (Osterbrock et al. 1996)
+    'zero_phase'        : 128.648464318,   # The phase corresponding to zero wind (DEPRECATED SOON)
+                                           # updated 2016-05-26 using Brian's instrument model
+                                           # (MIGHTI_Zero_wind_issues.ipynb)    
+    'phase_offset'      : -1.139683,       # An offset added to avoid 0/2pi discontinuities (DEPRECATED SOON)
+                                           # updated 2016-06-29 using Brian's instrument model
+    'bin_size'          : 1,              # The number of rows of the interferogram to bin together to 
+                                           # improve statistics at the cost of altitude resolution.   
+    'account_for_local_projection': True,  # Whether to account for the fact that the line of sight is not
+                                           # quite horizontal everywhere along the line of sight
+    'integration_order' : 0,               # 0: Use Riemann-sum rule for discretizing line-of-sight integral
+                                           # 1: Use trapezoidal rule for discretizing line-of-sight integral
+    'top_layer'         : 'exp',           # 'thin': assume VER goes to zero above top layer
+                                           # 'exp':  assume VER falls off exponentially in altitude with H=26km
+    'sph_asym_thresh'   : 0.19,            # The relative difference in VER estimates from A&B,
+                                           # beyond which the spherical asymmetry flag will be
+                                           # raised in L2.2.
+}
+
+global_params['green'] = {
+    'sigma'             : 1.0/557.7338e-9, 
+    'zero_phase'        : 54.6633360579,  
+    'phase_offset'      : -1.630175,       
+    'bin_size'          : 1,
+    'account_for_local_projection': True,
+    'integration_order' : 0,
+    'top_layer'         : 'exp',
+    'sph_asym_thresh'   : 0.19,            
+}
+#####################################################################################################
+
 
 import numpy as np
 import ICON
@@ -544,7 +596,10 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     
     if top_layer not in ['exp','thin']:
         raise ValueError('Argument top_layer=\'%s\' not recognized. Use \'exp\' or \'thin\'.' % top_layer)
-    
+    if integration_order not in [0,1]:
+        raise ValueError('Argument integration_order=\'%s\' not recognized. Use 0 or 1')
+        
+        
     ny,nx = np.shape(I)
     
     # Create the path matrix
@@ -723,6 +778,8 @@ def attribute_measurement_location(tang_lat, tang_lon, tang_alt, integration_ord
       *  alt         -- TYPE:array(ny), UNITS:km.    Measurement altitudes.
       
     '''
+    if integration_order not in [0,1]:
+        raise ValueError('integration_order = "%s" not recognized. Use 0 or 1')
     
     def shift_up_by_half(vec):
         """
@@ -885,7 +942,10 @@ def interpolate_linear(x, y, x0, extrapolation='hold', prop_err = False, yerr = 
         
     # Special corner case: x0 is exactly on the last grid point
     if x0==x[-1]:
-        return y[-1]
+        if prop_err:
+            return y[-1], yerr[-1]
+        else:
+            return y[-1]
     
     j0 = bisect.bisect(x,x0) - 1 # index to the left
     j1 = j0 + 1 # index to the right
@@ -964,17 +1024,17 @@ def level1_to_dict(L1_fn, emission_color):
         sensor = 'B'
     else:
         raise Exception('Cannot determine sensor (A or B) from %s' % L1_fn)
-        
-    # Note that as of v04 of the L1 files, the altitude array is now decreasing. This is why some of the
-    # arrays are reversed as follows:
     
     L1_dict = {}
     L1_dict['L1_fn']                       = L1_fn
-    L1_dict['I_amp']                       = f['ICON_L1_MIGHTI_%s_%s_ENVELOPE' % (sensor, emission_color.upper())][0,::-1,:]
-    L1_dict['I_phase']                     = f['ICON_L1_MIGHTI_%s_%s_PHASE' % (sensor, emission_color.upper())][0,::-1,:]
-    L1_dict['I_amp_uncertainty']           = f['ICON_L1_MIGHTI_%s_%s_ENVELOPE_UNCERTAINTIES' % (sensor, emission_color.upper())][0,::-1]
-    L1_dict['I_phase_uncertainty']         = f['ICON_L1_MIGHTI_%s_%s_PHASE_UNCERTAINTIES' % (sensor, emission_color.upper())][0,::-1]
-    tang_lla                               = f['ICON_L1_MIGHTI_%s_TANGENT_LATLONALT' % sensor][0,:,:,::-1] 
+    L1_dict['sensor']                      = sensor
+    L1_dict['I_amp']                       = f['ICON_L1_MIGHTI_%s_%s_ENVELOPE' % (sensor, emission_color.upper())][0,:,:]
+    L1_dict['I_phase']                     = f['ICON_L1_MIGHTI_%s_%s_PHASE' % (sensor, emission_color.upper())][0,:,:]
+    L1_dict['I_amp_uncertainty']           = f['ICON_L1_MIGHTI_%s_%s_ENVELOPE_UNCERTAINTIES' % (sensor, emission_color.upper())][0,:]
+    L1_dict['I_phase_uncertainty']         = f['ICON_L1_MIGHTI_%s_%s_PHASE_UNCERTAINTIES' % (sensor, emission_color.upper())][0,:]
+    # For tangent locations, only use the center, not the full horizontal distribution
+    ny,nx = np.shape(L1_dict['I_amp'])
+    tang_lla                               = f['ICON_L1_MIGHTI_%s_%s_TANGENT_LATLONALT' % (sensor, emission_color.upper())][0,:,:,:,nx/2] 
     L1_dict['tang_alt_start']              = tang_lla[0,2,:]
     L1_dict['tang_alt_stop']               = tang_lla[2,2,:]
     L1_dict['tang_lat_start']              = tang_lla[0,0,:]
@@ -984,8 +1044,8 @@ def level1_to_dict(L1_fn, emission_color):
     L1_dict['emission_color']              = emission_color
     # In the L1 file, the ECEF vectors are stored in multidimensional array: (time, start/mid/stop, vector_xyz, vert, horz)
     tmp                                    = f['ICON_L1_MIGHTI_%s_%s_ECEF_UNIT_VECTORS'% (sensor, emission_color.upper())][0,:,:,:,:]
-    L1_dict['mighti_ecef_vectors_start']   = np.transpose(tmp[0,::-1,:,:], (1,2,0)) # V x H x vector
-    L1_dict['mighti_ecef_vectors_stop']    = np.transpose(tmp[2,::-1,:,:], (1,2,0)) # V x H x vector
+    L1_dict['mighti_ecef_vectors_start']   = np.transpose(tmp[0,:,:,:], (1,2,0)) # V x H x vector
+    L1_dict['mighti_ecef_vectors_stop']    = np.transpose(tmp[2,:,:,:], (1,2,0)) # V x H x vector
     icon_vel_vec_start                     = f['ICON_L1_MIGHTI_%s_SC_VELOCITY_ECEF'% sensor][0,0,:]
     icon_vel_vec_stop                      = f['ICON_L1_MIGHTI_%s_SC_VELOCITY_ECEF'% sensor][0,2,:]
     L1_dict['icon_ecef_ram_vector_start']  = icon_vel_vec_start/np.linalg.norm(icon_vel_vec_start)
@@ -1020,208 +1080,167 @@ def level1_to_dict(L1_fn, emission_color):
 
 
 
-
-
-def level1_uiuc_to_dict(L1_uiuc_fn):
-    '''
-    THIS MAY BE DEPRECATED
-    
-    Read a level 1 file in special "UIUC" format, and translate it into a 
-    dictionary that the level 2.1 processing can use. This function is 
-    intended to be temporary, and used for testing only, not in operations.
-    The L1_uiuc file is a .npz file.
-    
-    INPUTS:
-    
-      *  L1_uiuc_fn   -- TYPE:str.  The full path and filename of the level 1 file
-      
-    OUTPUTS:
-    
-      *  L1_dict      -- TYPE:dict. A dictionary containing information needed for
-                                    the level 2.1 processing. See documentation for 
-                                    level1_dict_to_level21(...) for required keys.
-                                    
-    '''
-    
-    L1_dict = {}
-    L1_dict['L1_fn'] = L1_uiuc_fn
-    
-    npzfile = np.load(L1_uiuc_fn)
-    for key in npzfile.keys():
-        if key in ['emission_color','icon_alt_start','icon_alt_end',
-                   'icon_lat_start','icon_lat_end','icon_lon_start','icon_lon_end',
-                   'icon_velocity_start','icon_velocity_end','time','exp_time',
-                   'interferometer_start_path','interferometer_end_path']:
-            L1_dict[key] = npzfile[key].item()
-        else:
-            L1_dict[key] = npzfile[key]
-    npzfile.close()
-    
-    ####### Hacks for backwards compatibility #######
-    # End --> Stop
-    for key in L1_dict.keys():
-        if key[-3:] == 'end':
-            newkey = key[:-3] + 'stop'
-            L1_dict[newkey] = L1_dict[key]
-            del L1_dict[key]
-    
-    
-    # If interferogram is given as real/imaginary, then change
-    # it to amp/phase
-    if 'Ir' in L1_dict.keys():
-        Ir = L1_dict['Ir']
-        Ii = L1_dict['Ii']
-        I = Ir + 1j*Ii
-        L1_dict['I_amp'] = abs(I)
-        L1_dict['I_phase'] = np.angle(I)
-    # If uncertainties aren't in the file, add placeholders (0.01% and 2 mrad)
-    if 'I_amp_uncertainty' not in L1_dict.keys():
-        L1_dict['I_amp_uncertainty'] = 0.0001 * np.sum(L1_dict['I_amp'],axis=1)
-    if 'I_phase_uncertainty' not in L1_dict.keys():
-        L1_dict['I_phase_uncertainty'] = 0.002 * np.ones(np.shape(L1_dict['I_phase'])[0])
-    # Change time to time_start and time_end
-    if 'time' in L1_dict:
-        L1_dict['time_start'] = L1_dict['time']
-        L1_dict['time_stop']   = L1_dict['time'] + timedelta(seconds=L1_dict['exp_time'])
-        del L1_dict['time']
-    # Ensure longitudes are defined [0,360]
-    for key in ['icon_lon_start','icon_lon_stop','tang_lon_start','tang_lon_stop']:
-        L1_dict[key] = np.mod(L1_dict[key],360.)
-    # Optical path difference as a function of column, if it isn't already
-    if 'optical_path_difference' not in L1_dict.keys(): 
-        print 'WARNING: "optical_path_difference" not in L1_UIUC file. Adding manually.'
-        if 'interferometer_start_path' not in npzfile.keys():
-            raise Exception('"interferometer_start_path" not found in L1 UIUC file. Cannot continue')
-        L1_dict['optical_path_difference'] = np.linspace(L1_dict['interferometer_start_path'],
-                                                      L1_dict['interferometer_end_path'], 
-                                                      np.shape(L1_dict['Ir'])[1])
-        del L1_dict['interferometer_start_path']
-        del L1_dict['interferometer_end_path']
-    
-    # Trim edges of interferogram.
-    # This is kind of hacky, but it's the easiest way of maintaining backwards
-    # compatibility now that NRL is doing the trimming.
-    N = 20
-    L1_dict['I_amp'] = L1_dict['I_amp'][:,N:-N]
-    L1_dict['I_phase'] = L1_dict['I_phase'][:,N:-N]
-    L1_dict['optical_path_difference'] = L1_dict['optical_path_difference'][N:-N]
-    
-    return L1_dict
-    
-
-    
     
 
 
-def level1_dict_to_level21_dict(L1_dict, sigma, zero_phase, phase_offset, top_layer = 'exp', 
-                                integration_order = 0, account_for_local_projection = True, 
-                                bin_size = 1):
+def level1_dict_to_level21_dict(L1_dict, sigma = None, zero_phase = None, phase_offset = None, top_layer = None, 
+                                integration_order = None, account_for_local_projection = None, 
+                                bin_size = None, ):
     '''
     High-level function to run the Level 2.1 processing. It takes a dictionary (containing
     input variables extracted from a Level 1 file) and outputs a dictionary (containing 
-    output variables, which can be written to a file with another function).
+    output variables, which can be written to a file using save_nc_level21).
     
     INPUTS:
     
-      *  L1_dict             -- TYPE:dict.  A dictionary containing variables needed for
-                                             the level 2.1 processing: (TODO: describe dimensions, units).
+      *  L1_dict       -- TYPE:dict.  A dictionary containing variables needed for
+                                      the level 2.1 processing:
                                              
-                                             * L1_fn
-                                             * I_amp
-                                             * I_phase
-                                             * I_amp_uncertainty
-                                             * I_phase_uncertainty
-                                             * tang_alt_start
-                                             * tang_alt_stop
-                                             * tang_lat_start
-                                             * tang_lat_stop
-                                             * tang_lon_start
-                                             * tang_lon_stop
-                                             * emission_color
-                                             * icon_alt_start
-                                             * icon_alt_stop
-                                             * icon_lat_start
-                                             * icon_lat_stop
-                                             * icon_lon_start
-                                             * icon_lon_stop
-                                             * mighti_ecef_vectors_start
-                                             * mighti_ecef_vectors_stop
-                                             * icon_ecef_ram_vector_start
-                                             * icon_ecef_ram_vector_stop
-                                             * icon_velocity_start
-                                             * icon_velocity_stop
-                                             * source_files
-                                             * time_start
-                                             * time_stop
-                                             * exp_time
-                                             * optical_path_difference 
+                                      * L1_fn                      -- TYPE:str.                      
+                                                                      Level 1 filename
+                                      * sensor                     -- TYPE:str.
+                                                                      Which sensor took the data: 'A' or 'B'
+                                      * I_amp                      -- TYPE:array(ny,nx), UNITS:arb.  
+                                                                      Magnitude of interferogram
+                                      * I_phase                    -- TYPE:array(ny,nx), UNITS:rad.  
+                                                                      Phase of interferogram
+                                      * I_amp_uncertainty          -- TYPE:array(ny),    UNITS:arb.  
+                                                                      Uncertainty in the sum of each row of I_amp
+                                      * I_phase_uncertainty        -- TYPE:array(ny),    UNITS:rad. 
+                                                                      Uncertainty in the mean phase of each row of interferogram
+                                      * tang_alt_start             -- TYPE:array(ny),    UNITS:km.   
+                                                                      Tangent altitudes at beginning of exposure
+                                      * tang_alt_stop              -- TYPE:array(ny),    UNITS:km.   
+                                                                      Tangent altitudes at end of exposure
+                                      * tang_lat_start             -- TYPE:array(ny),    UNITS:deg.  
+                                                                      Tangent latitudes at beginning of exposure
+                                      * tang_lat_stop              -- TYPE:array(ny),    UNITS:deg.  
+                                                                      Tangent latitudes at end of exposure
+                                      * tang_lon_start             -- TYPE:array(ny),    UNITS:deg.  
+                                                                      Tangent longitudes at beginning of exposure
+                                      * tang_lon_stop              -- TYPE:array(ny),    UNITS:deg.  
+                                                                      Tangent longitudes at end of exposure
+                                      * emission_color             -- TYPE:str.                    
+                                                                      'red' or 'green'
+                                      * icon_alt_start             -- TYPE:float,        UNITS:km.   
+                                                                      Spacecraft altitude at beginning of exposure
+                                      * icon_alt_stop              -- TYPE:float,        UNITS:km.   
+                                                                      Spacecraft altitude at end of exposure
+                                      * icon_lat_start             -- TYPE:float,        UNITS:deg.  
+                                                                      Spacecraft latitude at beginning of exposure
+                                      * icon_lat_stop              -- TYPE:float,        UNITS:deg.  
+                                                                      Spacecraft latitude at end of exposure
+                                      * icon_lon_start             -- TYPE:float,        UNITS:deg.  
+                                                                      Spacecraft longitude at beginning of exposure
+                                      * icon_lon_stop              -- TYPE:float,        UNITS:deg.  
+                                                                       Spacecraft longitude at end of exposure
+                                      * mighti_ecef_vectors_start  -- TYPE:array(ny,nx,3).           
+                                                                      Unit ECEF vector of line of sight of each pixel at beginning of exposure 
+                                      * mighti_ecef_vectors_stop   -- TYPE:array(ny,nx,3).           
+                                                                      Unit ECEF vector of line of sight of each pixel at end of exposure 
+                                      * icon_ecef_ram_vector_start -- TYPE:array(3).                 
+                                                                      Unit ECEF vector of spacecraft ram at beginning of exposure
+                                      * icon_ecef_ram_vector_stop  -- TYPE:array(3).                 
+                                                                      Unit ECEF vector of spacecraft ram at end of exposure
+                                      * icon_velocity_start        -- TYPE:float.        UNITS:m/s.  
+                                                                      Spacecraft velocity at beginning of exposure (TODO: inertial or EF velocity?)
+                                      * icon_velocity_stop         -- TYPE:float.        UNITS:m/s.  
+                                                                      Spacecraft velocity at end of exposure
+                                      * source_files               -- TYPE:list of strs.             
+                                                                      All files that were used to generate this L1 file
+                                      * time_start                 -- TYPE:datetime (timezone naive).                
+                                                                      Start of exposure in UTC
+                                      * time_stop                  -- TYPE:datetime (timezone naive).                 
+                                                                      End of exposure in UTC
+                                      * exp_time                   -- TYPE:float.        UNITS:s.    
+                                                                      Length of exposure
+                                      * optical_path_difference    -- TYPE:array(nx).    UNITS:m.    
+                                                                      Optical path difference for each column of interferogram
                                              
+    OPTIONAL INPUTS - If None, defaults from MIGHTI_L2.global_params will be used 
+    
       *  sigma               -- TYPE:float, UNITS:m^-1. The wavenumber of the emission (1/wavelength)
       *  zero_phase          -- TYPE:float, UNITS:rad.  The phase corresponding to zero wind.
-      *  phase_offset        -- TYPE:float, UNITS.rad.  A phase that is added to avoid 0/2pi discontinuities.
-        
-    OPTIONAL INPUTS:
-
+      *  phase_offset        -- TYPE:float, UNITS:rad.  A phase that is added to avoid 0/2pi discontinuities.
       *  top_layer           -- TYPE:str, 'thin': assume VER goes to zero above top layer
-                                          'exp':  assume VER falls off exponentially in altitude (default)
-      *  integration_order   -- TYPE:int, 0: Use Riemann-sum rule for discretizing line-of-sight integral (default)
+                                          'exp':  assume VER falls off exponentially in altitude
+      *  integration_order   -- TYPE:int, 0: Use Riemann-sum rule for discretizing line-of-sight integral
                                           1: Use trapezoidal rule for discretizing line-of-sight integral
       *  account_for_local_projection -- TYPE:bool. If False, a simple inversion is used.
                                          If True, the inversion accounts for the fact that the ray is not 
-                                         perfectly tangent to each shell at each point along the ray. 
-                                         (default True)
+                                         perfectly tangent to each shell at each point along the ray.
       *  bin_size            -- TYPE:int, The number of rows of the interferogram to bin together to 
-                                          improve statistics at the cost of altitude resolution. (default 1)
+                                          improve statistics at the cost of altitude resolution.
                                                                           
     OUTPUTS:
     
       *  L21_dict            -- TYPE:dict. A dictionary containing output variables of the Level 2.1 processing:
-      
-                                             * los_wind 
-                                             * los_wind_error
-                                             * lat 
-                                             * lon  
-                                             * alt    
-                                             * time_start 
-                                             * time_stop
-                                             * exp_time
-                                             * az  
-                                             * emission_color 
-                                             * resolution_along_track 
-                                             * resolution_cross_track
-                                             * resolution_alt   
-                                             * icon_alt    
-                                             * icon_lat  
-                                             * icon_lon 
-                                             * fringe_amplitude 
-                                             * fringe_amplitude_error  
-                                             * mighti_ecef_vectors  
-                                             * icon_velocity_ecef_vector 
-                                             * file_creation_time
-                                             * source_files 
-                                             * bin_size 
-                                             * top_layer
-                                             * integration_order
-                                             * zero_phase
-                                             * phase_offset
-                                             * param_fn
+
+                                * los_wind                  -- TYPE:array(ny),   UNITS:m/s.   Line-of-sight wind profile 
+                                * los_wind_error            -- TYPE:array(ny),   UNITS:m/s.   Uncertainty of los_wind (1-sigma)
+                                * lat                       -- TYPE:array(ny),   UNITS:deg.   Latitude of each point in profile
+                                * lon                       -- TYPE:array(ny),   UNITS:deg.   Longitude of each point in profile
+                                * alt                       -- TYPE:array(ny),   UNITS:alt.   Altitude of each point in profile
+                                * time_start                -- TYPE:datetime (timezone naive) Time at start of exposure in UTC
+                                * time_stop                 -- TYPE:datetime (timezone naive) Time at end of exposure in UTC
+                                * exp_time                  -- TYPE:float,       UNITS:s.     Exposure time
+                                * az                        -- TYPE:array(ny),   UNITS:deg.   The azimuth angle of the line of sight
+                                                                                              at the tangent point (deg East of North)
+                                * emission_color            -- TYPE:str.                      'red' or 'green'
+                                * sensor                    -- TYPE:str.                      'A' or 'B'
+                                * resolution_along_track    -- TYPE:array(ny),   UNITS:km.    Horizontal resolution along the line of sight
+                                * resolution_cross_track    -- TYPE:array(ny),   UNITS:km.    Horizontal resolution perpendicular to line of sight
+                                * resolution_alt            -- TYPE:array(ny),   UNITS:km.    Vertical resolution
+                                * icon_alt                  -- TYPE:float,       UNITS:km.    Spacecraft altitude
+                                * icon_lat                  -- TYPE:float,       UNITS:deg.   Spacecraft latitude
+                                * icon_lon                  -- TYPE:float,       UNITS:deg.   Spacecraft longitude [0,360]
+                                * fringe_amplitude          -- TYPE:array(ny),   UNITS:arb.   The fringe contrast, a proxy for volume emission rate
+                                * fringe_amplitude_error    -- TYPE:array(ny),   UNITS:arb.   Uncertainty in fringe_amplitude (1-sigma)
+                                * mighti_ecef_vectors       -- TYPE:array(ny,3).              ECEF unit vector for each line of sight
+                                * icon_velocity_ecef_vector -- TYPE:array(3).    UNITS:m/s.   ECEF vector of spacecraft velocity (TODO: inertial or EF vel?) 
+                                * file_creation_time        -- TYPE:datetime (timezone naive) Time this processing was run in UTC
+                                * source_files              -- TYPE:list of str.              All science files that went into creating this file
+                                * bin_size                  -- TYPE:int.                      Bin size used in the processing
+                                * top_layer                 -- TYPE:str.                      How the top layer was handled: 'thin' or 'exp'
+                                * integration_order         -- TYPE:int.                      Order of integration used in inversion: 0 or 1
+                                * zero_phase                -- TYPE:float,       UNITS:rad.   The zero phase value used in the processing
+                                * phase_offset              -- TYPE:float,       UNITS:rad.   The phase offset used in the processing
 
     TODO:
     
       * error handling
     
     '''
+    
+    #### Parse input parameters and load defaults
+    emission_color = L1_dict['emission_color']
+    params = global_params[emission_color]
+    if sigma is None:
+        sigma = params['sigma']
+    if zero_phase is None:
+        zero_phase = params['zero_phase']
+    if phase_offset is None:
+        phase_offset = params['phase_offset']
+    if top_layer is None:
+        top_layer = params['top_layer']
+    if integration_order is None:
+        integration_order = params['integration_order']
+    if account_for_local_projection is None:
+        account_for_local_projection = params['account_for_local_projection']
+    if bin_size is None:
+        bin_size = params['bin_size']
+    bin_size = int(bin_size)
 
-    ###  Load parameters from input dictionary
+    ####  Load parameters from input dictionary
     Iraw = L1_dict['I_amp']*np.exp(1j*L1_dict['I_phase'])
     I_amp_uncertainty = L1_dict['I_amp_uncertainty']
     I_phase_uncertainty = L1_dict['I_phase_uncertainty']
-    emission_color = L1_dict['emission_color']
     source_files = L1_dict['source_files']
     exp_time = L1_dict['exp_time']
     L1_fn = L1_dict['L1_fn']
     opd = L1_dict['optical_path_difference']
     sigma_opd = sigma * opd # Optical path difference, in units of wavelengths
+    sensor = L1_dict['sensor']
     
     # Load parameters which are averaged from start to stop of exposure.
     icon_alt = (L1_dict['icon_alt_start'] + L1_dict['icon_alt_stop'])/2
@@ -1297,6 +1316,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma, zero_phase, phase_offset, top_la
              'exp_time'                     : exp_time,
              'az'                           : az,
              'emission_color'               : emission_color,
+             'sensor'                       : sensor,
              'resolution_along_track'       : np.nan, # TODO
              'resolution_cross_track'       : np.nan, # TODO
              'resolution_alt'               : np.nan, # TODO
@@ -1314,9 +1334,6 @@ def level1_dict_to_level21_dict(L1_dict, sigma, zero_phase, phase_offset, top_la
              'integration_order'            : integration_order,
              'zero_phase'                   : zero_phase,
              'phase_offset'                 : phase_offset,
-             'param_fn'                     : None, # A placeholder to put the parameter filename, if one exists.
-                                                    # This function doesn't know if one was used or not, so it will 
-                                                    # be filled in by a higher-level function.
     }
         
     return L21_dict
@@ -1348,7 +1365,7 @@ def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', di
       *  The netCDF4._netCDF4.Variable object that was created and to which was written
     
     '''    
-    
+        
     # Rudimentary error-checking:
     valid_var_types = ['data','support_data','metadata','ignore_data']
     if var_type not in valid_var_types:
@@ -1424,11 +1441,10 @@ def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', di
    
     
     
-def save_nc_level21(path, L21_dict):
+def save_nc_level21(path, L21_dict, data_revision=0):
     '''
     Take the output of the Level 2.1 processing and save it as a NetCDF4 file in the official format.
-    NetCDF4 file conventions taken from "Science Operations Center Data Product Conventions" Rev 0.4,
-    authored by Tori Fae., including the new filenaming requirement that will presumably be in Rev 0.5.
+    NetCDF4 file conventions taken from "Science Operations Center Data Product Conventions" Rev 0.5.
     
     INPUTS:
     
@@ -1437,6 +1453,11 @@ def save_nc_level21(path, L21_dict):
       *  L21_dict    -- TYPE:dict. A dictionary containing output variables of the Level 2.1 processing.
                                    See documentation for level1_dict_to_level21_dict(...) for details.
                                    
+    OPTIONAL INPUTS:
+    
+      *  data_revision       -- TYPE:int,  The minor version of the data [0-999]. The major version is set
+                                           by the software's major version.
+                                   
     OUTPUTS:
     
       *  L21_fn      -- TYPE:str.  The full path to the saved file.
@@ -1444,29 +1465,16 @@ def save_nc_level21(path, L21_dict):
     TO-DO:
     
       * Maybe: Fill in more notes for each variable
-      * accept L2.1 filename as argument, from which I will extract what should go in Data_Version
-      * Have a second set of eyes look at descriptions of each variable
       * Should dimensions be labeled the same as variables? Altitude/Vector/Epoch. Should Depend_0 point to vars or dims?
-      * How to specify sensor?
+      * How can we append to global attributes History and MODS when the processing is re-run?
       
     '''
-
-
-    data_version = 1 # TODO: how will this be calculated? It goes into global attr Data_Version
-    software_version = 0.01 # TODO: how will this be determined and stored? It goes into global attr Software_Version
-    version_for_filename = 1 # TODO: How is this related to the two above? Rec'd major software version number
-    revision_for_filename = 0 # TODO: How to determine this?
     
-    # TODO: How will sensor be determined? Will it be in L1 file?
-    source_files = ' '.join(L21_dict['source_files'])
-    if ('_A_' in source_files) or ('-A_' in source_files):
-        sensor = 'A'
-    elif ('_B_' in source_files) or ('-B_' in source_files):
-        sensor = 'B'
-    else:
-        raise Exception('Cannot Determine Sensor from filename: "%s"'%source_files) 
+    data_version_major = software_version_major # enforced as per Data Product Conventions Document
 
     #################### Compile variables to write in file ######################
+    ### Sensor:
+    sensor = L21_dict['sensor']
     ### Timing:
     t_start = L21_dict['time_start']
     t_stop  = L21_dict['time_stop']
@@ -1488,17 +1496,13 @@ def save_nc_level21(path, L21_dict):
         post = s[-1].upper()
         parents += '%s > %s, ' % (post, pre)
     if parents: parents = parents[:-2] # trim trailing comma
-    ### Parameters file, if there is one (note, that this will go in Calibration_File global attribute)
-    param_fn = L21_dict['param_fn']
-    if param_fn is None:
-        param_fn = ''
     
 
 
     ######################### Open file for writing ##############################
-    L21_fn = 'ICON_L2_1_MIGHTI-%s_%s_%s_v%02i_r%02i.nc' % (sensor,L21_dict['emission_color'].upper(),
+    L21_fn = 'ICON_L2_1_MIGHTI-%s_LINE-OF-SIGHT_WIND_%s_%s_v%02ir%03i.NC' % (sensor,L21_dict['emission_color'].upper(),
                                                            t_mid.strftime('%Y-%m-%d_%H.%M.%S'),
-                                                           version_for_filename, revision_for_filename)
+                                                           data_version_major, data_revision)
     L21_full_fn = '%s%s'%(path, L21_fn)
     ncfile = netCDF4.Dataset(L21_full_fn,mode='w',format='NETCDF4') 
 
@@ -1538,12 +1542,14 @@ def save_nc_level21(path, L21_dict):
                                                 "Contract Number NNG12FA45C from the Explorers Project Office." ))
 
         ncfile.ADID_Ref =                       'NASA Contract > NNG12FA45C'
-        ncfile.Calibration_File =               param_fn
+        ncfile.Calibration_File =               ''
         ncfile.Conventions =                    'SPDF ISTP/IACG Modified for NetCDF'
         ncfile.Data_Level =                     'L2.1'
         ncfile.Data_Type =                      'DP21 > Data Product 2.1: Line-of-sight Wind Profile'
-        ncfile.Data_Version =                   np.uint16(data_version)
-        ncfile.Date_Stop =                       t_mid.strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC' # single measurement: use midpoint
+        ncfile.Data_Version_Major =             np.uint16(data_version_major)
+        ncfile.Data_Revision =                  np.uint16(data_revision)
+        ncfile.Data_Version =                   data_version_major + 0.001 * data_revision
+        ncfile.Date_Stop =                      t_mid.strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC' # single measurement: use midpoint
         ncfile.Date_Start =                     t_mid.strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC' # single measurement: use midpoint
         ncfile.Description =                    'ICON MIGHTI Line-of-sight Winds (DP 2.1)'
         ncfile.Descriptor =                     'MIGHTI-%s > Michelson Interferometer for Global High-resolution ' % sensor+\
@@ -1551,11 +1557,10 @@ def save_nc_level21(path, L21_dict):
         ncfile.Discipline =                     'Space Physics > Ionospheric Science'
         ncfile.File =                           L21_fn
         ncfile.File_Date =                      t_file.strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC'
-        ncfile.Generated_By =                   'ICON SDC > ICON UIUC MIGHTI L2.1 Processor v%.2f, B. J. Harding' % software_version
+        ncfile.Generated_By =                   'ICON SDC > ICON UIUC MIGHTI L2.1 Processor v%s, B. J. Harding' % __version__
         ncfile.Generation_Date =                t_file.strftime('%Y%m%d')
-        ncfile.History =                        'Version %i, %s, %s, ' % (data_version, user_name, t_file.strftime('%Y-%m-%dT%H:%M:%S')) +\
-                                                'MIGHTI L2.1 Processor v%.2f ' % software_version # TODO: Tori suggested we make this a history
-                                                                                                  # of the software versions instead of data versions
+        ncfile.History =                        'Version %i, %s, %s, ' % (software_version_major, user_name, t_file.strftime('%Y-%m-%dT%H:%M:%S')) +\
+                                                'MIGHTI L2.1 Processor v%s ' % __version__
         ncfile.HTTP_LINK =                      'http://icon.ssl.berkeley.edu/Instruments/MIGHTI'
         ncfile.Instrument =                     'MIGHTI-%s' % sensor
         ncfile.Instrument_Type =                'Imagers (space)'
@@ -1571,7 +1576,7 @@ def save_nc_level21(path, L21_dict):
         ncfile.PI_Name =                        'T. J. Immel'
         ncfile.Project =                        'NASA > ICON'
         ncfile.Rules_of_Use =                   'Public Data for Scientific Use'
-        ncfile.Software_Version =               'ICON SDC > ICON UIUC MIGHTI L2.1 Processor v%.2f' % software_version
+        ncfile.Software_Version =               'ICON SDC > ICON UIUC MIGHTI L2.1 Processor v%s' % __version__
         ncfile.Source_Name =                    'ICON > Ionospheric Connection Explorer'
         ncfile.Spacecraft_ID =                  'NASA > ICON - 493'
         ncfile.Text =                           'ICON explores the boundary between Earth and space - the ionosphere - ' +\
@@ -1587,45 +1592,37 @@ def save_nc_level21(path, L21_dict):
         ncfile.createDimension('Epoch',0)
         ncfile.createDimension('Altitude', n)
         ncfile.createDimension('Vector',3)
+        ncfile.createDimension('Start_mid_stop',3)
 
 
         ################################## Variables #########################################
 
-        
+        prefix = 'ICON_L2_1_MIGHTI_%s_%s' % (sensor, L21_dict['emission_color'].upper()) # prefix of each variable,
+                                                                                         # e.g., ICON_L2_1_MIGHTI_A_RED        
         ######### Timing Variables #########
 
         # Time midpoint (the official required "Epoch" variable)
-        var = _create_variable(ncfile, 'Epoch', t_mid_msec, 
+        var = _create_variable(ncfile, 'EPOCH', t_mid_msec, 
                               dimensions=(),
                               format_nc='i8', format_fortran='I', desc='Sample time, midpoint of exposure. Number of msec since Jan 1, 1970.', 
                               display_type='scalar', field_name='Time', fill_value=None, label_axis='Time', bin_location=0.5,
                               units='ms', valid_min=0, valid_max=1000*365*86400e3, var_type='support_data', chunk_sizes=1,
                               notes='')
 
-        # Time start
-        var = _create_variable(ncfile, 'Epoch_Start', t_start_msec, 
-                              dimensions=(),
-                              format_nc='i8', format_fortran='I', desc='Sample time, start of exposure. Number of msec since Jan 1, 1970.', 
-                              display_type='scalar', field_name='Time Start', fill_value=None, label_axis='Time Start', bin_location=0.0,
-                              units='ms', valid_min=0, valid_max=1000*365*86400e3, var_type='support_data', chunk_sizes=1,
-                              notes='')
-
-        # Time stop
-        var = _create_variable(ncfile, 'Epoch_Stop', t_stop_msec, 
-                              dimensions=(),
-                              format_nc='i8', format_fortran='I', desc='Sample time, end of exposure. Number of msec since Jan 1, 1970.', 
-                              display_type='scalar', field_name='Time Stop', fill_value=None, label_axis='Time Stop', bin_location=1.0,
-                              units='ms', valid_min=0, valid_max=1000*365*86400e3, var_type='support_data', chunk_sizes=1,
+        # Time start/mid/stop
+        var = _create_variable(ncfile, '%s_TIME'%prefix, np.array([t_start_msec, t_mid_msec, t_stop_msec]),
+                              dimensions=('Start_mid_stop'),
+                              format_nc='i8', format_fortran='I', desc='Sample time at start, mid, stop of exposure. Number of msec since Jan 1, 1970.', 
+                              display_type='scalar', field_name='Time', fill_value=None, label_axis='Time', bin_location=[0.0,0.5,1.0],
+                              units='ms', valid_min=0, valid_max=1000*365*86400e3, var_type='support_data', chunk_sizes=[1],
                               notes='')
 
 
         ######### Data Location and Direction Variables #########
-        prefix = 'ICON_L2_1_MIGHTI_%s_%s' % (sensor, L21_dict['emission_color'].upper()) # prefix of each variable,
-                                                                                         # e.g., ICON_L2_1_MIGHTI_A_RED
         
         # Altitude
         val = L21_dict['alt']*1e3 # convert to meters
-        var_alt = _create_variable(ncfile, '%s_Altitude'%prefix, val, 
+        var_alt = _create_variable(ncfile, '%s_ALTITUDE'%prefix, val, 
                               dimensions=('Altitude'), # depend_0 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='WGS84 altitude of each wind sample', 
                               display_type='altitude_profile', field_name='Altitude', fill_value=None, label_axis='Altitude', bin_location=0.5,
@@ -1633,7 +1630,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # Latitude
-        var = _create_variable(ncfile, '%s_Latitude'%prefix, L21_dict['lat'], 
+        var = _create_variable(ncfile, '%s_LATITUDE'%prefix, L21_dict['lat'], 
                               dimensions=('Altitude'), depend_0 = var_alt.name,
                               format_nc='f8', format_fortran='F', desc='WGS84 latitude of each wind sample', 
                               display_type='altitude_profile', field_name='Latitude', fill_value=None, label_axis='Latitude', bin_location=0.5,
@@ -1641,7 +1638,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # Longitude
-        var = _create_variable(ncfile, '%s_Longitude'%prefix, L21_dict['lon'], 
+        var = _create_variable(ncfile, '%s_LONGITUDE'%prefix, L21_dict['lon'], 
                               dimensions=('Altitude'), depend_0 = var_alt.name,
                               format_nc='f8', format_fortran='F', desc='WGS84 longitude of each wind sample', 
                               display_type='altitude_profile', field_name='Longitude', fill_value=None, label_axis='Longitude', bin_location=0.5,
@@ -1649,7 +1646,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # Azimuth angle of line of sight
-        var = _create_variable(ncfile, '%s_Line_of_Sight_Azimuth'%prefix, L21_dict['az'], 
+        var = _create_variable(ncfile, '%s_LINE_OF_SIGHT_AZIMUTH'%prefix, L21_dict['az'], 
                               dimensions=('Altitude'), depend_0 = var_alt.name,
                               format_nc='f8', format_fortran='F', desc='Azimuth angle of the line of sight at the tangent point. Deg East of North.', 
                               display_type='altitude_profile', field_name='Line-of-sight Azimuth', fill_value=None, label_axis='Azimuth', bin_location=0.5,
@@ -1660,7 +1657,7 @@ def save_nc_level21(path, L21_dict):
         ######### Data Variables #########
 
         # Line-of-sight wind profile
-        var = _create_variable(ncfile, '%s_Line_of_Sight_Wind'%prefix, L21_dict['los_wind'], 
+        var = _create_variable(ncfile, '%s_LINE_OF_SIGHT_WIND'%prefix, L21_dict['los_wind'], 
                               dimensions=('Altitude'), depend_0 = var_alt.name,
                               format_nc='f8', format_fortran='F', desc='Line-of-sight horizontal wind profile. A positive wind is towards MIGHTI.', 
                               display_type='altitude_profile', field_name='Line-of-sight Wind', fill_value=None, label_axis='LoS Wind', bin_location=0.5,
@@ -1668,7 +1665,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # Line-of-sight wind error profile
-        var = _create_variable(ncfile, '%s_Line_of_Sight_Wind_Error'%prefix, L21_dict['los_wind_error'], 
+        var = _create_variable(ncfile, '%s_LINE_OF_SIGHT_WIND_ERROR'%prefix, L21_dict['los_wind_error'], 
                               dimensions=('Altitude'), depend_0 = var_alt.name,
                               format_nc='f8', format_fortran='F', desc='Line-of-sight Horizontal Wind Error Profile', 
                               display_type='altitude_profile', field_name='Line-of-sight Wind Error', fill_value=None, label_axis='Wind Error', bin_location=0.5,
@@ -1676,7 +1673,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # Fringe amplitude profile (TODO: will this be replaced by a VER data product?)
-        var = _create_variable(ncfile, '%s_Fringe_Amplitude'%prefix, L21_dict['fringe_amplitude'], 
+        var = _create_variable(ncfile, '%s_FRINGE_AMPLTIUDE'%prefix, L21_dict['fringe_amplitude'], 
                               dimensions=('Altitude'), depend_0 = var_alt.name,
                               format_nc='f8', format_fortran='F', desc='Fringe Amplitude Profile', 
                               display_type='altitude_profile', field_name='Fringe Amplitude', fill_value=None, label_axis='Fringe Amp', bin_location=0.5,
@@ -1685,7 +1682,7 @@ def save_nc_level21(path, L21_dict):
                                     'of the fringes, which has a dependence on temperature and background emission.')
 
         # Fringe amplitude error profile (TODO: will this be replaced by a VER data product?)
-        var = _create_variable(ncfile, '%s_Fringe_Amplitude_Error'%prefix, L21_dict['fringe_amplitude_error'], 
+        var = _create_variable(ncfile, '%s_FRINGE_AMPLTIUDE_ERROR'%prefix, L21_dict['fringe_amplitude_error'], 
                               dimensions=('Altitude'), depend_0 = var_alt.name,
                               format_nc='f8', format_fortran='F', desc='Fringe Amplitude Error Profile', 
                               display_type='altitude_profile', field_name='Fringe Amplitude Error', fill_value=None, label_axis='Amp Err', bin_location=0.5,
@@ -1695,16 +1692,8 @@ def save_nc_level21(path, L21_dict):
 
         ######### Other Metadata Variables #########
 
-        # Emission color
-        var = _create_variable(ncfile, '%s_Emission_Color'%prefix, L21_dict['emission_color'].capitalize(), 
-                              dimensions=(),
-                              format_nc=str, format_fortran='A', desc='Emission used for wind estimate: Red or Green', 
-                              display_type='scalar', field_name='Emission Color', fill_value=None, label_axis='Color', bin_location=0.5,
-                              units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
-                              notes='')
-
         # ICON velocity vector
-        var = _create_variable(ncfile, '%s_Spacecraft_Velocity_Vector'%prefix, L21_dict['icon_velocity_ecef_vector'], 
+        var = _create_variable(ncfile, '%s_SPACECRAFT_VELOCITY_VECTOR'%prefix, L21_dict['icon_velocity_ecef_vector'], 
                               dimensions=('Vector'),# depend_0 = 'Vector',
                               format_nc='f8', format_fortran='F', desc='ICON\'s velocity vector in Earth-Centered, Earth-fixed coordinates', 
                               display_type='scalar', field_name='ICON Velocity Vector', fill_value=None, label_axis='S/C Vel', bin_location=0.5,
@@ -1712,7 +1701,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # ICON latitude
-        var = _create_variable(ncfile, '%s_Spacecraft_Latitude'%prefix, L21_dict['icon_lat'], 
+        var = _create_variable(ncfile, '%s_SPACECRAFT_LATITUDE'%prefix, L21_dict['icon_lat'], 
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The WGS84 latitude of ICON', 
                               display_type='scalar', field_name='Spacecraft Latitude', fill_value=None, label_axis='S/C Lat', bin_location=0.5,
@@ -1720,7 +1709,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # ICON longitude
-        var = _create_variable(ncfile, '%s_Spacecraft_Longitude'%prefix, L21_dict['icon_lon'], 
+        var = _create_variable(ncfile, '%s_SPACECRAFT_LONGITUDE'%prefix, L21_dict['icon_lon'], 
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The WGS84 longitude of ICON', 
                               display_type='scalar', field_name='Spacecraft Longitude', fill_value=None, label_axis='S/C Lon', bin_location=0.5,
@@ -1729,7 +1718,7 @@ def save_nc_level21(path, L21_dict):
 
         # ICON altitude
         val = L21_dict['icon_alt']*1e3 # convert to m
-        var = _create_variable(ncfile, '%s_Spacecraft_Altitude'%prefix, val, 
+        var = _create_variable(ncfile, '%s_SPACECRAFT_ALTITUDE'%prefix, val, 
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The WGS84 altitude of ICON', 
                               display_type='scalar', field_name='Spacecraft Altitude', fill_value=None, label_axis='S/C Alt', bin_location=0.5,
@@ -1738,7 +1727,7 @@ def save_nc_level21(path, L21_dict):
 
         # Along-track resolution
         val = L21_dict['resolution_along_track']*1e3 # convert to meters
-        var = _create_variable(ncfile, '%s_Resolution_Along_Track'%prefix, val, 
+        var = _create_variable(ncfile, '%s_RESOLUTION_ALONG_TRACK'%prefix, val, 
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The horizontal resolution in the spacecraft velocity direction', 
                               display_type='scalar', field_name='Along-Track Resolution', fill_value=None, label_axis='Hor Res AT', bin_location=0.5,
@@ -1747,7 +1736,7 @@ def save_nc_level21(path, L21_dict):
 
         # Cross-track resolution
         val = L21_dict['resolution_cross_track']*1e3 # convert to meters
-        var = _create_variable(ncfile, '%s_Resolution_Cross_Track'%prefix, val, 
+        var = _create_variable(ncfile, '%s_RESOLUTION_CROSS_TRACK'%prefix, val, 
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The horizontal resolution perpendicular to the spacecraft velocity direction', 
                               display_type='scalar', field_name='Cross-Track Resolution', fill_value=None, label_axis='Hor Res CT', bin_location=0.5,
@@ -1755,7 +1744,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # Altitude resolution
-        var = _create_variable(ncfile, '%s_Resolution_Altitude'%prefix, L21_dict['resolution_alt'], 
+        var = _create_variable(ncfile, '%s_RESOLUTION_ALTITUDE'%prefix, L21_dict['resolution_alt']*1e3, # km to meters
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The vertical resolution', 
                               display_type='scalar', field_name='Vertical Resolution', fill_value=None, label_axis='Vert Res', bin_location=0.5,
@@ -1763,7 +1752,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # MIGHTI ECEF vectors
-        var = _create_variable(ncfile, '%s_Line_of_Sight_Vector'%prefix, L21_dict['mighti_ecef_vectors'], 
+        var = _create_variable(ncfile, '%s_LINE_OF_SIGHT_VECTOR'%prefix, L21_dict['mighti_ecef_vectors'], 
                               dimensions=('Altitude','Vector'), depend_0 = var_alt.name, # depend_1 = 'Vector',
                               format_nc='f8', format_fortran='F', desc='The look direction of each MIGHTI line of sight, as a vector in ECEF', 
                               display_type='altitude_profile', field_name='Line-of-sight Vector', fill_value=None, label_axis='LoS Vec', bin_location=0.5,
@@ -1771,7 +1760,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
         
         # Zero wind phase
-        var = _create_variable(ncfile, '%s_Zero_Wind_Phase'%prefix, L21_dict['zero_phase'], 
+        var = _create_variable(ncfile, '%s_ZERO_WIND_PHASE'%prefix, L21_dict['zero_phase'], 
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The fringe phase corresponding to a wind of zero', 
                               display_type='scalar', field_name='Zero Wind Phase', fill_value=None, label_axis='Zero Phase', bin_location=0.5,
@@ -1779,7 +1768,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
         
         # Phase offset
-        var = _create_variable(ncfile, '%s_Phase_Offset'%prefix, L21_dict['phase_offset'], 
+        var = _create_variable(ncfile, '%s_PHASE_OFFSET'%prefix, L21_dict['phase_offset'], 
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='A phase which is added to avoid 0/2pi discontinuities', 
                               display_type='scalar', field_name='Phase Offset', fill_value=None, label_axis='Phase Offs', bin_location=0.5,
@@ -1787,7 +1776,7 @@ def save_nc_level21(path, L21_dict):
                               notes='This phase is added before unwrapping and removed after unwrapping.')
 
         # Bin Size
-        var = _create_variable(ncfile, '%s_Bin_Size'%prefix, L21_dict['bin_size'], 
+        var = _create_variable(ncfile, '%s_BIN_SIZE'%prefix, L21_dict['bin_size'], 
                               dimensions=(),
                               format_nc='i1', format_fortran='I', desc='How many raw samples were binned vertically for each reported sample', 
                               display_type='scalar', field_name='Bin Size', fill_value=None, label_axis='Bin Size', bin_location=0.5,
@@ -1795,7 +1784,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # Integration order
-        var = _create_variable(ncfile, '%s_Integration_Order'%prefix, L21_dict['integration_order'], 
+        var = _create_variable(ncfile, '%s_INTEGRATION_ORDER'%prefix, L21_dict['integration_order'], 
                               dimensions=(),
                               format_nc='i1', format_fortran='I', desc='Order used to discretize the integral for inversion: 0=Riemann, 1=Trapezoidal', 
                               display_type='scalar', field_name='Order', fill_value=None, label_axis='Order', bin_location=0.5,
@@ -1803,7 +1792,7 @@ def save_nc_level21(path, L21_dict):
                               notes='')
 
         # How the top layer was handled in the inversion
-        var = _create_variable(ncfile, '%s_Top_Layer_Model'%prefix, L21_dict['top_layer'], 
+        var = _create_variable(ncfile, '%s_TOP_LAYER_MODEL'%prefix, L21_dict['top_layer'], 
                               dimensions=(),
                               format_nc=str, format_fortran='A', desc='How the top altitudinal layer is handled in the inversion: exp or thin', 
                               display_type='scalar', field_name='Top Layer', fill_value=None, label_axis='Top Layer', bin_location=0.5,
@@ -1823,13 +1812,14 @@ def save_nc_level21(path, L21_dict):
     
     
     
-def level1_to_level21_without_param_file(L1_fn, emission_color, L21_path, sigma, zero_phase, phase_offset, top_layer = 'exp', 
-                                         integration_order = 0, account_for_local_projection = True, 
-                                         bin_size = 1, param_fn = None):
+def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_revision=0, sigma=None, zero_phase=None, 
+                                        phase_offset=None, top_layer=None, integration_order=None, 
+                                        account_for_local_projection=None, bin_size = None):
     '''
     High-level function to apply the Level-1-to-Level-2.1 algorithm to a Level 1 file. This version
-    of the function requires the user to input the parameters instead of specifying them via
-    a parameter file. A single Level 1 file can become two Level 2.1 files (one per emission color).
+    of the function requires the user to input the arguments instead of specifying them with an 
+    Information.TXT file, as will be done in the Science Data Center. A single Level 1 file can 
+    become two Level 2.1 files (one per emission color).
     
     INPUTS:
     
@@ -1837,25 +1827,26 @@ def level1_to_level21_without_param_file(L1_fn, emission_color, L21_path, sigma,
       *  emission_color      -- TYPE:str.  'red' or 'green'
       *  L21_path            -- TYPE:str.  The directory the Level 2.1 file will be saved in, including trailing "/"
                                            (e.g., '/home/user/')
-      *  sigma               -- TYPE:float, UNITS:m^-1. The wavenumber of the emission (1/wavelength)                          
-      *  zero_phase          -- TYPE:float, UNITS:rad. The phase corresponding to zero wind.
-      *  phase_offset        -- TYPE:float, UNITS.rad. A phase that is added to avoid 0/2pi discontinuities.
       
-    OPTIONAL INPUTS:
+    OPTIONAL INPUT:
     
+      *  data_revision       -- TYPE:int,  The minor version of the data [0-999]. The major version is set
+                                           by this software's major version. (default 0)
+
+    MORE OPTIONAL INPUTS - If None, defaults from MIGHTI_L2.global_params will be used 
+    
+      *  sigma               -- TYPE:float, UNITS:m^-1. The wavenumber of the emission (1/wavelength)
+      *  zero_phase          -- TYPE:float, UNITS:rad.  The phase corresponding to zero wind.
+      *  phase_offset        -- TYPE:float, UNITS:rad.  A phase that is added to avoid 0/2pi discontinuities.
       *  top_layer           -- TYPE:str, 'thin': assume VER goes to zero above top layer
-                                          'exp':  assume VER falls off exponentially in altitude (default)
-      *  integration_order   -- TYPE:int, 0: Use Riemann-sum rule for discretizing line-of-sight integral (default)
+                                          'exp':  assume VER falls off exponentially in altitude
+      *  integration_order   -- TYPE:int, 0: Use Riemann-sum rule for discretizing line-of-sight integral
                                           1: Use trapezoidal rule for discretizing line-of-sight integral
-      *  account_for_local_projection -- TYPE:bool.   If False, a simple inversion is used.
+      *  account_for_local_projection -- TYPE:bool. If False, a simple inversion is used.
                                          If True, the inversion accounts for the fact that the ray is not 
-                                         perfectly tangent to each shell at each point along the ray. 
-                                         (default True)
-      *  bin_size            -- TYPE:int,  The number of rows of the interferogram to bin together to 
-                                           improve statistics at the cost of altitude resolution. (default 1)    
-      *  param_fn            -- TYPE:str,  (default None). If specified, this string will be written to the 
-                                           L2.1 NetCDF4 file's Calibration_File attribute. If this function is
-                                           being called directly, the intention is to leave as None.
+                                         perfectly tangent to each shell at each point along the ray.
+      *  bin_size            -- TYPE:int, The number of rows of the interferogram to bin together to 
+                                          improve statistics at the cost of altitude resolution.
                                            
     OUTPUTS:      
     
@@ -1866,6 +1857,7 @@ def level1_to_level21_without_param_file(L1_fn, emission_color, L21_path, sigma,
     # Parse inputs
     if emission_color not in ['red','green']:
         raise ValueError('Argument emission_color=\'%s\' not recognized. Use \'red\' or \'green\'.' % emission_color)
+    # For other inputs, just pass them to the lower-level function. It will replace the Nones.
     
     # Read L1 file into a dictionary
     L1_dict = level1_to_dict(L1_fn, emission_color)
@@ -1876,11 +1868,9 @@ def level1_to_level21_without_param_file(L1_fn, emission_color, L21_path, sigma,
                                            account_for_local_projection = account_for_local_projection, 
                                            bin_size = bin_size)
     
-    # Add pointer to param file, to be saved in the L2.1 file
-    L21_dict['param_fn'] = param_fn
     
     # Save L2.1 file
-    L21_fn = save_nc_level21(L21_path, L21_dict)
+    L21_fn = save_nc_level21(L21_path, L21_dict, data_revision)
     
     return L21_fn
     
@@ -1888,52 +1878,53 @@ def level1_to_level21_without_param_file(L1_fn, emission_color, L21_path, sigma,
     
     
     
-def level1_to_level21(L1_fn, param_fn, emission_color, L21_path):
+def level1_to_level21(info_fn, emission_color):
     '''
-    Highest-level function to apply the Level-1-to-Level-2.1 algorithm to a Level 1 file. The parameters
-    of the algorithm are specified by a parameter file (in NetCDF4 format) with variables described below.
-    There is a distinct parameter file for each sensor (A or B) and each emission color (red or green), but
-    the algorithm is identical. The parameter file can be created with the "save_nc_param_file" function below.
+    Highest-level function to apply the Level-1-to-Level-2.1 algorithm to a Level 1 file, with 
+    input arguments specified via an information file. The output L2.1 file will be saved to 
+    the same directory as the input L1 file.
     
     INPUTS:
     
-      *  L1_fn               -- TYPE:str.  The full path to the Level 1 file to be processed
-      *  param_fn            -- TYPE:str.  The full path to the Level 2 parameters NetCDF4 file, with the following
-                                           variables, described in more detail in the "save_nc_param_file" function 
-                                           below:
-                                           
-                                                  * ICON_MIGHTI_Wavenumber   
-                                                  * ICON_MIGHTI_Zero_Wind_Phase  
-                                                  * ICON_MIGHTI_Phase_Offset
-                                                  * ICON_MIGHTI_Top_Layer
-                                                  * ICON_MIGHTI_Integration_Order
-                                                  * ICON_MIGHTI_Bin_Size
-                                                  
-      *  emission_color      -- TYPE:str.  'red' or 'green'
-      *  L21_path            -- TYPE:str.  The directory the Level 2.1 file will be saved in, including trailing "/"
-                                           (e.g., '/home/user/')    
-                                           
+      * info_fn  -- TYPE:str.  Full path to an ASCII file in the following format:
+      
+                                        [PARAMETERS]
+                                        Revision=001
+                                        Directory=/path/to/wherever/
+                                        <other parameters>
+
+                                        [FILES]
+                                        ICON_L1_MIGHTI-A_SCIENCE_2017-03-03_191803_v04r006.NC
+                                       
+      * emission_color -- TYPE:str.  'red' or 'green'
+                                        
     OUTPUTS:   
     
-      *  L21_fn              -- TYPE:str.  The full path to the saved L2.1 file.
+      *  L21_fn  -- TYPE:str.  The full path to the saved L2.1 file.
     
     '''    
     
-    d = netCDF4.Dataset(param_fn)
-    sigma             = d.variables['ICON_MIGHTI_Wavenumber'][...].item()
-    zero_phase        = d.variables['ICON_MIGHTI_Zero_Wind_Phase'][...].item()
-    phase_offset      = d.variables['ICON_MIGHTI_Phase_Offset'][...].item()
-    top_layer         = d.variables['ICON_MIGHTI_Top_Layer'][...]
-    integration_order = d.variables['ICON_MIGHTI_Integration_Order'][...].item()
-    bin_size          = d.variables['ICON_MIGHTI_Bin_Size'][...].item()
-    d.close()
+    # Read the info file to extract parameters for the processing function
+    info = {} # expected to have entries: 'Directory' and 'Revision'
+    with open(info_fn, 'r') as f:
+        line = f.readline().strip() # skip the [Parameters] Line
+        line = f.readline().strip()
+        while line:
+            x = line.split('=')
+            info[x[0]] = x[1]
+            line = f.readline().strip()
+        line = f.readline().strip() # skip the [Files] line
+        line = f.readline().strip() # the L1 file to process
+        fn = line
+    # Parse the info
+    direc = info['Directory']
+    if direc[-1] != '/':
+        direc += '/'
+    L1_fn = direc + fn
+    data_revision = int(info['Revision'])
     
     # Call the lower-level function which does all the work.
-    # (Minor note: account_for_local_projection is not exposed to the user, since there's no reason not
-    # to set it to True. Here we let the lower-level function do the default behavior.)
-    L21_fn = level1_to_level21_without_param_file(L1_fn, emission_color, L21_path, sigma, zero_phase, phase_offset, 
-                                                  top_layer = top_layer, integration_order = integration_order,
-                                                  bin_size = bin_size, param_fn = param_fn)
+    L21_fn = level1_to_level21_without_info_file(L1_fn, emission_color, direc, data_revision = data_revision)
     
     return L21_fn
     
@@ -1943,7 +1934,8 @@ def level1_to_level21(L1_fn, param_fn, emission_color, L21_path):
     
 def level21_to_dict(L21_fns):
     ''' 
-    Load a series of Level 2.1 files and return relevant variables in a dictionary.
+    Load a series of Level 2.1 files and return relevant variables in a dictionary. It is
+    assumed that all files are from the same emission (red or green)
     
     INPUTS:
     
@@ -1964,20 +1956,27 @@ def level21_to_dict(L21_fns):
                                        MIGHTI towards the sample location, at the sample location (deg E of N).
                   * amp             -- TYPE:array(ny,nt), UNITS:arb. Fringe amplitude at sample locations
                   * time            -- TYPE:array(nt).               Array of datetime objects, one per file.
+                  * icon_lat        -- TYPE:array(nt),    UNITS:deg. Spacecraft latitude.
+                  * icon_lon        -- TYPE:array(nt),    UNITS:deg. Spacecraft longitude.
+                  * icon_alt        -- TYPE:array(nt),    UNITS:km.  Spacecraft altitude
                   * exp_time        -- TYPE:array(nt),    UNITS:sec. Exposure time of each sample.
                   * emission_color  -- TYPE:str,                     'red' or 'green'.
+                  * sensor          -- TYPE:list(nt),                each element is 'A' or 'B'
                   * source_files    -- TYPE:list of str,             A copy of the input.
                   
     '''
     
-    # Open the first file to see how many altitude bins there are
+    if len(L21_fns)==0:
+        raise ValueError('No files specified')
     
+    # Open the first file to see how many altitude bins there are
     fn = L21_fns[0]
     d = netCDF4.Dataset(fn)
-    sens  = fn.split('/')[-1][:-31].split('_')[-2][-1] # A or B
+    sens  = d.Instrument[-1] # 'A' or 'B'
     color = fn.split('/')[-1][:-31].split('_')[-1]     # RED or GREEN
+    first_color = color
     prefix = 'ICON_L2_1_MIGHTI_%s_%s' % (sens, color)
-    ny = len(d.variables['%s_Altitude'%prefix])
+    ny = len(d.variables['%s_ALTITUDE'%prefix])
     nt = len(L21_fns)
     d.close()
     
@@ -1990,25 +1989,33 @@ def level21_to_dict(L21_fns):
     amp = np.zeros((ny,nt))
     time = np.zeros(nt, dtype=object)
     exp_time = np.zeros(nt)
+    icon_lat = np.zeros(nt)
+    icon_lon = np.zeros(nt)
+    icon_alt = np.zeros(nt)
+    sensor = []
 
     for i in range(nt):
         fn = L21_fns[i]
         d = netCDF4.Dataset(fn)
-        sens  = fn.split('/')[-1][:-31].split('_')[-2][-1] # A or B
+        sens  = d.Instrument[-1] # 'A' or 'B'
         color = fn.split('/')[-1][:-31].split('_')[-1]     # RED or GREEN
+        assert color == first_color, "Input files do not have the same emission color"
         prefix = 'ICON_L2_1_MIGHTI_%s_%s' % (sens, color)
-        emission_color = d.variables['%s_Emission_Color' % prefix][...].lower()      
 
-        lat[:,i] =            d.variables['%s_Latitude' % prefix][...]
-        lon[:,i] =            d.variables['%s_Longitude' % prefix][...]
-        alt[:,i] =     1e-3 * d.variables['%s_Altitude' % prefix][...] # m to km
-        los_wind[:,i] =       d.variables['%s_Line_of_Sight_Wind' % prefix][...]
-        los_wind_error[:,i] = d.variables['%s_Line_of_Sight_Wind_Error' % prefix][...]
-        local_az[:,i] =       d.variables['%s_Line_of_Sight_Azimuth' % prefix][...]
-        amp[:,i] =            d.variables['%s_Fringe_Amplitude' % prefix][...]
-        time_msec =           d.variables['Epoch'][...].item()
+        lat[:,i] =            d.variables['%s_LATITUDE' % prefix][...]
+        lon[:,i] =            d.variables['%s_LONGITUDE' % prefix][...]
+        alt[:,i] =     1e-3 * d.variables['%s_ALTITUDE' % prefix][...] # m to km
+        los_wind[:,i] =       d.variables['%s_LINE_OF_SIGHT_WIND' % prefix][...]
+        los_wind_error[:,i] = d.variables['%s_LINE_OF_SIGHT_WIND_ERROR' % prefix][...]
+        local_az[:,i] =       d.variables['%s_LINE_OF_SIGHT_AZIMUTH' % prefix][...]
+        amp[:,i] =            d.variables['%s_FRINGE_AMPLTIUDE' % prefix][...]
+        icon_lat[i] =         d.variables['%s_SPACECRAFT_LATITUDE' % prefix][...].item()
+        icon_lon[i] =         d.variables['%s_SPACECRAFT_LONGITUDE' % prefix][...].item()
+        icon_alt[i] =         d.variables['%s_SPACECRAFT_ALTITUDE' % prefix][...].item()
+        time_msec =           d.variables['EPOCH'][...].item()
         time[i] = datetime(1970,1,1) + timedelta(seconds = 1e-3*time_msec)
         exp_time[i] = float(d.Time_Resolution.split(' ')[0])
+        sensor.append(sens)
         d.close()    
     
     L21_dict = {}
@@ -2020,203 +2027,25 @@ def level21_to_dict(L21_fns):
     L21_dict['local_az'] = local_az
     L21_dict['amp'] = amp
     L21_dict['time'] = time
+    L21_dict['icon_lat'] = icon_lat
+    L21_dict['icon_lon'] = icon_lon
+    L21_dict['icon_alt'] = icon_alt
     L21_dict['exp_time'] = exp_time
-    L21_dict['emission_color'] = emission_color
+    L21_dict['emission_color'] = color.lower()
+    L21_dict['sensor'] = sensor
     L21_dict['source_files'] = L21_fns
     
     return L21_dict
-
-
-
-
-
-def save_nc_param_file(path, param_dict, sensor, emission_color, source_files=[], t=None):
-    '''
-    Save a file that contains inversion parameters for the MIGHTI L2.1 and possibly L2.2 processing
-    (e.g., zero-wind phase). The filename format is:
-    ::
-    
-        ICON_MIGHTI-<sensor>_<emission_color>_L2PARAM_YYYY-MM-DD_HH.MM.SS.nc,
-        
-    where the sensor (A or B), emission color (RED or GREEN), and, optionally, the date, are specified
-    by the user. For example:
-    ::
-    
-        ICON_MIGHTI-A_RED_L2PARAM_2015-01-01_00.15.15.nc
-        
-    The parameters to be saved are contained in the cal_dict input dictionary.
-    
-    INPUTS:
-    
-      *  path           -- TYPE:str.  The directory the file will be saved in, including trailing "/"
-                                      (e.g., '/home/user/')
-      *  param_dict     -- TYPE:dict. A dictionary containing inversion parameters, which are listed below
-                                      and explained in more detail in the code below.
-                                      
-                                          * sigma         -- UNITS:m^-1
-                                          * zero_phase    -- UNITS:rad.
-                                          * phase_offset  -- UNITS:rad.
-                                          * bin_size
-                                          * integration_order
-                                          * top_layer      
-                                          * spher_asym_thresh
-                                          
-      *  sensor         -- TYPE:str.  'A' or 'B'
-      *  emission_color -- TYPE:str.  'red' or 'green'
-      
-    OPTIONAL INPUTS:
-    
-      *  source_files   -- TYPE:list of str. A list of the filenames that were used to generated this parameter
-                                             file. This may point to a series of L2.1 files
-                                             generated during a zero wind maneuver, or possibly L1 files. (Default [])
-      *  t              -- TYPE:datetime. A naive datetime.datetime object for writing to the filename.
-                                          If None (default), the current time will be used.
-                                          
-    OUTPUTS:
-    
-      *  cal_fn         -- TYPE:str.  The full path to the saved file.
-      
-    '''
-    
-    #################### Compile variables to write in file ######################
-    if sensor not in ['A','B']:
-        raise ValueError('Argument sensor=\'%s\' not recognized. Use \'A\' or \'B\'.' % sensor)
-    if emission_color not in ['red','green']:
-        raise ValueError('Argument emission_color=\'%s\' not recognized. Use \'red\' or \'green\'.' % emission_color)
-    
-    if t is None:
-        t = datetime.now() # time for the file name
-    t_file = datetime.now() # time this file was created
-    user_name = getpass.getuser()
-    ### Parent files
-    parents = '' # This will go in global attr Parents
-    for source_fn in source_files:
-        s = source_fn.split('/')[-1].split('.')
-        pre = '.'.join(s[:-1])
-        post = s[-1].upper()
-        parents += '%s > %s, ' % (post, pre)
-    if parents: parents = parents[:-2] # trim trailing comma
-
-
-    ######################### Open file for writing ##############################
-    fn = 'ICON_MIGHTI-%s_%s_L2PARAM_%s.nc' % (sensor,emission_color.upper(),t.strftime('%Y-%m-%d_%H.%M.%S'))
-    full_fn = '%s%s'%(path, fn)
-    ncfile = netCDF4.Dataset(full_fn,mode='w',format='NETCDF4') 
-
-    try:
-        ########################## Global Attributes #################################
-        ncfile.Acknowledgement =       ''.join(("This is a parameter file for the NASA Ionospheric Connection Explorer mission, ",
-                                                "an Explorer launched in June 2017.\n",
-                                                "\n",
-                                                "This file specifies parameters for the Level 2 processing of MIGHTI data. ",
-                                                "This file is not intended for public use. Please see the website (http://icon.ssl.berkeley.edu) ",
-                                                "or contact Dr. Thomas Immel at UC Berkeley."))
-        ncfile.ADID_Ref =                       'NASA Contract > NNG12FA45C'
-        ncfile.Description =                    'ICON MIGHTI-%s Level 2 Parameter File for %s' % (sensor, emission_color.capitalize())
-        ncfile.Generation_Date =                t_file.strftime('%Y%m%d')
-        ncfile.History =                        '%s, %s, ' % (user_name, t_file.strftime('%Y-%m-%dT%H:%M:%S'))
-        ncfile.HTTP_LINK =                      'http://icon.ssl.berkeley.edu/Instruments/MIGHTI'
-        ncfile.Instrument =                     'MIGHTI-%s' % sensor
-        ncfile.Parents =                        parents
-        ncfile.PI_Affiliation =                 'UC Berkeley > SSL'
-        ncfile.PI_Name =                        'T. J. Immel'
-        ncfile.Project =                        'NASA > ICON'
-        ncfile.Spacecraft_ID =                  'NASA > ICON - 493'
-        ncfile.Text =                           'ICON explores the boundary between Earth and space - the ionosphere - ' +\
-                                                'to understand the physical connection between our world and the immediate '+\
-                                                'space environment around us. Visit \'http://icon.ssl.berkeley.edu\' for more details.'
-        ncfile.Text_Supplement =                '((TODO: Insert reference to Harding et al [2016] paper))'
-
-
-        ################################## Variables #########################################
-        
-        # Wavenumber
-        var = ncfile.createVariable('ICON_MIGHTI_Wavenumber', 'f8')
-        var.CatDesc            = 'The wavenumber (1/wavelength) of the emission'
-        var.Units              = 'm^-1'
-        var.Var_Notes          = ''
-        var[...] = param_dict['sigma']
-        
-        # Zero-wind phase
-        var = ncfile.createVariable('ICON_MIGHTI_Zero_Wind_Phase', 'f8')
-        var.CatDesc            = 'The measured, unwrapped phase corresponding to zero wind'
-        var.Units              = 'rad'
-        var.Var_Notes          = 'After inverting the interferogram, unwrapping, and averaging, we are left with a single phase ' +\
-                                 'for each altitude, but this phase is only meaningful as a relative quantity; the absolute ' +\
-                                 'phase corresponding to zero wind must be subtracted to yield an absolute wind. This phase is ' +\
-                                 'found by conducting a "zero wind" spacecraft maneuver. By viewing the same region of the atmosphere '+\
-                                 'in the ram and the wake, separated by ~10 minutes, we can determine the zero phase since these two ' +\
-                                 'phase measurements should be equal and opposite.'
-        var[...] = param_dict['zero_phase']
-        
-        # Phase offset
-        var = ncfile.createVariable('ICON_MIGHTI_Phase_Offset', 'f8')
-        var.CatDesc            = 'A phase that is added before unwrapping to avoid 2pi discontinuities'
-        var.Units              = 'rad'
-        var.Var_Notes          = 'A phase to subtract from the interferogram before unwrapping to avoid 2pi discontinuities ' +\
-                                 'within a single wind profile, and also from profile to profile. It is added after unwrapping ' +\
-                                 'so that the zero wind phase is unaffected.'
-        var[...] = param_dict['phase_offset']
-        
-        # Bin size
-        var = ncfile.createVariable('ICON_MIGHTI_Bin_Size', 'i4')
-        var.CatDesc            = 'Number of raw samples binned vertically for each reported sample'
-        var.Units              = ''
-        var.Var_Notes          = 'A higher number sacrifices resolution to improve precision'
-        var[...] = param_dict['bin_size']
-        
-        # Integration order
-        var = ncfile.createVariable('ICON_MIGHTI_Integration_Order', 'i1')
-        var.CatDesc            = 'Order used to discretize the integral for inversion: 0=Riemann, 1=Trapezoidal'
-        var.Units              = ''
-        var.Var_Notes          = '0 is recommended. Choosing 1 sacrifices precision to improve accuracy, which may be useful ' +\
-                                 'when the wind shear is large and the signal is bright.'
-        var[...] = param_dict['integration_order']
-                
-        # Top Layer Model
-        var = ncfile.createVariable('ICON_MIGHTI_Top_Layer', str)
-        var.CatDesc            = 'How the top altitudinal layer is handled in the inversion: exp or thin'
-        var.Units              = ''
-        var.Var_Notes          = 'Some assumption must be made regarding the behavior of the atmosphere above the top layer ' +\
-                                 'observed by MIGHTI (300 km). Because of increasing viscosity, we assume the winds are constant. '+\
-                                 'The standard assumption is that the emission goes to zero above the top observed layer (i.e., the ' +\
-                                 'top layer is "thin"). A more realistic choice is to assume the emission falls off exponentially ("exp") ' +\
-                                 'with height. We assume a scale height of 26 km, which was extracted from various airglow models.'
-        var[...] = param_dict['top_layer']
-        
-        # Spherical asymmetry threshold
-        var = ncfile.createVariable('ICON_MIGHTI_Spherical_Asymmetry_Threshold', 'f8')
-        var.CatDesc            = 'Threshold on relative difference in A&B emission rate, for spherical asymmetry flag in L2.2'
-        var.Units              = ''
-        var.Var_Notes          = 'Relative difference in emission rate measured by A and B, beyond which ' +\
-                                 'the spherical-asymmetry flag will be raised. Technically, it should be ' +\
-                                 '"fringe amplitude" instead of "emission rate" due to the temperature ' +\
-                                 'dependence. Relative difference is defined as abs(A-B)/((A+B)/2).'
-        var[...] = param_dict['sph_asym_thresh']
-        
-        
-        ncfile.close()
-
-
-    except: # make sure the file is closed
-        ncfile.close()
-        raise
-    
-    return full_fn
-
-
 
     
     
 ############################################################################################################
 ##########################################       Level 2.2       ###########################################
 ############################################################################################################
-
-    
    
 
     
-def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh):
+def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None, time_start = None, time_stop = None):
     '''
     Given Level 2.1 data from MIGHTI A and MIGHTI B, process it with the Level 2.2 algorithm. 
     This entails interpolating line-of-sight wind measurements from MIGHTI A and B to a 
@@ -2229,10 +2058,26 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh):
       *  L21_B_dict      -- TYPE:dict.  The dictionary corresponding to three orbits of MIGHTI B measurements
                                         for a single emission color, which is the same as for the A measurements.
                                         See "level21_to_dict" for required keys.
-      *  sph_asym_thresh -- TYPE:float. Relative difference in emission rate measured by A and B, beyond which
-                                        the spherical-asymmetry flag will be raised. Technically, it should be
-                                        "fringe amplitude" instead of "emission rate" due to the temperature
-                                        dependence. Relative difference is defined as abs(A-B)/((A+B)/2).
+                                        
+    OPTIONAL INPUTS:
+    
+      *  sph_asym_thresh -- TYPE:float.    Relative difference in emission rate measured by A and B, beyond which
+                                           the spherical-asymmetry flag will be raised. Technically, it should be
+                                           "fringe amplitude" instead of "emission rate" due to the temperature
+                                           dependence. Relative difference is defined as abs(A-B)/((A+B)/2). If 
+                                           None (default), the default from MIGHTI_L2.global_params will be used.
+      *  time_start      -- TYPE:datetime. A timezone-naive datetime in UT, specifying the beginning of the interval
+                                           which the Level 2.2 data product should span. (Some L2.1 files from before
+                                           the start time are needed to handle the crossover). If None (default), 
+                                           the start time defaults to the first 0 UT after the first input file's time.
+                                           Note that the time changes from the top to the bottom of a L2.2 profile. We
+                                           use the top of the field of view as the reference. This means that it's
+                                           possible for some time samples to occur before the start time or after the
+                                           stop time.
+      *  time_stop       -- TYPE:datetime. A timezone-naive datetime in UT, specifying the end of the interval
+                                           which the Level 2.2 data product should span. (Some L2.1 files from after
+                                           the start time are needed to handle the crossover). If None (default), 
+                                           the stop time defaults to 24 hours after the start time.
                                         
     OUTPUTS:
     
@@ -2241,7 +2086,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh):
                                         points, and nx is the number of horizontal grid points.
                                         
                     * lat             -- TYPE:array(ny,nx),    UNITS:deg.  Latitude of each point on the grid.
-                    * lon             -- TYPE:array(ny,nx),    UNITS:deg.  Longitude of each point on the grid.
+                    * lon             -- TYPE:array(ny,nx),    UNITS:deg.  Longitude of each point on the grid [0-360]
+                    * lon_unwrapped   -- TYPE:array(ny,nx),    UNITS:deg.  Same as lon, but with 0/360 jumps removed
                     * alt             -- TYPE:array(ny,nx),    UNITS:km.   Altitude of each point on the grid.
                     * u               -- TYPE:array(ny,nx),    UNITS:m/s.  Estimated zonal wind (positive eastward).
                     * v               -- TYPE:array(ny,nx),    UNITS:m/s.  Estimated meridional wind (positive northward).
@@ -2267,6 +2113,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh):
                    * time            -- TYPE:array(ny,nx),    UNITS:none. The average between the time of the MIGHTI A 
                                                                           and B measurements that contribute to this 
                                                                           grid point, given as a datetime object. 
+                   * time_start      -- TYPE:datetime                     The start time for defining the reconstruction grid
+                   * time_stop       -- TYPE:datetime                     The stop time for defining the reconstruction grid
                    * time_delta      -- TYPE:array(ny,nx),    UNITS:s.    The difference between the time of the MIGHTI
                                                                           A and B measurements that contribute to this 
                                                                           grid point.
@@ -2278,21 +2126,38 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh):
                    * emission_color  -- TYPE:str,                         'red' or 'green'.        
                    * source_files    -- TYPE:list of str,                 All the files used to create the data product,
                                                                           including the full paths.
-                   * param_fn        -- TYPE:str,                         If one was used, the full path to the parameter
-                                                                          file will be inserted here by a higher-level 
-                                                                          function. If not, it should be left as None.
                     
     TODO:
     
         * only save the parent files that were actually used.
         * explicitly pass in which files are previous, current, and next orbit
-        * Will an orbit be -180 to 180 deg or 0 to 360? Who decides this? 
+        * Is there a better way to define the altitude reconstruction grid? Right now it is driven by the input grid
         
     '''
 
+
+    
+    
+    ################################## Parse Inputs ####################################
+    emission_color = L21_A_dict['emission_color']
+    params = global_params[emission_color]
+    if sph_asym_thresh is None:
+        sph_asym_thresh = params['sph_asym_thresh']
+    
+    if time_start is None:
+        # Default to first 0 UT after first file
+        t_first = min(L21_A_dict['time'][0], L21_B_dict['time'][0]) # first file time
+        time_start = datetime(t_first.year, t_first.month, t_first.day) + timedelta(days=1)
+        
+    if time_stop is None:
+        # Default to 24 hours after the start time
+        time_stop = time_start + timedelta(hours=24)
+    
+    assert L21_A_dict['emission_color'] == L21_B_dict['emission_color'], "Files for A and B are for different emissions"
+    
     
     lat_A      =       L21_A_dict['lat']
-    lon_A      =       L21_A_dict['lon']
+    lon_A_raw  =       L21_A_dict['lon']
     alt_A      =       L21_A_dict['alt']
     los_wind_A =       L21_A_dict['los_wind']
     los_wind_A_err =   L21_A_dict['los_wind_error']
@@ -2301,10 +2166,10 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh):
     time_A     =       L21_A_dict['time']
     exp_time_A =       L21_A_dict['exp_time']
     emission_color =   L21_A_dict['emission_color']
-    N_alts_A, N_times_A = np.shape(lon_A)
+    N_alts_A, N_times_A = np.shape(lat_A)
 
     lat_B      =       L21_B_dict['lat']
-    lon_B      =       L21_B_dict['lon']
+    lon_B_raw  =       L21_B_dict['lon']
     alt_B      =       L21_B_dict['alt']
     los_wind_B =       L21_B_dict['los_wind']
     los_wind_B_err =   L21_B_dict['los_wind_error']
@@ -2313,55 +2178,60 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh):
     time_B     =       L21_B_dict['time']
     exp_time_B =       L21_B_dict['exp_time']
     emission_color =   L21_B_dict['emission_color']
-    N_alts_B, N_times_B = np.shape(lon_B)
+    N_alts_B, N_times_B = np.shape(lat_B)
     
+    ####################### Define reconstruction grid: lon/alt ########################
 
-    ################### Parameters ###############################
-    kcurr_A = N_times_A/2 # an index of the A files that is known to be in the "current" orbit
-                          # (i.e., not "previous" or "next")
-    kcurr_B = N_times_B/2 # same for B
-
-
-    ############### Unwrap sample longitudes #####################
-    # Eventually, this section will change when we finalize how the L2.1
-    # files will be specified by Tori. A couple options are:
-    #     1) Tori explicitly denotes which files are "previous", "current", and "next" orbit
-    #     2) I look inside the file to determine the orbit number (assuming it is in there)
-    # For now we define:
-    #   - "current"  orbit is -180 to +180 deg
-    #   - "previous" orbit is -540 to -180 deg
-    #   - "next"     orbit is +180 to +540 deg
-    # The inversion will be performed in the domain -180 to +180 deg.
-    # This part of the code may need to be adjusted for use on real data.
-    # It is currently defined like this so that Scott's simulation (which spans one
-    # orbit from -180 to 180 deg). 
+    # Unwrap the sample longitude arrays to avoid 0/360 jumps
+    lon_A = lon_A_raw.copy()
+    lon_B = lon_B_raw.copy()
+    lon_A[:,0] = fix_longitudes(lon_A[:,0], lon_A[-1,0]) # Use top first A longitude as target
+    lon_B[:,0] = fix_longitudes(lon_B[:,0], lon_A[-1,0]) # Use top first A longitude as target
     for i in range(N_alts_A):
-        for k in range(kcurr_A,N_times_A-1):
-            if (lon_A[i,k+1] - lon_A[i,k]) < 0.0:
-                lon_A[i,k+1:] += 360.
-        for k in range(kcurr_A,0,-1):
-            if (lon_A[i,k] - lon_A[i,k-1]) < 0.0:
-                lon_A[i,:k] -= 360.
+        lon_A[i,:] = fix_longitudes(lon_A[i,:], lon_A[i,0])
     for i in range(N_alts_B):
-        for k in range(kcurr_B,N_times_B-1):
-            if (lon_B[i,k+1] - lon_B[i,k]) < 0.0:
-                lon_B[i,k+1:] += 360.
-        for k in range(kcurr_B,0,-1):
-            if (lon_B[i,k] - lon_B[i,k-1]) < 0.0:
-                lon_B[i,:k] -= 360.
+        lon_B[i,:] = fix_longitudes(lon_B[i,:], lon_B[i,0])
 
-    ################# Define reconstruction grid: lon/alt ###################
+    # Determine start longitude
+    # This should be the longitude of the tangent point at the top of the profile for the first
+    # exposure after the start time, averaged between A and B.
+    iA = bisect.bisect(time_A, time_start) # First A file after start time.
+    iB = bisect.bisect(time_B, time_start) # First B file after start time.
+    start_lon_A = lon_A[-1,iA]
+    start_lon_B = lon_B[-1,iB]
+    assert abs(start_lon_A - start_lon_B) < 90.,"A and B start longitudes are off by 360 deg. Bug in unwrapping code."
+    start_lon = np.mean([start_lon_A, start_lon_B])
+
+    # Determine stop longitude
+    # This should be the longitude of the tangent point at the top of the profile for the first
+    # exposure before the stop time, averaged between A and B.
+    iA = bisect.bisect(time_A, time_stop) - 1 # First A file before (or equal to) stop time
+    iB = bisect.bisect(time_B, time_stop) - 1 # First B file before (or equal to) stop time
+    stop_lon_A = lon_A[-1,iA]
+    stop_lon_B = lon_B[-1,iB]
+    assert abs(stop_lon_A - stop_lon_B) < 90.,"A and B start longitudes are off by 360 deg. Bug in unwrapping code."
+    stop_lon = np.mean([stop_lon_A, stop_lon_B])
+    
+    time_min = min(min(time_A), min(time_B))
+    time_max = max(max(time_A), max(time_B))
+    assert stop_lon > start_lon, 'No files found between time_start="%s" and time_stop="%s". Files provided span from "%s" to "%s"'%(time_start, \
+                                                                                   time_stop, time_min, time_max)
+
     # Determine how finely to define longitude grid based on minimum L2.1 sampling rate
     lon_res_A = (np.diff(lon_A,axis=1)).min()
     lon_res_B = (np.diff(lon_B,axis=1)).min()
     lon_res = min(lon_res_A, lon_res_B)
     # Define longitude grid
-    lon_vec = np.arange(-180.,180.,lon_res)
-    # Define altitude grid similarly (predefine 90 to 300 km)
-    alt_res_A = abs(np.diff(alt_A,axis=0)).min()
-    alt_res_B = abs(np.diff(alt_B,axis=0)).min()
-    alt_res = min(alt_res_A, alt_res_B)
-    alt_vec = np.arange(90., 300., alt_res)
+    lon_vec = np.arange(start_lon, stop_lon, lon_res)
+
+    # Define altitude grid based on the min and max in the L2.1 data
+    # Define altitude resolution based upon the resoluation of L2.1 data
+    alt_min = min(alt_A.min(), alt_B.min())
+    alt_max = max(alt_A.max(), alt_B.max())
+    nalts = max(np.shape(alt_A)[0], np.shape(alt_B)[0])
+    alt_vec = np.linspace(alt_min, alt_max, nalts)
+    alt_res = alt_vec[1] - alt_vec[0]
+
     # Define 2D reconstruction grid based on lon and alt
     lon,alt = np.meshgrid(lon_vec, alt_vec)
     N_alts, N_lons = np.shape(lon)
@@ -2394,7 +2264,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh):
     error_flags = np.zeros((N_alts, N_lons, 10))      # Error flags, one set per grid point. See above for definition.
     
     # Loop over the reconstruction altitudes
-    for i in range(N_alts):   
+    for i in range(N_alts):
+            
         alt_pt = alt_vec[i]
         # Create a list of longitudes, one per A and B file, which have been
         # interpolated to this altitude.
@@ -2407,6 +2278,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh):
         
         # Loop over the reconstruction longitudes
         for k in range(N_lons):
+            
             lon_pt = lon_vec[k]
             
             # Find the file to the left and right in longitude. 
@@ -2494,11 +2366,10 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh):
                     return val_pt
                 
                 else: # prop_err is True
-                    # Do interpolate of value to the desired altitude, for each longitude
+                    # Do interpolation of value to the desired altitude, for each longitude
                     val_0, val_0_err = interpolate_linear(alt_AB[:,0], val[:,0], alt_pt, 
                                                           prop_err = True, yerr = valerr[:,0])
-                    val_1, val_1_err = interpolate_linear(alt_AB[:,1], val[:,1], alt_pt, 
-                                                          prop_err = True, yerr = valerr[:,1])
+                    val_1, val_1_err = interpolate_linear(alt_AB[:,1], val[:,1], alt_pt, prop_err = True, yerr = valerr[:,1])
                     # Interpolate the longitude coordinate to the desired altitude
                     lon_0 = interpolate_linear(alt_AB[:,0], lon_AB[:,0], alt_pt)
                     lon_1 = interpolate_linear(alt_AB[:,1], lon_AB[:,1], alt_pt)
@@ -2589,11 +2460,12 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh):
             ver_B[i,k] = ver_B_pt
             ver_rel_diff[i,k] = ver_rel_diff_pt
                 
-             
+    
     # Create dictionary to be returned
     L22_dict = {}
     L22_dict['lat'] = lat
-    L22_dict['lon'] = lon
+    L22_dict['lon'] = np.mod(lon, 360.)
+    L22_dict['lon_unwrapped'] = lon
     L22_dict['alt'] = alt
     L22_dict['u'] = U
     L22_dict['v'] = V
@@ -2602,12 +2474,11 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh):
     L22_dict['error_flags'] = error_flags
     L22_dict['time'] = time
     L22_dict['time_delta'] = time_delta
+    L22_dict['time_start'] = time_start
+    L22_dict['time_stop'] = time_stop
     L22_dict['ver_rel_diff'] = ver_rel_diff
     L22_dict['emission_color'] = emission_color
     L22_dict['source_files'] = np.concatenate((L21_A_dict['source_files'], L21_B_dict['source_files']))
-    L22_dict['param_fn'] = None # A placeholder to put the parameter filename, if one exists.
-                                # This function doesn't know if one was used or not, so it will 
-                                # be filled in by a higher-level function.
     
     return L22_dict
 
@@ -2615,11 +2486,10 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh):
 
 
 
-def save_nc_level22(path, L22_dict):
+def save_nc_level22(path, L22_dict, data_revision = 0):
     '''
     Take the output of the Level 2.2 processing and save it as a NetCDF4 file in the official format.
-    NetCDF4 file conventions taken from "Science Operations Center Data Product Conventions" Rev 0.4,
-    authored by Tori Fae., including the new filenaming requirement that will presumably be in Rev 0.5.
+    NetCDF4 file conventions taken from "Science Operations Center Data Product Conventions" Rev 0.5.
     
     INPUTS:
     
@@ -2627,7 +2497,12 @@ def save_nc_level22(path, L22_dict):
                                    (e.g., '/home/user/')
       *  L22_dict    -- TYPE:dict. A dictionary containing output variables of the Level 2.2 processing.
                                    See documentation for level21_dict_to_level22_dict(...) for details.
-                                   
+                     
+    OPTIONAL INPUTS:
+    
+      *  data_revision       -- TYPE:int,  The minor version of the data [0-999]. The major version is set
+                                           by the software's major version.
+                                           
     OUTPUTS:
     
       *  L22_fn      -- TYPE:str.  The full path to the saved file.
@@ -2635,28 +2510,19 @@ def save_nc_level22(path, L22_dict):
     TO-DO:
     
       * Maybe: Fill in more notes for each variable
-      * accept L2.2 filename as argument, from which I will extract Data_Version    
-      * Have a second set of eyes look at descriptions of each variable
-      * Should dimensions be labeled the same as variables? Altitude/Vector/Epoch. Should Depend_0 point to vars or dims?
-      * Time Resolution attribute? 30-60 seconds? Varied? N/A?
-      * Add VER/fringe-amplitude estimate?
-      * So far I haven't used Depend_0 or Depend_1 because there isn't an array for altitude or longitude. It's not a
-        regular grid, in general. I'm not sure how NetCDF4/ISTP wants to handle that. 
+      * I'm confused about Dimensions and Depend_0, Depend_1, etc:
+              * Should dimensions be labeled the same as variables? Altitude/Vector/Epoch. 
+              * Should Depend_0 point to Variables or Dimensions?
         
     '''
-
-
-    data_version = 1 # TODO: how will this be calculated? It goes into global attr Data_Version
-    software_version = 0.01 # TODO: how will this be determined and stored? It goes into global attr Software_Version
-    version_for_filename = 1 # TODO: How is this related to the two above? Rec'd major software version number
-    revision_for_filename = 0 # TODO: How to determine this?
    
+    data_version_major = software_version_major # enforced as per Data Product Conventions Document
     
     #################### Compile variables to write in file ######################
     ### Timing:
     t_all = filter(None, L22_dict['time'].flatten()) # Extract all non-None grid times as a 1-D array
-    t_start = min(t_all)
-    t_stop  = max(t_all)
+    t_start = L22_dict['time_start']
+    t_stop  = L22_dict['time_stop']
     t_mid   = t_start + timedelta(seconds=(t_stop - t_start).total_seconds()/2) # midpoint time
     t_start_msec = (t_start - datetime(1970,1,1)).total_seconds()*1e3 # milliseconds since epoch
     t_stop_msec  = (t_stop  - datetime(1970,1,1)).total_seconds()*1e3
@@ -2675,16 +2541,12 @@ def save_nc_level22(path, L22_dict):
         post = s[-1].upper()
         parents += '%s > %s, ' % (post, pre)
     if parents: parents = parents[:-2] # trim trailing comma
-    ### Parameters file, if there is one (note, that this will go in Calibration_File global attribute)
-    param_fn = L22_dict['param_fn']
-    if param_fn is None:
-        param_fn = ''
 
 
     ######################### Open file for writing ##############################
-    L22_fn = 'ICON_L2_2_MIGHTI_%s_%s_v%02i_r%02i.nc' % (L22_dict['emission_color'].upper(),
-                                                        t_mid.strftime('%Y-%m-%d_%H.%M.%S'),
-                                                        version_for_filename, revision_for_filename)
+    L22_fn = 'ICON_L2_2_MIGHTI_VECTOR_WIND_%s_%s_v%02ir%03i.NC' % (L22_dict['emission_color'].upper(),
+                                                        t_start.strftime('%Y-%m-%d_%H.%M.%S'),
+                                                        data_version_major, data_revision)
     L22_full_fn = '%s%s'%(path, L22_fn)
     ncfile = netCDF4.Dataset(L22_full_fn,mode='w',format='NETCDF4') 
     
@@ -2725,11 +2587,13 @@ def save_nc_level22(path, L22_dict):
                                                 "Contract Number NNG12FA45C from the Explorers Project Office." ))
 
         ncfile.ADID_Ref =                       'NASA Contract > NNG12FA45C'
-        ncfile.Calibration_File =               param_fn
+        ncfile.Calibration_File =               ''
         ncfile.Conventions =                    'SPDF ISTP/IACG Modified for NetCDF'
         ncfile.Data_Level =                     'L2.2'
         ncfile.Data_Type =                      'DP22 > Data Product 2.2: Cardinal Vector Winds'
-        ncfile.Data_Version =                   np.uint16(data_version)
+        ncfile.Data_Version_Major =             np.uint16(data_version_major)
+        ncfile.Data_Revision =                  np.uint16(data_revision)
+        ncfile.Data_Version =                   data_version_major + 0.001 * data_revision
         ncfile.Date_Stop =                      t_stop.strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC' 
         ncfile.Date_Start =                     t_start.strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC' 
         ncfile.Description =                    'ICON MIGHTI Cardinal Vector Winds (DP 2.2)'
@@ -2737,11 +2601,10 @@ def save_nc_level22(path, L22_dict):
         ncfile.Discipline =                     'Space Physics > Ionospheric Science'
         ncfile.File =                           L22_fn
         ncfile.File_Date =                      t_file.strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC'
-        ncfile.Generated_By =                   'ICON SDC > ICON UIUC MIGHTI L2.2 Processor v%.2f, B. J. Harding (bhardin2@illinois.edu)' % software_version
+        ncfile.Generated_By =                   'ICON SDC > ICON UIUC MIGHTI L2.2 Processor v%s, B. J. Harding (bhardin2@illinois.edu)' % __version__
         ncfile.Generation_Date =                t_file.strftime('%Y%m%d')
-        ncfile.History =                        'Version %i, %s, %s, ' % (data_version, user_name, t_file.strftime('%Y-%m-%dT%H:%M:%S')) +\
-                                                'MIGHTI L2.2 Processor v%.2f ' % software_version +\
-                                                '((TODO: Prepend previous history of this file, if it exists))'
+        ncfile.History =                        'Version %i, %s, %s, ' % (software_version_major, user_name, t_file.strftime('%Y-%m-%dT%H:%M:%S')) +\
+                                                'MIGHTI L2.2 Processor v%s ' % __version__
         ncfile.HTTP_LINK =                      'http://icon.ssl.berkeley.edu/Instruments/MIGHTI'
         ncfile.Instrument =                     'MIGHTI'
         ncfile.Instrument_Type =                'Imagers (space)'
@@ -2757,7 +2620,7 @@ def save_nc_level22(path, L22_dict):
         ncfile.PI_Name =                        'T. J. Immel'
         ncfile.Project =                        'NASA > ICON'
         ncfile.Rules_of_Use =                   'Public Data for Scientific Use'
-        ncfile.Software_Version =               'ICON SDC > ICON UIUC MIGHTI L2.2 Processor v%.2f, B. J. Harding (bhardin2@illinois.edu)' % software_version
+        ncfile.Software_Version =               'ICON SDC > ICON UIUC MIGHTI L2.2 Processor v%s, B. J. Harding (bhardin2@illinois.edu)' % __version__
         ncfile.Source_Name =                    'ICON > Ionospheric Connection Explorer'
         ncfile.Spacecraft_ID =                  'NASA > ICON - 493'
         ncfile.Text =                           'ICON explores the boundary between Earth and space - the ionosphere - ' +\
@@ -2778,6 +2641,7 @@ def save_nc_level22(path, L22_dict):
 
 
         ################################## Variables #########################################
+        prefix = 'ICON_L2_2_MIGHTI_%s' % (L22_dict['emission_color'].upper())
 
         ######### Timing Variables #########
 
@@ -2792,21 +2656,27 @@ def save_nc_level22(path, L22_dict):
                     t_msec[i,j] = t_fillval
                 else:
                     t_msec[i,j] = np.int64(np.round((L22_dict['time'][i,j] - datetime(1970,1,1)).total_seconds()*1e3))
-        var = _create_variable(ncfile, 'Epoch', t_msec, 
+        var = _create_variable(ncfile, 'EPOCH', t_msec, 
+                              dimensions=('Altitude', 'Longitude'),
+                              format_nc='i8', format_fortran='I', desc='Sample time, midpoint of A and B measurements. Number of msec since Jan 1, 1970.', 
+                              display_type='scalar', field_name='Time', fill_value=t_fillval, label_axis='Time', bin_location=0.5,
+                              units='ms', valid_min=0, valid_max=1000*365*86400e3, var_type='support_data', chunk_sizes=[1,1],
+                              notes='')
+        
+        # Also include a more human-readable, intuitive variable
+        var = _create_variable(ncfile, '%s_TIME'%prefix, t_msec, 
                               dimensions=('Altitude', 'Longitude'),
                               format_nc='i8', format_fortran='I', desc='Sample time, midpoint of A and B measurements. Number of msec since Jan 1, 1970.', 
                               display_type='scalar', field_name='Time', fill_value=t_fillval, label_axis='Time', bin_location=0.5,
                               units='ms', valid_min=0, valid_max=1000*365*86400e3, var_type='support_data', chunk_sizes=[1,1],
                               notes='')
 
-
         
         ######### Data Location and Direction Variables #########
-        prefix = 'ICON_L2_2_MIGHTI_%s' % (L22_dict['emission_color'].upper())
         
         # Altitude
         val = L22_dict['alt']*1e3 # convert to meters
-        var_alt = _create_variable(ncfile, '%s_Altitude'%prefix, val, 
+        var_alt = _create_variable(ncfile, '%s_ALTITUDE'%prefix, val, 
                               dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='WGS84 altitude of each wind sample', 
                               display_type='image', field_name='Altitude', fill_value=None, label_axis='', bin_location=0.5,
@@ -2815,7 +2685,7 @@ def save_nc_level22(path, L22_dict):
 
         
         # Longitude
-        var = _create_variable(ncfile, '%s_Longitude'%prefix, L22_dict['lon'], 
+        var = _create_variable(ncfile, '%s_LONGITUDE'%prefix, L22_dict['lon'], 
                               dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='WGS84 longitude of each wind sample', 
                               display_type='image', field_name='Longitude', fill_value=None, label_axis='', bin_location=0.5,
@@ -2823,7 +2693,7 @@ def save_nc_level22(path, L22_dict):
                               notes='')
                               
         # Latitude
-        var = _create_variable(ncfile, '%s_Latitude'%prefix, L22_dict['lat'], 
+        var = _create_variable(ncfile, '%s_LATITUDE'%prefix, L22_dict['lat'], 
                               dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='WGS84 latitude of each wind sample', 
                               display_type='image', field_name='Latitude', fill_value=None, label_axis='', bin_location=0.5,
@@ -2835,7 +2705,7 @@ def save_nc_level22(path, L22_dict):
         ######### Data Variables #########
         
         # Zonal Wind
-        var = _create_variable(ncfile, '%s_Zonal_Wind'%prefix, L22_dict['u'], 
+        var = _create_variable(ncfile, '%s_ZONAL_WIND'%prefix, L22_dict['u'], 
                               dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Zonal component of the horizontal wind for an orbit. Positive Eastward.', 
                               display_type='image', field_name='Zonal Wind', fill_value=None, label_axis='', bin_location=0.5,
@@ -2843,7 +2713,7 @@ def save_nc_level22(path, L22_dict):
                               notes='')
         
         # Meridional Wind
-        var = _create_variable(ncfile, '%s_Meridional_Wind'%prefix, L22_dict['v'], 
+        var = _create_variable(ncfile, '%s_MERIDIONAL_WIND'%prefix, L22_dict['v'], 
                               dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Meridional component of the horizontal wind for an orbit. Positive Northward.', 
                               display_type='image', field_name='Meridional Wind', fill_value=None, label_axis='', bin_location=0.5,
@@ -2852,7 +2722,7 @@ def save_nc_level22(path, L22_dict):
                               
                               
         # Zonal Wind Error
-        var = _create_variable(ncfile, '%s_Zonal_Wind_Error'%prefix, L22_dict['u_error'], 
+        var = _create_variable(ncfile, '%s_ZONAL_WIND_ERROR'%prefix, L22_dict['u_error'], 
                               dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Error in the zonal wind estimate.', 
                               display_type='image', field_name='Zonal Wind Error', fill_value=None, label_axis='', bin_location=0.5,
@@ -2860,7 +2730,7 @@ def save_nc_level22(path, L22_dict):
                               notes='')
         
         # Meridional Wind Error
-        var = _create_variable(ncfile, '%s_Meridional_Wind_Error'%prefix, L22_dict['v_error'], 
+        var = _create_variable(ncfile, '%s_MERIDIONAL_WIND_ERROR'%prefix, L22_dict['v_error'], 
                               dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Error in the meridional wind estimate.', 
                               display_type='image', field_name='Meridional Wind Error', fill_value=None, label_axis='', bin_location=0.5,
@@ -2869,17 +2739,9 @@ def save_nc_level22(path, L22_dict):
 
 
         ######### Other Metadata Variables #########
-        
-        # Emission color
-        var = _create_variable(ncfile, '%s_Emission_Color'%prefix, L22_dict['emission_color'].capitalize(), 
-                              dimensions=(),
-                              format_nc=str, format_fortran='A', desc='Emission used for wind estimate: Red or Green', 
-                              display_type='scalar', field_name='Emission Color', fill_value=None, label_axis='Color', bin_location=0.5,
-                              units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
-                              notes='')
 
         # Fringe amplitude relative difference
-        var = _create_variable(ncfile, '%s_Fringe_Amplitude_Relative_Difference'%prefix, L22_dict['ver_rel_diff'], 
+        var = _create_variable(ncfile, '%s_FRINGE_AMPLITUDE_RELATIVE_DIFFERENCE'%prefix, L22_dict['ver_rel_diff'], 
                               dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Difference in MIGHTI A&B\'s fringe amplitude estimates, divided by the mean', 
                               display_type='image', field_name='Fringe Amplitude Difference', fill_value=None, label_axis='', bin_location=0.5,
@@ -2887,7 +2749,7 @@ def save_nc_level22(path, L22_dict):
                               notes='This is the quantity used to determine if spherical asymmetry flag is raised')    
         # Error flags
         
-        var = _create_variable(ncfile, '%s_Error_Flag'%prefix, L22_dict['error_flags'], 
+        var = _create_variable(ncfile, '%s_ERROR_FLAG'%prefix, L22_dict['error_flags'], 
                               dimensions=('Altitude','Longitude','N_flags'), # depend_0 = 'Altitude',
                               format_nc='b', format_fortran='I', desc='Error flags. See Var_Notes attribute for description.', 
                               display_type='image', field_name='Error Flags', fill_value=None, label_axis='', bin_location=0.5,
@@ -2915,100 +2777,235 @@ def save_nc_level22(path, L22_dict):
 
 
 
-def level21_to_level22_without_param_file(L21_path, L22_path, sph_asym_thresh, param_fn=None):
+def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph_asym_thresh=None, time_start=None, time_stop=None):
     '''
     High-level function to apply the Level-2.1-to-Level-2.2 algorithm to a series of Level 2.1 files
     (in the L21_path directory) and create a Level 2.2 file (in the L22_path directory). This version
-    of the function requires the user to input parameters manually, instead of specifying a 
-    parameter file.
+    of the function requires the user to input parameters manually, instead of specifying an 
+    Information.TXT file, like is done at the Science Data Center
     
     INPUTS:
     
-      *  L21_path        -- TYPE:str.   The directory containing the L2.1 files to be processed, including
-                                        trailing "/" (e.g., '/home/user/'). This should contain a series of
-                                        MIGHTI A and B files, over three orbits (previous, current, and next).
-      *  L22_path        -- TYPE:str.   The directory the L2.2 file will be saved in, including trailing "/"
-                                        (e.g., '/home/user/')
-      *  sph_asym_thresh -- TYPE:float. Relative difference in emission rate measured by A and B, beyond which
-                                        the spherical-asymmetry flag will be raised. Technically, it should be
-                                        "fringe amplitude" instead of "emission rate" due to the temperature
-                                        dependence. Relative difference is defined as abs(A-B)/((A+B)/2).   
-                                        
+      *  L21_fns         -- TYPE:list of str.   A list of L2.1 files to be processed, including both MIGHTI-A and
+                                                MIGHTI-B files.
+      *  L22_path        -- TYPE:str.           The directory the L2.2 file will be saved in, including trailing "/"
+                                                (e.g., '/home/user/')
+
     OPTIONAL INPUTS:
     
-      *  param_fn        -- TYPE:str,  (default None). If specified, this string will be written to the 
-                                       L2.2 NetCDF4 file's Calibration_File attribute. If this function is
-                                       being called directly, the intention is to leave as None.
+      *  data_revision   -- TYPE:int,      The minor version of the data [0-999]. The major version is set
+                                           by the software's major version.
+      *  sph_asym_thresh -- TYPE:float.    Relative difference in emission rate measured by A and B, beyond which
+                                           the spherical-asymmetry flag will be raised. Technically, it should be
+                                           "fringe amplitude" instead of "emission rate" due to the temperature
+                                           dependence. Relative difference is defined as abs(A-B)/((A+B)/2). If 
+                                           None (default), the default from MIGHTI_L2.global_params will be used.
+      *  time_start      -- TYPE:datetime. A timezone-naive datetime in UT, specifying the beginning of the interval
+                                           which the Level 2.2 data product should span. (Some L2.1 files from before
+                                           the start time are needed to handle the crossover). If None (default), 
+                                           the start time defaults to the first 0 UT after the first input file's time.
+      *  time_stop       -- TYPE:datetime. A timezone-naive datetime in UT, specifying the end of the interval
+                                           which the Level 2.2 data product should span. (Some L2.1 files from after
+                                           the stop time are needed to handle the crossover). If None (default), 
+                                           the stop time defaults to 24 hours after the start time. 
                                        
     OUTPUTS:
     
-      *  L22_fn          -- TYPE:str.   The full path to the saved L2.2 file.
+      *  L22_fn          -- TYPE:str.      The full path to the saved L2.2 file.
       
     '''
     
 
     ##### Load L2.1 files into dictionaries
-    Afns = glob.glob('%s*_MIGHTI-A_*.nc' % L21_path)
-    Bfns = glob.glob('%s*_MIGHTI-B_*.nc' % L21_path)
+    # Sort files by sensor
+    Afns = [f for f in L21_fns if 'MIGHTI-A' in f]
+    Bfns = [f for f in L21_fns if 'MIGHTI-B' in f]
+    
+    if len(Afns)==0:
+        raise ValueError('No MIGHTI-A files found')
+    if len(Bfns)==0:
+        raise ValueError('No MIGHTI-B files found')
 
     # Sort the files by time (same as alphanumeric sorting)
     Afns.sort()
     Bfns.sort()
 
+    # Read files (this is the bottleneck in terms of runtime)
     level21_A = level21_to_dict(Afns)
     level21_B = level21_to_dict(Bfns)
 
     ##### Run L2.2 processing to create L2.2 dictionary
-    L22_dict = level21_dict_to_level22_dict(level21_A, level21_B, sph_asym_thresh)
+    L22_dict = level21_dict_to_level22_dict(level21_A, level21_B, sph_asym_thresh=sph_asym_thresh,
+                                                                  time_start=time_start, time_stop=time_stop)
     
-    # Append the parameter filename to be written to the l2.2 file
-    L22_dict['param_fn'] = param_fn
-
     ##### Save L2.2 data to file
-    L22_fn = save_nc_level22(L22_path, L22_dict)
+    L22_fn = save_nc_level22(L22_path, L22_dict, data_revision=data_revision)
 
     return L22_fn
 
 
 
 
-def level21_to_level22(L21_path, L22_path, param_fn):
+def level21_to_level22(info_fn):
     '''
     Highest-level function to apply the Level-2.1-to-Level-2.2 algorithm to a series of Level 2.1 files
-    (in the L21_path directory) and create a Level 2.2 file (in the L22_path directory). The parameters
-    of the algorithm are specified by a parameters file (in NetCDF4 format) with variables described below.
-    The parameters file can be created with the "save_nc_param_file" function below.
+    (in the L21_path directory) and create a Level 2.2 file (in the L22_path directory). Inputs are
+    specified via an information file. The output Level 2.2 file will be saved to the same directory
+    as the input L2.1 files.
     
     INPUTS:
     
-      *  L21_path    -- TYPE:str.  The directory containing the L2.1 files to be processed, including
-                                   trailing "/" (e.g., '/home/user/'). This should contain a series of
-                                   MIGHTI A and B files, over three orbits (previous, current, and next).
-      *  L22_path    -- TYPE:str.  The directory the L2.2 file will be saved in, including trailing "/"
-                                   (e.g., '/home/user/')
-      *  param_fn    -- TYPE:str.  The full path to the Level 2 parameters NetCDF4 file, with the following
-                                   variables, described in more detail in the "save_nc_param_file" function 
-                                   above:
-                                   
-                                                  * ICON_MIGHTI_Spherical_Asymmetry_Threshold
-                                                  
+      * info_fn  -- TYPE:str.  Full path to an ASCII file in the following format:
+      
+                                        [PARAMETERS]
+                                        Revision=001
+                                        Directory=/path/to/wherever/
+                                        <other parameters>
+
+                                        [FILES]
+                                        ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2009-03-23_23.30.00_v01r001.NC
+                                        ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2009-03-23_23.31.00_v01r001.NC
+                                        ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2009-03-23_23.32.00_v01r001.NC
+                                        etc... including files from MIGHTI-B
+                                      
     OUTPUTS:
     
       *  L22_fn      -- TYPE:str.  The full path to the saved L2.2 file.
       
     '''
     
-    # Read parameter file
-    d = netCDF4.Dataset(param_fn)
-    sph_asym_thresh = d.variables['ICON_MIGHTI_Spherical_Asymmetry_Threshold'][...].item()
-    d.close()
+    # Read the info file to extract parameters for the processing function
+    info = {} # expected to have entries: 'Directory', 'Revision', and 'Files'
+    with open(info_fn, 'r') as f:
+        line = f.readline().strip() # skip the [Parameters] Line
+        line = f.readline().strip()
+        while line:
+            x = line.split('=')
+            info[x[0]] = x[1]
+            line = f.readline().strip()
+        line = f.readline().strip() # skip the [Files] line
+        info['Files'] = []
+        while line:
+            line = f.readline().strip() # an L2.1 file to process
+            info['Files'].append(line)
+                
+    # Parse the info
+    direc = info['Directory']
+    if direc[-1] != '/':
+        direc += '/'
+    data_revision = int(info['Revision'])
+    # Create list of full paths
+    L21_fns = []
+    for fn in info['Files']:
+        L21_fns.append(direc + fn)
     
     # Call lower-level function which does all the work
-    L22_fn = level21_to_level22_without_param_file(L21_path, L22_path, sph_asym_thresh, param_fn=param_fn)
+    L22_fn = level21_to_level22_without_info_file(L21_fns, direc, data_revision=data_revision,
+                                                  sph_asym_thresh=None) # Let sph_asym_thresh go to default
     
     return L22_fn
 
 
 
+
+
+def _test_level1_to_level21():
+    '''
+    Special-purpose function to test the installation of the Level 1 to Level 2.1 processing code. This assumes that 
+    the user is in the directory containing the test data.
+    '''
+
+    L21_old_fns = {'red':  'ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_RED_2016-07-28_18.33.25_v00r000.NC',
+                   'green':'ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2016-07-28_18.33.25_v00r000.NC'}
+
+    variable_stubs =    ['TIME',
+                         'ALTITUDE',
+                         'LATITUDE',
+                         'LONGITUDE',
+                         'LINE_OF_SIGHT_AZIMUTH',
+                         'LINE_OF_SIGHT_WIND',
+                         'LINE_OF_SIGHT_WIND_ERROR',
+                         'FRINGE_AMPLTIUDE',
+                         'FRINGE_AMPLTIUDE_ERROR',
+                         'SPACECRAFT_VELOCITY_VECTOR',
+                         'SPACECRAFT_LATITUDE',
+                         'SPACECRAFT_LONGITUDE',
+                         'SPACECRAFT_ALTITUDE',
+                         'LINE_OF_SIGHT_VECTOR',]
+
+    for emission_color in ['red', 'green']:
+        print '--------------  Testing %s --------------\n' % emission_color
+        print 'Processing L1 file...'
+        L21_fn = level1_to_level21('L21_info.txt', emission_color)
+        print 'Complete\n'
+
+        L21_old_fn = L21_old_fns[emission_color]
+        print 'Comparing new file: %s\nWith old file:      ./%s\n' % (L21_fn, L21_old_fn)
+
+        prefix = 'ICON_L2_1_MIGHTI_A_%s_' % (emission_color.upper())
+
+        d0 = netCDF4.Dataset(L21_fn)
+        d1 = netCDF4.Dataset(L21_old_fn)
+
+        print '%60s:  Difference' % ('Variable')
+        for stub in variable_stubs:
+            v = prefix + stub
+            v0 = d0.variables[v][...]
+            v1 = d1.variables[v][...]
+            e = np.linalg.norm(v1-v0)
+            print '%60s:  %e %s' % (v,e, d0.variables[v].Units)
+
+        d0.close()
+        d1.close()
+
+        print ''
+
+
+        
+    
+    
+def _test_level21_to_level22():
+    '''
+    Special-purpose function to test the installation of the Level 2.1 to Level 2.2 processing code. This assumes that 
+    the user is in the directory containing the test data.
+    '''
+    
+    print 'Reading L22_info.txt and running L2.1-to-L2.2 code. This will take a few minutes....'
+    # Run processing on test data
+    L22_fn = level21_to_level22('L22_info.txt')
+    print 'Processing complete\n'
+    
+    # Check against old file
+    L22_old_fn = 'ICON_L2_2_MIGHTI_VECTOR_WIND_GREEN_2009-03-24_00.00.00_v00r000.NC'
+
+    print 'Comparing new file: %s\nWith old file:      ./%s\n' % (L22_fn, L22_old_fn)
+    variables = ['EPOCH',
+                 'ICON_L2_2_MIGHTI_GREEN_TIME',
+                 'ICON_L2_2_MIGHTI_GREEN_ALTITUDE',
+                 'ICON_L2_2_MIGHTI_GREEN_LONGITUDE',
+                 'ICON_L2_2_MIGHTI_GREEN_LATITUDE',
+                 'ICON_L2_2_MIGHTI_GREEN_ZONAL_WIND',
+                 'ICON_L2_2_MIGHTI_GREEN_MERIDIONAL_WIND',
+                 'ICON_L2_2_MIGHTI_GREEN_ZONAL_WIND_ERROR',
+                 'ICON_L2_2_MIGHTI_GREEN_MERIDIONAL_WIND_ERROR',
+                 'ICON_L2_2_MIGHTI_GREEN_FRINGE_AMPLITUDE_RELATIVE_DIFFERENCE',
+                 'ICON_L2_2_MIGHTI_GREEN_ERROR_FLAG']
+
+    d0 = netCDF4.Dataset(L22_fn)
+    d1 = netCDF4.Dataset(L22_old_fn)
+
+    print '%60s:  Difference' % ('Variable')
+    for v in variables:
+        v0 = d0.variables[v][...]
+        v1 = d1.variables[v][...]
+        e =  np.linalg.norm(v1-v0)
+        print '%60s:  %e %s' % (v,e, d0.variables[v].Units)
+    d0.close()
+    d1.close()
+
+
+    
+    
+    
     
     
