@@ -871,9 +871,6 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
     laser_fns.sort()
     sky_fns.sort()
     
-    # TEMPORARY
-    laser_fns = laser_fns[:]
-    sky_fns = sky_fns[::2]
 
     if not laser_fns and not sky_fns:
         raise Exception('No data found.\n')
