@@ -706,7 +706,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
     # there are fewer artifacts in the estimated temperature if this is set
     # to False.
     ESTIMATE_BLUR = True
-    if instrument['Abbreviation'] == 'minime03':
+    if instrument['name'] == 'minime03':
         ESTIMATE_BLUR = False
     # The threshold for CCD temperature, above which a human should be
     # notified, because there is probably something wrong with the CCD.
@@ -715,12 +715,13 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
 
 
     ############## TEMPORARY ################
-    if   site['Abbreviation'] == 'a3o':
-        FRINGEFACTOR = 0.6
-    elif site['Abbreviation'] == 'mrh':
-        FRINGEFACTOR = 0.82
-    elif site['Abbreviation'] == 'nzk': 
-        FRINGEFACTOR = 0.9
+    if 'Abbreviation' in site.keys():
+        if   site['Abbreviation'] == 'a3o':
+            FRINGEFACTOR = 0.6
+        elif site['Abbreviation'] == 'mrh':
+            FRINGEFACTOR = 0.82
+        elif site['Abbreviation'] == 'nzk': 
+            FRINGEFACTOR = 0.9
     #########################################
 
     # Parse inputs

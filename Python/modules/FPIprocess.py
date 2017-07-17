@@ -821,7 +821,276 @@ def process_site(site_name, year, doy, reference='laser'):
         process_instr(instr_name, year, doy, reference)
     
 
+    
+    
 
+def process_directory(data_direc, results_direc, instrument, site, reference='laser', zenith_times=[17.,7.],
+                      wind_err_thresh=100., temp_err_thresh=100., make_plots=True):
+    '''
+    Process all the data from the specified folder. This function analyzes 
+    the laser and sky images to obtain line of sight winds, 
+    temperatures, etc., and saves them in a .npz file in the
+    directory results_direc. It also generates summary plots and saves them in 
+    the directory results_direc. It does *not* look for X300 or Boltwood Cloud
+    Sensor data. If this is running on remote2, you should use process_instr 
+    instead.
+    INPUTS:
+        data_direc - directory containing the FPI data to be processed
+        results_direc - directory to save the npz file and summary images
+        instrument - dictionary containing necessary instrument parameters
+        site - dictionary containing necessary site parameters
+    OPTIONAL INPUTS:
+        reference - str, 'laser' or 'zenith'. Passed on to FPI.ParameterFit(...)
+        zenith_times - 2x1 array, The local times outside of which the zenith wind should
+                       be ignored for use as a reference.
+        wind_err_thresh - float, m/s. Samples with a fit error above this should get a quality
+                            flag of 2.
+        temp_err_thresh - float, K. Samples with a fit error above this should get a quality
+                            flag of 2.      
+        make_plots      - whether to make and save summary graphics
+                    
+    OUTPUTS:
+        warnings - str - If this script believes a manual check of the data
+                   is a good idea, a message will be returned in this string.
+                   If not, the empty string will be returned. For now, the message
+                   is the entire log.
+        
+    '''
+    
+
+    # Define constants that do not depend on the site
+    direc_tol = 10.0 # tolerance in degrees to recognize a look direction with
+    ccd_temp_thresh = -60. # sky exposures with a CCD temp above this will get a quality flag.
+ 
+    notify_the_humans = False # default
+
+    # Find laser and sky files
+    laser_fns = glob.glob(data_direc + '*L*.img')
+    sky_fns   = glob.glob(data_direc + '*X*.img')
+    local = pytz.timezone(site['Timezone'])
+    laser_fns.sort()
+    sky_fns.sort()
+    
+    # TEMPORARY
+    laser_fns = laser_fns[:]
+    sky_fns = sky_fns[::2]
+
+    if not laser_fns and not sky_fns:
+        raise Exception('No data found.\n')
+    
+    # Open the first image to get the date
+    d = FPI.ReadIMG(sky_fns[0])
+    t0 = local.localize(d.info['LocalTime'])
+    datestr = t0.strftime('%Y_%m_%d_%Hh')
+    instrdatestr = instrument['name'] + '_' + datestr
+    
+    # Open a logfile
+    logname = results_direc + instrdatestr + '.log'
+    logfile = open(logname,'w') # overwrite previous log
+    logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Logfile Created\n')
+    
+
+    if not laser_fns and sky_fns and reference=='laser': # This is not a big deal if reference=='zenith'
+        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'No %s laser data found between %s and %s. Sky data found. <BADLASER> \n' % (instr_name, str(start_dt), str(stop_dt)))
+        logfile.close()
+        raise Exception('No %s laser data found between %s and %s. Sky data found.\n' % (instr_name, str(start_dt), str(stop_dt)))
+    
+
+    npzname = results_direc + instrdatestr + '.npz' # the name of the npz file to save to
+    Diagnostic_Fig = plt.figure(dpi=300, figsize=(10,7.5)) # Figure for diagnostics to be drawn to   
+    try:
+        # Run the analysis
+        (FPI_Results, notify_the_humans) = FPI.ParameterFit(instrument, site, laser_fns, sky_fns, \
+                direc_tol=direc_tol, N=instrument['N'], N0=instrument['N0'], N1=instrument['N1'], \
+                            logfile=logfile, diagnostic_fig=Diagnostic_Fig, reference=reference, \
+                            zenith_times=zenith_times)
+        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
+            'Laser and sky image analysis complete.\n')
+    except: 
+        # FPI.ParameterFit crashed. For now, write the log and re-raise the Exception.
+        tracebackstr = traceback.format_exc()
+        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error analyzing %s. Traceback listed below.\n-----------------------------------\n%s\n-----------------------------------\n' % (instrdatestr,tracebackstr))
+        notify_the_humans = True # This is redundant, since raising will ensure humans are notified.
+    #        Diagnostic_Fig = plt.figure()
+    #        Diagnostic_Fig.text(0.5, 0.5, 'Error - see log file', fontsize = 20, ha='center')
+        logfile.close()
+        raise
+        
+    # Add dummy cloud data
+    c = np.nan*np.zeros(len(FPI_Results['LOSwind']))
+    FPI_Results['Clouds'] = {'mean': c, 'max': c, 'min': c}
+        
+    # Grab the SVN revision number, so we know what code was used to process this day.
+    svndir = '/'.join(FPI.__file__.split('/')[:-1]) # get the directory of FPI.py
+    p = subprocess.Popen('svnversion %s'%svndir,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+    (stdout,stderr) = p.communicate()
+    sv = re.split(':|\n', stdout)[0]
+
+    # Save the SVN version number
+    FPI_Results['SVNRevision'] = sv
+ 
+        
+    # Helper function to determine if laser wavelength drift is occuring
+    def laser_is_drifting():
+        '''
+        Return True if the laser is suspected to be drifting.
+        Return False if zenith reference was used.
+        
+        The laser is "suspected to be drifting" if the following 2 criteria are satisfied:
+        1) The vertical wind at the beginning of the night and the end of the night are different by > 30 m/s.
+        2) The laser intensity varies by more than 20% from the median across the night.
+        '''
+        fpir = FPI_Results
+        if fpir['reference']=='zenith':
+            return False
+        
+        direction = fpir['direction']
+        LOSwind = fpir['LOSwind']
+            
+        direc = 'Zenith'
+        w = np.array([si for (si,d) in zip(LOSwind, direction) if d == direc])
+
+        lasI = fpir['laser_value']['I']
+        lasIe = fpir['laser_stderr']['I']
+
+        # Check if laser varies by more than 20 %
+        las_flag = sum(abs(lasI - np.median(lasI))/np.median(lasI) > 0.2) > 2
+        # Check if vertical wind drifts by more than 30 m/s
+        wstart = np.median(w[:5])
+        wend   = np.median(w[-5:])
+        w_flag = abs(wend-wstart) > 30.
+        
+        return w_flag and las_flag
+    
+    
+    ######### Quality Flags #########
+    # Compute quality flags and write any tripped flags to log
+    laser_drift = laser_is_drifting()
+    logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + ' Quality Flag Calculation:\n')
+    logfile.write('\t\tLaser Drift: %s\n' % laser_drift)
+    logfile.write('\t\tSample-specific flags:\n')
+    wind_quality_flag = np.zeros(len(FPI_Results['sky_times']))
+    temp_quality_flag = np.zeros(len(FPI_Results['sky_times']))
+    for ii in range(len(FPI_Results['sky_times'])): # Loop over samples
+        logfile.write('\t\t%s ' % FPI_Results['sky_fns'][ii].split('/')[-1])
+        t_flag = 0 # default
+        w_flag = 0 # default
+        if (FPI_Results['skyI'][ii] < instrument['skyI_quality_thresh']):
+            # The sky brightness is low enough that OH is probably an issue.
+            t_flag = 1
+            w_flag = 1
+            logfile.write('[skyI low W1T1] ')
+        if (reference == 'zenith'): # Zenith Processing
+            t_flag = 1
+            w_flag = 1
+            logfile.write('[zen ref W1T1] ')
+        if laser_drift:
+            w_flag = 1
+            logfile.write('[laser drift W1] ')
+        c = FPI_Results['Clouds']['mean'][ii]
+        if np.isnan(c): # There isn't a cloud sensor, or it isn't working
+            t_flag = 1
+            w_flag = 1
+            logfile.write('[no cloud data W1T1] ')
+#        if c > cloud_thresh[0]: # It's at least a little bit cloudy. Caution.
+#            t_flag = 1
+#            w_flag = 1
+#            logfile.write('[cloud>%.0f: W1T1] '%cloud_thresh[0])
+        if FPI_Results['sky_ccd_temperature'][ii] > ccd_temp_thresh:
+            t_flag = 1
+            w_flag = 1
+            logfile.write('[ccdtemp>%.0f: W1T1] '%ccd_temp_thresh)
+#        if c > cloud_thresh[1]: # It's definitely cloudy
+#            t_flag = 1
+#            w_flag = 2
+#            logfile.write('[cloud>%.0f: W2T1] '%cloud_thresh[1])
+        w_fit_err = FPI_Results['sigma_fit_LOSwind'][ii]
+        if (w_fit_err > wind_err_thresh): # Sample is not trustworthy at all
+            w_flag = 2
+            t_flag = 2
+            logfile.write('[sigma_wind large: W2T2] ')
+        t_fit_err = FPI_Results['sigma_T'][ii]
+        if (t_fit_err > temp_err_thresh): # Sample is not trustworthy at all
+            t_flag = 2
+            w_flag = 2
+            logfile.write('[sigma_T large: W2T2] ')
+        # A manual override can increase the calculated flag, but not decrease
+        #t_flag = max(t_flag,t_flag_manual)
+        #w_flag = max(w_flag,w_flag_manual)
+        wind_quality_flag[ii] = w_flag
+        temp_quality_flag[ii] = t_flag
+        logfile.write('[FINAL: W%iT%i]\n' % (w_flag,t_flag))
+    FPI_Results['wind_quality_flag'] = wind_quality_flag
+    FPI_Results['temp_quality_flag'] = temp_quality_flag
+            
+
+    # Save the results
+    np.savez(npzname, FPI_Results=FPI_Results, site=site, instrument=instrument)
+    logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Results saved to %s\n' % npzname)
+
+    # Load the results
+    npzfile = np.load(npzname)
+    FPI_Results = npzfile['FPI_Results']
+    FPI_Results = FPI_Results.reshape(-1)[0]
+    site = npzfile['site']
+    site = site.reshape(-1)[0]
+    del npzfile.f # http://stackoverflow.com/questions/9244397/memory-overflow-when-using-numpy-load-in-a-loop
+    npzfile.close()
+    
+    # Try to make plots
+    if make_plots:
+        try: 
+            # Plot some quick-look single-station data (LOSwinds and Temps)
+            (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, reference = reference, Zenith_Times=zenith_times)
+            
+            # Add Level 1 diagnostics to diagnostics fig
+            ax = Diagnostic_Fig.add_subplot(427) # TODO: generalize diagnostic figure generation?
+#            if FPI_Results['Clouds'] is not None:
+#                ct = FPI_Results['sky_times']
+#                cloud = FPI_Results['Clouds']['mean']
+#                ax.plot(ct, cloud, 'k.-')
+#                ax.plot([ct[0],ct[-1]], [cloud_thresh[0],cloud_thresh[0]], 'k--')
+#                ax.plot([ct[0],ct[-1]], [cloud_thresh[1],cloud_thresh[1]], 'k--')
+#                ax.set_xlim([ct[0] - datetime.timedelta(hours=0.5), ct[-1] + datetime.timedelta(hours=0.5)])
+#                ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+#                ax.set_ylim([-50,0])
+#                ax.set_ylabel('Cloud indicator\n[degrees C]')
+#                ax.grid(True)
+#                ax.set_xlabel('Universal Time, [hours]')
+            Diagnostic_Fig.tight_layout()
+            
+            Temperature_Fig.savefig(results_direc + instrdatestr + '_temp.png')
+            Doppler_Fig.savefig(    results_direc + instrdatestr + '_wind.png')
+            Diagnostic_Fig.savefig( results_direc + instrdatestr + '_diagnostic.png')
+            plt.close(Doppler_Fig)
+            plt.close(Temperature_Fig)
+            plt.close(Diagnostic_Fig)
+            
+        except: 
+            # Summary plots crashed. We still want to send the diagnostics and log to the
+            # website, so continue on with dummy plots.
+            tracebackstr = traceback.format_exc()
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error making plots for %s. Traceback listed below. Dummy plots sent to website.\n-----------------------------------\n%s\n-----------------------------------\n' % (instrdatestr,tracebackstr))
+            notify_the_humans = True
+            Temperature_Fig = plt.figure()
+            Temperature_Fig.text(0.5, 0.5, 'Plotting error - see log file', fontsize = 20, ha='center')
+            Doppler_Fig = plt.figure()
+            Doppler_Fig.text(0.5, 0.5, 'Plotting error - see log file', fontsize = 20, ha='center')
+            
+    logfile.close()
+
+    # Return log as string if an email to humans is suggested.
+    s = ''
+    if notify_the_humans:
+        with open (logname, "r") as myfile:
+            s = myfile.read() # return the whole thing as a string, including new-lines
+    return s
+
+    
+    
+    
+    
+    
 def multiprocess_instr(arg_list, num_processes=16):
     '''
     INPUT: arg_list - a list of [instr, year, doy] that will be cycled through.

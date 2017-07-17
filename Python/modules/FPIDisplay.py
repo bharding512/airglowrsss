@@ -1071,13 +1071,11 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
 	# Add Temperature figure
    	Temperature_Fig = plt.figure()
     	Temperature_Graph = Temperature_Fig.add_subplot(111)
-    	Temperature_Graph.hold(True)
 
     if Doppler_Fig is None:
         # Add Doppler figure
         Doppler_Fig = plt.figure()
         Doppler_Graph = Doppler_Fig.add_subplot(111)
-        Doppler_Graph.hold(True)
         
     (ref_Dop, e_ref_Dop) = FPI.DopplerReference(FPI_Results,reference=reference,AVERAGING_TIME=Zenith_Times)
 
@@ -1256,13 +1254,11 @@ def CompareData(files, full_clear=-30, full_cloud=-20,
             # Add Temperature figure
             Temperature_Fig = plt.figure()
             Temperature_Graph = Temperature_Fig.add_subplot(111)
-            Temperature_Graph.hold(True)
 
         if Doppler_Fig is None:
             # Add Doppler figure
             Doppler_Fig = plt.figure()
             Doppler_Graph = Doppler_Fig.add_subplot(111)
-            Doppler_Graph.hold(True)
 
 	if len(all_colors) == 0:
             all_markers = ['s', 'd', '^', 'x', 'p', '*', '+', 'v', '>', '<']
