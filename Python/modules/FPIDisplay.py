@@ -1004,7 +1004,7 @@ def DataSummary(files, times, bin_time = np.arange(17,32,0.5),
     return (Temperature_Fig, Temperature_Ax), (Zonal_Fig, Zonal_Ax), (Meridional_Fig, Meridional_Ax), (Vertical_Fig, Vertical_Ax), (Intensity_Fig, Intensity_Ax)
 
 def PlotDay(f, full_clear=-30, full_cloud=-20,
-            Tmin=500, Tmax=1500, Dmin=-200, Dmax=200,
+            Tmin=300, Tmax=1500, Dmin=-200, Dmax=200,
             reference='laser',directions=None,
 	    Temperature_Fig = None, Temperature_Graph = None, Doppler_Fig = None, Doppler_Graph = None,
         Zenith_Times=[21.,4.],cull=False):
