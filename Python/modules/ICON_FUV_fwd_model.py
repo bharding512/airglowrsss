@@ -289,7 +289,7 @@ def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry 
 
     satlatlonalt = [satlat,satlon,satalt]
     #print '%f,%f'%(az,ze)
-    
+
     # Call the function for a single az and ze angle. It returns all the stepping points along the line
     xyz, latlonalt = ic.project_line_of_sight(satlatlonalt, az,ze,step,total_distance)
 
@@ -390,7 +390,7 @@ def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,sym
     if TE==0:
         TE =  params['Sensitivity']
     if stripes_used==0:
-        stripes_used = params['stripes_usedl']
+        stripes_used = params['stripes_used']
 
     # Get Brightness for a given zenith angle
     if shperical == 0:
