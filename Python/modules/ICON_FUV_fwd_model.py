@@ -433,7 +433,7 @@ def get_Photons_from_Brightness_1356_nighttime_star(a_b):
     return get_Photons_from_Brightness_1356_nighttime(*a_b)
 
 # ICON FUV
-def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satalt,dn,symmetry=0,shperical=1,exposure=0.,testing = 0,cont=1,TE=0.,Ne_scaling = 1.,step = 10,total_distance = 5000.,stripes_used = 0,proc=16):
+def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satalt,dn,symmetry=0,shperical=1,exposure=0.,testing = 0,cont=1,TE=0.,Ne_scaling = 1.,step = 10,total_distance = 5000.,stripes_used = 0,proc=16, f107=None, f107a=None, apmsis=None):
     '''
     Calls 'get_Photons_from_Brightness_1356_nighttime' which calculates the Brightness and Electron density by going through integrated VER for all given zenith angles.
     INPUTS:
@@ -454,6 +454,9 @@ def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satal
         total_distance - length of the projected line for each raypath(km).
         stripes_used- number of stripes used of the CCD [default 1] [if zero on input loads default value]
         proc        - Number of cores used for multiprocessing
+        f107 - f107 value to use in MSIS/IRI calculations [default None, use values in PyGlow]
+        f107a - f107a value to use in MSIS/IRI calculations [default None, use values in PyGlow]
+        apmsis - Ap values to use in MSIS/IRI calculations [default None, use values in PyGlow]
     OUTPUTS:
         Brightness  - the intensity of the integrated emission (R) or 0 if the contribution is not set correctly
         photons     - the number of photons seen on the detecter for a given zenith angle [counts]
@@ -470,6 +473,7 @@ def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satal
         26-Aug-2015: Exception for Pool added.
         02-Sep-2015: Add testing input - Gaussian Ne instead of IRI
         04-Sep-2015: Add total_distance input - goes to the WGS84 raypath calculations
+        03-Aug-2017: add passing GPI values
     CALLS:
         -get_FUV_instrument_constants
         -Opens multiprocessing pool
@@ -488,7 +492,7 @@ def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satal
         Rayl = np.zeros(np.size(ze))
 
         # i put index on azimuth
-        job_args = [(ze[i],az[i] ,satlat,satlon,satalt, dn,symmetry,shperical,exposure,testing,cont,TE,Ne_scaling,step,total_distance,stripes_used) for i in range(0,len(ze))]
+        job_args = [(ze[i],az[i] ,satlat,satlon,satalt, dn,symmetry,shperical,exposure,testing,cont,TE,Ne_scaling,step,total_distance,stripes_used,f107,f107a,apmsis) for i in range(0,len(ze))]
         N = multiprocessing.cpu_count()
 
         # Create the pool.  Be nice.  Don't use all the cores!
