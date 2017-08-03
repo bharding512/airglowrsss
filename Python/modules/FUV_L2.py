@@ -633,7 +633,7 @@ def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,Sig_VER=None,co
         17-Sep-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
         24-Apr-2017: Uncertainty propagation added by Brian Harding (bhardin2@illinois.edu)
         02-Jun-2017: Added GPI values by Jonathan Makela (jmakela@illinois.edu)
-	12-Jul-2017: For RRMN calculation, no longer assumes spherical symmetry of O density (jmakela@illinois.edu) 
+	12-Jul-2017: For RRMN calculation, no longer assumes spherical symmetry of O density (jmakela@illinois.edu)
    CALLS:
         Pyglow
 

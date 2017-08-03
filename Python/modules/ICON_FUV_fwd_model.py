@@ -55,7 +55,7 @@ def get_FUV_instrument_constants():
     return instrument
 
 # ICON FUV
-def calc_1356_nighttime(lat,lon,alt,dn,Ne_scaling = 1.,testing=0):
+def calc_1356_nighttime(lat,lon,alt,dn,Ne_scaling = 1.,testing=0,f107=None, f107a=None, apmsis=None):
     '''
     Return the radiative recombination (RR) and mutual neutralization (MN) for the
     135.6-nm emission according to a requested location and time using IRI and MSIS
@@ -68,6 +68,9 @@ def calc_1356_nighttime(lat,lon,alt,dn,Ne_scaling = 1.,testing=0):
         dn  -  UT date and time to use (datetime)
         Ne_scaling - Scaling factor for Ne [default 1 => No scaling]
         Testing - Flag indicate using a Gaussian Ne instead of IRI [0: Pyglow, 1: Gaussian]
+        f107 - f107 value to use in MSIS/IRI calculations [default None, use values in PyGlow]
+        f107a - f107a value to use in MSIS/IRI calculations [default None, use values in PyGlow]
+        apmsis - Ap values to use in MSIS/IRI calculations [default None, use values in PyGlow]
     OUTPUT:
         RR  - volume emission rate due to radiative recombination (1/cm^3/s)
         MN  - volume emission rate due to mutual neutralization (1/cm^3/s) - 0 in case of testing
@@ -79,6 +82,7 @@ def calc_1356_nighttime(lat,lon,alt,dn,Ne_scaling = 1.,testing=0):
         13-Jul-2015: Add O as return value
         02-Sep-2015: Add testing input
         14-Sep-2015: Assumed Ne==Op or testing reasons.
+        03-Aug-2017: Added ability to pass GPI values
     CALLS:
         Pyglow: IRI-MSIS
     '''
@@ -93,7 +97,13 @@ def calc_1356_nighttime(lat,lon,alt,dn,Ne_scaling = 1.,testing=0):
     if testing==0:
         # Run pyglow at the requested location and time.  IRI and MSIS calls are needed to generate
         # model outputs of needed constituents
-        pt = pyglow.Point(dn, lat, lon, alt)
+        if apmsis is None:
+            pt = pyglow.Point(dn, lat, lon, alt)
+        else:
+            pt = pyglow.Point(dn, lat, lon, alt, user_ind=True)
+            pt.f107 = f107
+            pt.f107a = f107a
+            pt.apmsis = apmsis
         pt.run_iri()
         pt.run_msis()
 
@@ -167,7 +177,7 @@ def calculate_VER_1356_nighttime(satlat,satlon,satalt,dn,Ne_scaling = 1.,testing
     return VER_true, VER,MN, NE, O
 
 # ICON FUV
-def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scaling=1., step=10. , testing = 0):
+def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scaling=1., step=10. , testing = 0,f107=None, f107a=None, apmsis=None):
     '''
     Step along a desired look direction from a given observing location and
     calculate the 135.6-nm intensity. Lines-of-sight are calculated using a spherical earth.
@@ -182,6 +192,9 @@ def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scali
         Ne_scaling  - Scaling factor for Ne [default 1 => No scaling]
         step        - resolution of the integration along the line of sight (km, default = 10 km)
         testing     - Flag indicate using a Gaussian Ne instead of IRI [0: Pyglow, 1: Gaussian]
+        f107 - f107 value to use in MSIS/IRI calculations [default None, use values in PyGlow]
+        f107a - f107a value to use in MSIS/IRI calculations [default None, use values in PyGlow]
+        apmsis - Ap values to use in MSIS/IRI calculations [default None, use values in PyGlow]
     OUTPUTS:
         Brightness  - the intensity of the integrated emission (R) or 0 if the contribution is not set correctly
     NOTES:
@@ -193,7 +206,8 @@ def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scali
         03-Jun-2015: Changed Limb altitude from 90 to 150km (Dimitrios Iliou)
         13-Jul-2015: Add _ to calc_1356_nighttime since O is not needed for the fwd model
         02-Sep-2015: Add testing input - Gaussian Ne instead of IRI
-	12-Jul-2017: Changed ze/az input to deg
+	    12-Jul-2017: Changed ze/az input to deg
+        03-Aug-2017: Added ability to pass through GPI values
     CALLS:
         -calc_1356_nighttime
     '''
@@ -223,7 +237,7 @@ def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scali
             #break
 
         # Calculate 1356 Emission for a single point
-        VER,MN,Ne,_ = calc_1356_nighttime(satlat,satlon,alt,dn,Ne_scaling,testing)
+        VER,MN,Ne,_ = calc_1356_nighttime(satlat,satlon,alt,dn,Ne_scaling,testing,f107=f107, f107a=f107a, apmsis=apmsis)
 
         IRR = IRR + VER * step*10**5
         IMN = IMN + MN * step*10**5
@@ -251,7 +265,7 @@ def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scali
     return Rayleigh
 
 # ICON FUV WGS84
-def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry = 0,cont=1,Ne_scaling=1., step=10.,testing = 0,total_distance = 5000.):
+def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry = 0,cont=1,Ne_scaling=1., step=10.,testing = 0,total_distance = 5000.,f107=None, f107a=None, apmsis=None):
     '''
     Step along a desired look direction from a given observing location and
     calculate the 135.6-nm intensity. Lines-of-sight are calculated using a non-spherical non-symmetric earth.
@@ -268,6 +282,9 @@ def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry 
         step        - resolution of the integration along the line of sight (km, default = 10 km)
         testing     - Flag indicate using a Gaussian Ne instead of IRI [0: Pyglow, 1: Gaussian]
         total_distance - length of the projected line for each raypath(km).
+        f107 - f107 value to use in MSIS/IRI calculations [default None, use values in PyGlow]
+        f107a - f107a value to use in MSIS/IRI calculations [default None, use values in PyGlow]
+        apmsis - Ap values to use in MSIS/IRI calculations [default None, use values in PyGlow]
     OUTPUTS:
         Brightness  - the intensity of the integrated emission (R) or 0 if the contribution is not set correctly
     NOTES:
@@ -275,7 +292,8 @@ def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry 
     HISTORY:
         08-Jul-2015: Written by Dimitrios Iliou (iliou2@illinois.edu)
         02-Sep-2015: Add testing input - Gaussian Ne instead of IRI
-        04-Sep-2015: Add total_distance input - goes to the WGS84 raypath calculations
+        04-Sep-2015: Add total_distance input - goes to the WGS84 raypath calculations                03-Aug-2017: Added ability to pass through GPI values
+
     CALLS:
         -calc_1356_nighttime
         -ICON.project_line_of_sight
@@ -306,9 +324,9 @@ def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry 
         # The Ne can be scalled to test algorithm for various pertubations
         # The symmetry check changes the call so the lat lon coordinates will be the same as nadir direction or not.
         if symmetry == 0:
-            VER,MN,Ne,_ = calc_1356_nighttime(satlat,satlon,latlonalt[2,j],dn,Ne_scaling,testing)
+            VER,MN,Ne,_ = calc_1356_nighttime(satlat,satlon,latlonalt[2,j],dn,Ne_scaling,testing,f107=f107, f107a=f107a, apmsis=apmsis)
         elif symmetry == 1:
-            VER,MN,Ne,_ = calc_1356_nighttime(latlonalt[0,j],latlonalt[1,j],latlonalt[2,j],dn,Ne_scaling,testing)
+            VER,MN,Ne,_ = calc_1356_nighttime(latlonalt[0,j],latlonalt[1,j],latlonalt[2,j],dn,Ne_scaling,testing,f107=f107, f107a=f107a, apmsis=apmsis)
 
         #print '%f,%f,%f' %(latlonalt[0,j],latlonalt[1,j],latlonalt[2,j])
 
@@ -338,7 +356,7 @@ def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry 
 
 
 # ICON FUV
-def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,symmetry =0,shperical=1,exposure=0.,testing = 0,cont=1,TE=0.,Ne_scaling = 1.,step = 10, total_distance = 5000., stripes_used = 0):
+def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,symmetry =0,shperical=1,exposure=0.,testing = 0,cont=1,TE=0.,Ne_scaling = 1.,step = 10, total_distance = 5000., stripes_used = 0, f107=None, f107a=None, apmsis=None):
     '''
     Calls 'calculate_pixel_1356_nighttime' which calculates the Brightness through integrated VER for a given zenith angle.
     INPUTS:
@@ -358,6 +376,9 @@ def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,sym
         step        - resolution of the integration along the line of sight (km, default = 10 km)
         total_distance - length of the projected line for each raypath(km).
         stripes_used- number of stripes used of the CCD [default 1] [if zero on input loads default value]
+        f107 - f107 value to use in MSIS/IRI calculations [default None, use values in PyGlow]
+        f107a - f107a value to use in MSIS/IRI calculations [default None, use values in PyGlow]
+        apmsis - Ap values to use in MSIS/IRI calculations [default None, use values in PyGlow]
     OUTPUTS:
         Brightness  - the intensity of the integrated emission (R) or 0 if the contribution is not set correctly
         photons     - the number of photons seen on the detecter for a given zenith angle [counts]
@@ -376,7 +397,8 @@ def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,sym
         26-Jul-2015: Added the spherical and symmetry parameters on the function
         02-Sep-2015: Add testing input - Gaussian Ne instead of IRI
         04-Sep-2015: Add total_distance input - goes to the WGS84 raypath calculations
-	12-Jul-2017: Changed ze/az input to degrees
+	    12-Jul-2017: Changed ze/az input to degrees
+        3-Aug-2017: Allowed GPI values to be passed through
     CALLS:
         -get_FUV_instrument_constants
         -calculate_pixel_1356_nighttime
@@ -394,9 +416,9 @@ def get_Photons_from_Brightness_1356_nighttime(ze,az,satlat,satlon,satalt,dn,sym
 
     # Get Brightness for a given zenith angle
     if shperical == 0:
-        Brightness = calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont,Ne_scaling,step,testing)
+        Brightness = calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont,Ne_scaling,step,testing,f107=f107, f107a=f107a, apmsis=apmsis)
     elif shperical == 1:
-        Brightness = calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry,cont,Ne_scaling,step,testing,total_distance)
+        Brightness = calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry,cont,Ne_scaling,step,testing,total_distance,f107=f107, f107a=f107a, apmsis=apmsis)
 
     # Number of pixels in rescell = 8
     r = TE * exposure * stripes_used
