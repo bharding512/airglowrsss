@@ -825,7 +825,8 @@ def process_site(site_name, year, doy, reference='laser'):
     
 
 def process_directory(data_direc, results_direc, instrument, site, reference='laser', zenith_times=[17.,7.],
-                      wind_err_thresh=100., temp_err_thresh=100., make_plots=True):
+                      wind_err_thresh=100., temp_err_thresh=100., make_plots=True, Tmin=300., Tmax=1500., 
+                      bw_cloud_file_1 = '', bw_cloud_file_2 = '', cloud_thresh = [-22.,-10.],):
     '''
     Process all the data from the specified folder. This function analyzes 
     the laser and sky images to obtain line of sight winds, 
@@ -848,6 +849,13 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
         temp_err_thresh - float, K. Samples with a fit error above this should get a quality
                             flag of 2.      
         make_plots      - whether to make and save summary graphics
+        Tmin, Tmax      - float, K. Sets the scale of the y axis on the temperature plot
+        bw_cloud_file_1 - location of the Boltwood cloud sensor file relevant to the pre-midnight data
+                          (if '', don't try to ingest cloud data at all)
+        bw_cloud_file_2 - location of the Boltwood cloud sensor file relevant to the post-midnight data
+                          (if '', ignore the second file)        
+        cloud_thresh    - [float,float], K. The two cloud sensor readings that indicate 
+                          partially- and fully-cloudy. This affects the quality flag.
                     
     OUTPUTS:
         warnings - str - If this script believes a manual check of the data
@@ -913,9 +921,6 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
         logfile.close()
         raise
         
-    # Add dummy cloud data
-    c = np.nan*np.zeros(len(FPI_Results['LOSwind']))
-    FPI_Results['Clouds'] = {'mean': c, 'max': c, 'min': c}
         
     # Grab the SVN revision number, so we know what code was used to process this day.
     svndir = '/'.join(FPI.__file__.split('/')[:-1]) # get the directory of FPI.py
@@ -925,7 +930,74 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
 
     # Save the SVN version number
     FPI_Results['SVNRevision'] = sv
- 
+
+    
+    # Try to load the Boltwood data. This is inside a try block so that
+    # the npz will still save if there is a problem.
+    FPI_Results['Clouds'] = None # defaults
+    FPI_Results['Dome']   = None # assume no X300 
+    FPI_Results['Inside'] = None # assume no X300
+    try: 
+        # call modules from BoltWood for the two days required and combine the data
+        if bw_cloud_file_1 != '': # Look for boltwood data
+            if bw_cloud_file_2 == '': # only use one file
+                bw_date, bw_sky, bw_amb = BoltwoodSensor.ReadTempLog(
+                        bw_cloud_file_1,
+                        tz=site['Timezone']
+                        )
+                
+            else: # use two files
+                bw_date1, bw_sky1, bw_amb1 = BoltwoodSensor.ReadTempLog(
+                        bw_cloud_file_1,
+                        tz=site['Timezone'])
+                bw_date2, bw_sky2, bw_amb2 = BoltwoodSensor.ReadTempLog(
+                        bw_cloud_file_2, 
+                        tz=site['Timezone']
+                        )
+                bw_date = np.hstack((bw_date1,bw_date2))
+                bw_sky = np.hstack((bw_sky1, bw_sky2))
+                bw_amb = np.hstack((bw_amb1, bw_amb2))
+
+            
+            # Create a data structure containing the sensor temperatures
+            Clouds = np.nan*np.zeros((np.size(FPI_Results['sky_times']),3))
+            count = 0
+            for (t, dt) in zip(FPI_Results['sky_times'], FPI_Results['sky_intT']):
+                # Start and stop time of image data
+                t0 = np.array(t                                   )
+                t1 = np.array(t + datetime.timedelta(seconds = dt))
+                # Find the corresponding times in the Boltwood data
+                i = ((bw_date >= t0) & (bw_date <= t1))
+                if i.any():
+                    Clouds[count,:] = [bw_sky[i].mean(), bw_sky[i].max(), bw_sky[i].min()]
+                else:
+                    Clouds[count,:] = [np.nan,np.nan,np.nan]
+
+
+                count = count+1
+
+            if(np.size(bw_date) == 0):
+                FPI_Results['Clouds'] = None
+            else:
+                FPI_Results['Clouds'] = {'mean': Clouds[:,0], 'max': Clouds[:,1], 'min': Clouds[:,2]}
+
+
+        # Write things to the log
+        if FPI_Results['Clouds'] is None: # if it wasn't found
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'No Boltwood cloud sensor data found.\n')
+            c = np.nan*np.zeros(len(FPI_Results['LOSwind']))
+            FPI_Results['Clouds'] = {'mean': c, 'max': c, 'min': c}
+            
+        else:
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Found and loaded Boltwood cloud sensor data.\n')
+            
+    except: # There was an error in the Boltwood code. Write the log but continue.
+        c = np.nan*np.zeros(len(FPI_Results['LOSwind']))
+        FPI_Results['Clouds'] = {'mean': c, 'max': c, 'min': c}
+        tracebackstr = traceback.format_exc()
+        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Unknown error obtaining Boltwood data for %s. Traceback listed below. Analysis will continue without these data.\n-----------------------------------\n%s\n-----------------------------------\n' % (datestr,tracebackstr))
+        notify_the_humans = True
+
         
     # Helper function to determine if laser wavelength drift is occuring
     def laser_is_drifting():
@@ -989,18 +1061,18 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
             t_flag = 1
             w_flag = 1
             logfile.write('[no cloud data W1T1] ')
-#        if c > cloud_thresh[0]: # It's at least a little bit cloudy. Caution.
-#            t_flag = 1
-#            w_flag = 1
-#            logfile.write('[cloud>%.0f: W1T1] '%cloud_thresh[0])
+        if c > cloud_thresh[0]: # It's at least a little bit cloudy. Caution.
+            t_flag = 1
+            w_flag = 1
+            logfile.write('[cloud>%.0f: W1T1] '%cloud_thresh[0])
         if FPI_Results['sky_ccd_temperature'][ii] > ccd_temp_thresh:
             t_flag = 1
             w_flag = 1
             logfile.write('[ccdtemp>%.0f: W1T1] '%ccd_temp_thresh)
-#        if c > cloud_thresh[1]: # It's definitely cloudy
-#            t_flag = 1
-#            w_flag = 2
-#            logfile.write('[cloud>%.0f: W2T1] '%cloud_thresh[1])
+        if c > cloud_thresh[1]: # It's definitely cloudy
+            t_flag = 1
+            w_flag = 2
+            logfile.write('[cloud>%.0f: W2T1] '%cloud_thresh[1])
         w_fit_err = FPI_Results['sigma_fit_LOSwind'][ii]
         if (w_fit_err > wind_err_thresh): # Sample is not trustworthy at all
             w_flag = 2
@@ -1038,22 +1110,23 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
     if make_plots:
         try: 
             # Plot some quick-look single-station data (LOSwinds and Temps)
-            (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, reference = reference, Zenith_Times=zenith_times)
+            (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, reference = reference, Zenith_Times=zenith_times,
+                                                                                                   Tmin=Tmin, Tmax=Tmax)
             
             # Add Level 1 diagnostics to diagnostics fig
             ax = Diagnostic_Fig.add_subplot(427) # TODO: generalize diagnostic figure generation?
-#            if FPI_Results['Clouds'] is not None:
-#                ct = FPI_Results['sky_times']
-#                cloud = FPI_Results['Clouds']['mean']
-#                ax.plot(ct, cloud, 'k.-')
-#                ax.plot([ct[0],ct[-1]], [cloud_thresh[0],cloud_thresh[0]], 'k--')
-#                ax.plot([ct[0],ct[-1]], [cloud_thresh[1],cloud_thresh[1]], 'k--')
-#                ax.set_xlim([ct[0] - datetime.timedelta(hours=0.5), ct[-1] + datetime.timedelta(hours=0.5)])
-#                ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
-#                ax.set_ylim([-50,0])
-#                ax.set_ylabel('Cloud indicator\n[degrees C]')
-#                ax.grid(True)
-#                ax.set_xlabel('Universal Time, [hours]')
+            if FPI_Results['Clouds'] is not None:
+                ct = FPI_Results['sky_times']
+                cloud = FPI_Results['Clouds']['mean']
+                ax.plot(ct, cloud, 'k.-')
+                ax.plot([ct[0],ct[-1]], [cloud_thresh[0],cloud_thresh[0]], 'k--')
+                ax.plot([ct[0],ct[-1]], [cloud_thresh[1],cloud_thresh[1]], 'k--')
+                ax.set_xlim([ct[0] - datetime.timedelta(hours=0.5), ct[-1] + datetime.timedelta(hours=0.5)])
+                ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+                ax.set_ylim([-50,0])
+                ax.set_ylabel('Cloud indicator\n[degrees C]')
+                ax.grid(True)
+                ax.set_xlabel('Universal Time, [hours]')
             Diagnostic_Fig.tight_layout()
             
             Temperature_Fig.savefig(results_direc + instrdatestr + '_temp.png')
