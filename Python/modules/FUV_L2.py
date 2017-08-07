@@ -1236,12 +1236,26 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
     ######### Geometry Variables #########
 
     # ICON Spacecraft location in WGS
-    var = _create_variable(ncfile, 'ICON_L2_FUV_SC_WGS', L25_dict['ICON_WGS'],
-                          dimensions=('Epoch','Vector'),
-                          format_nc='f8', format_fortran='F', desc='Spacecraft location in WGS84 (Latitude, Longitude, Altitude).',
-                          display_type='Time_Series', field_name='Spacecraft location in WGS84', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='', valid_min=-180., valid_max=1000., var_type='support_data', chunk_sizes=[1,1],
-                          depend_0 = 'Epoch', depend_1 = 'Vector', notes='')
+    var = _create_variable(ncfile, 'ICON_L2_FUV_SC_LAT', L25_dict['ICON_WGS_LATITUDE'],
+                          dimensions=('Epoch'),
+                          format_nc='f8', format_fortran='F', desc='Spacecraft WGS84 latitude.',
+                          display_type='Time_Series', field_name='Spacecraft WGS84 latitude', fill_value=-999, label_axis='Time', bin_location=0.5,
+                          units='deg', valid_min=-90., valid_max=90., var_type='support_data', chunk_sizes=[1],
+                          depend_0 = 'Epoch', notes='')
+
+    var = _create_variable(ncfile, 'ICON_L2_FUV_SC_LON', L25_dict['ICON_WGS_LONGITUDE'],
+                          dimensions=('Epoch'),
+                          format_nc='f8', format_fortran='F', desc='Spacecraft WGS84 longitude.',
+                          display_type='Time_Series', field_name='Spacecraft WGS84 longitude', fill_value=-999, label_axis='Time', bin_location=0.5,
+                          units='deg', valid_min=-360., valid_max=360., var_type='support_data', chunk_sizes=[1],
+                          depend_0 = 'Epoch', notes='')
+
+    var = _create_variable(ncfile, 'ICON_L2_FUV_SC_ALT', L25_dict['ICON_WGS_ALTITUDE'],
+                          dimensions=('Epoch'),
+                          format_nc='f8', format_fortran='F', desc='Spacecraft WGS84 altitude.',
+                          display_type='Time_Series', field_name='Spacecraft WGS84 altitude', fill_value=-999, label_axis='Time', bin_location=0.5,
+                          units='km', valid_min=0., valid_max=1000., var_type='support_data', chunk_sizes=[1],
+                          depend_0 = 'Epoch', notes='')
 
     # ICON Orbit number
     var = _create_variable(ncfile, 'ICON_L2_ORBIT_NUMBER', L25_dict['ICON_ORBIT'],
@@ -1489,6 +1503,8 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
         02-Jun-2017: Revised by Jonathan Makela to read GPI files (jmakela@illinois.edu)
         13-Jun-2017: Revised by Jonathan Makela to pass in full file output path (jmakela@illinois.edu)
         30-Jun-2017: Revised by Jonathan Makela to work with orbit numbers (jmakela@illinois.edu)
+        07-Aug-2017: ICON_WGS84 is no longer in L1 file. Replaced with ICON_WGS84_LATITUDE, _LONGITUDE,
+                        _ALTITUDE. (jmakela@illinois.edu)
     TODO:
         1) Variable names in L1 and ancillary data files may change
     '''
@@ -1525,10 +1541,9 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
         FUV_ZE = ancillary.variables['ICON_ANCILLARY_FUV_FOV_ZENITH_ANGLE'][:,:,:]
 
         # The ICON WGS-84 location at the center of the integration time
-        ICON_WGS = ancillary.variables['ICON_ANCILLARY_FUV_SC_WGS'][:,:]
-        ICON_WGS84_LATITUDE = ancillary.variables['ICON_ANCILLARY_FUV_SC_WGS'][:,0]
-        ICON_WGS84_LONGITUDE = ancillary.variables['ICON_ANCILLARY_FUV_SC_WGS'][:,1]
-        ICON_WGS84_ALTITUDE = ancillary.variables['ICON_ANCILLARY_FUV_SC_WGS'][:,2]
+        ICON_WGS84_LATITUDE = ancillary.variables['ICON_ANCILLARY_FUV_LATITUDE'][:]
+        ICON_WGS84_LONGITUDE = ancillary.variables['ICON_ANCILLARY_FUV_LONGITUDE'][:]
+        ICON_WGS84_ALTITUDE = ancillary.variables['ICON_ANCILLARY_FUV_ALTITUDE'][:]
 
         # Read the UTC of all measurements and store in a datetime variable
         temp = ancillary.variables['ICON_ANCILLARY_FUV_TIME_UTC']
@@ -1694,7 +1709,9 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
         'FUV_TANGENT_WGS': FUV_TANGENT_WGS[night_ind,:,:,:],
         'FUV_AZ': FUV_AZ[night_ind,min_li:max_li+1,:],
         'FUV_ZE': FUV_ZE[night_ind,min_li:max_li+1,:],
-        'ICON_WGS': ICON_WGS[night_ind,:],
+        'ICON_WGS_LATITUDE': ICON_WGS84_LATITUDE[night_ind],
+        'ICON_WGS_LONGITUDE': ICON_WGS84_LONGITUDE[night_ind],
+        'ICON_WGS_ALTITUDE': ICON_WGS84_ALTITUDE[night_ind],
         'ICON_ORBIT': ICON_ORBIT[night_ind],
         'FUV_ver': FUV_ver[night_ind,min_li:max_li+1,:],
         'FUV_ver_error': FUV_sigma_ver[night_ind,min_li:max_li+1,:],
