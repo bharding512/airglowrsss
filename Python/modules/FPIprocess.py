@@ -563,8 +563,10 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
         logfile.write('\t\t%s ' % FPI_Results['sky_fns'][ii].split('/')[-1])
         t_flag = 0 # default
         w_flag = 0 # default
-        if (FPI_Results['skyI'][ii] < instrument['skyI_quality_thresh']):
-            # The sky brightness is low enough that OH is probably an issue.
+        # The order here is important. It goes from least concerning to most
+        # concerning. 
+        if (FPI_Results['skyI'][ii] < instrument['skyI_quality_thresh'][0]):
+            # The sky brightness is low enough that OH may be an issue.
             t_flag = 1
             w_flag = 1
             logfile.write('[skyI low W1T1] ')
@@ -591,7 +593,12 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
         if c > cloud_thresh[1]: # It's definitely cloudy
             t_flag = 1
             w_flag = 2
-            logfile.write('[cloud>%.0f: W2T1] '%cloud_thresh[1])
+            logfile.write('[cloud>%.0f: W2T1] '%cloud_thresh[1])        
+        if (FPI_Results['skyI'][ii] < instrument['skyI_quality_thresh'][1]):
+            # The sky brightness is low enough that OH is almost certainly issue.
+            t_flag = 2
+            w_flag = 2
+            logfile.write('[skyI low W2T2] ')
         w_fit_err = FPI_Results['sigma_fit_LOSwind'][ii]
         if (w_fit_err > wind_err_thresh): # Sample is not trustworthy at all
             w_flag = 2
@@ -1044,11 +1051,11 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
         logfile.write('\t\t%s ' % FPI_Results['sky_fns'][ii].split('/')[-1])
         t_flag = 0 # default
         w_flag = 0 # default
-        if (FPI_Results['skyI'][ii] < instrument['skyI_quality_thresh']):
-            # The sky brightness is low enough that OH is probably an issue.
+        if (FPI_Results['skyI'][ii] < instrument['skyI_quality_thresh'][0]):
+            # The sky brightness is low enough that OH may be an issue.
             t_flag = 1
             w_flag = 1
-            logfile.write('[skyI low W1T1] ')
+            logfile.write('[skyI low W1T1] ') 
         if (reference == 'zenith'): # Zenith Processing
             t_flag = 1
             w_flag = 1
@@ -1073,6 +1080,11 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
             t_flag = 1
             w_flag = 2
             logfile.write('[cloud>%.0f: W2T1] '%cloud_thresh[1])
+        if (FPI_Results['skyI'][ii] < instrument['skyI_quality_thresh'][1]):
+            # The sky brightness is low enough that OH is almost certainly issue.
+            t_flag = 2
+            w_flag = 2
+            logfile.write('[skyI low W2T2] ')
         w_fit_err = FPI_Results['sigma_fit_LOSwind'][ii]
         if (w_fit_err > wind_err_thresh): # Sample is not trustworthy at all
             w_flag = 2

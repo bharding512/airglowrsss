@@ -1752,7 +1752,8 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
         tp0 = sky_times[0] - datetime.timedelta(hours=0.5)
         tp1 = sky_times[-1] + datetime.timedelta(hours=0.5)
         sky_thresh = instrument['skyI_quality_thresh']
-        ax.semilogy([tp0, tp1],[sky_thresh, sky_thresh],'k--',label='qual. thresh')
+        ax.semilogy([tp0, tp1],[sky_thresh[0], sky_thresh[0]],'k--',lw=0.5,label='qual thresh (q=1)')
+        ax.semilogy([tp0, tp1],[sky_thresh[1], sky_thresh[1]],'k--',lw=0.5,label='qual thresh (q=2)')
         ax.set_xlim([tp0, tp1])
         ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
         ax.set_ylabel('Line Intensity\n[arbitrary]')
