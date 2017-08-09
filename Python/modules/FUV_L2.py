@@ -1240,14 +1240,14 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
                           dimensions=('Epoch'),
                           format_nc='f8', format_fortran='F', desc='Spacecraft WGS84 latitude.',
                           display_type='Time_Series', field_name='Spacecraft WGS84 latitude', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='deg', valid_min=-90., valid_max=90., var_type='support_data', chunk_sizes=[1],
+                          units='degress North', valid_min=-90., valid_max=90., var_type='support_data', chunk_sizes=[1],
                           depend_0 = 'Epoch', notes='')
 
     var = _create_variable(ncfile, 'ICON_L2_FUV_SC_LON', L25_dict['ICON_WGS_LONGITUDE'],
                           dimensions=('Epoch'),
                           format_nc='f8', format_fortran='F', desc='Spacecraft WGS84 longitude.',
                           display_type='Time_Series', field_name='Spacecraft WGS84 longitude', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='deg', valid_min=-360., valid_max=360., var_type='support_data', chunk_sizes=[1],
+                          units='degrees East', valid_min=-360., valid_max=360., var_type='support_data', chunk_sizes=[1],
                           depend_0 = 'Epoch', notes='')
 
     var = _create_variable(ncfile, 'ICON_L2_FUV_SC_ALT', L25_dict['ICON_WGS_ALTITUDE'],
@@ -1262,7 +1262,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
                           dimensions=('Epoch'),
                           format_nc='i4', format_fortran='I', desc='ICON Orbit Number',
                           display_type='Time_Series', field_name='ICON Orbit Number', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='', valid_min=0, valid_max=105000, var_type='support_data', chunk_sizes=[1],
+                          units=' ', valid_min=0, valid_max=105000, var_type='support_data', chunk_sizes=[1],
                           depend_0 = 'Epoch', notes='')
 
     # FUV tangent point locations in WGS
@@ -1306,7 +1306,6 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
                           units='degrees', valid_min=-90., valid_max=90., var_type='support_data',
                           chunk_sizes=[1,ncfile.dimensions['Vertical'].size,ncfile.dimensions['Horizontal'].size],
                           depend_0 = 'Epoch', depend_1='Vertical',depend_2='Horizontal', notes='')
-
     ######### Results Variables #########
 
     # FUV inverted volume emission rate
@@ -1378,7 +1377,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
                           dimensions=('Epoch','Horizontal'),
                           format_nc='i1', format_fortran='I', desc='FUV inversion quality flag',
                           display_type='Time_Series', field_name='Quality', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='', valid_min=0., valid_max=8, var_type='data', chunk_sizes=[1,1],
+                          units=' ', valid_min=0., valid_max=8, var_type='data', chunk_sizes=[1,1],
                           depend_0 = 'Epoch',depend_1='Horizontal', notes='Flag is 0 if the inversion is valid.')
 
     # Regularization type
@@ -1386,7 +1385,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
                           dimensions=(),
                           format_nc=str, format_fortran='A', desc='Regularization method: Tikhonov or MAP',
                           display_type='scalar', field_name='Regularzation Method', fill_value=None, label_axis='Method', bin_location=0.5,
-                          units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
+                          units=' ', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
                           notes='')
 
     # Regularization order
@@ -1394,7 +1393,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
                           dimensions=(),
                           format_nc='i1', format_fortran='I', desc='Regularization order',
                           display_type='scalar', field_name='Regularzation Order', fill_value=None, label_axis='Order', bin_location=0.5,
-                          units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
+                          units=' ', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
                           notes='')
 
     # Contribution type
@@ -1402,7 +1401,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
                           dimensions=(),
                           format_nc=str, format_fortran='A', desc='Chemestry considered in 135.6-nm emission: RR or RRMN',
                           display_type='scalar', field_name='1356 Contribution', fill_value=None, label_axis='Contrib', bin_location=0.5,
-                          units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
+                          units=' ', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
                           notes='')
 
     # Limb value used in inversion
@@ -1410,7 +1409,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
                           dimensions=(),
                           format_nc='f4', format_fortran='F', desc='Limb altitude used in inversion',
                           display_type='scalar', field_name='Inversion Limb Alt', fill_value=None, label_axis='Alt', bin_location=0.5,
-                          units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
+                          units=' ', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
                           notes='')
 
     ncfile.close()
