@@ -1477,7 +1477,7 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
                        file_GPI=None,
                        file_output='/home/jmakela/ICON_L2-5_FUV-2009-03-20_00.18.54_v01_r00.nc',
                        limb = 150.,Spherical = True,
-                       reg_method = 'Tikhonov',regu_order = 2, contribution ='RR'):
+                       reg_method = 'Tikhonov',regu_order = 2, contribution ='RRMN'):
     '''
     Operational Code that reads Lvl1 file and creates the corresponding Lvl2.5
     INPUTS:
@@ -1878,119 +1878,136 @@ def CreateSummaryPlot(file_netcdf, file_png, stripe=2, min_alt=None, max_alt=Non
             dn.append(parser.parse(d))
         dn = np.array(dn)
 
-        X = np.transpose([dn,]*f.dimensions['Vertical'].size)
-        Y = f.variables['ICON_L2_FUVA_TANGENT_ALT'][:,:,stripe]
-        Z = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ALTITUDE_PROFILE'][:,:,stripe]
-        Ze = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ERROR_ALTITUDE_PROFILE'][:,:,stripe]
+        orbits = f.variables['ICON_L2_ORBIT_NUMBER'][:]
 
-        # Min/max ranges for plots
-        if min_alt is None:
+        for orbit in unique(orbits):
+            stripe = 0
+
+            file_png = png_stub + '_%d.png' % orbit
+            orbit_ind = squeeze(where(f.variables['ICON_L2_ORBIT_NUMBER'][:] == orbit))
+            ds = np.array([i.total_seconds() for i in dn-dn[orbit_ind][0]])
+            orbit_ind = squeeze(where(abs(ds) < 2000.))
+
+            X = transpose([dn,]*f.dimensions['Vertical'].size)[orbit_ind]
+            Y = f.variables['ICON_L2_FUVA_TANGENT_ALT'][orbit_ind,:,stripe]
+            Z = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ALTITUDE_PROFILE'][orbit_ind,:,stripe]
+            Ze = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ERROR_ALTITUDE_PROFILE'][orbit_ind,:,stripe]
+
+            out = diff(X,axis=0)
+            mask = np.vstack([out > datetime.timedelta(seconds=24),ones([1,size(out,1)],dtype=bool)])
+            Zm = np.ma.MaskedArray(Z,mask)
+            Zem = np.ma.MaskedArray(Ze,mask)
+
             min_alt = Y.min()
-        if max_alt is None:
             max_alt = Y.max()
 
-        if min_dn is None:
-            min_dn = dn[0]
-        if max_dn is None:
-            max_dn = dn[-1]
+            min_dn = dn[orbit_ind[0]]
+            max_dn = dn[orbit_ind[-1]]
 
-        if min_ne is None:
-            min_ne = Z.min()
-        if max_ne is None:
-            max_ne = Z.max()
+            min_ne = 0.
+            #max_ne = Z.max()
+            max_ne = 1e6
 
-        if min_dne is None:
-            min_dne = np.log10(Ze.min())
-        if max_dne is None:
-            max_dne = np.log10(Ze.max())
+            min_dne = 0.
+            max_dne = 6.
 
-        # generate the plot
-        fig, axes = plt.subplots(nrows=5, sharex=True, figsize=(8,11))
+            fig, axes = subplots(nrows=5, sharex=True, figsize=(8,11))
 
-        # The electron density estimates
-        im = axes[0].pcolormesh(X,Y,Z,vmin=min_ne,vmax=max_ne,cmap=cm)
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
-        axes[0].set_ylim([min_alt,max_alt])
-        axes[0].set_title('Estimated Ne; Stripe #%d' % stripe)
-        axes[0].set_ylabel('Altitude [km]')
-        axes[0]
+            # The electron density estimates
+            im = axes[0].pcolormesh(X,Y,Zm,vmin=min_ne,vmax=max_ne)
+            gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+            gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+            axes[0].set_ylim([min_alt,max_alt])
+            axes[0].set_title('Estimated Ne; Stripe #%d' % stripe)
+            axes[0].set_ylabel('Altitude [km]')
 
-        # The electron density error estimates
-        im2 = axes[1].pcolormesh(X,Y,np.log10(Ze),vmin=min_dne,vmax=max_dne,cmap=cm)
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
-        axes[1].set_ylim([min_alt,max_alt])
-        axes[1].set_title('Estimated Ne Error; Stripe #%d' % stripe)
-        axes[1].set_ylabel('Altitude [km]')
+            # The electron density error estimates
+            im2 = axes[1].pcolormesh(X,Y,log10(Zem),vmin=min_dne,vmax=max_dne)
+            gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+            gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+            axes[1].set_ylim([min_alt,max_alt])
+            axes[1].set_title('Estimated Ne Error; Stripe #%d' % stripe)
+            axes[1].set_ylabel('Altitude [km]')
 
-        # The hmF2 estimates
-        for stripe in range(0,6):
-            Y = f.variables['ICON_L2_FUVA_SWP_HMF2'][:,stripe]
-            Ye = f.variables['ICON_L2_FUVA_SWP_HMF2_ERROR'][:,stripe]
-            axes[2].plot(dn,Y,'-')
-            axes[2].fill_between(dn,Y-Ye,Y+Ye,alpha=.25)
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
-        plt.xlim([min_dn,max_dn])
-        axes[2].set_ylim([min_alt,max_alt])
-        axes[2].set_title('Estimated hmF2')
-        axes[2].set_ylabel('Altitude [km]')
+            # The hmF2 estimates
+            out = diff(dn[orbit_ind],axis=0)
+            mask = np.hstack([out > datetime.timedelta(seconds=24),[True]])
+            for stripe in range(0,6):
+                Y = f.variables['ICON_L2_FUVA_SWP_HMF2'][orbit_ind,stripe]
+                Ym = np.ma.MaskedArray(Y,mask)
+                Ye = f.variables['ICON_L2_FUVA_SWP_HMF2_ERROR'][orbit_ind,stripe]
+                Yem = np.ma.MaskedArray(Ye,mask)
+                axes[2].plot(dn[orbit_ind],Ym,'-')
+                axes[2].fill_between(dn[orbit_ind],Ym-Yem,Ym+Yem,alpha=.25)
+            gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+            gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+            xlim([min_dn,max_dn])
+            axes[2].set_ylim([min_alt,max_alt])
+            axes[2].set_title('Estimated hmF2')
+            axes[2].set_ylabel('Altitude [km]')
 
-        # The NmF2 estimates
-        for stripe in range(0,6):
-            Y = f.variables['ICON_L2_FUVA_SWP_NMF2'][:,stripe]
-            Ye = f.variables['ICON_L2_FUVA_SWP_NMF2_ERROR'][:,stripe]
-            axes[3].plot(dn,Y,'-')
-            axes[3].fill_between(dn,Y-Ye,Y+Ye,alpha=.25)
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
-        plt.xlim([min_dn,max_dn])
-        axes[3].set_title('Estimated NmF2')
-        axes[3].set_ylabel('Ne [cm^-3]')
+            # The NmF2 estimates
+            for stripe in range(0,6):
+                Y = f.variables['ICON_L2_FUVA_SWP_NMF2'][orbit_ind,stripe]
+                Ym = np.ma.MaskedArray(Y,mask)
+                Ye = f.variables['ICON_L2_FUVA_SWP_NMF2_ERROR'][orbit_ind,stripe]
+                Yem = np.ma.MaskedArray(Ye,mask)
+                axes[3].plot(dn[orbit_ind],Ym,'-')
+                axes[3].fill_between(dn[orbit_ind],Ym-Yem,Ym+Yem,alpha=.25)
+            gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+            gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+            xlim([min_dn,max_dn])
+            axes[3].set_title('Estimated NmF2')
+            axes[3].set_ylabel('Ne [cm^-3]')
 
-        # The quality flag
-        for stripe in range(0,6):
-            quality = f.variables['ICON_L2_FUVA_QUALITY'][:]
-            axes[4].plot(dn,quality[:,stripe],'.',label=stripe)
-        axes[4].set_ylim([-.25,2])
-        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-        plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
-        axes[4].set_title('Inversion quality flag')
-        axes[4].set_xlabel('UTC')
-        lgd = plt.legend(ncol=6,numpoints=1,loc=9, bbox_to_anchor=(0.6, -0.23))
+            # The quality flag
+            for stripe in range(0,6):
+                quality = f.variables['ICON_L2_FUVA_QUALITY'][orbit_ind]
+                axes[4].plot(dn[orbit_ind],quality[:,stripe],'.',label=stripe)
+            axes[4].set_ylim([-.25,2])
+            gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+            gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+            axes[4].set_title('Inversion quality flag')
+            axes[4].set_xlabel('UTC')
+            lgd = plt.legend(ncol=6,numpoints=1,loc=9, bbox_to_anchor=(0.6, -0.23))
 
-        # labels
-        axes[4].annotate('(%s, %s)' % (f.variables['ICON_L2_1356_CONTRIBUTION'][:],
-                                      f.variables['ICON_L2_REGULARIZATION_METHOD'][:]),
-                         xy=(1, 0.05), xytext=(0, 10),
-                         xycoords=('axes fraction', 'figure fraction'),
-                         textcoords='offset points',
-                         ha='right', va='top')
+            an = axes[4].annotate('(%s, %s)' % (f.variables['ICON_L2_1356_CONTRIBUTION'][:],
+                                          f.variables['ICON_L2_REGULARIZATION_METHOD'][:]),
+                             xy=(1, 0.05), xytext=(0, 10),
+                             xycoords=('axes fraction', 'figure fraction'),
+                             textcoords='offset points',
+                             ha='right', va='top')
 
-        an = axes[0].annotate('%s' % (dn[0].strftime('%d %b %Y')),
-                         xy=(.5, .95), xytext=(0, 10),
-                         xycoords=('axes fraction', 'figure fraction'),
-                         textcoords='offset points',
-                         size=12,ha='center', va='top')
+            orbit_str = 'err'
+            if len(unique(orbits[orbit_ind])) == 1:
+                orbit_str = '%d' % unique(orbits[orbit_ind])
+            elif len(unique(orbits[orbit_ind])) == 2:
+                orbit_str = '%d-%d' % (unique(orbits[orbit_ind])[0],unique(orbits[orbit_ind])[1])
 
-        # Make some room for the colorbar
-        fig.subplots_adjust(left=0.07, right=0.87)
+            axes[0].annotate('%s (Orbits: %s)' % (dn[0].strftime('%Y-%m-%d'), orbit_str),
+                             xy=(.5, .94), xytext=(0, 10),
+                             xycoords=('axes fraction', 'figure fraction'),
+                             textcoords='offset points',
+                             size=12,ha='center', va='top')
 
-        # Add the colorbar outside...
-        box = axes[0].get_position()
-        pad, width = 0.02, 0.02
-        cax = fig.add_axes([box.xmax + pad, box.ymin, width, box.height])
-        fig.colorbar(im, cax=cax,format='%.0e',label='Ne [cm^-3]',extend='max')
+            # Make some room for the colorbar
+            fig.subplots_adjust(left=0.07, right=0.87)
 
-        box = axes[1].get_position()
-        pad, width = 0.02, 0.02
-        cax = fig.add_axes([box.xmax + pad, box.ymin, width, box.height])
-        fig.colorbar(im2, cax=cax, label='log10(Ne_error) [cm^-3]', extend='max')
-        #fig.tight_layout()
-        fig.savefig(file_png, bbox_extra_artists=(lgd,an), bbox_inches='tight')
+            # Add the colorbar outside...
+            box = axes[0].get_position()
+            pad, width = 0.02, 0.02
+            cax = fig.add_axes([box.xmax + pad, box.ymin, width, box.height])
+            fig.colorbar(im, cax=cax,format='%.0e',label='Ne [cm^-3]',extend='max')
 
-        # Close the netCDF file
+            box = axes[1].get_position()
+            pad, width = 0.02, 0.02
+            cax = fig.add_axes([box.xmax + pad, box.ymin, width, box.height])
+            fig.colorbar(im2, cax=cax, label='log10(Ne_error) [cm^-3]', extend='max')
+
+            # Generate the filename with the orbit number in it
+            outname = file_png[:-4] + '_o%05d.png' % orbit
+            fig.savefig(outname, bbox_extra_artists=(lgd,an), bbox_inches='tight')
+
         f.close()
     except:
         print 'Error generating L2.5 summary file'
