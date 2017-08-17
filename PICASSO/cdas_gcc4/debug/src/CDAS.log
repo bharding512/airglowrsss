@@ -1,0 +1,2030 @@
+[Fri Aug 03 09:34:53 2007]: Opened System log file: CDAS.log
+[Fri Aug 03 09:34:53 2007]: Opened Error log file: error.txt
+[Fri Aug 03 09:34:53 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:34:53 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:34:53 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:34:53 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Fri Aug 03 09:34:55 2007]: Read in configuration file
+[Fri Aug 03 09:34:55 2007]: Initializing System
+[Fri Aug 03 09:34:55 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:34:55 2007]: Starting control thread
+[Fri Aug 03 09:34:55 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:34:55 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:34:55 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:34:55 2007]: Waiting for Fri Aug 03 18:33:43 2007...
+[Fri Aug 03 09:34:55 2007]: Starting server thread
+[Fri Aug 03 09:35:00 2007]: Current CCD temperature:    -1.00
+[Fri Aug 03 09:35:00 2007]: 1186184023
+[Fri Aug 03 09:35:00 2007]: 1186197725
+[Fri Aug 03 09:35:00 2007]: 1
+[Fri Aug 03 09:35:00 2007]: 18
+[Fri Aug 03 09:35:00 2007]: 0
+[Fri Aug 03 09:35:00 2007]: 1
+[Fri Aug 03 09:35:00 2007]: Cerro Tololo
+[Fri Aug 03 09:35:00 2007]: CTO
+[Fri Aug 03 09:35:00 2007]: -30.1679
+[Fri Aug 03 09:35:00 2007]: 289.194
+[Fri Aug 03 09:35:00 2007]: 2.155
+[Fri Aug 03 09:35:00 2007]: 1
+[Fri Aug 03 09:35:00 2007]: 0
+[Fri Aug 03 09:35:00 2007]: 0
+[Fri Aug 03 09:35:00 2007]: 1024
+[Fri Aug 03 09:35:00 2007]: 1024
+[Fri Aug 03 09:35:00 2007]: 0
+[Fri Aug 03 09:35:00 2007]: 5
+[Fri Aug 03 09:35:00 2007]: 0
+[Fri Aug 03 09:35:00 2007]: -1
+[Fri Aug 03 09:35:00 2007]: 1
+[Fri Aug 03 09:35:00 2007]: /home/PICASSO/PICASSO/
+[Fri Aug 03 09:35:00 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Fri Aug 03 09:35:00 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Fri Aug 03 09:35:00 2007]: /home/PICASSO/public_html/
+[Fri Aug 03 09:35:00 2007]: 0
+[Fri Aug 03 09:35:00 2007]: 0
+[Fri Aug 03 09:35:00 2007]: 0
+[Fri Aug 03 09:35:00 2007]: SHTR:0:1:1
+[Fri Aug 03 09:35:00 2007]: 6300:250:90:0
+[Fri Aug 03 09:35:00 2007]: 6343:250:90:0
+[Fri Aug 03 09:35:00 2007]: 7774:350:90:0
+[Fri Aug 03 09:35:00 2007]: empty:0:1:0
+[Fri Aug 03 09:35:00 2007]: 2:2:4
+[Fri Aug 03 09:35:00 2007]: 1:3
+[Fri Aug 03 09:35:00 2007]: 1:1
+[Fri Aug 03 09:35:00 2007]: 0
+[Fri Aug 03 09:35:00 2007]: 5:1:1:1:1:2
+[Fri Aug 03 09:35:00 2007]: 1:10:90
+[Fri Aug 03 09:35:00 2007]: 0:0
+[Fri Aug 03 09:35:06 2007]: Stop command received.  Stopping program...
+[Fri Aug 03 09:35:06 2007]: Stopping server thread
+[Fri Aug 03 09:35:07 2007]: Stopping control thread
+[Fri Aug 03 09:35:08 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:35:08 2007]: Closing system log file
+[Fri Aug 03 09:35:16 2007]: Opened System log file: CDAS.log
+[Fri Aug 03 09:35:16 2007]: Opened Error log file: error.txt
+[Fri Aug 03 09:35:16 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:35:16 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:35:16 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:35:16 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Fri Aug 03 09:35:17 2007]: Read in configuration file
+[Fri Aug 03 09:35:17 2007]: Initializing System
+[Fri Aug 03 09:35:17 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:35:17 2007]: Starting server thread
+[Fri Aug 03 09:35:17 2007]: Starting control thread
+[Fri Aug 03 09:35:17 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:35:17 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:35:17 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:35:17 2007]: Waiting for Fri Aug 03 18:33:43 2007...
+[Fri Aug 03 09:35:19 2007]: 1186184023
+[Fri Aug 03 09:35:19 2007]: 1186197725
+[Fri Aug 03 09:35:19 2007]: 1
+[Fri Aug 03 09:35:19 2007]: 18
+[Fri Aug 03 09:35:19 2007]: 0
+[Fri Aug 03 09:35:19 2007]: 1
+[Fri Aug 03 09:35:19 2007]: Cerro Tololo
+[Fri Aug 03 09:35:19 2007]: CTO
+[Fri Aug 03 09:35:19 2007]: -30.1679
+[Fri Aug 03 09:35:19 2007]: 289.194
+[Fri Aug 03 09:35:19 2007]: 2.155
+[Fri Aug 03 09:35:19 2007]: 1
+[Fri Aug 03 09:35:19 2007]: 0
+[Fri Aug 03 09:35:19 2007]: 0
+[Fri Aug 03 09:35:19 2007]: 1024
+[Fri Aug 03 09:35:19 2007]: 1024
+[Fri Aug 03 09:35:19 2007]: 0
+[Fri Aug 03 09:35:19 2007]: 5
+[Fri Aug 03 09:35:19 2007]: 0
+[Fri Aug 03 09:35:19 2007]: -1
+[Fri Aug 03 09:35:20 2007]: 1
+[Fri Aug 03 09:35:20 2007]: /home/PICASSO/PICASSO/
+[Fri Aug 03 09:35:20 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Fri Aug 03 09:35:20 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Fri Aug 03 09:35:20 2007]: /home/PICASSO/public_html/
+[Fri Aug 03 09:35:20 2007]: 0
+[Fri Aug 03 09:35:20 2007]: 0
+[Fri Aug 03 09:35:20 2007]: 0
+[Fri Aug 03 09:35:20 2007]: SHTR:0:1:1
+[Fri Aug 03 09:35:20 2007]: 6300:250:90:0
+[Fri Aug 03 09:35:20 2007]: 6343:250:90:0
+[Fri Aug 03 09:35:20 2007]: 7774:350:90:0
+[Fri Aug 03 09:35:20 2007]: empty:0:1:0
+[Fri Aug 03 09:35:20 2007]: 2:2:4
+[Fri Aug 03 09:35:20 2007]: 1:3
+[Fri Aug 03 09:35:20 2007]: 1:1
+[Fri Aug 03 09:35:20 2007]: 0
+[Fri Aug 03 09:35:20 2007]: 5:1:1:1:1:2
+[Fri Aug 03 09:35:20 2007]: 1:10:90
+[Fri Aug 03 09:35:20 2007]: 0:0
+[Fri Aug 03 09:35:20 2007]: Stop command received.  Stopping program...
+[Fri Aug 03 09:35:20 2007]: Stopping server thread
+[Fri Aug 03 09:35:21 2007]: Stopping control thread
+[Fri Aug 03 09:35:22 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:35:22 2007]: Closing system log file
+[Fri Aug 03 09:42:15 2007]: Opened System log file: CDAS.log
+[Fri Aug 03 09:42:15 2007]: Opened Error log file: error.txt
+[Fri Aug 03 09:42:15 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:42:15 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:42:15 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:42:15 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Fri Aug 03 09:42:16 2007]: Read in configuration file
+[Fri Aug 03 09:42:16 2007]: Initializing System
+[Fri Aug 03 09:42:16 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:42:16 2007]: Starting server thread
+[Fri Aug 03 09:42:16 2007]: Starting control thread
+[Fri Aug 03 09:42:16 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:42:16 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:42:16 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:42:16 2007]: Waiting for Fri Aug 03 18:33:43 2007...
+[Fri Aug 03 09:42:19 2007]: 1186184023
+[Fri Aug 03 09:42:19 2007]: 1186197725
+[Fri Aug 03 09:42:19 2007]: 1
+[Fri Aug 03 09:42:19 2007]: 18
+[Fri Aug 03 09:42:19 2007]: 0
+[Fri Aug 03 09:42:19 2007]: 1
+[Fri Aug 03 09:42:19 2007]: Cerro Tololo
+[Fri Aug 03 09:42:19 2007]: CTO
+[Fri Aug 03 09:42:19 2007]: -30.1679
+[Fri Aug 03 09:42:19 2007]: 289.194
+[Fri Aug 03 09:42:19 2007]: 2.155
+[Fri Aug 03 09:42:19 2007]: 1
+[Fri Aug 03 09:42:19 2007]: 0
+[Fri Aug 03 09:42:19 2007]: 0
+[Fri Aug 03 09:42:19 2007]: 1024
+[Fri Aug 03 09:42:19 2007]: 1024
+[Fri Aug 03 09:42:19 2007]: 0
+[Fri Aug 03 09:42:19 2007]: 5
+[Fri Aug 03 09:42:19 2007]: 0
+[Fri Aug 03 09:42:19 2007]: -1
+[Fri Aug 03 09:42:19 2007]: 1
+[Fri Aug 03 09:42:19 2007]: /home/PICASSO/PICASSO/
+[Fri Aug 03 09:42:19 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Fri Aug 03 09:42:19 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Fri Aug 03 09:42:19 2007]: /home/PICASSO/public_html/
+[Fri Aug 03 09:42:19 2007]: 0
+[Fri Aug 03 09:42:19 2007]: 0
+[Fri Aug 03 09:42:19 2007]: 0
+[Fri Aug 03 09:42:19 2007]: SHTR:0:1:1
+[Fri Aug 03 09:42:19 2007]: 6300:250:90:0
+[Fri Aug 03 09:42:19 2007]: 6343:250:90:0
+[Fri Aug 03 09:42:19 2007]: 7774:350:90:0
+[Fri Aug 03 09:42:19 2007]: empty:0:1:0
+[Fri Aug 03 09:42:19 2007]: 2:2:4
+[Fri Aug 03 09:42:19 2007]: 1:3
+[Fri Aug 03 09:42:19 2007]: 1:1
+[Fri Aug 03 09:42:19 2007]: 0
+[Fri Aug 03 09:42:19 2007]: 5:1:1:1:1:2
+[Fri Aug 03 09:42:19 2007]: 1:10:90
+[Fri Aug 03 09:42:19 2007]: 0:0
+[Fri Aug 03 09:42:20 2007]: Stop command received.  Stopping program...
+[Fri Aug 03 09:42:20 2007]: Stopping server thread
+[Fri Aug 03 09:42:20 2007]: Stopping control thread
+[Fri Aug 03 09:42:21 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:42:21 2007]: Closing system log file
+[Fri Aug 03 09:42:26 2007]: Opened System log file: CDAS.log
+[Fri Aug 03 09:42:26 2007]: Opened Error log file: error.txt
+[Fri Aug 03 09:42:26 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:42:26 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:42:26 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:42:26 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Fri Aug 03 09:42:27 2007]: Read in configuration file
+[Fri Aug 03 09:42:27 2007]: Initializing System
+[Fri Aug 03 09:42:27 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:42:27 2007]: Starting server thread
+[Fri Aug 03 09:42:27 2007]: Starting control thread
+[Fri Aug 03 09:42:27 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:42:27 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:42:27 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:42:27 2007]: Waiting for Fri Aug 03 18:33:43 2007...
+[Fri Aug 03 09:42:29 2007]: 1186184023
+[Fri Aug 03 09:42:29 2007]: 1186197725
+[Fri Aug 03 09:42:29 2007]: 1
+[Fri Aug 03 09:42:29 2007]: 18
+[Fri Aug 03 09:42:29 2007]: 0
+[Fri Aug 03 09:42:29 2007]: 1
+[Fri Aug 03 09:42:29 2007]: Cerro Tololo
+[Fri Aug 03 09:42:29 2007]: CTO
+[Fri Aug 03 09:42:29 2007]: -30.1679
+[Fri Aug 03 09:42:29 2007]: 289.194
+[Fri Aug 03 09:42:29 2007]: 2.155
+[Fri Aug 03 09:42:29 2007]: 1
+[Fri Aug 03 09:42:29 2007]: 0
+[Fri Aug 03 09:42:29 2007]: 0
+[Fri Aug 03 09:42:29 2007]: 1024
+[Fri Aug 03 09:42:29 2007]: 1024
+[Fri Aug 03 09:42:29 2007]: 0
+[Fri Aug 03 09:42:29 2007]: 5
+[Fri Aug 03 09:42:29 2007]: 0
+[Fri Aug 03 09:42:29 2007]: -1
+[Fri Aug 03 09:42:29 2007]: 1
+[Fri Aug 03 09:42:29 2007]: /home/PICASSO/PICASSO/
+[Fri Aug 03 09:42:29 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Fri Aug 03 09:42:29 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Fri Aug 03 09:42:29 2007]: /home/PICASSO/public_html/
+[Fri Aug 03 09:42:29 2007]: 0
+[Fri Aug 03 09:42:29 2007]: 0
+[Fri Aug 03 09:42:29 2007]: 0
+[Fri Aug 03 09:42:29 2007]: SHTR:0:1:1
+[Fri Aug 03 09:42:29 2007]: 6300:250:90:0
+[Fri Aug 03 09:42:29 2007]: 6343:250:90:0
+[Fri Aug 03 09:42:29 2007]: 7774:350:90:0
+[Fri Aug 03 09:42:29 2007]: empty:0:1:0
+[Fri Aug 03 09:42:29 2007]: 2:2:4
+[Fri Aug 03 09:42:29 2007]: 1:3
+[Fri Aug 03 09:42:29 2007]: 1:1
+[Fri Aug 03 09:42:29 2007]: 0
+[Fri Aug 03 09:42:29 2007]: 5:1:1:1:1:2
+[Fri Aug 03 09:42:29 2007]: 1:10:90
+[Fri Aug 03 09:42:29 2007]: 0:0
+[Fri Aug 03 09:42:30 2007]: Stop command received.  Stopping program...
+[Fri Aug 03 09:42:30 2007]: Stopping server thread
+[Fri Aug 03 09:42:30 2007]: Stopping control thread
+[Fri Aug 03 09:42:31 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:42:31 2007]: Closing system log file
+[Fri Aug 03 09:43:55 2007]: Opened System log file: CDAS.log
+[Fri Aug 03 09:43:55 2007]: Opened Error log file: error.txt
+[Fri Aug 03 09:43:55 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:43:55 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:43:55 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:43:55 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Fri Aug 03 09:43:56 2007]: Read in configuration file
+[Fri Aug 03 09:43:56 2007]: Initializing System
+[Fri Aug 03 09:43:56 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:43:56 2007]: Starting server thread
+[Fri Aug 03 09:43:56 2007]: Starting control thread
+[Fri Aug 03 09:43:56 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:43:56 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:43:56 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:43:56 2007]: Waiting for Fri Aug 03 18:33:43 2007...
+[Fri Aug 03 09:44:50 2007]: Opened System log file: CDAS.log
+[Fri Aug 03 09:44:50 2007]: Opened Error log file: error.txt
+[Fri Aug 03 09:44:50 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:44:50 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:44:50 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:44:50 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Fri Aug 03 09:44:51 2007]: Read in configuration file
+[Fri Aug 03 09:44:51 2007]: Initializing System
+[Fri Aug 03 09:44:51 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:44:51 2007]: Starting server thread
+[Fri Aug 03 09:44:51 2007]: Starting control thread
+[Fri Aug 03 09:44:51 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:44:51 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:44:51 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:44:51 2007]: Waiting for Fri Aug 03 18:33:43 2007...
+[Fri Aug 03 09:45:40 2007]: Opened System log file: CDAS.log
+[Fri Aug 03 09:45:40 2007]: Opened Error log file: error.txt
+[Fri Aug 03 09:45:40 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:45:40 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:45:40 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:45:40 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Fri Aug 03 09:45:42 2007]: Read in configuration file
+[Fri Aug 03 09:45:42 2007]: Initializing System
+[Fri Aug 03 09:45:42 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:45:42 2007]: Starting control thread
+[Fri Aug 03 09:45:42 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 09:45:42 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 09:45:42 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:45:42 2007]: Starting server thread
+[Fri Aug 03 09:45:42 2007]: Waiting for Fri Aug 03 18:33:43 2007...
+[Fri Aug 03 09:45:52 2007]: 1186184023
+[Fri Aug 03 09:45:52 2007]: 1186197725
+[Fri Aug 03 09:45:52 2007]: 1
+[Fri Aug 03 09:45:52 2007]: 18
+[Fri Aug 03 09:45:52 2007]: 0
+[Fri Aug 03 09:45:52 2007]: 1
+[Fri Aug 03 09:45:52 2007]: Cerro Tololo
+[Fri Aug 03 09:45:52 2007]: CTO
+[Fri Aug 03 09:45:52 2007]: -30.1679
+[Fri Aug 03 09:45:52 2007]: 289.194
+[Fri Aug 03 09:45:52 2007]: 2.155
+[Fri Aug 03 09:45:52 2007]: 1
+[Fri Aug 03 09:45:52 2007]: 0
+[Fri Aug 03 09:45:52 2007]: 0
+[Fri Aug 03 09:45:52 2007]: 1024
+[Fri Aug 03 09:45:52 2007]: 1024
+[Fri Aug 03 09:45:52 2007]: 0
+[Fri Aug 03 09:45:52 2007]: 5
+[Fri Aug 03 09:45:52 2007]: 0
+[Fri Aug 03 09:45:52 2007]: -1
+[Fri Aug 03 09:45:52 2007]: 1
+[Fri Aug 03 09:45:52 2007]: /home/PICASSO/PICASSO/
+[Fri Aug 03 09:45:52 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Fri Aug 03 09:45:52 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Fri Aug 03 09:45:52 2007]: /home/PICASSO/public_html/
+[Fri Aug 03 09:45:52 2007]: 0
+[Fri Aug 03 09:45:52 2007]: 0
+[Fri Aug 03 09:45:52 2007]: 0
+[Fri Aug 03 09:45:52 2007]: SHTR:0:1:1
+[Fri Aug 03 09:45:52 2007]: 6300:250:90:0
+[Fri Aug 03 09:45:52 2007]: 6343:250:90:0
+[Fri Aug 03 09:45:52 2007]: 7774:350:90:0
+[Fri Aug 03 09:45:52 2007]: empty:0:1:0
+[Fri Aug 03 09:45:52 2007]: 2:2:4
+[Fri Aug 03 09:45:52 2007]: 1:3
+[Fri Aug 03 09:45:52 2007]: 1:1
+[Fri Aug 03 09:45:52 2007]: 0
+[Fri Aug 03 09:45:52 2007]: 5:1:1:1:1:2
+[Fri Aug 03 09:45:52 2007]: 1:10:90
+[Fri Aug 03 09:45:52 2007]: 0:0
+[Fri Aug 03 09:45:53 2007]: Stop command received.  Stopping program...
+[Fri Aug 03 09:45:53 2007]: Stopping server thread
+[Fri Aug 03 09:45:54 2007]: Stopping control thread
+[Fri Aug 03 09:45:55 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 09:45:55 2007]: Closing system log file
+[Fri Aug 03 10:03:07 2007]: Opened System log file: CDAS.log
+[Fri Aug 03 10:03:07 2007]: Opened Error log file: error.txt
+[Fri Aug 03 10:03:07 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 10:03:07 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 10:03:07 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 10:03:07 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Fri Aug 03 10:03:56 2007]: Opened System log file: CDAS.log
+[Fri Aug 03 10:03:56 2007]: Opened Error log file: error.txt
+[Fri Aug 03 10:03:56 2007]: Auto set start time to: Fri Aug 03 18:33:43 2007
+[Fri Aug 03 10:03:56 2007]: Auto set stop time to: Fri Aug 03 22:22:05 2007
+[Fri Aug 03 10:03:56 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Fri Aug 03 10:03:56 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 08:15:45 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 08:15:45 2007]: Opened Error log file: error.txt
+[Mon Aug 20 08:15:45 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 08:15:45 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 08:15:45 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:15:45 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 08:16:18 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 08:16:18 2007]: Opened Error log file: error.txt
+[Mon Aug 20 08:16:18 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 08:16:18 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 08:16:18 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:16:18 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 08:16:18 2007]: Read in configuration file
+[Mon Aug 20 08:16:18 2007]: Initializing System
+[Mon Aug 20 08:16:18 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:16:18 2007]: Starting server thread
+[Mon Aug 20 08:16:18 2007]: Starting control thread
+[Mon Aug 20 08:16:18 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 08:16:18 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 08:16:18 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:16:18 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 08:16:23 2007]: 1187674604
+[Mon Aug 20 08:16:23 2007]: 1187689853
+[Mon Aug 20 08:16:23 2007]: 1
+[Mon Aug 20 08:16:23 2007]: 18
+[Mon Aug 20 08:16:23 2007]: 0
+[Mon Aug 20 08:16:23 2007]: 1
+[Mon Aug 20 08:16:23 2007]: Cerro Tololo
+[Mon Aug 20 08:16:23 2007]: CTO
+[Mon Aug 20 08:16:23 2007]: -30.1679
+[Mon Aug 20 08:16:23 2007]: 289.194
+[Mon Aug 20 08:16:23 2007]: 2.155
+[Mon Aug 20 08:16:23 2007]: 1
+[Mon Aug 20 08:16:23 2007]: 0
+[Mon Aug 20 08:16:23 2007]: 0
+[Mon Aug 20 08:16:23 2007]: 1024
+[Mon Aug 20 08:16:23 2007]: 1024
+[Mon Aug 20 08:16:23 2007]: 0
+[Mon Aug 20 08:16:23 2007]: 5
+[Mon Aug 20 08:16:23 2007]: 0
+[Mon Aug 20 08:16:23 2007]: -1
+[Mon Aug 20 08:16:23 2007]: -999
+[Mon Aug 20 08:16:23 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 08:16:23 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 08:16:23 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 08:16:23 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 08:16:24 2007]: 0
+[Mon Aug 20 08:16:24 2007]: 0
+[Mon Aug 20 08:16:24 2007]: 0
+[Mon Aug 20 08:16:24 2007]: SHTR:0:1:1
+[Mon Aug 20 08:16:24 2007]: 6300:250:90:0
+[Mon Aug 20 08:16:24 2007]: 6343:250:90:0
+[Mon Aug 20 08:16:24 2007]: 7774:350:90:0
+[Mon Aug 20 08:16:24 2007]: empty:0:1:0
+[Mon Aug 20 08:16:24 2007]: 2:2:4
+[Mon Aug 20 08:16:24 2007]: 1:3
+[Mon Aug 20 08:16:24 2007]: 1:1
+[Mon Aug 20 08:16:24 2007]: 0
+[Mon Aug 20 08:16:24 2007]: 5:1:1:1:1:2
+[Mon Aug 20 08:16:24 2007]: 1:10:90
+[Mon Aug 20 08:16:24 2007]: 0:0
+[Mon Aug 20 08:16:49 2007]: Change CCD temperature setpoint to -25
+[Mon Aug 20 08:16:49 2007]: Change camera type to 3
+[Mon Aug 20 08:17:07 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test1 w/ exposure time 0.1
+[Mon Aug 20 08:19:59 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 08:19:59 2007]: Opened Error log file: error.txt
+[Mon Aug 20 08:19:59 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 08:19:59 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 08:19:59 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:19:59 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 08:19:59 2007]: Read in configuration file
+[Mon Aug 20 08:19:59 2007]: Initializing System
+[Mon Aug 20 08:19:59 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:19:59 2007]: Starting server thread
+[Mon Aug 20 08:19:59 2007]: Starting control thread
+[Mon Aug 20 08:19:59 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 08:19:59 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 08:19:59 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:19:59 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 08:20:00 2007]: Current CCD temperature:   -1.00
+[Mon Aug 20 08:20:08 2007]: 1187674604
+[Mon Aug 20 08:20:08 2007]: 1187689853
+[Mon Aug 20 08:20:08 2007]: 1
+[Mon Aug 20 08:20:08 2007]: 18
+[Mon Aug 20 08:20:08 2007]: 0
+[Mon Aug 20 08:20:08 2007]: 1
+[Mon Aug 20 08:20:09 2007]: Cerro Tololo
+[Mon Aug 20 08:20:09 2007]: CTO
+[Mon Aug 20 08:20:09 2007]: -30.1679
+[Mon Aug 20 08:20:09 2007]: 289.194
+[Mon Aug 20 08:20:09 2007]: 2.155
+[Mon Aug 20 08:20:09 2007]: 1
+[Mon Aug 20 08:20:09 2007]: 0
+[Mon Aug 20 08:20:09 2007]: 0
+[Mon Aug 20 08:20:09 2007]: 1024
+[Mon Aug 20 08:20:09 2007]: 1024
+[Mon Aug 20 08:20:09 2007]: 0
+[Mon Aug 20 08:20:09 2007]: 5
+[Mon Aug 20 08:20:09 2007]: 0
+[Mon Aug 20 08:20:09 2007]: -1
+[Mon Aug 20 08:20:09 2007]: -999
+[Mon Aug 20 08:20:09 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 08:20:09 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 08:20:09 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 08:20:09 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 08:20:09 2007]: 0
+[Mon Aug 20 08:20:09 2007]: 0
+[Mon Aug 20 08:20:09 2007]: 0
+[Mon Aug 20 08:20:09 2007]: SHTR:0:1:1
+[Mon Aug 20 08:20:09 2007]: 6300:250:90:0
+[Mon Aug 20 08:20:09 2007]: 6343:250:90:0
+[Mon Aug 20 08:20:09 2007]: 7774:350:90:0
+[Mon Aug 20 08:20:09 2007]: empty:0:1:0
+[Mon Aug 20 08:20:09 2007]: 2:2:4
+[Mon Aug 20 08:20:09 2007]: 1:3
+[Mon Aug 20 08:20:09 2007]: 1:1
+[Mon Aug 20 08:20:09 2007]: 0
+[Mon Aug 20 08:20:09 2007]: 5:1:1:1:1:2
+[Mon Aug 20 08:20:09 2007]: 1:10:90
+[Mon Aug 20 08:20:09 2007]: 0:0
+[Mon Aug 20 08:20:16 2007]: Change CCD temperature setpoint to -25
+[Mon Aug 20 08:20:16 2007]: Change camera type to 3
+[Mon Aug 20 08:20:24 2007]: Stop command received.  Stopping program...
+[Mon Aug 20 08:20:24 2007]: Stopping server thread
+[Mon Aug 20 08:20:25 2007]: Stopping control thread
+[Mon Aug 20 08:20:26 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:20:26 2007]: Warming up sensor to 0 C
+[Mon Aug 20 08:27:54 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 08:27:54 2007]: Opened Error log file: error.txt
+[Mon Aug 20 08:27:54 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 08:27:54 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 08:27:54 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:27:54 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 08:27:54 2007]: Read in configuration file
+[Mon Aug 20 08:27:54 2007]: Initializing System
+[Mon Aug 20 08:27:54 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:27:54 2007]: Starting server thread
+[Mon Aug 20 08:27:54 2007]: Starting control thread
+[Mon Aug 20 08:27:54 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 08:27:54 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 08:27:54 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:27:54 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 08:27:59 2007]: 1187674604
+[Mon Aug 20 08:27:59 2007]: 1187689853
+[Mon Aug 20 08:27:59 2007]: 1
+[Mon Aug 20 08:27:59 2007]: 18
+[Mon Aug 20 08:27:59 2007]: 0
+[Mon Aug 20 08:27:59 2007]: 1
+[Mon Aug 20 08:27:59 2007]: Cerro Tololo
+[Mon Aug 20 08:27:59 2007]: CTO
+[Mon Aug 20 08:27:59 2007]: -30.1679
+[Mon Aug 20 08:27:59 2007]: 289.194
+[Mon Aug 20 08:27:59 2007]: 2.155
+[Mon Aug 20 08:27:59 2007]: 1
+[Mon Aug 20 08:27:59 2007]: 0
+[Mon Aug 20 08:27:59 2007]: 0
+[Mon Aug 20 08:27:59 2007]: 1024
+[Mon Aug 20 08:27:59 2007]: 1024
+[Mon Aug 20 08:27:59 2007]: -25
+[Mon Aug 20 08:27:59 2007]: 5
+[Mon Aug 20 08:27:59 2007]: 0
+[Mon Aug 20 08:27:59 2007]: 3
+[Mon Aug 20 08:27:59 2007]: -999
+[Mon Aug 20 08:27:59 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 08:27:59 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 08:27:59 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 08:27:59 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 08:27:59 2007]: 0
+[Mon Aug 20 08:27:59 2007]: 0
+[Mon Aug 20 08:27:59 2007]: 0
+[Mon Aug 20 08:27:59 2007]: SHTR:0:1:1
+[Mon Aug 20 08:27:59 2007]: 6300:250:90:0
+[Mon Aug 20 08:27:59 2007]: 6343:250:90:0
+[Mon Aug 20 08:27:59 2007]: 7774:350:90:0
+[Mon Aug 20 08:27:59 2007]: empty:0:1:0
+[Mon Aug 20 08:27:59 2007]: 2:2:4
+[Mon Aug 20 08:27:59 2007]: 1:3
+[Mon Aug 20 08:27:59 2007]: 1:1
+[Mon Aug 20 08:27:59 2007]: 0
+[Mon Aug 20 08:27:59 2007]: 5:1:1:1:1:2
+[Mon Aug 20 08:27:59 2007]: 1:10:90
+[Mon Aug 20 08:27:59 2007]: 0:0
+[Mon Aug 20 08:28:04 2007]: Stop command received.  Stopping program...
+[Mon Aug 20 08:28:04 2007]: Stopping server thread
+[Mon Aug 20 08:28:04 2007]: Stopping control thread
+[Mon Aug 20 08:28:05 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:28:05 2007]: Warming up sensor to 0 C
+[Mon Aug 20 08:44:07 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 08:44:07 2007]: Opened Error log file: error.txt
+[Mon Aug 20 08:44:07 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 08:44:07 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 08:44:07 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:44:07 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 08:44:07 2007]: Read in configuration file
+[Mon Aug 20 08:44:07 2007]: Initializing System
+[Mon Aug 20 08:44:07 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:44:07 2007]: Starting server thread
+[Mon Aug 20 08:44:07 2007]: Starting control thread
+[Mon Aug 20 08:44:07 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 08:44:07 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 08:44:07 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:44:07 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 08:44:17 2007]: 1187674604
+[Mon Aug 20 08:44:17 2007]: 1187689853
+[Mon Aug 20 08:44:17 2007]: 1
+[Mon Aug 20 08:44:17 2007]: 18
+[Mon Aug 20 08:44:17 2007]: 0
+[Mon Aug 20 08:44:17 2007]: 1
+[Mon Aug 20 08:44:17 2007]: Cerro Tololo
+[Mon Aug 20 08:44:17 2007]: CTO
+[Mon Aug 20 08:44:17 2007]: -30.1679
+[Mon Aug 20 08:44:17 2007]: 289.194
+[Mon Aug 20 08:44:17 2007]: 2.155
+[Mon Aug 20 08:44:17 2007]: 1
+[Mon Aug 20 08:44:17 2007]: 0
+[Mon Aug 20 08:44:17 2007]: 0
+[Mon Aug 20 08:44:17 2007]: 1024
+[Mon Aug 20 08:44:17 2007]: 1024
+[Mon Aug 20 08:44:17 2007]: -25
+[Mon Aug 20 08:44:17 2007]: 5
+[Mon Aug 20 08:44:17 2007]: 0
+[Mon Aug 20 08:44:17 2007]: 3
+[Mon Aug 20 08:44:17 2007]: -999
+[Mon Aug 20 08:44:17 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 08:44:17 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 08:44:17 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 08:44:17 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 08:44:17 2007]: 0
+[Mon Aug 20 08:44:17 2007]: 0
+[Mon Aug 20 08:44:17 2007]: 0
+[Mon Aug 20 08:44:17 2007]: SHTR:0:1:1
+[Mon Aug 20 08:44:17 2007]: 6300:250:90:0
+[Mon Aug 20 08:44:17 2007]: 6343:250:90:0
+[Mon Aug 20 08:44:17 2007]: 7774:350:90:0
+[Mon Aug 20 08:44:17 2007]: empty:0:1:0
+[Mon Aug 20 08:44:17 2007]: 2:2:4
+[Mon Aug 20 08:44:17 2007]: 1:3
+[Mon Aug 20 08:44:17 2007]: 1:1
+[Mon Aug 20 08:44:17 2007]: 0
+[Mon Aug 20 08:44:17 2007]: 5:1:1:1:1:2
+[Mon Aug 20 08:44:17 2007]: 1:10:90
+[Mon Aug 20 08:44:17 2007]: 0:0
+[Mon Aug 20 08:44:19 2007]: Stop command received.  Stopping program...
+[Mon Aug 20 08:44:19 2007]: Stopping server thread
+[Mon Aug 20 08:44:19 2007]: Stopping control thread
+[Mon Aug 20 08:44:20 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 08:44:20 2007]: Warming up sensor to 0 C
+[Mon Aug 20 08:45:10 2007]: Sensor warmed up successfully
+[Mon Aug 20 08:45:10 2007]: Closing system log file
+[Mon Aug 20 09:06:11 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:06:11 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:06:11 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:06:11 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:06:11 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:06:11 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:06:11 2007]: Read in configuration file
+[Mon Aug 20 09:06:11 2007]: Initializing System
+[Mon Aug 20 09:06:11 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:06:11 2007]: Starting server thread
+[Mon Aug 20 09:06:11 2007]: Starting control thread
+[Mon Aug 20 09:06:11 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:06:11 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:06:11 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:06:12 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 09:06:16 2007]: 1187674604
+[Mon Aug 20 09:06:16 2007]: 1187689853
+[Mon Aug 20 09:06:16 2007]: 1
+[Mon Aug 20 09:06:16 2007]: 18
+[Mon Aug 20 09:06:16 2007]: 0
+[Mon Aug 20 09:06:16 2007]: 1
+[Mon Aug 20 09:06:16 2007]: Cerro Tololo
+[Mon Aug 20 09:06:16 2007]: CTO
+[Mon Aug 20 09:06:16 2007]: -30.1679
+[Mon Aug 20 09:06:16 2007]: 289.194
+[Mon Aug 20 09:06:16 2007]: 2.155
+[Mon Aug 20 09:06:16 2007]: 1
+[Mon Aug 20 09:06:16 2007]: 0
+[Mon Aug 20 09:06:16 2007]: 0
+[Mon Aug 20 09:06:16 2007]: 1024
+[Mon Aug 20 09:06:16 2007]: 1024
+[Mon Aug 20 09:06:16 2007]: 0
+[Mon Aug 20 09:06:16 2007]: 5
+[Mon Aug 20 09:06:16 2007]: 0
+[Mon Aug 20 09:06:16 2007]: 3
+[Mon Aug 20 09:06:16 2007]: -999
+[Mon Aug 20 09:06:16 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 09:06:16 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 09:06:16 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 09:06:16 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 09:06:16 2007]: 0
+[Mon Aug 20 09:06:16 2007]: 0
+[Mon Aug 20 09:06:16 2007]: 0
+[Mon Aug 20 09:06:16 2007]: SHTR:0:1:1
+[Mon Aug 20 09:06:16 2007]: 6300:250:90:0
+[Mon Aug 20 09:06:16 2007]: 6343:250:90:0
+[Mon Aug 20 09:06:16 2007]: 7774:350:90:0
+[Mon Aug 20 09:06:16 2007]: empty:0:1:0
+[Mon Aug 20 09:06:16 2007]: 2:2:4
+[Mon Aug 20 09:06:16 2007]: 1:3
+[Mon Aug 20 09:06:16 2007]: 1:1
+[Mon Aug 20 09:06:16 2007]: 0
+[Mon Aug 20 09:06:16 2007]: 5:1:1:1:1:2
+[Mon Aug 20 09:06:16 2007]: 1:10:90
+[Mon Aug 20 09:06:16 2007]: 0:0
+[Mon Aug 20 09:06:32 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:06:32 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:06:32 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:06:32 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:06:32 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:06:32 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:06:33 2007]: Read in configuration file
+[Mon Aug 20 09:06:33 2007]: Initializing System
+[Mon Aug 20 09:06:33 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:06:33 2007]: Starting server thread
+[Mon Aug 20 09:06:33 2007]: Starting control thread
+[Mon Aug 20 09:06:33 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:06:33 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:06:33 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:06:33 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 09:06:39 2007]: 1187674604
+[Mon Aug 20 09:06:39 2007]: 1187689853
+[Mon Aug 20 09:06:39 2007]: 1
+[Mon Aug 20 09:06:39 2007]: 18
+[Mon Aug 20 09:06:39 2007]: 0
+[Mon Aug 20 09:06:39 2007]: 1
+[Mon Aug 20 09:06:39 2007]: Cerro Tololo
+[Mon Aug 20 09:06:39 2007]: CTO
+[Mon Aug 20 09:06:39 2007]: -30.1679
+[Mon Aug 20 09:06:39 2007]: 289.194
+[Mon Aug 20 09:06:39 2007]: 2.155
+[Mon Aug 20 09:06:39 2007]: 1
+[Mon Aug 20 09:06:39 2007]: 0
+[Mon Aug 20 09:06:39 2007]: 0
+[Mon Aug 20 09:06:39 2007]: 1024
+[Mon Aug 20 09:06:39 2007]: 1024
+[Mon Aug 20 09:06:39 2007]: 0
+[Mon Aug 20 09:06:39 2007]: 5
+[Mon Aug 20 09:06:39 2007]: 0
+[Mon Aug 20 09:06:39 2007]: 3
+[Mon Aug 20 09:06:39 2007]: -999
+[Mon Aug 20 09:06:39 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 09:06:39 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 09:06:39 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 09:06:39 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 09:06:39 2007]: 0
+[Mon Aug 20 09:06:39 2007]: 0
+[Mon Aug 20 09:06:39 2007]: 0
+[Mon Aug 20 09:06:39 2007]: SHTR:0:1:1
+[Mon Aug 20 09:06:39 2007]: 6300:250:90:0
+[Mon Aug 20 09:06:39 2007]: 6343:250:90:0
+[Mon Aug 20 09:06:39 2007]: 7774:350:90:0
+[Mon Aug 20 09:06:39 2007]: empty:0:1:0
+[Mon Aug 20 09:06:39 2007]: 2:2:4
+[Mon Aug 20 09:06:39 2007]: 1:3
+[Mon Aug 20 09:06:39 2007]: 1:1
+[Mon Aug 20 09:06:39 2007]: 0
+[Mon Aug 20 09:06:39 2007]: 5:1:1:1:1:2
+[Mon Aug 20 09:06:39 2007]: 1:10:90
+[Mon Aug 20 09:06:39 2007]: 0:0
+[Mon Aug 20 09:07:11 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:07:11 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:07:11 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:07:11 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:07:11 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:07:11 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:07:11 2007]: Read in configuration file
+[Mon Aug 20 09:07:11 2007]: Initializing System
+[Mon Aug 20 09:07:11 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:07:11 2007]: Starting server thread
+[Mon Aug 20 09:07:11 2007]: Starting control thread
+[Mon Aug 20 09:07:11 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:07:11 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:07:11 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:07:11 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 09:07:15 2007]: 1187674604
+[Mon Aug 20 09:07:15 2007]: 1187689853
+[Mon Aug 20 09:07:15 2007]: 1
+[Mon Aug 20 09:07:15 2007]: 18
+[Mon Aug 20 09:07:15 2007]: 0
+[Mon Aug 20 09:07:15 2007]: 1
+[Mon Aug 20 09:07:15 2007]: Cerro Tololo
+[Mon Aug 20 09:07:15 2007]: CTO
+[Mon Aug 20 09:07:15 2007]: -30.1679
+[Mon Aug 20 09:07:15 2007]: 289.194
+[Mon Aug 20 09:07:15 2007]: 2.155
+[Mon Aug 20 09:07:15 2007]: 1
+[Mon Aug 20 09:07:15 2007]: 0
+[Mon Aug 20 09:07:15 2007]: 0
+[Mon Aug 20 09:07:15 2007]: 1024
+[Mon Aug 20 09:07:15 2007]: 1024
+[Mon Aug 20 09:07:15 2007]: 0
+[Mon Aug 20 09:07:15 2007]: 5
+[Mon Aug 20 09:07:15 2007]: 0
+[Mon Aug 20 09:07:15 2007]: 3
+[Mon Aug 20 09:07:15 2007]: -999
+[Mon Aug 20 09:07:15 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 09:07:15 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 09:07:15 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 09:07:15 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 09:07:15 2007]: 0
+[Mon Aug 20 09:07:15 2007]: 0
+[Mon Aug 20 09:07:15 2007]: 0
+[Mon Aug 20 09:07:15 2007]: SHTR:0:1:1
+[Mon Aug 20 09:07:15 2007]: 6300:250:90:0
+[Mon Aug 20 09:07:15 2007]: 6343:250:90:0
+[Mon Aug 20 09:07:15 2007]: 7774:350:90:0
+[Mon Aug 20 09:07:15 2007]: empty:0:1:0
+[Mon Aug 20 09:07:15 2007]: 2:2:4
+[Mon Aug 20 09:07:15 2007]: 1:3
+[Mon Aug 20 09:07:15 2007]: 1:1
+[Mon Aug 20 09:07:15 2007]: 0
+[Mon Aug 20 09:07:15 2007]: 5:1:1:1:1:2
+[Mon Aug 20 09:07:15 2007]: 1:10:90
+[Mon Aug 20 09:07:15 2007]: 0:0
+[Mon Aug 20 09:07:22 2007]: Change CCD temperature setpoint to -25
+[Mon Aug 20 09:08:06 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:08:06 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:08:06 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:08:06 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:08:06 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:08:06 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:08:06 2007]: Read in configuration file
+[Mon Aug 20 09:08:06 2007]: Initializing System
+[Mon Aug 20 09:08:06 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:08:06 2007]: Starting server thread
+[Mon Aug 20 09:08:06 2007]: Starting control thread
+[Mon Aug 20 09:08:06 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:08:06 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:08:06 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:08:06 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 09:08:16 2007]: 1187674604
+[Mon Aug 20 09:08:16 2007]: 1187689853
+[Mon Aug 20 09:08:16 2007]: 1
+[Mon Aug 20 09:08:16 2007]: 18
+[Mon Aug 20 09:08:16 2007]: 0
+[Mon Aug 20 09:08:16 2007]: 1
+[Mon Aug 20 09:08:16 2007]: Cerro Tololo
+[Mon Aug 20 09:08:16 2007]: CTO
+[Mon Aug 20 09:08:16 2007]: -30.1679
+[Mon Aug 20 09:08:16 2007]: 289.194
+[Mon Aug 20 09:08:16 2007]: 2.155
+[Mon Aug 20 09:08:16 2007]: 1
+[Mon Aug 20 09:08:16 2007]: 0
+[Mon Aug 20 09:08:16 2007]: 0
+[Mon Aug 20 09:08:16 2007]: 1024
+[Mon Aug 20 09:08:16 2007]: 1024
+[Mon Aug 20 09:08:16 2007]: 0
+[Mon Aug 20 09:08:16 2007]: 5
+[Mon Aug 20 09:08:16 2007]: 0
+[Mon Aug 20 09:08:17 2007]: 3
+[Mon Aug 20 09:08:17 2007]: -999
+[Mon Aug 20 09:08:17 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 09:08:17 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 09:08:17 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 09:08:17 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 09:08:17 2007]: 0
+[Mon Aug 20 09:08:17 2007]: 0
+[Mon Aug 20 09:08:17 2007]: 0
+[Mon Aug 20 09:08:17 2007]: SHTR:0:1:1
+[Mon Aug 20 09:08:17 2007]: 6300:250:90:0
+[Mon Aug 20 09:08:17 2007]: 6343:250:90:0
+[Mon Aug 20 09:08:17 2007]: 7774:350:90:0
+[Mon Aug 20 09:08:17 2007]: empty:0:1:0
+[Mon Aug 20 09:08:17 2007]: 2:2:4
+[Mon Aug 20 09:08:17 2007]: 1:3
+[Mon Aug 20 09:08:17 2007]: 1:1
+[Mon Aug 20 09:08:17 2007]: 0
+[Mon Aug 20 09:08:17 2007]: 5:1:1:1:1:2
+[Mon Aug 20 09:08:17 2007]: 1:10:90
+[Mon Aug 20 09:08:17 2007]: 0:0
+[Mon Aug 20 09:08:27 2007]: Change CCD temperature setpoint to -25
+[Mon Aug 20 09:12:19 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:12:19 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:12:19 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:12:19 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:12:19 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:12:19 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:12:36 2007]: Read in configuration file
+[Mon Aug 20 09:12:36 2007]: Initializing System
+[Mon Aug 20 09:12:36 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:12:36 2007]: Starting server thread
+[Mon Aug 20 09:12:36 2007]: Starting control thread
+[Mon Aug 20 09:12:36 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:12:36 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:12:36 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:12:36 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 09:12:41 2007]: 1187674604
+[Mon Aug 20 09:12:41 2007]: 1187689853
+[Mon Aug 20 09:12:41 2007]: 1
+[Mon Aug 20 09:12:41 2007]: 18
+[Mon Aug 20 09:12:41 2007]: 0
+[Mon Aug 20 09:12:41 2007]: 1
+[Mon Aug 20 09:12:41 2007]: Cerro Tololo
+[Mon Aug 20 09:12:41 2007]: CTO
+[Mon Aug 20 09:12:41 2007]: -30.1679
+[Mon Aug 20 09:12:41 2007]: 289.194
+[Mon Aug 20 09:12:41 2007]: 2.155
+[Mon Aug 20 09:12:41 2007]: 1
+[Mon Aug 20 09:12:41 2007]: 0
+[Mon Aug 20 09:12:41 2007]: 0
+[Mon Aug 20 09:12:41 2007]: 1024
+[Mon Aug 20 09:12:41 2007]: 1024
+[Mon Aug 20 09:12:41 2007]: 0
+[Mon Aug 20 09:12:41 2007]: 5
+[Mon Aug 20 09:12:41 2007]: 0
+[Mon Aug 20 09:12:41 2007]: 3
+[Mon Aug 20 09:12:41 2007]: -999
+[Mon Aug 20 09:12:41 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 09:12:41 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 09:12:41 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 09:12:41 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 09:12:41 2007]: 0
+[Mon Aug 20 09:12:41 2007]: 0
+[Mon Aug 20 09:12:41 2007]: 0
+[Mon Aug 20 09:12:41 2007]: SHTR:0:1:1
+[Mon Aug 20 09:12:41 2007]: 6300:250:90:0
+[Mon Aug 20 09:12:41 2007]: 6343:250:90:0
+[Mon Aug 20 09:12:41 2007]: 7774:350:90:0
+[Mon Aug 20 09:12:41 2007]: empty:0:1:0
+[Mon Aug 20 09:12:41 2007]: 2:2:4
+[Mon Aug 20 09:12:41 2007]: 1:3
+[Mon Aug 20 09:12:41 2007]: 1:1
+[Mon Aug 20 09:12:41 2007]: 0
+[Mon Aug 20 09:12:41 2007]: 5:1:1:1:1:2
+[Mon Aug 20 09:12:41 2007]: 1:10:90
+[Mon Aug 20 09:12:41 2007]: 0:0
+[Mon Aug 20 09:12:45 2007]: Change CCD temperature setpoint to -25
+[Mon Aug 20 09:13:30 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:13:30 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:13:30 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:13:30 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:13:30 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:13:30 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:14:02 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:14:02 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:14:02 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:14:02 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:14:02 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:14:02 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:16:51 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:16:51 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:16:51 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:16:51 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:16:51 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:16:51 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:18:24 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:18:24 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:18:24 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:18:24 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:18:24 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:18:24 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:19:53 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:19:53 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:19:53 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:19:53 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:19:53 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:19:53 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:41:30 2007]: Read in configuration file
+[Mon Aug 20 09:41:30 2007]: Initializing System
+[Mon Aug 20 09:41:30 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:41:30 2007]: Starting server thread
+[Mon Aug 20 09:41:31 2007]: Starting control thread
+[Mon Aug 20 09:41:31 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:41:31 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:41:31 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:41:31 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 09:41:49 2007]: Change CCD height to 1472
+[Mon Aug 20 09:41:50 2007]: Change CCD height to 2184
+[Mon Aug 20 09:41:52 2007]: Stop command received.  Stopping program...
+[Mon Aug 20 09:41:52 2007]: Stopping server thread
+[Mon Aug 20 09:41:53 2007]: Stopping control thread
+[Mon Aug 20 09:41:54 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:41:54 2007]: Warming up sensor to 0 C
+[Mon Aug 20 09:41:54 2007]: Sensor warmed up successfully
+[Mon Aug 20 09:41:54 2007]: Closing system log file
+[Mon Aug 20 09:42:06 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:42:06 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:42:06 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:42:06 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:42:06 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:42:06 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:42:17 2007]: Read in configuration file
+[Mon Aug 20 09:42:17 2007]: Initializing System
+[Mon Aug 20 09:42:17 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:42:17 2007]: Starting server thread
+[Mon Aug 20 09:42:17 2007]: Starting control thread
+[Mon Aug 20 09:42:17 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:42:17 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:42:17 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:42:17 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 09:42:27 2007]: 1187674604
+[Mon Aug 20 09:42:27 2007]: 1187689853
+[Mon Aug 20 09:42:27 2007]: 1
+[Mon Aug 20 09:42:27 2007]: 18
+[Mon Aug 20 09:42:27 2007]: 0
+[Mon Aug 20 09:42:27 2007]: 1
+[Mon Aug 20 09:42:27 2007]: Cerro Tololo
+[Mon Aug 20 09:42:27 2007]: CTO
+[Mon Aug 20 09:42:27 2007]: -30.1679
+[Mon Aug 20 09:42:27 2007]: 289.194
+[Mon Aug 20 09:42:27 2007]: 2.155
+[Mon Aug 20 09:42:27 2007]: 1
+[Mon Aug 20 09:42:27 2007]: 0
+[Mon Aug 20 09:42:27 2007]: 0
+[Mon Aug 20 09:42:27 2007]: 1472
+[Mon Aug 20 09:42:27 2007]: 2184
+[Mon Aug 20 09:42:27 2007]: -25
+[Mon Aug 20 09:42:27 2007]: 5
+[Mon Aug 20 09:42:27 2007]: 0
+[Mon Aug 20 09:42:27 2007]: 3
+[Mon Aug 20 09:42:27 2007]: -999
+[Mon Aug 20 09:42:27 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 09:42:27 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 09:42:27 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 09:42:27 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 09:42:27 2007]: 0
+[Mon Aug 20 09:42:27 2007]: 0
+[Mon Aug 20 09:42:27 2007]: 0
+[Mon Aug 20 09:42:27 2007]: SHTR:0:1:1
+[Mon Aug 20 09:42:27 2007]: 6300:250:90:0
+[Mon Aug 20 09:42:27 2007]: 6343:250:90:0
+[Mon Aug 20 09:42:27 2007]: 7774:350:90:0
+[Mon Aug 20 09:42:27 2007]: empty:0:1:0
+[Mon Aug 20 09:42:27 2007]: 2:2:4
+[Mon Aug 20 09:42:27 2007]: 1:3
+[Mon Aug 20 09:42:27 2007]: 1:1
+[Mon Aug 20 09:42:27 2007]: 0
+[Mon Aug 20 09:42:27 2007]: 5:1:1:1:1:2
+[Mon Aug 20 09:42:27 2007]: 1:10:90
+[Mon Aug 20 09:42:27 2007]: 0:0
+[Mon Aug 20 09:43:19 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test4 w/ exposure time 0.1
+[Mon Aug 20 09:45:00 2007]: Current CCD temperature:  -23.50
+[Mon Aug 20 09:48:37 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:48:37 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:48:37 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:48:37 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:48:37 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:48:37 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:48:37 2007]: Read in configuration file
+[Mon Aug 20 09:48:37 2007]: Initializing System
+[Mon Aug 20 09:48:37 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:48:37 2007]: Starting server thread
+[Mon Aug 20 09:48:37 2007]: Starting control thread
+[Mon Aug 20 09:48:37 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:48:37 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:48:37 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:48:37 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 09:48:42 2007]: 1187674604
+[Mon Aug 20 09:48:42 2007]: 1187689853
+[Mon Aug 20 09:48:42 2007]: 1
+[Mon Aug 20 09:48:42 2007]: 18
+[Mon Aug 20 09:48:42 2007]: 0
+[Mon Aug 20 09:48:42 2007]: 1
+[Mon Aug 20 09:48:42 2007]: Cerro Tololo
+[Mon Aug 20 09:48:42 2007]: CTO
+[Mon Aug 20 09:48:42 2007]: -30.1679
+[Mon Aug 20 09:48:42 2007]: 289.194
+[Mon Aug 20 09:48:42 2007]: 2.155
+[Mon Aug 20 09:48:42 2007]: 1
+[Mon Aug 20 09:48:42 2007]: 0
+[Mon Aug 20 09:48:42 2007]: 0
+[Mon Aug 20 09:48:42 2007]: 1472
+[Mon Aug 20 09:48:43 2007]: 2184
+[Mon Aug 20 09:48:43 2007]: -25
+[Mon Aug 20 09:48:43 2007]: 5
+[Mon Aug 20 09:48:43 2007]: 0
+[Mon Aug 20 09:48:43 2007]: 3
+[Mon Aug 20 09:48:43 2007]: -999
+[Mon Aug 20 09:48:43 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 09:48:43 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 09:48:43 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 09:48:43 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 09:48:43 2007]: 0
+[Mon Aug 20 09:48:43 2007]: 0
+[Mon Aug 20 09:48:43 2007]: 0
+[Mon Aug 20 09:48:43 2007]: SHTR:0:1:1
+[Mon Aug 20 09:48:43 2007]: 6300:250:90:0
+[Mon Aug 20 09:48:43 2007]: 6343:250:90:0
+[Mon Aug 20 09:48:43 2007]: 7774:350:90:0
+[Mon Aug 20 09:48:43 2007]: empty:0:1:0
+[Mon Aug 20 09:48:43 2007]: 2:2:4
+[Mon Aug 20 09:48:43 2007]: 1:3
+[Mon Aug 20 09:48:43 2007]: 1:1
+[Mon Aug 20 09:48:43 2007]: 0
+[Mon Aug 20 09:48:43 2007]: 5:1:1:1:1:2
+[Mon Aug 20 09:48:43 2007]: 1:10:90
+[Mon Aug 20 09:48:43 2007]: 0:0
+[Mon Aug 20 09:48:56 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test5 w/ exposure time 0.1
+[Mon Aug 20 09:51:16 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:51:16 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:51:16 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:51:16 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:51:16 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:51:16 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:51:16 2007]: Read in configuration file
+[Mon Aug 20 09:51:16 2007]: Initializing System
+[Mon Aug 20 09:51:16 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:51:16 2007]: Starting server thread
+[Mon Aug 20 09:51:16 2007]: Starting control thread
+[Mon Aug 20 09:51:16 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:51:16 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:51:16 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:51:16 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 09:51:26 2007]: 1187674604
+[Mon Aug 20 09:51:26 2007]: 1187689853
+[Mon Aug 20 09:51:26 2007]: 1
+[Mon Aug 20 09:51:26 2007]: 18
+[Mon Aug 20 09:51:26 2007]: 0
+[Mon Aug 20 09:51:26 2007]: 1
+[Mon Aug 20 09:51:26 2007]: Cerro Tololo
+[Mon Aug 20 09:51:26 2007]: CTO
+[Mon Aug 20 09:51:26 2007]: -30.1679
+[Mon Aug 20 09:51:26 2007]: 289.194
+[Mon Aug 20 09:51:26 2007]: 2.155
+[Mon Aug 20 09:51:26 2007]: 1
+[Mon Aug 20 09:51:26 2007]: 0
+[Mon Aug 20 09:51:26 2007]: 0
+[Mon Aug 20 09:51:26 2007]: 1472
+[Mon Aug 20 09:51:26 2007]: 2184
+[Mon Aug 20 09:51:26 2007]: -25
+[Mon Aug 20 09:51:26 2007]: 5
+[Mon Aug 20 09:51:26 2007]: 0
+[Mon Aug 20 09:51:26 2007]: 3
+[Mon Aug 20 09:51:26 2007]: -999
+[Mon Aug 20 09:51:27 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 09:51:27 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 09:51:27 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 09:51:27 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 09:51:27 2007]: 0
+[Mon Aug 20 09:51:27 2007]: 0
+[Mon Aug 20 09:51:27 2007]: 0
+[Mon Aug 20 09:51:27 2007]: SHTR:0:1:1
+[Mon Aug 20 09:51:27 2007]: 6300:250:90:0
+[Mon Aug 20 09:51:27 2007]: 6343:250:90:0
+[Mon Aug 20 09:51:27 2007]: 7774:350:90:0
+[Mon Aug 20 09:51:27 2007]: empty:0:1:0
+[Mon Aug 20 09:51:27 2007]: 2:2:4
+[Mon Aug 20 09:51:27 2007]: 1:3
+[Mon Aug 20 09:51:27 2007]: 1:1
+[Mon Aug 20 09:51:27 2007]: 0
+[Mon Aug 20 09:51:27 2007]: 5:1:1:1:1:2
+[Mon Aug 20 09:51:27 2007]: 1:10:90
+[Mon Aug 20 09:51:27 2007]: 0:0
+[Mon Aug 20 09:51:28 2007]: 1187674604
+[Mon Aug 20 09:51:28 2007]: 1187689853
+[Mon Aug 20 09:51:28 2007]: 1
+[Mon Aug 20 09:51:28 2007]: 18
+[Mon Aug 20 09:51:28 2007]: 0
+[Mon Aug 20 09:51:28 2007]: 1
+[Mon Aug 20 09:51:28 2007]: Cerro Tololo
+[Mon Aug 20 09:51:28 2007]: CTO
+[Mon Aug 20 09:51:28 2007]: -30.1679
+[Mon Aug 20 09:51:28 2007]: 289.194
+[Mon Aug 20 09:51:28 2007]: 2.155
+[Mon Aug 20 09:51:28 2007]: 1
+[Mon Aug 20 09:51:28 2007]: 0
+[Mon Aug 20 09:51:28 2007]: 0
+[Mon Aug 20 09:51:28 2007]: 1472
+[Mon Aug 20 09:51:28 2007]: 2184
+[Mon Aug 20 09:51:28 2007]: -25
+[Mon Aug 20 09:51:28 2007]: 5
+[Mon Aug 20 09:51:28 2007]: 0
+[Mon Aug 20 09:51:28 2007]: 3
+[Mon Aug 20 09:51:28 2007]: -999
+[Mon Aug 20 09:51:28 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 09:51:28 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 09:51:28 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 09:51:28 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 09:51:28 2007]: 0
+[Mon Aug 20 09:51:28 2007]: 0
+[Mon Aug 20 09:51:28 2007]: 0
+[Mon Aug 20 09:51:28 2007]: SHTR:0:1:1
+[Mon Aug 20 09:51:28 2007]: 6300:250:90:0
+[Mon Aug 20 09:51:28 2007]: 6343:250:90:0
+[Mon Aug 20 09:51:28 2007]: 7774:350:90:0
+[Mon Aug 20 09:51:28 2007]: empty:0:1:0
+[Mon Aug 20 09:51:28 2007]: 2:2:4
+[Mon Aug 20 09:51:28 2007]: 1:3
+[Mon Aug 20 09:51:28 2007]: 1:1
+[Mon Aug 20 09:51:28 2007]: 0
+[Mon Aug 20 09:51:28 2007]: 5:1:1:1:1:2
+[Mon Aug 20 09:51:28 2007]: 1:10:90
+[Mon Aug 20 09:51:28 2007]: 0:0
+[Mon Aug 20 09:51:33 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test6 w/ exposure time 0.1
+[Mon Aug 20 09:52:33 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:52:33 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:52:33 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:52:33 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:52:33 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:52:33 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:52:33 2007]: Read in configuration file
+[Mon Aug 20 09:52:33 2007]: Initializing System
+[Mon Aug 20 09:52:33 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:52:33 2007]: Starting server thread
+[Mon Aug 20 09:52:33 2007]: Starting control thread
+[Mon Aug 20 09:52:33 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:52:33 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:52:33 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:52:33 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 09:52:44 2007]: 1187674604
+[Mon Aug 20 09:52:44 2007]: 1187689853
+[Mon Aug 20 09:52:44 2007]: 1
+[Mon Aug 20 09:52:44 2007]: 18
+[Mon Aug 20 09:52:44 2007]: 0
+[Mon Aug 20 09:52:44 2007]: 1
+[Mon Aug 20 09:52:45 2007]: Cerro Tololo
+[Mon Aug 20 09:52:45 2007]: CTO
+[Mon Aug 20 09:52:45 2007]: -30.1679
+[Mon Aug 20 09:52:45 2007]: 289.194
+[Mon Aug 20 09:52:45 2007]: 2.155
+[Mon Aug 20 09:52:45 2007]: 1
+[Mon Aug 20 09:52:45 2007]: 0
+[Mon Aug 20 09:52:45 2007]: 0
+[Mon Aug 20 09:52:45 2007]: 1472
+[Mon Aug 20 09:52:45 2007]: 2184
+[Mon Aug 20 09:52:45 2007]: -25
+[Mon Aug 20 09:52:45 2007]: 5
+[Mon Aug 20 09:52:45 2007]: 0
+[Mon Aug 20 09:52:45 2007]: 3
+[Mon Aug 20 09:52:45 2007]: -999
+[Mon Aug 20 09:52:45 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 09:52:45 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 09:52:45 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 09:52:45 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 09:52:45 2007]: 0
+[Mon Aug 20 09:52:45 2007]: 0
+[Mon Aug 20 09:52:45 2007]: 0
+[Mon Aug 20 09:52:45 2007]: SHTR:0:1:1
+[Mon Aug 20 09:52:45 2007]: 6300:250:90:0
+[Mon Aug 20 09:52:45 2007]: 6343:250:90:0
+[Mon Aug 20 09:52:45 2007]: 7774:350:90:0
+[Mon Aug 20 09:52:45 2007]: empty:0:1:0
+[Mon Aug 20 09:52:45 2007]: 2:2:4
+[Mon Aug 20 09:52:45 2007]: 1:3
+[Mon Aug 20 09:52:45 2007]: 1:1
+[Mon Aug 20 09:52:45 2007]: 0
+[Mon Aug 20 09:52:45 2007]: 5:1:1:1:1:2
+[Mon Aug 20 09:52:45 2007]: 1:10:90
+[Mon Aug 20 09:52:45 2007]: 0:0
+[Mon Aug 20 09:52:49 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test7 w/ exposure time 0.1
+[Mon Aug 20 09:56:10 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 09:56:10 2007]: Opened Error log file: error.txt
+[Mon Aug 20 09:56:10 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:56:10 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:56:10 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:56:10 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 09:56:10 2007]: Read in configuration file
+[Mon Aug 20 09:56:10 2007]: Initializing System
+[Mon Aug 20 09:56:10 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:56:10 2007]: Starting server thread
+[Mon Aug 20 09:56:10 2007]: Starting control thread
+[Mon Aug 20 09:56:10 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 09:56:10 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 09:56:10 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 09:56:10 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 09:56:16 2007]: 1187674604
+[Mon Aug 20 09:56:16 2007]: 1187689853
+[Mon Aug 20 09:56:16 2007]: 1
+[Mon Aug 20 09:56:16 2007]: 18
+[Mon Aug 20 09:56:16 2007]: 0
+[Mon Aug 20 09:56:16 2007]: 1
+[Mon Aug 20 09:56:16 2007]: Cerro Tololo
+[Mon Aug 20 09:56:16 2007]: CTO
+[Mon Aug 20 09:56:16 2007]: -30.1679
+[Mon Aug 20 09:56:16 2007]: 289.194
+[Mon Aug 20 09:56:16 2007]: 2.155
+[Mon Aug 20 09:56:16 2007]: 1
+[Mon Aug 20 09:56:16 2007]: 0
+[Mon Aug 20 09:56:16 2007]: 0
+[Mon Aug 20 09:56:16 2007]: 1472
+[Mon Aug 20 09:56:16 2007]: 2184
+[Mon Aug 20 09:56:16 2007]: -25
+[Mon Aug 20 09:56:16 2007]: 5
+[Mon Aug 20 09:56:16 2007]: 0
+[Mon Aug 20 09:56:16 2007]: 3
+[Mon Aug 20 09:56:16 2007]: -999
+[Mon Aug 20 09:56:16 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 09:56:16 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 09:56:16 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 09:56:16 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 09:56:16 2007]: 0
+[Mon Aug 20 09:56:16 2007]: 0
+[Mon Aug 20 09:56:16 2007]: 0
+[Mon Aug 20 09:56:16 2007]: SHTR:0:1:1
+[Mon Aug 20 09:56:16 2007]: 6300:250:90:0
+[Mon Aug 20 09:56:16 2007]: 6343:250:90:0
+[Mon Aug 20 09:56:16 2007]: 7774:350:90:0
+[Mon Aug 20 09:56:16 2007]: empty:0:1:0
+[Mon Aug 20 09:56:16 2007]: 2:2:4
+[Mon Aug 20 09:56:16 2007]: 1:3
+[Mon Aug 20 09:56:16 2007]: 1:1
+[Mon Aug 20 09:56:16 2007]: 0
+[Mon Aug 20 09:56:16 2007]: 5:1:1:1:1:2
+[Mon Aug 20 09:56:16 2007]: 1:10:90
+[Mon Aug 20 09:56:16 2007]: 0:0
+[Mon Aug 20 09:56:21 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test8 w/ exposure time 0.1
+[Mon Aug 20 09:57:15 2007]: Capture params: Filter position: 0.10, Filename: test8.tif, savePNG: 0
+[Mon Aug 20 10:00:00 2007]: Current CCD temperature:  -11.38
+[Mon Aug 20 10:05:00 2007]: Current CCD temperature:  -10.19
+[Mon Aug 20 10:10:00 2007]: Current CCD temperature:  -10.19
+[Mon Aug 20 10:15:00 2007]: Current CCD temperature:  -10.19
+[Mon Aug 20 10:20:00 2007]: Current CCD temperature:  -10.19
+[Mon Aug 20 10:25:00 2007]: Current CCD temperature:  -10.19
+[Mon Aug 20 10:27:12 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 10:27:12 2007]: Opened Error log file: error.txt
+[Mon Aug 20 10:27:12 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:27:12 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:27:12 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:27:12 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 10:27:12 2007]: Read in configuration file
+[Mon Aug 20 10:27:12 2007]: Initializing System
+[Mon Aug 20 10:27:12 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:27:12 2007]: Starting server thread
+[Mon Aug 20 10:27:12 2007]: Stopping server thread
+[Mon Aug 20 10:27:12 2007]: Starting control thread
+[Mon Aug 20 10:27:12 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:27:12 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:27:12 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:27:12 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 10:27:17 2007]: 1187674604
+[Mon Aug 20 10:27:17 2007]: 1187689853
+[Mon Aug 20 10:27:17 2007]: 1
+[Mon Aug 20 10:27:17 2007]: 18
+[Mon Aug 20 10:27:17 2007]: 0
+[Mon Aug 20 10:27:17 2007]: 1
+[Mon Aug 20 10:27:17 2007]: Cerro Tololo
+[Mon Aug 20 10:27:17 2007]: CTO
+[Mon Aug 20 10:27:17 2007]: -30.1679
+[Mon Aug 20 10:27:17 2007]: 289.194
+[Mon Aug 20 10:27:17 2007]: 2.155
+[Mon Aug 20 10:27:17 2007]: 1
+[Mon Aug 20 10:27:17 2007]: 0
+[Mon Aug 20 10:27:17 2007]: 0
+[Mon Aug 20 10:27:17 2007]: 1472
+[Mon Aug 20 10:27:17 2007]: 2184
+[Mon Aug 20 10:27:17 2007]: -25
+[Mon Aug 20 10:27:17 2007]: 5
+[Mon Aug 20 10:27:17 2007]: 0
+[Mon Aug 20 10:27:17 2007]: 3
+[Mon Aug 20 10:27:17 2007]: -999
+[Mon Aug 20 10:27:17 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 10:27:17 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 10:27:17 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 10:27:17 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 10:27:17 2007]: 0
+[Mon Aug 20 10:27:17 2007]: 0
+[Mon Aug 20 10:27:17 2007]: 0
+[Mon Aug 20 10:27:17 2007]: SHTR:0:1:1
+[Mon Aug 20 10:27:17 2007]: 6300:250:90:0
+[Mon Aug 20 10:27:17 2007]: 6343:250:90:0
+[Mon Aug 20 10:27:17 2007]: 7774:350:90:0
+[Mon Aug 20 10:27:17 2007]: empty:0:1:0
+[Mon Aug 20 10:27:17 2007]: 2:2:4
+[Mon Aug 20 10:27:17 2007]: 1:3
+[Mon Aug 20 10:27:17 2007]: 1:1
+[Mon Aug 20 10:27:17 2007]: 0
+[Mon Aug 20 10:27:17 2007]: 5:1:1:1:1:2
+[Mon Aug 20 10:27:17 2007]: 1:10:90
+[Mon Aug 20 10:27:17 2007]: 0:0
+[Mon Aug 20 10:27:22 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test9 w/ exposure time 0.1
+[Mon Aug 20 10:27:24 2007]: Capture params: Filter position: 0.10, Filename: test9.tif, savePNG: 0
+[Mon Aug 20 10:27:49 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test10 w/ exposure time 0.1
+[Mon Aug 20 10:27:51 2007]: Capture params: Filter position: 0.10, Filename: test10.tif, savePNG: 0
+[Mon Aug 20 10:28:02 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test11 w/ exposure time 0.1
+[Mon Aug 20 10:28:04 2007]: Capture params: Filter position: 0.10, Filename: test11.tif, savePNG: 0
+[Mon Aug 20 10:28:32 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 10:28:32 2007]: Opened Error log file: error.txt
+[Mon Aug 20 10:28:32 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:28:32 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:28:32 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:28:32 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 10:28:32 2007]: Read in configuration file
+[Mon Aug 20 10:28:32 2007]: Initializing System
+[Mon Aug 20 10:28:32 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:28:32 2007]: Starting server thread
+[Mon Aug 20 10:28:32 2007]: Stopping server thread
+[Mon Aug 20 10:28:32 2007]: Starting control thread
+[Mon Aug 20 10:28:32 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:28:32 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:28:32 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:28:32 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 10:28:36 2007]: 1187674604
+[Mon Aug 20 10:28:36 2007]: 1187689853
+[Mon Aug 20 10:28:36 2007]: 1
+[Mon Aug 20 10:28:36 2007]: 18
+[Mon Aug 20 10:28:36 2007]: 0
+[Mon Aug 20 10:28:36 2007]: 1
+[Mon Aug 20 10:28:36 2007]: Cerro Tololo
+[Mon Aug 20 10:28:36 2007]: CTO
+[Mon Aug 20 10:28:36 2007]: -30.1679
+[Mon Aug 20 10:28:36 2007]: 289.194
+[Mon Aug 20 10:28:36 2007]: 2.155
+[Mon Aug 20 10:28:36 2007]: 1
+[Mon Aug 20 10:28:36 2007]: 34
+[Mon Aug 20 10:28:36 2007]: 46
+[Mon Aug 20 10:28:36 2007]: 1472
+[Mon Aug 20 10:28:36 2007]: 2184
+[Mon Aug 20 10:28:36 2007]: -25
+[Mon Aug 20 10:28:36 2007]: 5
+[Mon Aug 20 10:28:36 2007]: 0
+[Mon Aug 20 10:28:36 2007]: 3
+[Mon Aug 20 10:28:36 2007]: -999
+[Mon Aug 20 10:28:36 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 10:28:36 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 10:28:36 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 10:28:36 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 10:28:36 2007]: 0
+[Mon Aug 20 10:28:36 2007]: 0
+[Mon Aug 20 10:28:36 2007]: 0
+[Mon Aug 20 10:28:36 2007]: SHTR:0:1:1
+[Mon Aug 20 10:28:36 2007]: 6300:250:90:0
+[Mon Aug 20 10:28:36 2007]: 6343:250:90:0
+[Mon Aug 20 10:28:36 2007]: 7774:350:90:0
+[Mon Aug 20 10:28:36 2007]: empty:0:1:0
+[Mon Aug 20 10:28:36 2007]: 2:2:4
+[Mon Aug 20 10:28:36 2007]: 1:3
+[Mon Aug 20 10:28:36 2007]: 1:1
+[Mon Aug 20 10:28:36 2007]: 0
+[Mon Aug 20 10:28:36 2007]: 5:1:1:1:1:2
+[Mon Aug 20 10:28:36 2007]: 1:10:90
+[Mon Aug 20 10:28:36 2007]: 0:0
+[Mon Aug 20 10:28:38 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test11 w/ exposure time 0.1
+[Mon Aug 20 10:28:40 2007]: Capture params: Filter position: 0.10, Filename: test11.tif, savePNG: 0
+[Mon Aug 20 10:28:58 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test11 w/ exposure time 0.1
+[Mon Aug 20 10:29:00 2007]: Capture params: Filter position: 0.10, Filename: test11.tif, savePNG: 0
+[Mon Aug 20 10:29:11 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test11 w/ exposure time 0.1
+[Mon Aug 20 10:29:13 2007]: Capture params: Filter position: 0.10, Filename: test11.tif, savePNG: 0
+[Mon Aug 20 10:29:33 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 10:29:33 2007]: Opened Error log file: error.txt
+[Mon Aug 20 10:29:33 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:29:33 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:29:33 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:29:33 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 10:29:33 2007]: Read in configuration file
+[Mon Aug 20 10:29:33 2007]: Initializing System
+[Mon Aug 20 10:29:33 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:29:33 2007]: Starting server thread
+[Mon Aug 20 10:29:33 2007]: Stopping server thread
+[Mon Aug 20 10:29:33 2007]: Starting control thread
+[Mon Aug 20 10:29:33 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:29:33 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:29:33 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:29:33 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 10:30:00 2007]: Current CCD temperature:  -24.69
+[Mon Aug 20 10:30:00 2007]: Current CCD temperature:  -24.69
+[Mon Aug 20 10:30:02 2007]: Stop command received.  Stopping program...
+[Mon Aug 20 10:30:02 2007]: Stopping server thread
+[Mon Aug 20 10:30:02 2007]: Stopping control thread
+[Mon Aug 20 10:30:02 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:30:02 2007]: Warming up sensor to 0 C
+[Mon Aug 20 10:32:13 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 10:32:13 2007]: Opened Error log file: error.txt
+[Mon Aug 20 10:32:13 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:32:13 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:32:13 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:32:13 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 10:32:13 2007]: Read in configuration file
+[Mon Aug 20 10:32:13 2007]: Initializing System
+[Mon Aug 20 10:32:13 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:32:13 2007]: Starting server thread
+[Mon Aug 20 10:32:13 2007]: Starting control thread
+[Mon Aug 20 10:32:13 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:32:13 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:32:13 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:32:13 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 10:32:21 2007]: 1187674604
+[Mon Aug 20 10:32:21 2007]: 1187689853
+[Mon Aug 20 10:32:21 2007]: 1
+[Mon Aug 20 10:32:21 2007]: 18
+[Mon Aug 20 10:32:21 2007]: 0
+[Mon Aug 20 10:32:21 2007]: 1
+[Mon Aug 20 10:32:21 2007]: Cerro Tololo
+[Mon Aug 20 10:32:21 2007]: CTO
+[Mon Aug 20 10:32:21 2007]: -30.1679
+[Mon Aug 20 10:32:21 2007]: 289.194
+[Mon Aug 20 10:32:21 2007]: 2.155
+[Mon Aug 20 10:32:21 2007]: 1
+[Mon Aug 20 10:32:21 2007]: 34
+[Mon Aug 20 10:32:21 2007]: 46
+[Mon Aug 20 10:32:21 2007]: 1472
+[Mon Aug 20 10:32:21 2007]: 2184
+[Mon Aug 20 10:32:21 2007]: -25
+[Mon Aug 20 10:32:21 2007]: 5
+[Mon Aug 20 10:32:21 2007]: 0
+[Mon Aug 20 10:32:21 2007]: 3
+[Mon Aug 20 10:32:21 2007]: -999
+[Mon Aug 20 10:32:21 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 10:32:21 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 10:32:21 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 10:32:21 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 10:32:21 2007]: 0
+[Mon Aug 20 10:32:21 2007]: 0
+[Mon Aug 20 10:32:21 2007]: 0
+[Mon Aug 20 10:32:21 2007]: SHTR:0:1:1
+[Mon Aug 20 10:32:21 2007]: 6300:250:90:0
+[Mon Aug 20 10:32:21 2007]: 6343:250:90:0
+[Mon Aug 20 10:32:21 2007]: 7774:350:90:0
+[Mon Aug 20 10:32:21 2007]: empty:0:1:0
+[Mon Aug 20 10:32:21 2007]: 2:2:4
+[Mon Aug 20 10:32:21 2007]: 1:3
+[Mon Aug 20 10:32:21 2007]: 1:1
+[Mon Aug 20 10:32:21 2007]: 0
+[Mon Aug 20 10:32:21 2007]: 5:1:1:1:1:2
+[Mon Aug 20 10:32:21 2007]: 1:10:90
+[Mon Aug 20 10:32:21 2007]: 0:0
+[Mon Aug 20 10:32:38 2007]: Change CCD top to 0
+[Mon Aug 20 10:32:38 2007]: Change CCD left to 0
+[Mon Aug 20 10:32:42 2007]: Stop command received.  Stopping program...
+[Mon Aug 20 10:32:42 2007]: Stopping server thread
+[Mon Aug 20 10:32:42 2007]: Stopping control thread
+[Mon Aug 20 10:32:43 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:32:43 2007]: Warming up sensor to 0 C
+[Mon Aug 20 10:32:43 2007]: Sensor warmed up successfully
+[Mon Aug 20 10:32:43 2007]: Closing system log file
+[Mon Aug 20 10:34:03 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 10:34:03 2007]: Opened Error log file: error.txt
+[Mon Aug 20 10:34:03 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:34:03 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:34:03 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:34:03 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 10:34:03 2007]: Read in configuration file
+[Mon Aug 20 10:34:03 2007]: Initializing System
+[Mon Aug 20 10:34:03 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:34:03 2007]: Starting server thread
+[Mon Aug 20 10:34:03 2007]: Starting control thread
+[Mon Aug 20 10:34:03 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:34:03 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:34:03 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:34:03 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 10:34:09 2007]: 1187674604
+[Mon Aug 20 10:34:09 2007]: 1187689853
+[Mon Aug 20 10:34:09 2007]: 1
+[Mon Aug 20 10:34:09 2007]: 18
+[Mon Aug 20 10:34:09 2007]: 0
+[Mon Aug 20 10:34:09 2007]: 1
+[Mon Aug 20 10:34:09 2007]: Cerro Tololo
+[Mon Aug 20 10:34:09 2007]: CTO
+[Mon Aug 20 10:34:09 2007]: -30.1679
+[Mon Aug 20 10:34:09 2007]: 289.194
+[Mon Aug 20 10:34:09 2007]: 2.155
+[Mon Aug 20 10:34:09 2007]: 1
+[Mon Aug 20 10:34:09 2007]: 0
+[Mon Aug 20 10:34:09 2007]: 0
+[Mon Aug 20 10:34:09 2007]: 1472
+[Mon Aug 20 10:34:09 2007]: 2184
+[Mon Aug 20 10:34:09 2007]: -25
+[Mon Aug 20 10:34:09 2007]: 5
+[Mon Aug 20 10:34:09 2007]: 0
+[Mon Aug 20 10:34:09 2007]: 3
+[Mon Aug 20 10:34:09 2007]: -999
+[Mon Aug 20 10:34:09 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 10:34:09 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 10:34:09 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 10:34:09 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 10:34:09 2007]: 0
+[Mon Aug 20 10:34:09 2007]: 0
+[Mon Aug 20 10:34:09 2007]: 0
+[Mon Aug 20 10:34:09 2007]: SHTR:0:1:1
+[Mon Aug 20 10:34:09 2007]: 6300:250:90:0
+[Mon Aug 20 10:34:09 2007]: 6343:250:90:0
+[Mon Aug 20 10:34:09 2007]: 7774:350:90:0
+[Mon Aug 20 10:34:09 2007]: empty:0:1:0
+[Mon Aug 20 10:34:09 2007]: 2:2:4
+[Mon Aug 20 10:34:09 2007]: 1:3
+[Mon Aug 20 10:34:09 2007]: 1:1
+[Mon Aug 20 10:34:09 2007]: 0
+[Mon Aug 20 10:34:09 2007]: 5:1:1:1:1:2
+[Mon Aug 20 10:34:09 2007]: 1:10:90
+[Mon Aug 20 10:34:09 2007]: 0:0
+[Mon Aug 20 10:34:15 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test11 w/ exposure time 0.1
+[Mon Aug 20 10:43:22 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 10:43:22 2007]: Opened Error log file: error.txt
+[Mon Aug 20 10:43:22 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:43:22 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:43:22 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:43:22 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 10:43:22 2007]: Read in configuration file
+[Mon Aug 20 10:43:22 2007]: Initializing System
+[Mon Aug 20 10:43:22 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:43:22 2007]: Starting server thread
+[Mon Aug 20 10:43:22 2007]: Starting control thread
+[Mon Aug 20 10:43:22 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:43:22 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:43:22 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:43:22 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 10:43:28 2007]: 1187674604
+[Mon Aug 20 10:43:28 2007]: 1187689853
+[Mon Aug 20 10:43:28 2007]: 1
+[Mon Aug 20 10:43:28 2007]: 18
+[Mon Aug 20 10:43:28 2007]: 0
+[Mon Aug 20 10:43:28 2007]: 1
+[Mon Aug 20 10:43:28 2007]: Cerro Tololo
+[Mon Aug 20 10:43:28 2007]: CTO
+[Mon Aug 20 10:43:28 2007]: -30.1679
+[Mon Aug 20 10:43:28 2007]: 289.194
+[Mon Aug 20 10:43:28 2007]: 2.155
+[Mon Aug 20 10:43:28 2007]: 1
+[Mon Aug 20 10:43:28 2007]: 0
+[Mon Aug 20 10:43:28 2007]: 0
+[Mon Aug 20 10:43:28 2007]: 1472
+[Mon Aug 20 10:43:28 2007]: 2184
+[Mon Aug 20 10:43:28 2007]: -25
+[Mon Aug 20 10:43:28 2007]: 5
+[Mon Aug 20 10:43:28 2007]: 0
+[Mon Aug 20 10:43:28 2007]: 3
+[Mon Aug 20 10:43:28 2007]: -999
+[Mon Aug 20 10:43:28 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 10:43:28 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 10:43:28 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 10:43:28 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 10:43:28 2007]: 0
+[Mon Aug 20 10:43:28 2007]: 0
+[Mon Aug 20 10:43:28 2007]: 0
+[Mon Aug 20 10:43:28 2007]: SHTR:0:1:1
+[Mon Aug 20 10:43:28 2007]: 6300:250:90:0
+[Mon Aug 20 10:43:28 2007]: 6343:250:90:0
+[Mon Aug 20 10:43:28 2007]: 7774:350:90:0
+[Mon Aug 20 10:43:28 2007]: empty:0:1:0
+[Mon Aug 20 10:43:28 2007]: 2:2:4
+[Mon Aug 20 10:43:28 2007]: 1:3
+[Mon Aug 20 10:43:28 2007]: 1:1
+[Mon Aug 20 10:43:28 2007]: 0
+[Mon Aug 20 10:43:28 2007]: 5:1:1:1:1:2
+[Mon Aug 20 10:43:28 2007]: 1:10:90
+[Mon Aug 20 10:43:28 2007]: 0:0
+[Mon Aug 20 10:43:37 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test12 w/ exposure time 0.1
+[Mon Aug 20 10:45:03 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 10:45:03 2007]: Opened Error log file: error.txt
+[Mon Aug 20 10:45:03 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:45:03 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:45:03 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:45:03 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 10:45:03 2007]: Read in configuration file
+[Mon Aug 20 10:45:03 2007]: Initializing System
+[Mon Aug 20 10:45:03 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:45:03 2007]: Starting server thread
+[Mon Aug 20 10:45:03 2007]: Starting control thread
+[Mon Aug 20 10:45:03 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:45:03 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:45:03 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:45:03 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 10:45:10 2007]: 1187674604
+[Mon Aug 20 10:45:10 2007]: 1187689853
+[Mon Aug 20 10:45:10 2007]: 1
+[Mon Aug 20 10:45:10 2007]: 18
+[Mon Aug 20 10:45:10 2007]: 0
+[Mon Aug 20 10:45:10 2007]: 1
+[Mon Aug 20 10:45:10 2007]: Cerro Tololo
+[Mon Aug 20 10:45:10 2007]: CTO
+[Mon Aug 20 10:45:10 2007]: -30.1679
+[Mon Aug 20 10:45:10 2007]: 289.194
+[Mon Aug 20 10:45:10 2007]: 2.155
+[Mon Aug 20 10:45:10 2007]: 1
+[Mon Aug 20 10:45:10 2007]: 0
+[Mon Aug 20 10:45:10 2007]: 0
+[Mon Aug 20 10:45:10 2007]: 1472
+[Mon Aug 20 10:45:10 2007]: 2184
+[Mon Aug 20 10:45:10 2007]: -25
+[Mon Aug 20 10:45:10 2007]: 5
+[Mon Aug 20 10:45:10 2007]: 0
+[Mon Aug 20 10:45:10 2007]: 3
+[Mon Aug 20 10:45:10 2007]: -999
+[Mon Aug 20 10:45:10 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 10:45:10 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 10:45:10 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 10:45:10 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 10:45:10 2007]: 0
+[Mon Aug 20 10:45:10 2007]: 0
+[Mon Aug 20 10:45:10 2007]: 0
+[Mon Aug 20 10:45:10 2007]: SHTR:0:1:1
+[Mon Aug 20 10:45:10 2007]: 6300:250:90:0
+[Mon Aug 20 10:45:10 2007]: 6343:250:90:0
+[Mon Aug 20 10:45:10 2007]: 7774:350:90:0
+[Mon Aug 20 10:45:10 2007]: empty:0:1:0
+[Mon Aug 20 10:45:10 2007]: 2:2:4
+[Mon Aug 20 10:45:10 2007]: 1:3
+[Mon Aug 20 10:45:10 2007]: 1:1
+[Mon Aug 20 10:45:10 2007]: 0
+[Mon Aug 20 10:45:10 2007]: 5:1:1:1:1:2
+[Mon Aug 20 10:45:10 2007]: 1:10:90
+[Mon Aug 20 10:45:10 2007]: 0:0
+[Mon Aug 20 10:45:13 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test12 w/ exposure time 0.1
+[Mon Aug 20 10:46:54 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 10:46:54 2007]: Opened Error log file: error.txt
+[Mon Aug 20 10:46:54 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:46:54 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:46:54 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:46:54 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 10:46:54 2007]: Read in configuration file
+[Mon Aug 20 10:46:54 2007]: Initializing System
+[Mon Aug 20 10:46:54 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:46:54 2007]: Starting server thread
+[Mon Aug 20 10:46:54 2007]: Starting control thread
+[Mon Aug 20 10:46:54 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:46:54 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:46:54 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:46:54 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 10:47:00 2007]: 1187674604
+[Mon Aug 20 10:47:00 2007]: 1187689853
+[Mon Aug 20 10:47:00 2007]: 1
+[Mon Aug 20 10:47:00 2007]: 18
+[Mon Aug 20 10:47:00 2007]: 0
+[Mon Aug 20 10:47:00 2007]: 1
+[Mon Aug 20 10:47:00 2007]: Cerro Tololo
+[Mon Aug 20 10:47:00 2007]: CTO
+[Mon Aug 20 10:47:00 2007]: -30.1679
+[Mon Aug 20 10:47:00 2007]: 289.194
+[Mon Aug 20 10:47:00 2007]: 2.155
+[Mon Aug 20 10:47:00 2007]: 1
+[Mon Aug 20 10:47:00 2007]: 0
+[Mon Aug 20 10:47:00 2007]: 0
+[Mon Aug 20 10:47:00 2007]: 1472
+[Mon Aug 20 10:47:00 2007]: 2184
+[Mon Aug 20 10:47:00 2007]: -25
+[Mon Aug 20 10:47:00 2007]: 5
+[Mon Aug 20 10:47:00 2007]: 0
+[Mon Aug 20 10:47:00 2007]: 3
+[Mon Aug 20 10:47:00 2007]: -999
+[Mon Aug 20 10:47:00 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 10:47:00 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 10:47:00 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 10:47:00 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 10:47:00 2007]: 0
+[Mon Aug 20 10:47:00 2007]: 0
+[Mon Aug 20 10:47:00 2007]: 0
+[Mon Aug 20 10:47:00 2007]: SHTR:0:1:1
+[Mon Aug 20 10:47:00 2007]: 6300:250:90:0
+[Mon Aug 20 10:47:00 2007]: 6343:250:90:0
+[Mon Aug 20 10:47:00 2007]: 7774:350:90:0
+[Mon Aug 20 10:47:00 2007]: empty:0:1:0
+[Mon Aug 20 10:47:00 2007]: 2:2:4
+[Mon Aug 20 10:47:00 2007]: 1:3
+[Mon Aug 20 10:47:00 2007]: 1:1
+[Mon Aug 20 10:47:00 2007]: 0
+[Mon Aug 20 10:47:00 2007]: 5:1:1:1:1:2
+[Mon Aug 20 10:47:00 2007]: 1:10:90
+[Mon Aug 20 10:47:00 2007]: 0:0
+[Mon Aug 20 10:47:03 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test12 w/ exposure time 0.1
+[Mon Aug 20 10:50:00 2007]: Current CCD temperature:  -25.25
+[Mon Aug 20 10:53:23 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 10:53:23 2007]: Opened Error log file: error.txt
+[Mon Aug 20 10:53:23 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:53:23 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:53:23 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:53:23 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 10:53:23 2007]: Read in configuration file
+[Mon Aug 20 10:53:23 2007]: Initializing System
+[Mon Aug 20 10:53:23 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:53:23 2007]: Starting server thread
+[Mon Aug 20 10:53:23 2007]: Starting control thread
+[Mon Aug 20 10:53:23 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:53:23 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:53:23 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:53:23 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 10:53:34 2007]: 1187674604
+[Mon Aug 20 10:53:34 2007]: 1187689853
+[Mon Aug 20 10:53:34 2007]: 1
+[Mon Aug 20 10:53:34 2007]: 18
+[Mon Aug 20 10:53:34 2007]: 0
+[Mon Aug 20 10:53:34 2007]: 1
+[Mon Aug 20 10:53:34 2007]: Cerro Tololo
+[Mon Aug 20 10:53:34 2007]: CTO
+[Mon Aug 20 10:53:34 2007]: -30.1679
+[Mon Aug 20 10:53:34 2007]: 289.194
+[Mon Aug 20 10:53:34 2007]: 2.155
+[Mon Aug 20 10:53:34 2007]: 1
+[Mon Aug 20 10:53:34 2007]: 0
+[Mon Aug 20 10:53:34 2007]: 0
+[Mon Aug 20 10:53:34 2007]: 1472
+[Mon Aug 20 10:53:34 2007]: 2184
+[Mon Aug 20 10:53:34 2007]: -25
+[Mon Aug 20 10:53:34 2007]: 5
+[Mon Aug 20 10:53:34 2007]: 0
+[Mon Aug 20 10:53:34 2007]: 3
+[Mon Aug 20 10:53:34 2007]: -999
+[Mon Aug 20 10:53:34 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 10:53:34 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 10:53:34 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 10:53:34 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 10:53:34 2007]: 0
+[Mon Aug 20 10:53:34 2007]: 0
+[Mon Aug 20 10:53:34 2007]: 0
+[Mon Aug 20 10:53:34 2007]: SHTR:0:1:1
+[Mon Aug 20 10:53:34 2007]: 6300:250:90:0
+[Mon Aug 20 10:53:34 2007]: 6343:250:90:0
+[Mon Aug 20 10:53:34 2007]: 7774:350:90:0
+[Mon Aug 20 10:53:34 2007]: empty:0:1:0
+[Mon Aug 20 10:53:34 2007]: 2:2:4
+[Mon Aug 20 10:53:34 2007]: 1:3
+[Mon Aug 20 10:53:34 2007]: 1:1
+[Mon Aug 20 10:53:34 2007]: 0
+[Mon Aug 20 10:53:34 2007]: 5:1:1:1:1:2
+[Mon Aug 20 10:53:34 2007]: 1:10:90
+[Mon Aug 20 10:53:34 2007]: 0:0
+[Mon Aug 20 10:53:47 2007]: Change CCD height to 1000
+[Mon Aug 20 10:53:47 2007]: Change CCD height to 1000
+[Mon Aug 20 10:53:51 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test12 w/ exposure time 0.1
+[Mon Aug 20 10:54:28 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 10:54:28 2007]: Opened Error log file: error.txt
+[Mon Aug 20 10:54:28 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:54:28 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:54:28 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:54:28 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 10:54:28 2007]: Read in configuration file
+[Mon Aug 20 10:54:28 2007]: Initializing System
+[Mon Aug 20 10:54:28 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:54:28 2007]: Starting server thread
+[Mon Aug 20 10:54:28 2007]: Starting control thread
+[Mon Aug 20 10:54:28 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:54:28 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:54:28 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:54:28 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 10:54:44 2007]: 1187674604
+[Mon Aug 20 10:54:44 2007]: 1187689853
+[Mon Aug 20 10:54:44 2007]: 1
+[Mon Aug 20 10:54:44 2007]: 18
+[Mon Aug 20 10:54:44 2007]: 0
+[Mon Aug 20 10:54:44 2007]: 1
+[Mon Aug 20 10:54:44 2007]: Cerro Tololo
+[Mon Aug 20 10:54:44 2007]: CTO
+[Mon Aug 20 10:54:44 2007]: -30.1679
+[Mon Aug 20 10:54:44 2007]: 289.194
+[Mon Aug 20 10:54:44 2007]: 2.155
+[Mon Aug 20 10:54:44 2007]: 1
+[Mon Aug 20 10:54:44 2007]: 0
+[Mon Aug 20 10:54:44 2007]: 0
+[Mon Aug 20 10:54:44 2007]: 1472
+[Mon Aug 20 10:54:44 2007]: 2184
+[Mon Aug 20 10:54:44 2007]: -25
+[Mon Aug 20 10:54:44 2007]: 5
+[Mon Aug 20 10:54:44 2007]: 0
+[Mon Aug 20 10:54:44 2007]: 3
+[Mon Aug 20 10:54:44 2007]: -999
+[Mon Aug 20 10:54:44 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 10:54:44 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 10:54:44 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 10:54:44 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 10:54:44 2007]: 0
+[Mon Aug 20 10:54:44 2007]: 0
+[Mon Aug 20 10:54:44 2007]: 0
+[Mon Aug 20 10:54:44 2007]: SHTR:0:1:1
+[Mon Aug 20 10:54:44 2007]: 6300:250:90:0
+[Mon Aug 20 10:54:44 2007]: 6343:250:90:0
+[Mon Aug 20 10:54:44 2007]: 7774:350:90:0
+[Mon Aug 20 10:54:44 2007]: empty:0:1:0
+[Mon Aug 20 10:54:44 2007]: 2:2:4
+[Mon Aug 20 10:54:44 2007]: 1:3
+[Mon Aug 20 10:54:44 2007]: 1:1
+[Mon Aug 20 10:54:44 2007]: 0
+[Mon Aug 20 10:54:44 2007]: 5:1:1:1:1:2
+[Mon Aug 20 10:54:45 2007]: 1:10:90
+[Mon Aug 20 10:54:45 2007]: 0:0
+[Mon Aug 20 10:54:52 2007]: Change CCD height to 1000
+[Mon Aug 20 10:54:52 2007]: Change CCD height to 1000
+[Mon Aug 20 10:54:56 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test12 w/ exposure time 0.1
+[Mon Aug 20 10:55:39 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 10:55:39 2007]: Opened Error log file: error.txt
+[Mon Aug 20 10:55:39 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:55:39 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:55:39 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:55:39 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 10:55:40 2007]: Read in configuration file
+[Mon Aug 20 10:55:40 2007]: Initializing System
+[Mon Aug 20 10:55:40 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:55:40 2007]: Starting server thread
+[Mon Aug 20 10:55:40 2007]: Starting control thread
+[Mon Aug 20 10:55:40 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 10:55:40 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 10:55:40 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 10:55:40 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 11:02:00 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 11:02:00 2007]: Opened Error log file: error.txt
+[Mon Aug 20 11:02:00 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 11:02:00 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 11:02:00 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 11:02:00 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 11:02:00 2007]: Read in configuration file
+[Mon Aug 20 11:02:00 2007]: Initializing System
+[Mon Aug 20 11:02:00 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 11:02:00 2007]: Starting server thread
+[Mon Aug 20 11:02:00 2007]: Starting control thread
+[Mon Aug 20 11:02:00 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 11:02:00 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 11:02:00 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 11:02:00 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 11:02:09 2007]: 1187674604
+[Mon Aug 20 11:02:09 2007]: 1187689853
+[Mon Aug 20 11:02:09 2007]: 1
+[Mon Aug 20 11:02:09 2007]: 18
+[Mon Aug 20 11:02:09 2007]: 0
+[Mon Aug 20 11:02:09 2007]: 1
+[Mon Aug 20 11:02:09 2007]: Cerro Tololo
+[Mon Aug 20 11:02:09 2007]: CTO
+[Mon Aug 20 11:02:09 2007]: -30.1679
+[Mon Aug 20 11:02:09 2007]: 289.194
+[Mon Aug 20 11:02:09 2007]: 2.155
+[Mon Aug 20 11:02:09 2007]: 1
+[Mon Aug 20 11:02:09 2007]: 0
+[Mon Aug 20 11:02:09 2007]: 0
+[Mon Aug 20 11:02:09 2007]: 1472
+[Mon Aug 20 11:02:09 2007]: 2184
+[Mon Aug 20 11:02:09 2007]: -25
+[Mon Aug 20 11:02:09 2007]: 5
+[Mon Aug 20 11:02:09 2007]: 0
+[Mon Aug 20 11:02:09 2007]: 3
+[Mon Aug 20 11:02:09 2007]: -999
+[Mon Aug 20 11:02:09 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 11:02:09 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 11:02:09 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 11:02:09 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 11:02:09 2007]: 0
+[Mon Aug 20 11:02:09 2007]: 0
+[Mon Aug 20 11:02:09 2007]: 0
+[Mon Aug 20 11:02:09 2007]: SHTR:0:1:1
+[Mon Aug 20 11:02:09 2007]: 6300:250:90:0
+[Mon Aug 20 11:02:09 2007]: 6343:250:90:0
+[Mon Aug 20 11:02:09 2007]: 7774:350:90:0
+[Mon Aug 20 11:02:09 2007]: empty:0:1:0
+[Mon Aug 20 11:02:09 2007]: 2:2:4
+[Mon Aug 20 11:02:09 2007]: 1:3
+[Mon Aug 20 11:02:09 2007]: 1:1
+[Mon Aug 20 11:02:09 2007]: 0
+[Mon Aug 20 11:02:09 2007]: 5:1:1:1:1:2
+[Mon Aug 20 11:02:09 2007]: 1:10:90
+[Mon Aug 20 11:02:09 2007]: 0:0
+[Mon Aug 20 11:02:12 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test12 w/ exposure time 0.1
+[Mon Aug 20 11:02:36 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 11:02:36 2007]: Opened Error log file: error.txt
+[Mon Aug 20 11:02:36 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 11:02:36 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 11:02:36 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 11:02:36 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 11:02:36 2007]: Read in configuration file
+[Mon Aug 20 11:02:36 2007]: Initializing System
+[Mon Aug 20 11:02:36 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 11:02:36 2007]: Starting server thread
+[Mon Aug 20 11:02:36 2007]: Starting control thread
+[Mon Aug 20 11:02:36 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 11:02:36 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 11:02:36 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 11:02:36 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 11:02:48 2007]: 1187674604
+[Mon Aug 20 11:02:48 2007]: 1187689853
+[Mon Aug 20 11:02:48 2007]: 1
+[Mon Aug 20 11:02:48 2007]: 18
+[Mon Aug 20 11:02:48 2007]: 0
+[Mon Aug 20 11:02:48 2007]: 1
+[Mon Aug 20 11:02:48 2007]: Cerro Tololo
+[Mon Aug 20 11:02:48 2007]: CTO
+[Mon Aug 20 11:02:48 2007]: -30.1679
+[Mon Aug 20 11:02:48 2007]: 289.194
+[Mon Aug 20 11:02:48 2007]: 2.155
+[Mon Aug 20 11:02:48 2007]: 1
+[Mon Aug 20 11:02:48 2007]: 0
+[Mon Aug 20 11:02:48 2007]: 0
+[Mon Aug 20 11:02:48 2007]: 1472
+[Mon Aug 20 11:02:48 2007]: 2184
+[Mon Aug 20 11:02:48 2007]: -25
+[Mon Aug 20 11:02:48 2007]: 5
+[Mon Aug 20 11:02:48 2007]: 0
+[Mon Aug 20 11:02:48 2007]: 3
+[Mon Aug 20 11:02:48 2007]: -999
+[Mon Aug 20 11:02:48 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 11:02:48 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 11:02:48 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 11:02:48 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 11:02:48 2007]: 0
+[Mon Aug 20 11:02:48 2007]: 0
+[Mon Aug 20 11:02:48 2007]: 0
+[Mon Aug 20 11:02:48 2007]: SHTR:0:1:1
+[Mon Aug 20 11:02:48 2007]: 6300:250:90:0
+[Mon Aug 20 11:02:48 2007]: 6343:250:90:0
+[Mon Aug 20 11:02:48 2007]: 7774:350:90:0
+[Mon Aug 20 11:02:48 2007]: empty:0:1:0
+[Mon Aug 20 11:02:48 2007]: 2:2:4
+[Mon Aug 20 11:02:48 2007]: 1:3
+[Mon Aug 20 11:02:48 2007]: 1:1
+[Mon Aug 20 11:02:48 2007]: 0
+[Mon Aug 20 11:02:48 2007]: 5:1:1:1:1:2
+[Mon Aug 20 11:02:48 2007]: 1:10:90
+[Mon Aug 20 11:02:48 2007]: 0:0
+[Mon Aug 20 11:02:52 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test12 w/ exposure time 0.1
+[Mon Aug 20 11:03:01 2007]: Capture params: Filter position: 0.10, Filename: test12.tif, savePNG: 0
+[Mon Aug 20 11:05:00 2007]: Current CCD temperature:  -25.25
+[Mon Aug 20 11:10:00 2007]: Current CCD temperature:  -25.19
+[Mon Aug 20 11:11:23 2007]: Stop command received.  Stopping program...
+[Mon Aug 20 11:11:23 2007]: Stopping server thread
+[Mon Aug 20 11:11:23 2007]: Stopping control thread
+[Mon Aug 20 11:11:24 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 11:11:24 2007]: Warming up sensor to 0 C
+[Mon Aug 20 11:13:24 2007]: Sensor warmed up successfully
+[Mon Aug 20 11:13:24 2007]: Closing system log file
+[Mon Aug 20 11:16:28 2007]: Opened System log file: CDAS.log
+[Mon Aug 20 11:16:28 2007]: Opened Error log file: error.txt
+[Mon Aug 20 11:16:28 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 11:16:28 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 11:16:28 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 11:16:28 2007]: Filter Sequence, 2, 4, 2, 4, 2, 4, 2, 4, 3
+[Mon Aug 20 11:16:58 2007]: Read in configuration file
+[Mon Aug 20 11:16:58 2007]: Initializing System
+[Mon Aug 20 11:16:58 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 11:16:58 2007]: Starting server thread
+[Mon Aug 20 11:16:58 2007]: Starting control thread
+[Mon Aug 20 11:16:58 2007]: Auto set start time to: Tue Aug 21 00:36:44 2007
+[Mon Aug 20 11:16:58 2007]: Auto set stop time to: Tue Aug 21 04:50:53 2007
+[Mon Aug 20 11:16:58 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 11:16:58 2007]: Waiting for Tue Aug 21 00:36:44 2007...
+[Mon Aug 20 11:17:04 2007]: 1187674604
+[Mon Aug 20 11:17:04 2007]: 1187689853
+[Mon Aug 20 11:17:04 2007]: 1
+[Mon Aug 20 11:17:04 2007]: 18
+[Mon Aug 20 11:17:04 2007]: 0
+[Mon Aug 20 11:17:04 2007]: 1
+[Mon Aug 20 11:17:04 2007]: Cerro Tololo
+[Mon Aug 20 11:17:04 2007]: CTO
+[Mon Aug 20 11:17:04 2007]: -30.1679
+[Mon Aug 20 11:17:04 2007]: 289.194
+[Mon Aug 20 11:17:04 2007]: 2.155
+[Mon Aug 20 11:17:04 2007]: 1
+[Mon Aug 20 11:17:04 2007]: 0
+[Mon Aug 20 11:17:04 2007]: 0
+[Mon Aug 20 11:17:04 2007]: 1472
+[Mon Aug 20 11:17:04 2007]: 2184
+[Mon Aug 20 11:17:04 2007]: -25
+[Mon Aug 20 11:17:04 2007]: 5
+[Mon Aug 20 11:17:04 2007]: 0
+[Mon Aug 20 11:17:04 2007]: 3
+[Mon Aug 20 11:17:04 2007]: -999
+[Mon Aug 20 11:17:04 2007]: /home/PICASSO/PICASSO/
+[Mon Aug 20 11:17:04 2007]: /home/PICASSO/public_html/PICASSO/png/
+[Mon Aug 20 11:17:04 2007]: /home/PICASSO/public_html/PICASSO/mpeg/
+[Mon Aug 20 11:17:04 2007]: /home/PICASSO/public_html/
+[Mon Aug 20 11:17:04 2007]: 0
+[Mon Aug 20 11:17:04 2007]: 0
+[Mon Aug 20 11:17:04 2007]: 0
+[Mon Aug 20 11:17:04 2007]: SHTR:0:1:1
+[Mon Aug 20 11:17:04 2007]: 6300:250:90:0
+[Mon Aug 20 11:17:04 2007]: 6343:250:90:0
+[Mon Aug 20 11:17:04 2007]: 7774:350:90:0
+[Mon Aug 20 11:17:04 2007]: empty:0:1:0
+[Mon Aug 20 11:17:04 2007]: 2:2:4
+[Mon Aug 20 11:17:04 2007]: 1:3
+[Mon Aug 20 11:17:04 2007]: 1:1
+[Mon Aug 20 11:17:04 2007]: 0
+[Mon Aug 20 11:17:04 2007]: 5:1:1:1:1:2
+[Mon Aug 20 11:17:04 2007]: 1:10:90
+[Mon Aug 20 11:17:04 2007]: 0:0
+[Mon Aug 20 11:17:17 2007]: Capturing /home/PICASSO/PICASSO/2007/232/test13 w/ exposure time 0.1
+[Mon Aug 20 11:17:24 2007]: Capture params: Filter position: 0.10, Filename: test13.tif, savePNG: 0
+[Mon Aug 20 11:17:36 2007]: Stop command received.  Stopping program...
+[Mon Aug 20 11:17:37 2007]: Stopping server thread
+[Mon Aug 20 11:17:37 2007]: Stopping control thread
+[Mon Aug 20 11:17:37 2007]: Writing XML file: /home/PICASSO/public_html/CDAS.xml
+[Mon Aug 20 11:17:37 2007]: Warming up sensor to 0 C
+[Mon Aug 20 11:17:37 2007]: Sensor warmed up successfully
+[Mon Aug 20 11:17:37 2007]: Closing system log file
+[Mon Aug 02 14:34:57 2010]: Opened System log file: CDAS.log
+[Mon Aug 02 14:34:57 2010]: Opened Error log file: error.txt
+[Mon Aug 02 14:37:20 2010]: Opened System log file: CDAS.log
+[Mon Aug 02 14:37:20 2010]: Opened Error log file: error.txt
+[Mon Aug 02 14:41:33 2010]: Opened System log file: CDAS.log
+[Mon Aug 02 14:41:33 2010]: Opened Error log file: error.txt
+[Mon Aug 02 14:44:31 2010]: Opened System log file: CDAS.log
+[Mon Aug 02 14:44:31 2010]: Opened Error log file: error.txt
+[Mon Aug 02 14:55:03 2010]: Opened System log file: CDAS.log
+[Mon Aug 02 14:55:03 2010]: Opened Error log file: error.txt
+[Mon Aug 02 14:55:32 2010]: Auto set start time to: Mon Aug 02 14:21:56 2010
+[Mon Aug 02 14:55:32 2010]: Auto set stop time to: Mon Aug 02 18:27:39 2010
+[Mon Aug 02 14:55:32 2010]: Writing XML file: CDAS.xml
+[Mon Aug 02 14:56:40 2010]: Opened System log file: CDAS.log
+[Mon Aug 02 14:56:40 2010]: Opened Error log file: error.txt
+[Mon Aug 02 14:58:22 2010]: Opened System log file: CDAS.log
+[Mon Aug 02 14:58:22 2010]: Opened Error log file: error.txt
+[Mon Aug 02 14:58:58 2010]: Auto set start time to: Mon Aug 02 19:13:31 2010
+[Mon Aug 02 14:58:58 2010]: Auto set stop time to: Mon Aug 02 22:56:01 2010
+[Mon Aug 02 14:58:58 2010]: Writing XML file: /home/airglow/public_html/CDAS.xml
+[Mon Aug 02 14:58:58 2010]: Filter Sequence, 2, 2, 3, 2, 2, 4
+[Mon Aug 02 14:58:59 2010]: Read in configuration file
+[Mon Aug 02 14:58:59 2010]: Initializing System
+[Mon Aug 02 14:58:59 2010]: Writing XML file: /home/airglow/public_html/CDAS.xml
+[Mon Aug 02 14:58:59 2010]: Starting server thread
+[Mon Aug 02 14:58:59 2010]: Starting server thread
+[Mon Aug 02 14:58:59 2010]: Starting control thread
+[Mon Aug 02 14:58:59 2010]: Auto set start time to: Mon Aug 02 19:13:31 2010
+[Mon Aug 02 14:58:59 2010]: Auto set stop time to: Mon Aug 02 22:56:01 2010
+[Mon Aug 02 14:58:59 2010]: Writing XML file: /home/airglow/public_html/CDAS.xml
+[Mon Aug 02 14:58:59 2010]: Waiting for Mon Aug 02 19:13:31 2010...
