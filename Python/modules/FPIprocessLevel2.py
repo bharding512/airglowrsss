@@ -281,8 +281,9 @@ class Level1:
         # remove bad indices corresponding to sigma > 50 or los > 1000.
         for direction in self.directions:
             bad_ind = np.where(\
-                    (self.los_fit[direction] > errorbarlimit) \
-                    | (self.los_cal[direction] > errorbarlimit) \
+                    self.los_sigma[direction] > errorbarlimit           
+                    #(self.los_fit[direction] > errorbarlimit) \
+                    #| (self.los_cal[direction] > errorbarlimit) \
                     #| (np.abs(self.los_wind[direction]) > 1e3) \
                     )  
 
@@ -297,8 +298,8 @@ class Level1:
             self.ind      [direction] = np.delete( self.ind      [direction], bad_ind)
             self.iw       [direction] = np.delete( self.iw       [direction], bad_ind)
             self.iwe      [direction] = np.delete( self.iwe      [direction], bad_ind)
-            self.iwef     [direction] = np.delete( self.iwef     [direction], bad_ind)
-            self.iwec     [direction] = np.delete( self.iwec     [direction], bad_ind)
+            #self.iwef     [direction] = np.delete( self.iwef     [direction], bad_ind)
+            #self.iwec     [direction] = np.delete( self.iwec     [direction], bad_ind)
             self.zenith   [direction] = np.delete( self.zenith   [direction], bad_ind)
             self.azimuth  [direction] = np.delete( self.azimuth  [direction], bad_ind)
             self.i        [direction] = np.delete( self.i        [direction], bad_ind)
@@ -378,7 +379,7 @@ class Level1:
             self.alliwe = iwe
 
         # fill in dictionaries directions as keys:
-        for (t, direction, iw, iwe, iwef, iwec) \
+        for (t, direction, iw, iwe) \
                 in zip( \
                 self.r['sky_times'], self.r['direction'], \
                 self.alliw, self.alliwe):
@@ -942,8 +943,8 @@ def CardFinder(dn, instr1, w_is_0=False):
 
         # record parent Level 1 LOS errors:
         d_loop.los_sigma1 = l1.los_sigma[look]
-        d_loop.los_fit1 = l1.los_fit[look]
-        d_loop.los_cal1 = l1.los_cal[look]
+        #d_loop.los_fit1 = l1.los_fit[look]
+        #d_loop.los_cal1 = l1.los_cal[look]
 
         # fill in cloud information
         d_loop.flag_wind = l1.flag_wind[look]
@@ -1351,7 +1352,7 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
             # Calculated Average vertical wind at cv points
             iw = np.average(np.vstack((iw1,iw2)), \
                     axis=0, \
-                    weights=(1./np.vstack((iwef1,iwef2))**2),\
+                    weights=(1./np.vstack((iwe1,iwe2))**2),\
                     )
             iwe = np.sqrt((iwe1**-2 + iwe2**-2)/(iwe1**-4+ iwe2**-4))
 
