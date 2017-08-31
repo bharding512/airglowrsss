@@ -1844,13 +1844,13 @@ def get_msisGPI(dn, year_day, f107, f107a, ap, ap3):
 
     return my_f107, my_f107a, my_apmsis
 
-def CreateSummaryPlot(file_netcdf, file_png, stripe=2, min_alt=None, max_alt=None,
+def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=None,
                       min_dn=None, max_dn=None, min_ne=None, max_ne=None, min_dne=None, max_dne=None):
     '''
     Operational Code to generate the standard summary file for the nighttime FUV 2.5 dataproduct.
     INPUTS:
         file_netcdf - full path to the netCDF4 file
-        file_png - full path to the png file to be generated
+        png_stub - full path to the png file to be generated (will be modified to contain orbit number)
         stripe - which stripe to plot profiles for (default = 2)
         min_alt, max_alt - min/max range of altitude to plot (km). If no value passed, figure this
                            out from the range of altitudes in the file.
@@ -1865,6 +1865,7 @@ def CreateSummaryPlot(file_netcdf, file_png, stripe=2, min_alt=None, max_alt=Non
     NOTES:
     HISTORY:
         05-Jun-2017: Written by Jonathan Makela (jmakela@illinois.edu)
+        31-Aug-2017: Fixed a few bugs and implemented multi-orbit plot fixes
     '''
 
     # Use viridis if it exists
@@ -1885,21 +1886,21 @@ def CreateSummaryPlot(file_netcdf, file_png, stripe=2, min_alt=None, max_alt=Non
 
         orbits = f.variables['ICON_L2_ORBIT_NUMBER'][:]
 
-        for orbit in unique(orbits):
+        for orbit in np.unique(orbits):
             stripe = 0
 
-            file_png = png_stub + '_%d.png' % orbit
-            orbit_ind = squeeze(where(f.variables['ICON_L2_ORBIT_NUMBER'][:] == orbit))
+            file_png = png_stub[0:-11] + 'o%05d_' % orbit + png_stub[-11:]
+            orbit_ind = np.squeeze(np.where(f.variables['ICON_L2_ORBIT_NUMBER'][:] == orbit))
             ds = np.array([i.total_seconds() for i in dn-dn[orbit_ind][0]])
-            orbit_ind = squeeze(where(abs(ds) < 2000.))
+            orbit_ind = np.squeeze(np.where(abs(ds) < 2000.))
 
-            X = transpose([dn,]*f.dimensions['Vertical'].size)[orbit_ind]
+            X = np.transpose([dn,]*f.dimensions['Vertical'].size)[orbit_ind]
             Y = f.variables['ICON_L2_FUVA_TANGENT_ALT'][orbit_ind,:,stripe]
             Z = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ALTITUDE_PROFILE'][orbit_ind,:,stripe]
             Ze = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ERROR_ALTITUDE_PROFILE'][orbit_ind,:,stripe]
 
-            out = diff(X,axis=0)
-            mask = np.vstack([out > datetime.timedelta(seconds=24),ones([1,size(out,1)],dtype=bool)])
+            out = np.diff(X,axis=0)
+            mask = np.vstack([out > datetime.timedelta(seconds=24),np.ones([1,np.size(out,1)],dtype=bool)])
             Zm = np.ma.MaskedArray(Z,mask)
             Zem = np.ma.MaskedArray(Ze,mask)
 
@@ -1916,26 +1917,26 @@ def CreateSummaryPlot(file_netcdf, file_png, stripe=2, min_alt=None, max_alt=Non
             min_dne = 0.
             max_dne = 6.
 
-            fig, axes = subplots(nrows=5, sharex=True, figsize=(8,11))
+            fig, axes = plt.subplots(nrows=5, sharex=True, figsize=(8,11))
 
             # The electron density estimates
             im = axes[0].pcolormesh(X,Y,Zm,vmin=min_ne,vmax=max_ne)
-            gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-            gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+            plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
             axes[0].set_ylim([min_alt,max_alt])
             axes[0].set_title('Estimated Ne; Stripe #%d' % stripe)
             axes[0].set_ylabel('Altitude [km]')
 
             # The electron density error estimates
-            im2 = axes[1].pcolormesh(X,Y,log10(Zem),vmin=min_dne,vmax=max_dne)
-            gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-            gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+            im2 = axes[1].pcolormesh(X,Y,np.log10(Zem),vmin=min_dne,vmax=max_dne)
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+            plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
             axes[1].set_ylim([min_alt,max_alt])
             axes[1].set_title('Estimated Ne Error; Stripe #%d' % stripe)
             axes[1].set_ylabel('Altitude [km]')
 
             # The hmF2 estimates
-            out = diff(dn[orbit_ind],axis=0)
+            out = np.diff(dn[orbit_ind],axis=0)
             mask = np.hstack([out > datetime.timedelta(seconds=24),[True]])
             for stripe in range(0,6):
                 Y = f.variables['ICON_L2_FUVA_SWP_HMF2'][orbit_ind,stripe]
@@ -1944,9 +1945,9 @@ def CreateSummaryPlot(file_netcdf, file_png, stripe=2, min_alt=None, max_alt=Non
                 Yem = np.ma.MaskedArray(Ye,mask)
                 axes[2].plot(dn[orbit_ind],Ym,'-')
                 axes[2].fill_between(dn[orbit_ind],Ym-Yem,Ym+Yem,alpha=.25)
-            gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-            gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
-            xlim([min_dn,max_dn])
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+            plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+            plt.xlim([min_dn,max_dn])
             axes[2].set_ylim([min_alt,max_alt])
             axes[2].set_title('Estimated hmF2')
             axes[2].set_ylabel('Altitude [km]')
@@ -1959,9 +1960,9 @@ def CreateSummaryPlot(file_netcdf, file_png, stripe=2, min_alt=None, max_alt=Non
                 Yem = np.ma.MaskedArray(Ye,mask)
                 axes[3].plot(dn[orbit_ind],Ym,'-')
                 axes[3].fill_between(dn[orbit_ind],Ym-Yem,Ym+Yem,alpha=.25)
-            gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-            gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
-            xlim([min_dn,max_dn])
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+            plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+            plt.xlim([min_dn,max_dn])
             axes[3].set_title('Estimated NmF2')
             axes[3].set_ylabel('Ne [cm^-3]')
 
@@ -1970,8 +1971,8 @@ def CreateSummaryPlot(file_netcdf, file_png, stripe=2, min_alt=None, max_alt=Non
                 quality = f.variables['ICON_L2_FUVA_QUALITY'][orbit_ind]
                 axes[4].plot(dn[orbit_ind],quality[:,stripe],'.',label=stripe)
             axes[4].set_ylim([-.25,2])
-            gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-            gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
+            plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+            plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
             axes[4].set_title('Inversion quality flag')
             axes[4].set_xlabel('UTC')
             lgd = plt.legend(ncol=6,numpoints=1,loc=9, bbox_to_anchor=(0.6, -0.23))
@@ -1984,10 +1985,10 @@ def CreateSummaryPlot(file_netcdf, file_png, stripe=2, min_alt=None, max_alt=Non
                              ha='right', va='top')
 
             orbit_str = 'err'
-            if len(unique(orbits[orbit_ind])) == 1:
-                orbit_str = '%d' % unique(orbits[orbit_ind])
-            elif len(unique(orbits[orbit_ind])) == 2:
-                orbit_str = '%d-%d' % (unique(orbits[orbit_ind])[0],unique(orbits[orbit_ind])[1])
+            if len(np.unique(orbits[orbit_ind])) == 1:
+                orbit_str = '%d' % np.unique(orbits[orbit_ind])
+            elif len(np.unique(orbits[orbit_ind])) == 2:
+                orbit_str = '%d-%d' % (np.unique(orbits[orbit_ind])[0],np.unique(orbits[orbit_ind])[1])
 
             axes[0].annotate('%s (Orbits: %s)' % (dn[0].strftime('%Y-%m-%d'), orbit_str),
                              xy=(.5, .94), xytext=(0, 10),
@@ -2010,12 +2011,14 @@ def CreateSummaryPlot(file_netcdf, file_png, stripe=2, min_alt=None, max_alt=Non
             fig.colorbar(im2, cax=cax, label='log10(Ne_error) [cm^-3]', extend='max')
 
             # Generate the filename with the orbit number in it
-            outname = file_png[:-4] + '_o%05d.png' % orbit
-            fig.savefig(outname, bbox_extra_artists=(lgd,an), bbox_inches='tight')
+            fig.savefig(file_png, bbox_extra_artists=(lgd,an), bbox_inches='tight')
 
         f.close()
-    except:
-        print 'Error generating L2.5 summary file'
+    except Exception as e:
+        if hasattr(e, 'message'):
+            print 'Error generating L2.5 summary file: (%s)' % e.message
+        else:
+            print 'Error generating L2.5 summary file'
         return 1
 
     return 0
