@@ -7,6 +7,7 @@
 #include "ServerCommands.h"
 #include "schedule.h"
 #include <time.h>
+#include <string.h>
 
 void fltkClientUI::cb_Connect_i(Fl_Button*, void*) {
   // Read the address and port info

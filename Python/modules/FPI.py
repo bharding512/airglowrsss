@@ -764,7 +764,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
     # Read the first file, subtract 12 hours, then ask for next sunset time
     # Read the first file, and ask for next sunrise time.
     d = ReadIMG(sky_all[0])
-    dt0 = local.localize(d.info['LocalTime'])
+    dt0 = local.localize(d.info['LocalTime']).astimezone(pytz.utc)
     refdt = dt0 - datetime.timedelta(hours=12)
     obs.date = refdt
     # Calculate sunset time on this day.

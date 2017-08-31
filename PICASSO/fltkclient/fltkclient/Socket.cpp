@@ -6,9 +6,9 @@
 #include <string.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <iostream.h>
+#include <iostream>
 
-
+using namespace std;
 
 Socket::Socket() :
   m_sock ( -1 )
