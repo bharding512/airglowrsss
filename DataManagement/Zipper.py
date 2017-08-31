@@ -39,7 +39,6 @@ def activeinstruments():
             email:     Email list who wants warnings
             split:     Location of split command [for FPI and ASI]
             url:       Address of temp logs [for X3T]
-            space:     Disc data is stored on (optional)
     
     Outputs:
         code =  dictionary of all active site/instrument/num info
@@ -55,7 +54,7 @@ def activeinstruments():
     # 2. for remote2 server for emailing person of interest.
 
     # Email list
-    UIemail = ['bharding512@gmail.com','fishnchips1624+status@gmail.com']
+    UIemail = ['bharding512@gmail.com']
     BZemail = ['rburiti.ufcg@gmail.com']
     AKemail = []
     MOemail = ['zouhair@uca.ac.ma']
