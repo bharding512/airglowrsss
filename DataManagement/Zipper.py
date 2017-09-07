@@ -101,35 +101,42 @@ def activeinstruments():
     # code['car']['scn']['0T'] = {'send_dir':'F:/Sending/', 'local_dir':'F:/Data/ScintmonT/', 'split':'/usr/bin/split','email':UIemail+BZemail}
     code['car']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.2/log.txt','email':UIemail+BZemail}
 
-    code['mor']['fpi']['03'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
-    code['mor']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/admin/Documents/ClarityII/','email':UIemail}
-    code['mor']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.204/log.txt','email':UIemail}
-    code['mor']['pic']['04'] = {'send_dir':'/data/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
+    # Morocco is offline while we figure out CCD problems (7 Sep 2017 BJH)
+#    code['mor']['fpi']['03'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+#    code['mor']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/admin/Documents/ClarityII/','email':UIemail}
+#    code['mor']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.204/log.txt','email':UIemail}
+#    code['mor']['pic']['04'] = {'send_dir':'/data/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
 
     #code['bog']['scn']['0O'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps/cascade/', 'split':'usr/bin/split','email':UIemail}
 
     # CTO is broken, CCD overheats and Filterwheel does not work
-    code['cto']['pic']['02'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
+#    code['cto']['pic']['02'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
     #code['cto']['scn']['0L'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps/cascade/', 'split':'/usr/bin/split','email':UIemail}
     #code['cto']['scn']['0M'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps2/cascade/', 'split':'/usr/bin/split','email':UIemail}
 
-    code['hka']['asi']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
-    code['hka']['nfi']['01'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
+    # I'm not sure what's wrong with CASI/CNFI... ask Jonathan. For now I'm disabling warnings (7 Sep 2017 BJH)
+#    code['hka']['asi']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+#    code['hka']['nfi']['01'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
     #code['hka']['scn']['0K'] = {'send_dir':'/home/gps/Sending', 'local_dir':'/home/gps/cascade', 'split':'/usr/bin/split','email':UIemail}
-    code['hka']['cas']['01'] = {'send_dir':'/mnt/data/Sending/', 'local_dir':'mnt/data/','split':'/usr/bin/split','email':UIemail}
+#    code['hka']['cas']['01'] = {'send_dir':'/mnt/data/Sending/', 'local_dir':'mnt/data/','split':'/usr/bin/split','email':UIemail}
 
     #REMOVED Feb 27, 2017
     #code['tht']['pic']['06'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
 
     #NSO now in Texas April 10, 2017
     #code['nso']['pic']['03'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
-    code['uta']['pic']['03'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
+
+    # pic03 currently being shipped to UTA
+#    code['uta']['pic']['03'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
     
+
     #code['kaf']['fpi']['04'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
     #code['kaf']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/???/My Documents/ClarityII/','email':UIemail}
-    
-    code['bdr']['fpi']['94'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/FPIData/', 'split':'/usr/bin/split','email':UIemail}
-    code['bdr']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/User/My Documents/ClarityII/','email':UIemail}
+   
+   
+    # BDR has been offline for a while -- originally turned off for rainy season (7 Sep 2017 BJH)
+#    code['bdr']['fpi']['94'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/FPIData/', 'split':'/usr/bin/split','email':UIemail}
+#    code['bdr']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/User/My Documents/ClarityII/','email':UIemail}
     #code['bdr']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.204/log.txt','email':UIemail}
  
 #    code['arg']['fpi']['93'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/FPIData/', 'split':'/usr/bin/split','email':UIemail}
@@ -138,7 +145,7 @@ def activeinstruments():
     #code['xxx']['xxx']['00'] = {'local_dir':'.','email':UIemail}
     
     # Last index is for remote2 admin related issues (not site based)
-    code['ADMIN']={'email':['fishnchips1624+status@gmail.com']}
+    code['ADMIN']={'email':['bharding512@gmail.com']}
 
     return(code)
 
