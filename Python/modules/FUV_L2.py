@@ -47,6 +47,8 @@ from numpy.random import multivariate_normal
 from scipy.linalg import sqrtm # matrix square root
 
 # For plotting
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
@@ -1889,7 +1891,7 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
         for orbit in np.unique(orbits):
             stripe = 0
 
-            file_png = png_stub[0:-11] + 'o%05d_' % orbit + png_stub[-11:]
+            file_png = png_stub[0:-23] + '-o%05d' % orbit + png_stub[-23:]
             orbit_ind = np.squeeze(np.where(f.variables['ICON_L2_ORBIT_NUMBER'][:] == orbit))
             ds = np.array([i.total_seconds() for i in dn-dn[orbit_ind][0]])
             orbit_ind = np.squeeze(np.where(abs(ds) < 2000.))
@@ -1917,6 +1919,14 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
             min_dne = 0.
             max_dne = 6.
 
+            # Get the orbit(s) in this plot
+            orbit_str = 'err'
+            if len(np.unique(orbits[orbit_ind])) == 1:
+                orbit_str = '%d' % np.unique(orbits[orbit_ind])
+            elif len(np.unique(orbits[orbit_ind])) == 2:
+                orbit_str = '%d-%d' % (np.unique(orbits[orbit_ind])[0],np.unique(orbits[orbit_ind])[1])
+
+
             fig, axes = plt.subplots(nrows=5, sharex=True, figsize=(8,11))
 
             # The electron density estimates
@@ -1924,7 +1934,7 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
             plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
             plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
             axes[0].set_ylim([min_alt,max_alt])
-            axes[0].set_title('Estimated Ne; Stripe #%d' % stripe)
+            axes[0].set_title('Estimated Ne; Stripe #%d \n %s (Orbits: %s)' % (stripe,dn[0].strftime('%Y-%m-%d'), orbit_str))
             axes[0].set_ylabel('Altitude [km]')
 
             # The electron density error estimates
@@ -1975,7 +1985,7 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
             plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=15))
             axes[4].set_title('Inversion quality flag')
             axes[4].set_xlabel('UTC')
-            lgd = plt.legend(ncol=6,numpoints=1,loc=9, bbox_to_anchor=(0.6, -0.23))
+            lgd = plt.legend(ncol=6,numpoints=1,loc=9, bbox_to_anchor=(0.6, -0.30))
 
             an = axes[4].annotate('(%s, %s)' % (f.variables['ICON_L2_1356_CONTRIBUTION'][:],
                                           f.variables['ICON_L2_REGULARIZATION_METHOD'][:]),
@@ -1983,18 +1993,6 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
                              xycoords=('axes fraction', 'figure fraction'),
                              textcoords='offset points',
                              ha='right', va='top')
-
-            orbit_str = 'err'
-            if len(np.unique(orbits[orbit_ind])) == 1:
-                orbit_str = '%d' % np.unique(orbits[orbit_ind])
-            elif len(np.unique(orbits[orbit_ind])) == 2:
-                orbit_str = '%d-%d' % (np.unique(orbits[orbit_ind])[0],np.unique(orbits[orbit_ind])[1])
-
-            axes[0].annotate('%s (Orbits: %s)' % (dn[0].strftime('%Y-%m-%d'), orbit_str),
-                             xy=(.5, .94), xytext=(0, 10),
-                             xycoords=('axes fraction', 'figure fraction'),
-                             textcoords='offset points',
-                             size=12,ha='center', va='top')
 
             # Make some room for the colorbar
             fig.subplots_adjust(left=0.07, right=0.87)
