@@ -28,7 +28,7 @@ if __name__=="__main__":
     
     # Set warning limits
     hoursback = 27  # Must be slightly longer than 24 hrs - allows transfer time to be sluggish. Probably less than 30 hrs so warnings don't come after we've left work.
-    diskfree = 5    # GB remaining. Some drives are 1TB, others are 20GB. Some systems use 100MB a day, others 1GB. So 5 seems acceptable.  Currently you must manually run code to get space.
+    diskfree = 15    # GB remaining. Some drives are 1TB, others are 20GB. Some systems use 100MB a day, others 1GB. So 10 seems acceptable.  Currently you must manually run code to get space.
  
     #locations
     tracking = '/rdata/airglow/rx/tracking/'
