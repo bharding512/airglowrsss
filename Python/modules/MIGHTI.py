@@ -131,10 +131,10 @@ def get_instrument_constants():
         'startpath': 4.62e-2, # optical path difference at start of interferometer [m]
           'endpath': 5.50e-2, # optical path difference at end of interferometer [m]
           'etendue': 0.0495*1e-4, # for full FoV [m^2 str] Englert et al 2016, Night.
-           'opteff': 0.115, # transmittance of all optics and QE, Englert et al 2016, Green.
+           'opteff': 0.147, # transmittance of all optics and QE, Englert et al 2016, Green.
       'darkcurrent': 0.1*32, # electrons per sec per binned pixel
         'readnoise': 16.8, # electrons rms, per binned pixel. Englert et al 2016
-  'fringe_contrast': 0.43, # Englert et al 2016, Green Night (worst case)
+  'fringe_contrast': 0.72, # Englert et al 2016, Green Night (worst case)
          'exptime': 60., # Night.
                   }
 
