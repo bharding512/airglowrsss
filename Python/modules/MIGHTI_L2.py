@@ -23,10 +23,10 @@ global_params = {}
 global_params['red'] = {
     'sigma'             : 1.0/630.0304e-9, # reciprocal of center wavelength of emission [m^-1] 
                                            # (Osterbrock et al. 1996)
-    'zero_phase'        : 128.648464318,   # The phase corresponding to zero wind (DEPRECATED SOON)
+    'zero_phase'        : 0.0,   # The phase corresponding to zero wind (DEPRECATED SOON)
                                            # updated 2016-05-26 using Brian's instrument model
                                            # (MIGHTI_Zero_wind_issues.ipynb)    
-    'phase_offset'      : -1.139683,       # An offset added to avoid 0/2pi discontinuities (DEPRECATED SOON)
+    'phase_offset'      : 0.0,       # An offset added to avoid 0/2pi discontinuities (DEPRECATED SOON)
                                            # updated 2016-06-29 using Brian's instrument model
     'bin_size'          : 1,              # The number of rows of the interferogram to bin together to 
                                            # improve statistics at the cost of altitude resolution.   
@@ -43,8 +43,8 @@ global_params['red'] = {
 
 global_params['green'] = {
     'sigma'             : 1.0/557.7338e-9, 
-    'zero_phase'        : 54.6633360579,  
-    'phase_offset'      : -1.630175,       
+    'zero_phase'        : 0.0,  
+    'phase_offset'      : 0.0,       
     'bin_size'          : 1,
     'account_for_local_projection': True,
     'integration_order' : 0,
@@ -94,7 +94,7 @@ def phase_to_wind_factor(sigma_opd):
 
 
 
-def unwrap(x):
+def unwrap(x, start=0):
     '''
     Unwrap a monotonically increasing phase signal to remove -2*pi jumps.
     This is very similar to np.unwrap, but only unwraps negative jumps. 
@@ -103,17 +103,30 @@ def unwrap(x):
     
       *  x     -- TYPE:array, UNITS:rad. Signal that has -2*pi jumps to remove
       
+    OPTIONAL INPUTS:
+    
+      * start  -- TYPE:int.              The pixel at which to begin unwrapping
+      
     OUTPUTS:
     
       *  xnew  -- TYPE:array, UNITS:rad. Copy of x with -2*pi jumps removed
       
     '''
-    dx = np.diff(x)
     xnew = np.zeros(len(x))
-    xnew[0] = x[0]
+    xnew[start] = x[start]
+
+    # Go from start forwards
+    dx = np.diff(x[start:])
     idx = dx < 0
     dx[idx] = dx[idx] + 2.*np.pi
-    xnew[1:] = xnew[0] + np.cumsum(dx)
+    xnew[start+1:] = xnew[start] + np.cumsum(dx)
+
+    # Go from start backwards
+    dx = np.diff(x[start::-1])
+    idx = dx > 0
+    dx[idx] = dx[idx] - 2.*np.pi
+    xnew[:start] = xnew[start] + np.cumsum(dx)[::-1]
+    
     return xnew
 
 
@@ -515,21 +528,22 @@ def create_local_projection_matrix(tang_alt, icon_alt):
     
     
     
-def extract_phase_from_row(row, zero_phase, phase_offset):
+def extract_phase_from_row(row, zero_phase, phase_offset, unwrapping_column):
     '''
     Given a 1-D interference pattern (i.e., a row of the intererogram), 
     analyze it to get a single phase value, which represents the wind.
     
     INPUTS:
     
-      *  row          -- TYPE:array(nx), UNITS:arb.   A row of the complex-valued, MIGHTI interferogram.
-      *  zero_phase   -- TYPE:float,     UNITS:rad.   The phase angle which is equivalent 
-                                                      to a wind value of zero.
-      *  phase_offset -- TYPE:float,     UNITS:rad.   An offset to avoid 2pi ambiguities.
+      *  row               -- TYPE:array(nx), UNITS:arb.   A row of the complex-valued, MIGHTI interferogram.
+      *  zero_phase        -- TYPE:float,     UNITS:rad.   The phase angle which is equivalent 
+                                                           to a wind value of zero.
+      *  phase_offset      -- TYPE:float,     UNITS:rad.   An offset to avoid 2pi ambiguities.
+      *  unwrapping_column -- TYPE:int.                    The column at which to begin unwrapping.
       
     OUTPUTS:
     
-      *  phase        -- TYPE:float,     UNITS:rad. 
+      *  phase             -- TYPE:float,     UNITS:rad. 
       
     '''
     
@@ -539,7 +553,7 @@ def extract_phase_from_row(row, zero_phase, phase_offset):
     # First, apply phase offset (keeping phase between -pi and pi)
     row_phase_off = np.mod(row_phase - phase_offset + np.pi, 2*np.pi) - np.pi
     # Second, unwrap, and undo phase offset
-    phaseu = unwrap(row_phase_off) + phase_offset
+    phaseu = unwrap(row_phase_off, unwrapping_column) + phase_offset
     meanphase = np.mean(phaseu)
     phase = meanphase - zero_phase
     return phase
@@ -549,7 +563,7 @@ def extract_phase_from_row(row, zero_phase, phase_offset):
     
     
 def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertainty, 
-                      zero_phase, phase_offset,
+                      zero_phase, phase_offset, unwrapping_column,
                       top_layer='exp', integration_order=0, 
                       account_for_local_projection=True):
     '''
@@ -569,6 +583,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
       *  zero_phase  -- TYPE:float,        UNITS:rad.   The phase angle which is equivalent 
                                                         to a wind value of zero.
       *  phase_offset-- TYPE:float,        UNITS:rad.   An offset to avoid 2pi ambiguities.
+      *  unwrapping_column -- TYPE:int.                 The column at which to begin unwrapping the phase.
       
     OPTIONAL INPUTS:
     
@@ -616,7 +631,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
         # This is implemented with a simple linear inversion
         Ip = np.linalg.solve(D,I)
         for i in range(ny):
-            phase[i] = extract_phase_from_row(Ip[i,:], zero_phase, phase_offset)
+            phase[i] = extract_phase_from_row(Ip[i,:], zero_phase, phase_offset, unwrapping_column)
         
     else:
         # The problem becomes nonlinear, but still solvable in closed form.
@@ -643,7 +658,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
             Ip[i,:] = Li
             # Analyze the layer to get the phase, and store it.
             # Note that the zero-phase/zero-wind is needed for this step.
-            phase[i] = extract_phase_from_row(Li, zero_phase, phase_offset)
+            phase[i] = extract_phase_from_row(Li, zero_phase, phase_offset, unwrapping_column)
             
     amp = np.sum(abs(Ip),axis=1)        
     
@@ -657,7 +672,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     ### Step 0: Characterize L1 and L2.1 interferograms with a single amp/phase per row
     ph_L1 = np.zeros(ny)
     for i in range(ny):
-        ph_L1[i] = extract_phase_from_row(I[i,:], zero_phase, phase_offset)
+        ph_L1[i] = extract_phase_from_row(I[i,:], zero_phase, phase_offset, unwrapping_column)
     A_L1 = np.sum(abs(I),axis=1)
     ph_L2 = phase.copy() # this was calculated above
     A_L2 = amp.copy() # this was calculated above
@@ -1069,6 +1084,7 @@ def level1_to_dict(L1_fn, emission_color):
     L1_dict['icon_lat_stop']  = icon_latlonalt[2,0]
     L1_dict['icon_lon_start'] = icon_latlonalt[0,1]
     L1_dict['icon_lon_stop']  = icon_latlonalt[2,1]
+    L1_dict['unwrapping_column'] = int(f.getncattr('Reference_Pixel_%s' % emission_color.capitalize()))
     
     # Dummy placeholder code for reading global attributes, if that matters
     nc_attrs = f.ncattrs()
@@ -1085,7 +1101,7 @@ def level1_to_dict(L1_fn, emission_color):
 
 def level1_dict_to_level21_dict(L1_dict, sigma = None, zero_phase = None, phase_offset = None, top_layer = None, 
                                 integration_order = None, account_for_local_projection = None, 
-                                bin_size = None, ):
+                                bin_size = None):
     '''
     High-level function to run the Level 2.1 processing. It takes a dictionary (containing
     input variables extracted from a Level 1 file) and outputs a dictionary (containing 
@@ -1156,6 +1172,10 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, zero_phase = None, phase_
                                                                       Length of exposure
                                       * optical_path_difference    -- TYPE:array(nx).    UNITS:m.    
                                                                       Optical path difference for each column of interferogram
+                                      * unwrapping_column          -- TYPE:int.           
+                                                                      The column at which to begin unwrapping the phase of the interferogram.
+                                                                      This is necessary to ensure that the zero wind phase (which was removed
+                                                                      in the L1 processing) does not have a 2pi ambiguity.
                                              
     OPTIONAL INPUTS - If None, defaults from MIGHTI_L2.global_params will be used 
     
@@ -1205,6 +1225,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, zero_phase = None, phase_
                                 * integration_order         -- TYPE:int.                      Order of integration used in inversion: 0 or 1
                                 * zero_phase                -- TYPE:float,       UNITS:rad.   The zero phase value used in the processing
                                 * phase_offset              -- TYPE:float,       UNITS:rad.   The phase offset used in the processing
+                                * unwrapping_column         -- TYPE:int.                      The reference column for unwrapping used in the processing
+                                * I                         -- TYPE:array(ny,nx) UNITS:arb.   The complex-valued, onion-peeled interferogram
 
     TODO:
     
@@ -1241,6 +1263,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, zero_phase = None, phase_
     opd = L1_dict['optical_path_difference']
     sigma_opd = sigma * opd # Optical path difference, in units of wavelengths
     sensor = L1_dict['sensor']
+    unwrapping_column = L1_dict['unwrapping_column']
     
     # Load parameters which are averaged from start to stop of exposure.
     icon_alt = (L1_dict['icon_alt_start'] + L1_dict['icon_alt_stop'])/2
@@ -1283,7 +1306,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, zero_phase = None, phase_
     #### Onion-peel interferogram
     Ip, phase, amp, phase_uncertainty, amp_uncertainty = perform_inversion(I, tang_alt, icon_alt, 
                            I_phase_uncertainty, I_amp_uncertainty,
-                           zero_phase, phase_offset,
+                           zero_phase, phase_offset, unwrapping_column,
                            top_layer=top_layer, integration_order=integration_order,
                            account_for_local_projection=account_for_local_projection)
 
@@ -1334,6 +1357,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, zero_phase = None, phase_
              'integration_order'            : integration_order,
              'zero_phase'                   : zero_phase,
              'phase_offset'                 : phase_offset,
+             'unwrapping_column'            : unwrapping_column,
+             'I'                            : Ip,
     }
         
     return L21_dict
