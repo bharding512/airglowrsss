@@ -14,7 +14,7 @@ import numpy as np
 import math
 
 # Pyglow is needed in order to call MSIS to get the [O] density that is needed for the electron density calculation
-import pyglow
+from pyglow import pyglow
 # From the datetime module we need the datetime and timedelta functions
 import datetime
 
@@ -663,19 +663,14 @@ def calculate_electron_density(VER,satlatlonalt,tang_altitude,dt,Sig_VER=None,co
 
     if contribution=='RRMN':
         O = np.zeros(len(VER))
-#        for i,height in enumerate(tang_altitude):
-	for i, (azim, zen) in enumerate(zip(az,ze)):
-	    # calculate the tangent point
-	    tp = ic.tangent_point(satlatlonalt,azim,zen)
-#            print tp, tang_altitude[i]
-	    # Create pyglow point, either use the default GPI or the passed in GPI
+    	for i, (azim, zen) in enumerate(zip(az,ze)):
+    	    # calculate the tangent point
+    	    tp = ic.tangent_point(satlatlonalt,azim,zen)
+    	    # Create pyglow point, either use the default GPI or the passed in GPI
             if apmsis is None:
-#                pt = pyglow.pyglow.Point(dt, satlatlonalt[0], satlatlonalt[1], height)
-		pt = pyglow.pyglow.Point(dt, tp[0], tp[1], tp[2])
-                # Run MSIS-00 to get O density
+                pt = pyglow.Point(dt, tp[0], tp[1], tp[2])
             else:
-#                pt = pyglow.pyglow.Point(dt, satlatlonalt[0], satlatlonalt[1], height,user_ind=True)
-		pt = pyglow.pyglow.Point(dt, tp[0], tp[1], tp[2], user_ind=True)
+                pt = pyglow.Point(dt, tp[0], tp[1], tp[2], user_ind=True)
                 pt.f107 = f107
                 pt.f107a = f107a
                 pt.apmsis = apmsis
