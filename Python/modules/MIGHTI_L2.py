@@ -2075,12 +2075,14 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     Given Level 2.1 data from MIGHTI A and MIGHTI B, process it with the Level 2.2 algorithm. 
     This entails interpolating line-of-sight wind measurements from MIGHTI A and B to a 
     common grid, and rotating to a geographic coordinate system to derive vector horizontal winds. 
+    The input files should span 24 hours (0 UT to 23:59:59 UT), with ~20 minutes of extra files
+    on either side.
     
     INPUTS:
     
-      *  L21_A_dict      -- TYPE:dict.  The dictionary corresponding to three orbits of MIGHTI A measurements 
+      *  L21_A_dict      -- TYPE:dict.  The dictionary corresponding to 24+ hours of MIGHTI A measurements 
                                         for a single emission color. See "level21_to_dict" for required keys.
-      *  L21_B_dict      -- TYPE:dict.  The dictionary corresponding to three orbits of MIGHTI B measurements
+      *  L21_B_dict      -- TYPE:dict.  The dictionary corresponding to 24+ hours of MIGHTI B measurements
                                         for a single emission color, which is the same as for the A measurements.
                                         See "level21_to_dict" for required keys.
                                         
@@ -2940,8 +2942,8 @@ def _test_level1_to_level21():
     the user is in the directory containing the test data.
     '''
 
-    L21_old_fns = {'red':  'ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_RED_2016-07-28_18.33.25_v00r000.NC',
-                   'green':'ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2016-07-28_18.33.25_v00r000.NC'}
+    L21_old_fns = {'red':  'ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_RED_2017-05-29_01.11.33_v00r001_old.NC',
+                   'green':'ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2017-05-29_01.11.33_v00r001_old.NC'}
 
     variable_stubs =    ['TIME',
                          'ALTITUDE',
@@ -2958,6 +2960,8 @@ def _test_level1_to_level21():
                          'SPACECRAFT_ALTITUDE',
                          'LINE_OF_SIGHT_VECTOR',]
 
+    print '\nMIGHTI L1-L2.1 PROCESSING v%s\n' % (__version__)
+    
     for emission_color in ['red', 'green']:
         print '--------------  Testing %s --------------\n' % emission_color
         print 'Processing L1 file...'
@@ -2992,9 +2996,10 @@ def _test_level1_to_level21():
 def _test_level21_to_level22():
     '''
     Special-purpose function to test the installation of the Level 2.1 to Level 2.2 processing code. This assumes that 
-    the user is in the directory containing the test data.
+    the user is in the directory containing the test data. The idea is to just test green, since red is identical. Both
+    red and green are tested in L2.1.
     '''
-    
+    print '\nMIGHTI L2.1-L2.2 PROCESSING v%s\n' % (__version__)
     print 'Reading L22_info.txt and running L2.1-to-L2.2 code. This will take a few minutes....'
     # Run processing on test data
     L22_fn = level21_to_level22('L22_info.txt')
