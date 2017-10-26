@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files.
 software_version_major = 0 # When this changes, the data version will automatically change as well
-software_version_minor = 4 # [0-99], resetting when the major version changes
+software_version_minor = 3 # [0-99], resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -22,7 +22,12 @@ global_params = {}
 
 global_params['red'] = {
     'sigma'             : 1.0/630.0304e-9, # reciprocal of center wavelength of emission [m^-1] 
-                                           # (Osterbrock et al. 1996)  
+                                           # (Osterbrock et al. 1996)
+    'zero_phase'        : 0.0,   # The phase corresponding to zero wind (DEPRECATED SOON)
+                                           # updated 2016-05-26 using Brian's instrument model
+                                           # (MIGHTI_Zero_wind_issues.ipynb)    
+    'phase_offset'      : 0.0,       # An offset added to avoid 0/2pi discontinuities (DEPRECATED SOON)
+                                           # updated 2016-06-29 using Brian's instrument model
     'bin_size'          : 1,              # The number of rows of the interferogram to bin together to 
                                            # improve statistics at the cost of altitude resolution.   
     'account_for_local_projection': True,  # Whether to account for the fact that the line of sight is not
@@ -37,7 +42,9 @@ global_params['red'] = {
 }
 
 global_params['green'] = {
-    'sigma'             : 1.0/557.7338e-9,
+    'sigma'             : 1.0/557.7338e-9, 
+    'zero_phase'        : 0.0,  
+    'phase_offset'      : 0.0,       
     'bin_size'          : 1,
     'account_for_local_projection': True,
     'integration_order' : 0,
@@ -55,7 +62,6 @@ from datetime import datetime, timedelta
 import netCDF4
 import getpass # for determining who is running the script
 import glob
-import traceback # for printing detailed error traces
 
 
 ############################################################################################################
@@ -522,7 +528,7 @@ def create_local_projection_matrix(tang_alt, icon_alt):
     
     
     
-def extract_phase_from_row(row, unwrapping_column):
+def extract_phase_from_row(row, zero_phase, phase_offset, unwrapping_column):
     '''
     Given a 1-D interference pattern (i.e., a row of the intererogram), 
     analyze it to get a single phase value, which represents the wind.
@@ -530,6 +536,9 @@ def extract_phase_from_row(row, unwrapping_column):
     INPUTS:
     
       *  row               -- TYPE:array(nx), UNITS:arb.   A row of the complex-valued, MIGHTI interferogram.
+      *  zero_phase        -- TYPE:float,     UNITS:rad.   The phase angle which is equivalent 
+                                                           to a wind value of zero.
+      *  phase_offset      -- TYPE:float,     UNITS:rad.   An offset to avoid 2pi ambiguities.
       *  unwrapping_column -- TYPE:int.                    The column at which to begin unwrapping.
       
     OUTPUTS:
@@ -541,16 +550,22 @@ def extract_phase_from_row(row, unwrapping_column):
     row_phase = np.angle(row)
 
     # Average phase and then take delta. Need unwrapping for this.
-    phaseu = unwrap(row_phase, unwrapping_column)
+    # First, apply phase offset (keeping phase between -pi and pi)
+    row_phase_off = np.mod(row_phase - phase_offset + np.pi, 2*np.pi) - np.pi
+    # Second, unwrap, and undo phase offset
+    phaseu = unwrap(row_phase_off, unwrapping_column) + phase_offset
     meanphase = np.mean(phaseu)
-    return meanphase
+    phase = meanphase - zero_phase
+    return phase
 
     
     
     
     
-def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertainty, unwrapping_column,
-                      top_layer='exp', integration_order=0, account_for_local_projection=True):
+def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertainty, 
+                      zero_phase, phase_offset, unwrapping_column,
+                      top_layer='exp', integration_order=0, 
+                      account_for_local_projection=True):
     '''
     Perform the onion-peeling inversion on the interferogram to return
     a new interferogram, whose rows refer to specific altitudes. In effect,
@@ -565,6 +580,9 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
                                                            This is provided in L1 file.
       *  I_amp_uncertainty   -- TYPE:array(ny), UNITS:arb. Uncertainty in the summed amplitude of each row of I.
                                                            This is provided in L1 file.
+      *  zero_phase  -- TYPE:float,        UNITS:rad.   The phase angle which is equivalent 
+                                                        to a wind value of zero.
+      *  phase_offset-- TYPE:float,        UNITS:rad.   An offset to avoid 2pi ambiguities.
       *  unwrapping_column -- TYPE:int.                 The column at which to begin unwrapping the phase.
       
     OPTIONAL INPUTS:
@@ -613,7 +631,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
         # This is implemented with a simple linear inversion
         Ip = np.linalg.solve(D,I)
         for i in range(ny):
-            phase[i] = extract_phase_from_row(Ip[i,:], unwrapping_column)
+            phase[i] = extract_phase_from_row(Ip[i,:], zero_phase, phase_offset, unwrapping_column)
         
     else:
         # The problem becomes nonlinear, but still solvable in closed form.
@@ -639,7 +657,8 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
             Li = Li/dii
             Ip[i,:] = Li
             # Analyze the layer to get the phase, and store it.
-            phase[i] = extract_phase_from_row(Li,  unwrapping_column)
+            # Note that the zero-phase/zero-wind is needed for this step.
+            phase[i] = extract_phase_from_row(Li, zero_phase, phase_offset, unwrapping_column)
             
     amp = np.sum(abs(Ip),axis=1)        
     
@@ -653,7 +672,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     ### Step 0: Characterize L1 and L2.1 interferograms with a single amp/phase per row
     ph_L1 = np.zeros(ny)
     for i in range(ny):
-        ph_L1[i] = extract_phase_from_row(I[i,:], unwrapping_column)
+        ph_L1[i] = extract_phase_from_row(I[i,:], zero_phase, phase_offset, unwrapping_column)
     A_L1 = np.sum(abs(I),axis=1)
     ph_L2 = phase.copy() # this was calculated above
     A_L2 = amp.copy() # this was calculated above
@@ -1001,7 +1020,13 @@ def level1_to_dict(L1_fn, emission_color):
                                the level 2.1 processing. See documentation for 
                                level1_dict_to_level21(...) for required keys.
                                
-
+    TODO:
+    
+      *  lots of stuff, mostly just waiting on finalization of L1 file.
+      *  time in better format
+      *  exposure time different than stop minus start?
+      *  will ICON velocity be specified in m/s eventually?
+      
     '''
     
     f = netCDF4.Dataset(L1_fn)
@@ -1045,7 +1070,7 @@ def level1_to_dict(L1_fn, emission_color):
     L1_dict['source_files']                = [f.Parents]
     tsec_start                             = f['ICON_L1_MIGHTI_%s_IMAGE_TIMES'% sensor][0,0]*1e-3
     tsec_stop                              = f['ICON_L1_MIGHTI_%s_IMAGE_TIMES'% sensor][0,2]*1e-3
-    L1_dict['time_start']                  = datetime(1970,1,1) + timedelta(seconds=tsec_start)
+    L1_dict['time_start']                  = datetime(1970,1,1) + timedelta(seconds=tsec_start) # TODO: ms or s?
     L1_dict['time_stop']                   = datetime(1970,1,1) + timedelta(seconds=tsec_stop)
     L1_dict['exp_time']                    = tsec_stop - tsec_start
     L1_dict['optical_path_difference']     = f['ICON_L1_MIGHTI_%s_%s_ARRAY_OPD' % (sensor, emission_color.upper())][0,:]*1e-2 # convert to m
@@ -1074,7 +1099,7 @@ def level1_to_dict(L1_fn, emission_color):
     
 
 
-def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None, 
+def level1_dict_to_level21_dict(L1_dict, sigma = None, zero_phase = None, phase_offset = None, top_layer = None, 
                                 integration_order = None, account_for_local_projection = None, 
                                 bin_size = None):
     '''
@@ -1155,6 +1180,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     OPTIONAL INPUTS - If None, defaults from MIGHTI_L2.global_params will be used 
     
       *  sigma               -- TYPE:float, UNITS:m^-1. The wavenumber of the emission (1/wavelength)
+      *  zero_phase          -- TYPE:float, UNITS:rad.  The phase corresponding to zero wind.
+      *  phase_offset        -- TYPE:float, UNITS:rad.  A phase that is added to avoid 0/2pi discontinuities.
       *  top_layer           -- TYPE:str, 'thin': assume VER goes to zero above top layer
                                           'exp':  assume VER falls off exponentially in altitude
       *  integration_order   -- TYPE:int, 0: Use Riemann-sum rule for discretizing line-of-sight integral
@@ -1196,8 +1223,14 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                 * bin_size                  -- TYPE:int.                      Bin size used in the processing
                                 * top_layer                 -- TYPE:str.                      How the top layer was handled: 'thin' or 'exp'
                                 * integration_order         -- TYPE:int.                      Order of integration used in inversion: 0 or 1
+                                * zero_phase                -- TYPE:float,       UNITS:rad.   The zero phase value used in the processing
+                                * phase_offset              -- TYPE:float,       UNITS:rad.   The phase offset used in the processing
                                 * unwrapping_column         -- TYPE:int.                      The reference column for unwrapping used in the processing
                                 * I                         -- TYPE:array(ny,nx) UNITS:arb.   The complex-valued, onion-peeled interferogram
+
+    TODO:
+    
+      * error handling
     
     '''
     
@@ -1206,6 +1239,10 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     params = global_params[emission_color]
     if sigma is None:
         sigma = params['sigma']
+    if zero_phase is None:
+        zero_phase = params['zero_phase']
+    if phase_offset is None:
+        phase_offset = params['phase_offset']
     if top_layer is None:
         top_layer = params['top_layer']
     if integration_order is None:
@@ -1268,7 +1305,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     
     #### Onion-peel interferogram
     Ip, phase, amp, phase_uncertainty, amp_uncertainty = perform_inversion(I, tang_alt, icon_alt, 
-                           I_phase_uncertainty, I_amp_uncertainty, unwrapping_column,
+                           I_phase_uncertainty, I_amp_uncertainty,
+                           zero_phase, phase_offset, unwrapping_column,
                            top_layer=top_layer, integration_order=integration_order,
                            account_for_local_projection=account_for_local_projection)
 
@@ -1317,6 +1355,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
              'bin_size'                     : bin_size,
              'top_layer'                    : top_layer,
              'integration_order'            : integration_order,
+             'zero_phase'                   : zero_phase,
+             'phase_offset'                 : phase_offset,
              'unwrapping_column'            : unwrapping_column,
              'I'                            : Ip,
     }
@@ -1484,8 +1524,9 @@ def save_nc_level21(path, L21_dict, data_revision=0):
     
 
 
-    L21_fn = 'ICON_L2_MIGHTI-%s_LINE-OF-SIGHT_WIND_%s_%s_v%02ir%03i.NC' % (sensor,L21_dict['emission_color'].upper(),
-                                                           t_mid.strftime('%Y-%m-%d_%H%M%S'),
+    ######################### Open file for writing ##############################
+    L21_fn = 'ICON_L2_1_MIGHTI-%s_LINE-OF-SIGHT_WIND_%s_%s_v%02ir%03i.NC' % (sensor,L21_dict['emission_color'].upper(),
+                                                           t_mid.strftime('%Y-%m-%d_%H.%M.%S'),
                                                            data_version_major, data_revision)
     L21_full_fn = '%s%s'%(path, L21_fn)
     ncfile = netCDF4.Dataset(L21_full_fn,mode='w',format='NETCDF4') 
@@ -1551,7 +1592,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ncfile.Link_Text =                      'MIGHTI Line-of-sight Wind Profile (DP 2.1)'
         ncfile.Link_Title =                     'ICON MIGHTI'
         ncfile.Logical_File_ID =                L21_fn[:-3]
-        ncfile.Logical_Source =                 'ICON_L2_MIGHTI-%s_' % (sensor,)
+        ncfile.Logical_Source =                 'ICON_L2_1_MIGHTI-%s_' % (sensor,)
         ncfile.Logical_Source_Description =     'MIGHTI Sensor %s - Line-of-sight Wind Profile'
         ncfile.Mission_Group =                  'Ionospheric Investigations'
         ncfile.MODS =                           ncfile.History
@@ -1566,7 +1607,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ncfile.Text =                           'ICON explores the boundary between Earth and space - the ionosphere - ' +\
                                                 'to understand the physical connection between our world and the immediate '+\
                                                 'space environment around us. Visit \'http://icon.ssl.berkeley.edu\' for more details.'
-        ncfile.Text_Supplement =                'See Harding et al. [2017], doi:10.1007/s11214-017-0359-3'
+        ncfile.Text_Supplement =                '((TODO: Insert reference to Harding et al [2016] paper))'
         ncfile.Time_Resolution =                '%.1f seconds' % L21_dict['exp_time']
         ncfile.Title =                          'ICON MIGHTI Line-of-sight Wind Profile (DP 2.1)'
 
@@ -1742,6 +1783,22 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               display_type='altitude_profile', field_name='Line-of-sight Vector', fill_value=None, label_axis='LoS Vec', bin_location=0.5,
                               units='', valid_min=-1., valid_max=1., var_type='metadata', chunk_sizes=[1,3],
                               notes='')
+        
+        # Zero wind phase
+        var = _create_variable(ncfile, '%s_ZERO_WIND_PHASE'%prefix, L21_dict['zero_phase'], 
+                              dimensions=(),
+                              format_nc='f8', format_fortran='F', desc='The fringe phase corresponding to a wind of zero', 
+                              display_type='scalar', field_name='Zero Wind Phase', fill_value=None, label_axis='Zero Phase', bin_location=0.5,
+                              units='rad', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=1,
+                              notes='')
+        
+        # Phase offset
+        var = _create_variable(ncfile, '%s_PHASE_OFFSET'%prefix, L21_dict['phase_offset'], 
+                              dimensions=(),
+                              format_nc='f8', format_fortran='F', desc='A phase which is added to avoid 0/2pi discontinuities', 
+                              display_type='scalar', field_name='Phase Offset', fill_value=None, label_axis='Phase Offs', bin_location=0.5,
+                              units='rad', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=1,
+                              notes='This phase is added before unwrapping and removed after unwrapping.')
 
         # Bin Size
         var = _create_variable(ncfile, '%s_BIN_SIZE'%prefix, L21_dict['bin_size'], 
@@ -1780,7 +1837,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
     
     
     
-def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_revision=0, sigma=None, top_layer=None, integration_order=None, 
+def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_revision=0, sigma=None, zero_phase=None, 
+                                        phase_offset=None, top_layer=None, integration_order=None, 
                                         account_for_local_projection=None, bin_size = None):
     '''
     High-level function to apply the Level-1-to-Level-2.1 algorithm to a Level 1 file. This version
@@ -1803,6 +1861,8 @@ def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_r
     MORE OPTIONAL INPUTS - If None, defaults from MIGHTI_L2.global_params will be used 
     
       *  sigma               -- TYPE:float, UNITS:m^-1. The wavenumber of the emission (1/wavelength)
+      *  zero_phase          -- TYPE:float, UNITS:rad.  The phase corresponding to zero wind.
+      *  phase_offset        -- TYPE:float, UNITS:rad.  A phase that is added to avoid 0/2pi discontinuities.
       *  top_layer           -- TYPE:str, 'thin': assume VER goes to zero above top layer
                                           'exp':  assume VER falls off exponentially in altitude
       *  integration_order   -- TYPE:int, 0: Use Riemann-sum rule for discretizing line-of-sight integral
@@ -1828,7 +1888,7 @@ def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_r
     L1_dict = level1_to_dict(L1_fn, emission_color)
     
     # Perform L1 to L2.1 processing
-    L21_dict = level1_dict_to_level21_dict(L1_dict, sigma, top_layer = top_layer, 
+    L21_dict = level1_dict_to_level21_dict(L1_dict, sigma, zero_phase, phase_offset, top_layer = top_layer, 
                                            integration_order = integration_order, 
                                            account_for_local_projection = account_for_local_projection, 
                                            bin_size = bin_size)
@@ -1843,10 +1903,11 @@ def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_r
     
     
     
-def read_info_file(info_fn):
+def level1_to_level21(info_fn, emission_color):
     '''
-    Read the Information.TXT file that the Science Data Center provides, and return a dictionary
-    of parameters and a list of files.
+    Highest-level function to apply the Level-1-to-Level-2.1 algorithm to a Level 1 file, with 
+    input arguments specified via an information file. The output L2.1 file will be saved to 
+    the same directory as the input L1 file.
     
     INPUTS:
     
@@ -1859,118 +1920,39 @@ def read_info_file(info_fn):
 
                                         [FILES]
                                         ICON_L1_MIGHTI-A_SCIENCE_2017-03-03_191803_v04r006.NC
+                                       
+      * emission_color -- TYPE:str.  'red' or 'green'
                                         
-                                        
-    OUTPUTS:
+    OUTPUTS:   
     
-      * info    -- TYPE:dict.         A dictionary of the parameters specified in the file. Keys
-                                      and values are both strings.
-      * files   -- TYPE:list of str.  A list of the files specified in the file.
-      
-    '''
+      *  L21_fn  -- TYPE:str.  The full path to the saved L2.1 file.
+    
+    '''    
     
     # Read the info file to extract parameters for the processing function
     info = {} # expected to have entries: 'Directory' and 'Revision'
-    files = [] # files to process
     with open(info_fn, 'r') as f:
-        # Read until the [Parameters] line
-        line = f.readline()
-        while line and '[parameters]' not in line.lower():
-            line = f.readline()
-        if not line:
-            raise IOError('Information file format not understood: "[Parameters]" not found')
-        # Read and save all the parameters, until a blank line
+        line = f.readline().strip() # skip the [Parameters] Line
         line = f.readline().strip()
         while line:
             x = line.split('=')
             info[x[0]] = x[1]
             line = f.readline().strip()
-        # Read until the [Parameters] line
-        line = f.readline()
-        while line and '[files]' not in line.lower():
-            line = f.readline()
-        if not line:
-            raise IOError('Information file format not understood: "[Files]" not found')
-        # Read until the end of the file, recording all the fns
-        line = f.readline()
-        while line:
-            files.append(line.strip())
-            line = f.readline()
-            
-    return info, files
-    
-    
-    
-    
-    
-def level1_to_level21(info_fn):
-    '''
-    Highest-level function to apply the Level-1-to-Level-2.1 algorithm to a Level 1 file, with 
-    input arguments specified via an information file. Many files may be specified in the information
-    file; this routine loops over all files specified. For each file, the processing is run twice:
-    once for 'red' and once for 'green'. The output L2.1 files will be saved to the same directory 
-    as the input L1 file.
-    
-    INPUTS:
-    
-      * info_fn  -- TYPE:str.  Full path to an ASCII file in the following format:
-      
-                                        [PARAMETERS]
-                                        Revision=001
-                                        Directory=/path/to/wherever/
-                                        <other parameters>
-
-                                        [FILES]
-                                        ICON_L1_MIGHTI-A_SCIENCE_2017-03-03_191803_v04r006.NC
-                                        
-    OUTPUTS:   
-    
-      *  ret     -- TYPE:str. '0' if everything worked. If not, a human-readable error message for each file that failed
-    
-    '''    
-    
-    
-    info, L1_fns = read_info_file(info_fn)
-    
+        line = f.readline().strip() # skip the [Files] line
+        line = f.readline().strip() # the L1 file to process
+        fn = line
     # Parse the info
-    # (0) Make sure there's a trailing "/" on the directory
     direc = info['Directory']
     if direc[-1] != '/':
         direc += '/'
-    # (1) Add the directory to all the L1 files
-    L1_full_fns = []
-    for L1_fn in L1_fns:
-        L1_full_fns.append(direc + L1_fn)
-    # (2) Parse list of data revision numbers
-    s = info['Revision'].split(',')
-    data_revision = [int(x) for x in s]
-    # if data_revision only has one entry, it should be applied to all input files
-    if len(data_revision)==1:
-        data_revision = [data_revision[0]]*len(L1_fns)
-    assert len(L1_fns)==len(data_revision), "Length of revision list != Length of file list"
+    L1_fn = direc + fn
+    data_revision = int(info['Revision'])
     
+    # Call the lower-level function which does all the work.
+    L21_fn = level1_to_level21_without_info_file(L1_fn, emission_color, direc, data_revision = data_revision)
     
-    # Loop and call the lower-level function which does all the real work.
-    L21_fns = []
-    failed_L1_fns = []
-    failure_messages = []
-    for L1_fn, rev in zip(L1_full_fns, data_revision):
-        for emission_color in ['red','green']:
-            try:
-                L21_fn = level1_to_level21_without_info_file(L1_fn, emission_color, direc, data_revision = rev)
-                L21_fns.append(L21_fn)
-            except Exception as e:
-                failed_L1_fns.append(L1_fn)
-                failure_messages.append('Failed processing:\n\tL1_file = %s\n\tColor   = %s\n%s\n'%(L1_fn,emission_color,traceback.format_exc()))
-                
-    if not failure_messages: # Everything worked
-        return '0' # Is this what Tori wants?
+    return L21_fn
     
-    else:
-        s = '\n'.join(failure_messages)
-        print(s)
-        return s
-                    
     
     
     
@@ -2082,8 +2064,6 @@ def level21_to_dict(L21_fns):
 
     
     
-    
-    
 ############################################################################################################
 ##########################################       Level 2.2       ###########################################
 ############################################################################################################
@@ -2165,11 +2145,6 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                    * time_delta      -- TYPE:array(ny,nx),    UNITS:s.    The difference between the time of the MIGHTI
                                                                           A and B measurements that contribute to this 
                                                                           grid point.
-                   * ver_A           -- TYPE:array(ny,nc),    UNITS:none. The fringe amplitude measured by MIGHTI A (roughly
-                                                                          proportional to VER)
-                   * ver_B           -- TYPE:array(ny,nc),    UNITS:none. The fringe amplitude measured by MIGHTI B (roughly
-                                                                          proportional to VER)
-                   * ver             -- TYPE:array(ny,nc),    UNITS:none. Mean of the above two quantitiies.
                    * ver_rel_diff    -- TYPE:array(ny,nx),    UNITS:none. The difference between the fringe amplitude 
                                                                           of the MIGHTI A and B measurements that 
                                                                           contribute to this grid point, divided by the
@@ -2182,6 +2157,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     TODO:
     
         * only save the parent files that were actually used.
+        * explicitly pass in which files are previous, current, and next orbit
+        * Is there a better way to define the altitude reconstruction grid? Right now it is driven by the input grid
         
     '''
 
@@ -2310,8 +2287,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     time_delta = np.nan*np.zeros(np.shape(lon))       # difference between A and B times used (seconds)
     ver_A = np.nan*np.zeros(np.shape(lon))            # fringe amplitude from A (related to VER)
     ver_B = np.nan*np.zeros(np.shape(lon))            # fringe amplitude from B (related to VER)
-    ver   = np.nan*np.zeros(np.shape(lon))            # fringe amplitude (mean of A and B)
-    ver_rel_diff = np.nan*np.zeros(np.shape(lon))     # relative difference in A and B VER
+    ver_rel_diff = np.nan*np.zeros(np.shape(lon))     # relative difference in the above two
     error_flags = np.zeros((N_alts, N_lons, 10))      # Error flags, one set per grid point. See above for definition.
     
     # Loop over the reconstruction altitudes
@@ -2509,7 +2485,6 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             time_delta[i,k] = (t_B-t_A).total_seconds()
             ver_A[i,k] = ver_A_pt
             ver_B[i,k] = ver_B_pt
-            ver[i,k]   = (ver_A_pt + ver_B_pt)/2.
             ver_rel_diff[i,k] = ver_rel_diff_pt
                 
     
@@ -2528,9 +2503,6 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     L22_dict['time_delta'] = time_delta
     L22_dict['time_start'] = time_start
     L22_dict['time_stop'] = time_stop
-    L22_dict['ver_A'] = ver_A
-    L22_dict['ver_B'] = ver_B
-    L22_dict['ver'] = ver
     L22_dict['ver_rel_diff'] = ver_rel_diff
     L22_dict['emission_color'] = emission_color
     L22_dict['source_files'] = np.concatenate((L21_A_dict['source_files'], L21_B_dict['source_files']))
@@ -2599,8 +2571,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
 
 
     ######################### Open file for writing ##############################
-    L22_fn = 'ICON_L2_MIGHTI_VECTOR_WIND_%s_%s_v%02ir%03i.NC' % (L22_dict['emission_color'].upper(),
-                                                        t_start.strftime('%Y-%m-%d_%H%M%S'),
+    L22_fn = 'ICON_L2_2_MIGHTI_VECTOR_WIND_%s_%s_v%02ir%03i.NC' % (L22_dict['emission_color'].upper(),
+                                                        t_start.strftime('%Y-%m-%d_%H.%M.%S'),
                                                         data_version_major, data_revision)
     L22_full_fn = '%s%s'%(path, L22_fn)
     ncfile = netCDF4.Dataset(L22_full_fn,mode='w',format='NETCDF4') 
@@ -2666,7 +2638,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         ncfile.Link_Text =                      'MIGHTI Cardinal Vector Winds (DP 2.2)'
         ncfile.Link_Title =                     'ICON MIGHTI'
         ncfile.Logical_File_ID =                L22_fn[:-3]
-        ncfile.Logical_Source =                 'ICON_L2_MIGHTI'
+        ncfile.Logical_Source =                 'ICON_L2_2_MIGHTI'
         ncfile.Logical_Source_Description =     'MIGHTI - Cardinal Vector Winds'
         ncfile.Mission_Group =                  'Ionospheric Investigations'
         ncfile.MODS =                           ncfile.History
@@ -2681,7 +2653,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         ncfile.Text =                           'ICON explores the boundary between Earth and space - the ionosphere - ' +\
                                                 'to understand the physical connection between our world and the immediate '+\
                                                 'space environment around us. Visit \'http://icon.ssl.berkeley.edu\' for more details.'
-        ncfile.Text_Supplement =                'See Harding et al. [2017], doi:10.1007/s11214-017-0359-3'
+        ncfile.Text_Supplement =                '((TODO: Insert reference to Harding et al [2016] paper))'
         ncfile.Time_Resolution =                '30 or 60 seconds'
         ncfile.Title =                          'ICON MIGHTI Cardinal Vector Winds (DP 2.2)'
 
@@ -2727,7 +2699,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               notes='')
 
         
-        ######### Data Location Variables #########
+        ######### Data Location and Direction Variables #########
         
         # Altitude
         val = L22_dict['alt']*1e3 # convert to meters
@@ -2794,36 +2766,6 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
 
 
         ######### Other Metadata Variables #########
-        
-        # Fringe amplitude profile from MIGHTI-A
-        var = _create_variable(ncfile, '%s_FRINGE_AMPLTIUDE_A'%prefix, L22_dict['ver_A'], 
-                              dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
-                              format_nc='f8', format_fortran='F', desc='Fringe Amplitude from MIGHTI-A', 
-                              display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='', bin_location=0.5,
-                              units='', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=[1,1],
-                              notes='The approximate volume emission rate (VER) in arbitrary units from MIGHTI A. ' +
-                                    'Technically this is the visibility '+
-                                    'of the fringes, which has a dependence on temperature and background emission.')
-        
-        # Fringe amplitude profile from MIGHTI-B
-        var = _create_variable(ncfile, '%s_FRINGE_AMPLTIUDE_B'%prefix, L22_dict['ver_B'], 
-                              dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
-                              format_nc='f8', format_fortran='F', desc='Fringe Amplitude from MIGHTI-B', 
-                              display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='', bin_location=0.5,
-                              units='', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=[1,1],
-                              notes='The approximate volume emission rate (VER) in arbitrary units from MIGHTI B. ' +
-                                    'Technically this is the visibility '+
-                                    'of the fringes, which has a dependence on temperature and background emission.')
-        
-         # Fringe amplitude profile from MIGHTI-B
-        var = _create_variable(ncfile, '%s_FRINGE_AMPLTIUDE'%prefix, L22_dict['ver'], 
-                              dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
-                              format_nc='f8', format_fortran='F', desc='Fringe Amplitude', 
-                              display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='', bin_location=0.5,
-                              units='', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=[1,1],
-                              notes='The approximate volume emission rate (VER) in arbitrary units, estimated by combining MIGHTI A and B. ' +
-                                    'Technically this is the visibility '+
-                                    'of the fringes, which has a dependence on temperature and background emission.')
 
         # Fringe amplitude relative difference
         var = _create_variable(ncfile, '%s_FRINGE_AMPLITUDE_RELATIVE_DIFFERENCE'%prefix, L22_dict['ver_rel_diff'], 
@@ -2864,15 +2806,15 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
 
 def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph_asym_thresh=None, time_start=None, time_stop=None):
     '''
-    High-level function to apply the Level-2.1-to-Level-2.2 algorithm to a series of same-colored Level 2.1 files
-    (in the L21_path directory) and create a single Level 2.2 file (in the L22_path directory). This version
+    High-level function to apply the Level-2.1-to-Level-2.2 algorithm to a series of Level 2.1 files
+    (in the L21_path directory) and create a Level 2.2 file (in the L22_path directory). This version
     of the function requires the user to input parameters manually, instead of specifying an 
-    Information.TXT file, like is done at the Science Data Center.
+    Information.TXT file, like is done at the Science Data Center
     
     INPUTS:
     
       *  L21_fns         -- TYPE:list of str.   A list of L2.1 files to be processed, including both MIGHTI-A and
-                                                MIGHTI-B files, all from the same color.
+                                                MIGHTI-B files.
       *  L22_path        -- TYPE:str.           The directory the L2.2 file will be saved in, including trailing "/"
                                                 (e.g., '/home/user/')
 
@@ -2899,8 +2841,6 @@ def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph
       *  L22_fn          -- TYPE:str.      The full path to the saved L2.2 file.
       
     '''
-    
-    assert len(L21_fns)>0, "No L2.1 files specified"
     
 
     ##### Load L2.1 files into dictionaries
@@ -2935,10 +2875,9 @@ def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph
 
 def level21_to_level22(info_fn):
     '''
-    Highest-level function to apply the Level-2.1-to-Level-2.2 algorithm. Inputs are specified via an information file.
-    Files should be listed in the information file for a 24 hour period (0 UT to 0 UT), plus >15 minutes of files on either
-    side. If files from green and red are both specified (as expected when run at the Science Data Center), they will be split
-    and run separately by this function. The output Level 2.2 file(s) will be saved to the same directory
+    Highest-level function to apply the Level-2.1-to-Level-2.2 algorithm to a series of Level 2.1 files
+    (in the L21_path directory) and create a Level 2.2 file (in the L22_path directory). Inputs are
+    specified via an information file. The output Level 2.2 file will be saved to the same directory
     as the input L2.1 files.
     
     INPUTS:
@@ -2951,63 +2890,50 @@ def level21_to_level22(info_fn):
                                         <other parameters>
 
                                         [FILES]
-                                        ICON_L2_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2009-03-23_23.30.00_v01r001.NC
-                                        ICON_L2_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2009-03-23_23.31.00_v01r001.NC
-                                        ICON_L2_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2009-03-23_23.32.00_v01r001.NC
+                                        ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2009-03-23_23.30.00_v01r001.NC
+                                        ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2009-03-23_23.31.00_v01r001.NC
+                                        ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2009-03-23_23.32.00_v01r001.NC
                                         etc... including files from MIGHTI-B
                                       
     OUTPUTS:
     
-      *  ret     -- TYPE:str. '0' if everything worked. If not, a human-readable error message for each file that failed
+      *  L22_fn      -- TYPE:str.  The full path to the saved L2.2 file.
       
     '''
     
-    info, L21_fns = read_info_file(info_fn)
-    L21_fns.sort()
-    
+    # Read the info file to extract parameters for the processing function
+    info = {} # expected to have entries: 'Directory', 'Revision', and 'Files'
+    with open(info_fn, 'r') as f:
+        line = f.readline().strip() # skip the [Parameters] Line
+        line = f.readline().strip()
+        while line:
+            x = line.split('=')
+            info[x[0]] = x[1]
+            line = f.readline().strip()
+        line = f.readline().strip() # skip the [Files] line
+        info['Files'] = []
+        while line:
+            line = f.readline().strip() # an L2.1 file to process
+            info['Files'].append(line)
+                
     # Parse the info
-    # (0) Make sure there's a trailing "/" on the directory
     direc = info['Directory']
     if direc[-1] != '/':
         direc += '/'
-    # (1) Add the directory to all the L2.1 files
-    L21_full_fns = []
-    for L21_fn in L21_fns:
-        L21_full_fns.append(direc + L21_fn)
-    # (2) Parse list of data revision numbers
-    s = info['Revision'].split(',')
-    data_revision = [int(x) for x in s]
-    # For L2.2, we only expect a single revision number
-    assert len(data_revision)==1, "Multiple revision numbers not supported for Level 2.2 processing"
-    data_revision = data_revision[0]
+    data_revision = int(info['Revision'])
+    # Create list of full paths
+    L21_fns = []
+    for fn in info['Files']:
+        L21_fns.append(direc + fn)
     
-    # For both red and green, call lower-level function which does all the real work
-    L22_fns = []
-    failure_messages = []
-    for emission_color in ['red','green']:
-        # Extract L2.1 files with this color
-        L21_fns_color = [fn for fn in L21_fns if emission_color.upper() in fn]
-        try:
-            L22_fn = level21_to_level22_without_info_file(L21_fns_color, direc, data_revision=data_revision)       
-            L22_fns.append(L22_fn)
-        except Exception as e:
-            failure_messages.append('Failed processing:\n\tColor   = %s\%s\n'%(emission_color,traceback.format_exc()))
-                
-                
-    if not failure_messages: # Everything worked
-        return '0' # Is this what Tori wants?
+    # Call lower-level function which does all the work
+    L22_fn = level21_to_level22_without_info_file(L21_fns, direc, data_revision=data_revision,
+                                                  sph_asym_thresh=None) # Let sph_asym_thresh go to default
     
-    else:
-        s = '\n'.join(failure_messages)
-        print(s)
-        return s
+    return L22_fn
 
 
 
-
-################################################################################################################
-#############################################    Unit Tests    #################################################
-################################################################################################################
 
 
 def _test_level1_to_level21():
@@ -3016,8 +2942,8 @@ def _test_level1_to_level21():
     the user is in the directory containing the test data.
     '''
 
-    L21_old_fns = ['ICON_L2_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2017-05-29_011133_v00r001_old.NC',
-                   'ICON_L2_MIGHTI-A_LINE-OF-SIGHT_WIND_RED_2017-05-29_011133_v00r001_old.NC',]
+    L21_old_fns = {'red':  'ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_RED_2017-05-29_01.11.33_v00r001_old.NC',
+                   'green':'ICON_L2_1_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2017-05-29_01.11.33_v00r001_old.NC'}
 
     variable_stubs =    ['TIME',
                          'ALTITUDE',
@@ -3036,21 +2962,16 @@ def _test_level1_to_level21():
 
     print '\nMIGHTI L1-L2.1 PROCESSING v%s\n' % (__version__)
     
-    print 'Processing L1 file...'
-    ret = level1_to_level21('L21_info.txt')
-    print 'Complete\n'
-    
-    # Find new files that were created 
-    L21_fns = glob.glob('./ICON_L2_*r001.NC')
-    L21_fns.sort()
-    assert L21_fns, "No output data files found."
-    
-    for L21_fn, L21_old_fn in zip(L21_fns, L21_old_fns):
-    
+    for emission_color in ['red', 'green']:
+        print '--------------  Testing %s --------------\n' % emission_color
+        print 'Processing L1 file...'
+        L21_fn = level1_to_level21('L21_info.txt', emission_color)
+        print 'Complete\n'
+
+        L21_old_fn = L21_old_fns[emission_color]
         print 'Comparing new file: %s\nWith old file:      ./%s\n' % (L21_fn, L21_old_fn)
-        
-        emission_color = L21_fn.split('_')[5]
-        prefix = 'ICON_L2_1_MIGHTI_A_%s_' % (emission_color)
+
+        prefix = 'ICON_L2_1_MIGHTI_A_%s_' % (emission_color.upper())
 
         d0 = netCDF4.Dataset(L21_fn)
         d1 = netCDF4.Dataset(L21_old_fn)
@@ -3075,27 +2996,18 @@ def _test_level1_to_level21():
 def _test_level21_to_level22():
     '''
     Special-purpose function to test the installation of the Level 2.1 to Level 2.2 processing code. This assumes that 
-    the user is in the directory containing the test data. Here we just test green, since red is identical. Both
+    the user is in the directory containing the test data. The idea is to just test green, since red is identical. Both
     red and green are tested in L2.1.
     '''
-    
-    L22_old_fn = 'ICON_L2_2_MIGHTI_VECTOR_WIND_GREEN_2009-03-24_00.00.00_v00r000.NC'    
-    
     print '\nMIGHTI L2.1-L2.2 PROCESSING v%s\n' % (__version__)
-    print 'Reading L22_info.txt and running L2.1-to-L2.2 code. Red will fail and Green will succeed.'
-    print 'This will take a few minutes....\n'
+    print 'Reading L22_info.txt and running L2.1-to-L2.2 code. This will take a few minutes....'
     # Run processing on test data
-    msg = level21_to_level22('L22_info.txt')
+    L22_fn = level21_to_level22('L22_info.txt')
     print 'Processing complete\n'
     
-    # Find the new file that was created
-    L22_fns = glob.glob('./ICON_L2_MIGHTI_VECTOR*.NC') # This may (should) contain the old file as well as the new
-    if L22_old_fn in L22_fns:
-        L22_fns.remove(L22_old_fn)
-    assert len(L22_fns)==1, "Too many L2.2 files found"
-    L22_fn = L22_fns[0]
-    
-    
+    # Check against old file
+    L22_old_fn = 'ICON_L2_2_MIGHTI_VECTOR_WIND_GREEN_2009-03-24_00.00.00_v00r000.NC'
+
     print 'Comparing new file: %s\nWith old file:      ./%s\n' % (L22_fn, L22_old_fn)
     variables = ['EPOCH',
                  'ICON_L2_2_MIGHTI_GREEN_TIME',
