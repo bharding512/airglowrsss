@@ -13,6 +13,7 @@ from scipy.sparse import linalg as splinalg
 from numpy.linalg import norm
 from scipy.interpolate import RectBivariateSpline, RectSphereBivariateSpline
 import bisect
+import warnings
 
 RE = 6371e3
 sec = lambda(x): 1/cos(x)
@@ -210,6 +211,9 @@ def white_light_scatter(dhf, tau0, P, h, om=1., alpha=0., M=20, N=20, R=20, N_in
     phi_bounds = linspace(0,2*pi,R+1) # phi defined at grid center
     phi = (phi_bounds[1:] + phi_bounds[:-1])/2
     dphi = phi[1] - phi[0]
+    
+    if h < 1000:
+        warnings.warn('Are you sure you specified "h" in meters, not kilometers? (h=%.1f)'%h)
 
     ##################################################################
     # Compute matrices which will implement scattering calculations
@@ -302,7 +306,7 @@ def white_light_scatter(dhf, tau0, P, h, om=1., alpha=0., M=20, N=20, R=20, N_in
             # Capitalized variables indicate 3-D variables (tau, u, phi).
             # In including the ground albedo effect in J0, it is assumed that
             # most scattering happens near the ground, in order to simplify
-            # the geometry of ground reflections.
+            # the trigonometry of ground reflections.
             TAU,U,PHI = meshgrid(tau_mid, u_int, phi_int, indexing='ij')
             _,DU,DPHI = meshgrid(tau_mid, du_int, dphi_int, indexing='ij')
             TH = arccos(U)
@@ -655,7 +659,7 @@ def descatter_asi_data_2D(imd, asi_mask_d, Xd, Yd, tau0, P, h, om=1., M=10, N=20
             It is assumed that input variables are arrays of the same size.
             '''
             sc = 1.0 # how much more to favor y over x when interpolating
-            f = interpolate.griddata((Xd[asi_mask_d],sc*Yd[asi_mask_d].flatten()),imd_iter[asi_mask_d].flatten(),(x,sc*y),
+            f = interpolate.griddata((Xd[asi_mask_d].flatten(),sc*Yd[asi_mask_d].flatten()),imd_iter[asi_mask_d].flatten(),(x,sc*y),
                                      method='nearest')
             # Special case if scalar inputs.
             if not hasattr(x,'__len__'): # don't worry about horizon or whatever. It's probably fine.
@@ -718,7 +722,7 @@ def descatter_asi_data_2D(imd, asi_mask_d, Xd, Yd, tau0, P, h, om=1., M=10, N=20
         Array inputs are expected, but scalar inputs will work too.
         '''
         sc = 1.0 # how much more to favor y over x when interpolating
-        f = interpolate.griddata((Xd[asi_mask_d],sc*Yd[asi_mask_d].flatten()),imd_descatter[asi_mask_d].flatten(),(x,sc*y),
+        f = interpolate.griddata((Xd[asi_mask_d].flatten(),sc*Yd[asi_mask_d].flatten()),imd_descatter[asi_mask_d].flatten(),(x,sc*y),
                                  method='nearest')
         # Special case if scalar inputs.
         if not hasattr(x,'__len__'): # don't worry about horizon or whatever. It's probably fine.
