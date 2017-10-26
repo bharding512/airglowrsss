@@ -760,11 +760,8 @@ def BinMonthlyData(SITE,YEAR,MONTH,DLIST=[],YLIST=[],SPLIT=False,KP=[0,10],CV=Tr
         d.key = "Listed days in {0:%B}".format(dn)
         dl = []; yl = []
         for doy,yr in zip(DLIST,YLIST):
-            doystart = (_dt.datetime(yr,MONTH,1) - _dt.datetime(yr,1,1)).days+1
-            doyend = doystart + _cal.monthrange(yr,MONTH)[1]
-            if doystart <= doy and doy <doyend:
-                dl.append(doy)
-                yl.append(yr)
+            dl.append(doy)
+            yl.append(yr)
         if not(dl):
             print 'Doy List contains no days in desired month.'
 
