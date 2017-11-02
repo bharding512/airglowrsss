@@ -1,4 +1,4 @@
-# A module for functions used for the conversion of MIGHTI Level 1 files to Level 2.1 and 2.2 files.
+# A module for the conversion of MIGHTI Level 1 files to Level 2.1 and 2.2 files.
 # Level 1 files - Calibrated MIGHTI interferograms
 # Level 2.1 files - Line-of-sight wind profiles (this is where the onion-peeling inversion happens)
 # Level 2.2 files - Vector wind profiles (this is where the A/B matchup happens)
@@ -9,9 +9,9 @@
 ####################################### VERSION CONTROL ############################################
 # These need to be manually changed, when necessary.
 # NOTE: When the major version is updated, you should change the History global attribute
-# in both the L2.1 and L2.2 netcdf files.
+# in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 0 # When this changes, the data version will automatically change as well
-software_version_minor = 4 # [0-99], resetting when the major version changes
+software_version_minor = 5 # [0-99], resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -23,7 +23,7 @@ global_params = {}
 global_params['red'] = {
     'sigma'             : 1.0/630.0304e-9, # reciprocal of center wavelength of emission [m^-1] 
                                            # (Osterbrock et al. 1996)  
-    'bin_size'          : 1,              # The number of rows of the interferogram to bin together to 
+    'bin_size'          : 1,               # The number of rows of the interferogram to bin together to 
                                            # improve statistics at the cost of altitude resolution.   
     'account_for_local_projection': True,  # Whether to account for the fact that the line of sight is not
                                            # quite horizontal everywhere along the line of sight
@@ -56,6 +56,7 @@ import netCDF4
 import getpass # for determining who is running the script
 import glob
 import traceback # for printing detailed error traces
+import sys
 
 
 ############################################################################################################
@@ -853,47 +854,6 @@ def los_az_angle(sat_latlonalt, lat, lon, alt):
 
 
 
-def remove_Earth_rotation(v_inertial, az, lat, lon, alt):
-    '''
-    Transform wind measurement from inertial coordinates to a reference
-    frame rotating with the Earth. This can be thought of as "removing 
-    Earth rotation from the line-of-sight measurement."
-    
-    INPUTS:
-    
-      *  v_inertial    -- TYPE:array(ny), UNITS:m/s.   Line-of-sight velocity in inertial
-                          coordinates, positive towards MIGHTI.
-      *  az            -- TYPE:array(ny), UNITS:deg.   Azimuth angle of line of sight
-                          from the satellite to the measurement location, evaluated at the 
-                          measurement location. Degrees East of North. See los_az_angle() above.
-      *  lat           -- TYPE:array(ny), UNITS:deg.   Measurement latitudes.
-      *  lon           -- TYPE:array(ny), UNITS:deg.   Measurement longitudes.
-      *  alt           -- TYPE:array(ny), UNITS:km.    Measurement altitudes.
-      
-    OUTPUTS:
-    
-      *  v             -- TYPE:array(ny), UNITS:m/s.   Line-of-sight velocity in Earth-fixed
-                          coordinates, positive towards MIGHTI.
-                          
-    '''
-    ny = len(v_inertial)
-    corot_contribution = np.zeros(ny)
-    for i in range(ny):
-        meas_latlonalt = np.array([lat[i], lon[i], alt[i]]) # where the measurement is attributed to
-        meas_xyz = ICON.wgs84_to_ecef(meas_latlonalt)
-        rho = np.sqrt(meas_xyz[0]**2 + meas_xyz[1]**2)
-        sidereal_day_length = 23.*60.*60. + 56.*60. + 4. # sidereal day is 23 hrs 56 min 4 sec 
-        corot_vel = 2.*np.pi*rho/sidereal_day_length*1e3
-        # Compute component along LoS
-        corot_contribution[i] = -corot_vel * np.sin(np.deg2rad(az[i])) # positive towards MIGHTI
-    v = v_inertial - corot_contribution
-    return v
-
-
-
-
-
-
 def interpolate_linear(x, y, x0, extrapolation='hold', prop_err = False, yerr = None):
     '''
     Linear interpolation of the function y = f(x) to the location x0.
@@ -1134,7 +1094,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                       * icon_ecef_ram_vector_stop  -- TYPE:array(3).                 
                                                                       Unit ECEF vector of spacecraft ram at end of exposure
                                       * icon_velocity_start        -- TYPE:float.        UNITS:m/s.  
-                                                                      Spacecraft velocity at beginning of exposure (TODO: inertial or EF velocity?)
+                                                                      Spacecraft velocity at beginning of exposure
                                       * icon_velocity_stop         -- TYPE:float.        UNITS:m/s.  
                                                                       Spacecraft velocity at end of exposure
                                       * source_files               -- TYPE:list of strs.             
@@ -1190,7 +1150,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                 * fringe_amplitude          -- TYPE:array(ny),   UNITS:arb.   The fringe contrast, a proxy for volume emission rate
                                 * fringe_amplitude_error    -- TYPE:array(ny),   UNITS:arb.   Uncertainty in fringe_amplitude (1-sigma)
                                 * mighti_ecef_vectors       -- TYPE:array(ny,3).              ECEF unit vector for each line of sight
-                                * icon_velocity_ecef_vector -- TYPE:array(3).    UNITS:m/s.   ECEF vector of spacecraft velocity (TODO: inertial or EF vel?) 
+                                * icon_velocity_ecef_vector -- TYPE:array(3).    UNITS:m/s.   ECEF vector of spacecraft velocity
                                 * file_creation_time        -- TYPE:datetime (timezone naive) Time this processing was run in UTC
                                 * source_files              -- TYPE:list of str.              All science files that went into creating this file
                                 * bin_size                  -- TYPE:int.                      Bin size used in the processing
@@ -1275,17 +1235,12 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
 
     #### Transform from phase to wind
     f = phase_to_wind_factor(np.mean(sigma_opd)) # Use average OPD to analyze entire row
-    v_inertial             = f * phase
-    v_inertial_uncertainty = f * phase_uncertainty
+    v             = f * phase
+    v_uncertainty = f * phase_uncertainty
         
-
     #### Calculate azimuth angles at measurement locations
     az = los_az_angle(icon_latlonalt, lat, lon, alt)
 
-    #### Transform from inertial to rotating coordinate frame
-    v = remove_Earth_rotation(v_inertial, az, lat, lon, alt)
-    v_uncertainty = v_inertial_uncertainty.copy() # No appreciable uncertainty added in this process
-    
     #### For reporting in output file, determine ecef vector at center of row
     mighti_ecef_vectors_center = mighti_ecef_vectors[:,nx/2,:]
     
@@ -1581,8 +1536,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
         ################################## Variables #########################################
 
-        prefix = 'ICON_L2_1_MIGHTI_%s_%s' % (sensor, L21_dict['emission_color'].upper()) # prefix of each variable,
-                                                                                         # e.g., ICON_L2_1_MIGHTI_A_RED        
+        prefix = 'ICON_L2_MIGHTI_%s_%s' % (sensor, L21_dict['emission_color'].upper()) # prefix of each variable,
+                                                                                         # e.g., ICON_L2_MIGHTI_A_RED        
         ######### Timing Variables #########
 
         # Time midpoint (the official required "Epoch" variable)
@@ -1898,18 +1853,17 @@ def read_info_file(info_fn):
             line = f.readline()
             
     return info, files
+                    
     
-    
-    
-    
-    
+  
+
 def level1_to_level21(info_fn):
     '''
     Highest-level function to apply the Level-1-to-Level-2.1 algorithm to a Level 1 file, with 
     input arguments specified via an information file. Many files may be specified in the information
     file; this routine loops over all files specified. For each file, the processing is run twice:
-    once for 'red' and once for 'green'. The output L2.1 files will be saved to the same directory 
-    as the input L1 file.
+    once for 'red' and once for 'green'. The output L2.1 files will be saved to the Output folder in
+    the directory specified in the information file.
     
     INPUTS:
     
@@ -1925,7 +1879,7 @@ def level1_to_level21(info_fn):
                                         
     OUTPUTS:   
     
-      *  ret     -- TYPE:str. '0' if everything worked. If not, a human-readable error message for each file that failed
+      *  ret     -- TYPE:str. '' if everything worked. If not, a human-readable error message for each file that failed
     
     '''    
     
@@ -1937,10 +1891,10 @@ def level1_to_level21(info_fn):
     direc = info['Directory']
     if direc[-1] != '/':
         direc += '/'
-    # (1) Add the directory to all the L1 files
+    # (1) Add the directory to all the L1 files, which are in the Input folder
     L1_full_fns = []
     for L1_fn in L1_fns:
-        L1_full_fns.append(direc + L1_fn)
+        L1_full_fns.append(direc + 'Input/' + L1_fn)
     # (2) Parse list of data revision numbers
     s = info['Revision'].split(',')
     data_revision = [int(x) for x in s]
@@ -1957,22 +1911,22 @@ def level1_to_level21(info_fn):
     for L1_fn, rev in zip(L1_full_fns, data_revision):
         for emission_color in ['red','green']:
             try:
-                L21_fn = level1_to_level21_without_info_file(L1_fn, emission_color, direc, data_revision = rev)
+                L21_fn = level1_to_level21_without_info_file(L1_fn, emission_color, direc + 'Output/', data_revision = rev)
                 L21_fns.append(L21_fn)
             except Exception as e:
                 failed_L1_fns.append(L1_fn)
                 failure_messages.append('Failed processing:\n\tL1_file = %s\n\tColor   = %s\n%s\n'%(L1_fn,emission_color,traceback.format_exc()))
                 
     if not failure_messages: # Everything worked
-        return '0' # Is this what Tori wants?
+        return ''
     
     else:
-        s = '\n'.join(failure_messages)
-        print(s)
+        s = '\n' + '\n'.join(failure_messages)
         return s
-                    
     
     
+
+
     
     
 def level21_to_dict(L21_fns):
@@ -2014,11 +1968,14 @@ def level21_to_dict(L21_fns):
     
     # Open the first file to see how many altitude bins there are
     fn = L21_fns[0]
-    d = netCDF4.Dataset(fn)
+    try:
+        d = netCDF4.Dataset(fn)
+    except IOError as e:
+        raise IOError('File not found: %s' % fn)
     sens  = d.Instrument[-1] # 'A' or 'B'
-    color = fn.split('/')[-1][:-31].split('_')[-1]     # RED or GREEN
+    color = fn.split('/')[-1][:-29].split('_')[-1]     # RED or GREEN
     first_color = color
-    prefix = 'ICON_L2_1_MIGHTI_%s_%s' % (sens, color)
+    prefix = 'ICON_L2_MIGHTI_%s_%s' % (sens, color)
     ny = len(d.variables['%s_ALTITUDE'%prefix])
     nt = len(L21_fns)
     d.close()
@@ -2040,10 +1997,14 @@ def level21_to_dict(L21_fns):
     for i in range(nt):
         fn = L21_fns[i]
         d = netCDF4.Dataset(fn)
+        try:
+            d = netCDF4.Dataset(fn)
+        except IOError as e:
+            raise IOError('File not found: %s' % fn)
         sens  = d.Instrument[-1] # 'A' or 'B'
-        color = fn.split('/')[-1][:-31].split('_')[-1]     # RED or GREEN
+        color = fn.split('/')[-1][:-29].split('_')[-1]     # RED or GREEN
         assert color == first_color, "Input files do not have the same emission color"
-        prefix = 'ICON_L2_1_MIGHTI_%s_%s' % (sens, color)
+        prefix = 'ICON_L2_MIGHTI_%s_%s' % (sens, color)
 
         lat[:,i] =            d.variables['%s_LATITUDE' % prefix][...]
         lon[:,i] =            d.variables['%s_LONGITUDE' % prefix][...]
@@ -2696,7 +2657,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
 
 
         ################################## Variables #########################################
-        prefix = 'ICON_L2_2_MIGHTI_%s' % (L22_dict['emission_color'].upper())
+        prefix = 'ICON_L2_MIGHTI_%s' % (L22_dict['emission_color'].upper())
 
         ######### Timing Variables #########
 
@@ -2933,13 +2894,15 @@ def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph
 
 
 
+
+
 def level21_to_level22(info_fn):
     '''
     Highest-level function to apply the Level-2.1-to-Level-2.2 algorithm. Inputs are specified via an information file.
     Files should be listed in the information file for a 24 hour period (0 UT to 0 UT), plus >15 minutes of files on either
     side. If files from green and red are both specified (as expected when run at the Science Data Center), they will be split
-    and run separately by this function. The output Level 2.2 file(s) will be saved to the same directory
-    as the input L2.1 files.
+    and run separately by this function. The output Level 2.2 file(s) will be saved to the "Output" folder in the directory
+    specified by the information file.
     
     INPUTS:
     
@@ -2958,7 +2921,7 @@ def level21_to_level22(info_fn):
                                       
     OUTPUTS:
     
-      *  ret     -- TYPE:str. '0' if everything worked. If not, a human-readable error message for each file that failed
+      *  ret     -- TYPE:str. '' if everything worked. If not, a human-readable error message for each file that failed
       
     '''
     
@@ -2970,10 +2933,10 @@ def level21_to_level22(info_fn):
     direc = info['Directory']
     if direc[-1] != '/':
         direc += '/'
-    # (1) Add the directory to all the L2.1 files
+    # (1) Add the directory to all the L2.1 files, which are in the Input folder
     L21_full_fns = []
     for L21_fn in L21_fns:
-        L21_full_fns.append(direc + L21_fn)
+        L21_full_fns.append(direc + 'Input/' + L21_fn)
     # (2) Parse list of data revision numbers
     s = info['Revision'].split(',')
     data_revision = [int(x) for x in s]
@@ -2986,21 +2949,22 @@ def level21_to_level22(info_fn):
     failure_messages = []
     for emission_color in ['red','green']:
         # Extract L2.1 files with this color
-        L21_fns_color = [fn for fn in L21_fns if emission_color.upper() in fn]
+        L21_fns_color = [fn for fn in L21_full_fns if emission_color.upper() in fn]
         try:
-            L22_fn = level21_to_level22_without_info_file(L21_fns_color, direc, data_revision=data_revision)       
+            L22_fn = level21_to_level22_without_info_file(L21_fns_color, direc + 'Output/', data_revision=data_revision)       
             L22_fns.append(L22_fn)
         except Exception as e:
-            failure_messages.append('Failed processing:\n\tColor   = %s\%s\n'%(emission_color,traceback.format_exc()))
+            failure_messages.append('Failed processing:\n\tColor   = %s\n%s\n'%(emission_color,traceback.format_exc()))
                 
                 
     if not failure_messages: # Everything worked
-        return '0' # Is this what Tori wants?
+        return ''
     
     else:
-        s = '\n'.join(failure_messages)
-        print(s)
+        s = '\n' + '\n'.join(failure_messages)
         return s
+
+
 
 
 
@@ -3015,9 +2979,6 @@ def _test_level1_to_level21():
     Special-purpose function to test the installation of the Level 1 to Level 2.1 processing code. This assumes that 
     the user is in the directory containing the test data.
     '''
-
-    L21_old_fns = ['ICON_L2_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2017-05-29_011133_v00r001_old.NC',
-                   'ICON_L2_MIGHTI-A_LINE-OF-SIGHT_WIND_RED_2017-05-29_011133_v00r001_old.NC',]
 
     variable_stubs =    ['TIME',
                          'ALTITUDE',
@@ -3037,20 +2998,25 @@ def _test_level1_to_level21():
     print '\nMIGHTI L1-L2.1 PROCESSING v%s\n' % (__version__)
     
     print 'Processing L1 file...'
-    ret = level1_to_level21('L21_info.txt')
+    err = level1_to_level21('./Input/Information.TXT')
     print 'Complete\n'
     
     # Find new files that were created 
-    L21_fns = glob.glob('./ICON_L2_*r001.NC')
+    L21_fns = glob.glob('./Output/*')
     L21_fns.sort()
+    
+    # Find old truth files
+    L21_old_fns = glob.glob('./Output_Truth/*')
+    L21_old_fns.sort()
+    
     assert L21_fns, "No output data files found."
     
     for L21_fn, L21_old_fn in zip(L21_fns, L21_old_fns):
     
-        print 'Comparing new file: %s\nWith old file:      ./%s\n' % (L21_fn, L21_old_fn)
+        print 'Comparing new file: %s\nWith old file:      %s\n' % (L21_fn, L21_old_fn)
         
         emission_color = L21_fn.split('_')[5]
-        prefix = 'ICON_L2_1_MIGHTI_A_%s_' % (emission_color)
+        prefix = 'ICON_L2_MIGHTI_A_%s_' % (emission_color)
 
         d0 = netCDF4.Dataset(L21_fn)
         d1 = netCDF4.Dataset(L21_old_fn)
@@ -3078,36 +3044,36 @@ def _test_level21_to_level22():
     the user is in the directory containing the test data. Here we just test green, since red is identical. Both
     red and green are tested in L2.1.
     '''
-    
-    L22_old_fn = 'ICON_L2_2_MIGHTI_VECTOR_WIND_GREEN_2009-03-24_00.00.00_v00r000.NC'    
-    
+        
     print '\nMIGHTI L2.1-L2.2 PROCESSING v%s\n' % (__version__)
-    print 'Reading L22_info.txt and running L2.1-to-L2.2 code. Red will fail and Green will succeed.'
+    print 'Reading ./Input/Information.TXT and running L2.1-to-L2.2 code. Red will fail and Green will succeed.'
     print 'This will take a few minutes....\n'
     # Run processing on test data
-    msg = level21_to_level22('L22_info.txt')
-    print 'Processing complete\n'
+    msg = level21_to_level22('./Input/Information.TXT')
+    print 'Processing complete. Output message:\n\n%s\n\n---------------------------------------\n' % msg
     
     # Find the new file that was created
-    L22_fns = glob.glob('./ICON_L2_MIGHTI_VECTOR*.NC') # This may (should) contain the old file as well as the new
-    if L22_old_fn in L22_fns:
-        L22_fns.remove(L22_old_fn)
+    L22_fns = glob.glob('./Output/*')
     assert len(L22_fns)==1, "Too many L2.2 files found"
     L22_fn = L22_fns[0]
     
+    # Find the old truth file
+    L22_old_fns = glob.glob('./Output_Truth/*')
+    assert len(L22_old_fns)==1, "Too many L2.2 truth files found"
+    L22_old_fn = L22_old_fns[0]    
     
-    print 'Comparing new file: %s\nWith old file:      ./%s\n' % (L22_fn, L22_old_fn)
+    print 'Comparing new file: %s\nWith old file:      %s\n' % (L22_fn, L22_old_fn)
     variables = ['EPOCH',
-                 'ICON_L2_2_MIGHTI_GREEN_TIME',
-                 'ICON_L2_2_MIGHTI_GREEN_ALTITUDE',
-                 'ICON_L2_2_MIGHTI_GREEN_LONGITUDE',
-                 'ICON_L2_2_MIGHTI_GREEN_LATITUDE',
-                 'ICON_L2_2_MIGHTI_GREEN_ZONAL_WIND',
-                 'ICON_L2_2_MIGHTI_GREEN_MERIDIONAL_WIND',
-                 'ICON_L2_2_MIGHTI_GREEN_ZONAL_WIND_ERROR',
-                 'ICON_L2_2_MIGHTI_GREEN_MERIDIONAL_WIND_ERROR',
-                 'ICON_L2_2_MIGHTI_GREEN_FRINGE_AMPLITUDE_RELATIVE_DIFFERENCE',
-                 'ICON_L2_2_MIGHTI_GREEN_ERROR_FLAG']
+                 'ICON_L2_MIGHTI_GREEN_TIME',
+                 'ICON_L2_MIGHTI_GREEN_ALTITUDE',
+                 'ICON_L2_MIGHTI_GREEN_LONGITUDE',
+                 'ICON_L2_MIGHTI_GREEN_LATITUDE',
+                 'ICON_L2_MIGHTI_GREEN_ZONAL_WIND',
+                 'ICON_L2_MIGHTI_GREEN_MERIDIONAL_WIND',
+                 'ICON_L2_MIGHTI_GREEN_ZONAL_WIND_ERROR',
+                 'ICON_L2_MIGHTI_GREEN_MERIDIONAL_WIND_ERROR',
+                 'ICON_L2_MIGHTI_GREEN_FRINGE_AMPLITUDE_RELATIVE_DIFFERENCE',
+                 'ICON_L2_MIGHTI_GREEN_ERROR_FLAG']
 
     d0 = netCDF4.Dataset(L22_fn)
     d1 = netCDF4.Dataset(L22_old_fn)
@@ -3120,8 +3086,76 @@ def _test_level21_to_level22():
         print '%60s:  %e %s' % (v,e, d0.variables[v].Units)
     d0.close()
     d1.close()
+    print ''
 
 
+    
+    
+    
+    
+################################################################################################################
+##############################   INTERFACE FOR SCIENCE DATA CENTER:    #########################################
+################################################################################################################
+    
+def main(argv):
+    '''
+    Program that will run if this file is called as a script. Depending on the 
+    argument, the Level 2.1 or Level 2.2 algorithms will be launched, assuming that the Information.TXT file
+    is in the directory. Examples:
+    
+    $ python /path/to/MIGHTI_L2.py -L2.1
+    $ python /path/to/MIGHTI_L2.py -L2.2
+    $ python /path/to/MIGHTI_L2.py -L2.1test
+    $ python /path/to/MIGHTI_L2.py -L2.2test
+    
+    INPUT:
+        argv --TYPE:str. The command line arguments, provided by sys.argv.
+        
+    '''
+    info_fn = './Input/Information.TXT'
+    
+    usagestr = 'usage: python MIGHTI_L2.py -L2.x  (where x is 1 or 2)'
+    if len(argv)!=2:
+        print usagestr
+        sys.exit(1)
+        
+    # Call the L2.1 or L2.2 algorithms, as specified.
+    # Also possibly call the unit test functions
+    err = ''
+    if argv[1] == '-L2.1':
+        err = level1_to_level21(info_fn)
+    elif argv[1] == '-L2.2':
+        err = level21_to_level22(info_fn)
+    elif argv[1] == '-L2.1test':
+        _test_level1_to_level21()
+    elif argv[1] == '-L2.2test':
+        _test_level21_to_level22()
+    else:
+        print usagestr
+        sys.exit(1)
+    
+    # If the processing had a problem, print it and exit with error
+    if err:
+        print err
+        sys.exit(1)
+    else:
+        sys.exit(0)
+    
+    
+if __name__ == "__main__":
+    main(sys.argv)
+    
+    
+    
+    
+
+
+
+    
+    
+    
+    
+    
     
     
     
