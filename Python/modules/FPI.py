@@ -6,7 +6,10 @@ matplotlib.use('AGG')
 
 import subprocess
 import re
-import Image
+try:
+    import Image
+except:
+    from PIL import Image
 import matplotlib as mpl
 from math import pi, floor, sqrt
 import numpy as np
