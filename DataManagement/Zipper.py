@@ -61,6 +61,7 @@ def activeinstruments():
     
     # The dictionary!
     code = defaultdict(lambda: defaultdict(dict))
+
     code['uao']['fpi']['05'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
     #code['uao']['sky']['01'] = {'send_dir':'D:/Sending/', 'local_dir':'D:/Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
     code['uao']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/NATION/Documents/ClarityII/','email':UIemail}
@@ -142,6 +143,11 @@ def activeinstruments():
 #    code['arg']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/meriwej/Documents/ClarityII/','email':UIemail}
     #code['arg']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.204/log.txt','email':UIemail}
     #code['xxx']['xxx']['00'] = {'local_dir':'.','email':UIemail}
+
+    # Kwaj FPI
+    code['kwj']['fpi']['09'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+    code['uao']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/User/My Documents/ClarityII/','email':UIemail}
+    #code['uao']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.0.2/log.txt','email':UIemail}
     
     # Last index is for remote2 admin related issues (not site based)
     code['ADMIN']={'email':['bharding512@gmail.com']}
