@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 0 # When this changes, the data version will automatically change as well
-software_version_minor = 5 # [0-99], resetting when the major version changes
+software_version_minor = 6 # [0-99], resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -107,18 +107,23 @@ def unwrap(x, start=0):
       *  xnew  -- TYPE:array, UNITS:rad. Copy of x with -2*pi jumps removed
       
     '''
+    
+    assert(isinstance(start,int)), "Input 'start' must be an integer"
+    
     xnew = np.zeros(len(x))
     xnew[start] = x[start]
 
     # Go from start forwards
     dx = np.diff(x[start:])
-    idx = dx < 0
+    #idx = dx < 0 # This throws a warning for nans, so use a more complicated expression:
+    idx = np.array([dxi < 0 if not np.isnan(dxi) else False for dxi in dx])
     dx[idx] = dx[idx] + 2.*np.pi
     xnew[start+1:] = xnew[start] + np.cumsum(dx)
 
     # Go from start backwards
     dx = np.diff(x[start::-1])
-    idx = dx > 0
+    #idx = dx > 0 # This throws a warning for nans, so use a more complicated expression:
+    idx = np.array([dxi > 0 if not np.isnan(dxi) else False for dxi in dx])
     dx[idx] = dx[idx] - 2.*np.pi
     xnew[:start] = xnew[start] + np.cumsum(dx)[::-1]
     
@@ -235,7 +240,7 @@ def bin_array(b, y, lon = False):
 
         if lon:
             y_samps = fix_longitudes(y_samps, 180.)
-        y_b[i_new] = np.mean(y_samps)
+        y_b[i_new] = np.nanmean(y_samps)
         
     return y_b
     
@@ -283,7 +288,7 @@ def bin_uncertainty(b, ye):
         else: # grab 
             ye_samps = ye[i_start:i_stop]
 
-        ye_b[i_new] = 1.0/len(ye_samps) * np.sqrt(np.sum(ye_samps**2))
+        ye_b[i_new] = 1.0/len(ye_samps) * np.sqrt(np.nansum(ye_samps**2))
         
     return ye_b
     
@@ -541,10 +546,18 @@ def extract_phase_from_row(row, unwrapping_column):
     
     row_phase = np.angle(row)
 
-    # Average phase and then take delta. Need unwrapping for this.
+    # Unwrap phase
     phaseu = unwrap(row_phase, unwrapping_column)
-    meanphase = np.mean(phaseu)
-    return meanphase
+
+    # Fit line to non-NaN phase values
+    col = np.arange(len(phaseu))
+    idx = ~np.isnan(phaseu)
+    p = np.polyfit(col[idx], phaseu[idx], 1)
+
+    # Evaluate line at reference column
+    tot_phase = np.polyval(p,unwrapping_column)
+    
+    return tot_phase
 
     
     
@@ -566,7 +579,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
                                                            This is provided in L1 file.
       *  I_amp_uncertainty   -- TYPE:array(ny), UNITS:arb. Uncertainty in the summed amplitude of each row of I.
                                                            This is provided in L1 file.
-      *  unwrapping_column -- TYPE:int.                 The column at which to begin unwrapping the phase.
+      *  unwrapping_column -- TYPE:array(ny).              The column at which to begin unwrapping the phase. 
       
     OPTIONAL INPUTS:
     
@@ -602,8 +615,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     
     # Create the path matrix
     D = create_observation_matrix(tang_alt, icon_alt, top_layer=top_layer, integration_order=integration_order)
-    
-    
+        
     
     ######### Onion-peeling inversion and amp/phase extraction #########
     # The inversion will proceed in different ways depending on whether
@@ -614,12 +626,12 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
         # This is implemented with a simple linear inversion
         Ip = np.linalg.solve(D,I)
         for i in range(ny):
-            phase[i] = extract_phase_from_row(Ip[i,:], unwrapping_column)
+            phase[i] = extract_phase_from_row(Ip[i,:], unwrapping_column[i])
         
     else:
         # The problem becomes nonlinear, but still solvable in closed form.
         # This code implements Eq (9) in the MIGHTI L2 Space Science Reviews
-        # paper (Harding et al. 2016).
+        # paper (Harding et al. 2017).
         
         B = create_local_projection_matrix(tang_alt, icon_alt)
         Ip = np.zeros((ny,nx), dtype=complex) # onion-peeled interferogram
@@ -640,9 +652,9 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
             Li = Li/dii
             Ip[i,:] = Li
             # Analyze the layer to get the phase, and store it.
-            phase[i] = extract_phase_from_row(Li,  unwrapping_column)
+            phase[i] = extract_phase_from_row(Li,  unwrapping_column[i])
             
-    amp = np.sum(abs(Ip),axis=1)        
+    amp = np.nansum(abs(Ip),axis=1)        
     
 
 
@@ -654,8 +666,8 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     ### Step 0: Characterize L1 and L2.1 interferograms with a single amp/phase per row
     ph_L1 = np.zeros(ny)
     for i in range(ny):
-        ph_L1[i] = extract_phase_from_row(I[i,:], unwrapping_column)
-    A_L1 = np.sum(abs(I),axis=1)
+        ph_L1[i] = extract_phase_from_row(I[i,:], unwrapping_column[i])
+    A_L1 = np.nansum(abs(I),axis=1)
     ph_L2 = phase.copy() # this was calculated above
     A_L2 = amp.copy() # this was calculated above
     # If amp is exactly zero (unlikely in practice), then replace it with a small number
@@ -1019,7 +1031,10 @@ def level1_to_dict(L1_fn, emission_color):
     L1_dict['icon_lat_stop']  = icon_latlonalt[2,0]
     L1_dict['icon_lon_start'] = icon_latlonalt[0,1]
     L1_dict['icon_lon_stop']  = icon_latlonalt[2,1]
-    L1_dict['unwrapping_column'] = int(f.getncattr('Reference_Pixel_%s' % emission_color.capitalize()))
+    col = f.getncattr('Reference_Pixel_%s' % emission_color.capitalize())
+    if not hasattr(col,'__len__'): # Only a single value was given. Expand to all rows
+        col = col*np.ones(ny)
+    L1_dict['unwrapping_column'] = np.array([int(x) for x in col]) # convert to integer
     
     # Dummy placeholder code for reading global attributes, if that matters
     nc_attrs = f.ncattrs()
@@ -1107,10 +1122,10 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                                                       Length of exposure
                                       * optical_path_difference    -- TYPE:array(nx).    UNITS:m.    
                                                                       Optical path difference for each column of interferogram
-                                      * unwrapping_column          -- TYPE:int.           
+                                      * unwrapping_column          -- TYPE:array(ny) of int.           
                                                                       The column at which to begin unwrapping the phase of the interferogram.
                                                                       This is necessary to ensure that the zero wind phase (which was removed
-                                                                      in the L1 processing) does not have a 2pi ambiguity.
+                                                                      in the L1 processing) does not have a 2pi ambiguity. It is a function of row.
                                              
     OPTIONAL INPUTS - If None, defaults from MIGHTI_L2.global_params will be used 
     
@@ -1156,7 +1171,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                 * bin_size                  -- TYPE:int.                      Bin size used in the processing
                                 * top_layer                 -- TYPE:str.                      How the top layer was handled: 'thin' or 'exp'
                                 * integration_order         -- TYPE:int.                      Order of integration used in inversion: 0 or 1
-                                * unwrapping_column         -- TYPE:int.                      The reference column for unwrapping used in the processing
+                                * unwrapping_column         -- TYPE:array(ny) of int.         The reference column for unwrapping used in the processing
                                 * I                         -- TYPE:array(ny,nx) UNITS:arb.   The complex-valued, onion-peeled interferogram
     
     '''
@@ -1439,7 +1454,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
     
 
 
-    L21_fn = 'ICON_L2_MIGHTI-%s_LINE-OF-SIGHT_WIND_%s_%s_v%02ir%03i.NC' % (sensor,L21_dict['emission_color'].upper(),
+    L21_fn = 'ICON_L2_MIGHTI-%s_LINE-OF-SIGHT-WIND-%s_%s_v%02ir%03i.NC' % (sensor,L21_dict['emission_color'].upper(),
                                                            t_mid.strftime('%Y-%m-%d_%H%M%S'),
                                                            data_version_major, data_revision)
     L21_full_fn = '%s%s'%(path, L21_fn)
@@ -1973,7 +1988,7 @@ def level21_to_dict(L21_fns):
     except IOError as e:
         raise IOError('File not found: %s' % fn)
     sens  = d.Instrument[-1] # 'A' or 'B'
-    color = fn.split('/')[-1][:-29].split('_')[-1]     # RED or GREEN
+    color = fn.split('/')[-1].split('_')[3].split('-')[-1]     # RED or GREEN
     first_color = color
     prefix = 'ICON_L2_MIGHTI_%s_%s' % (sens, color)
     ny = len(d.variables['%s_ALTITUDE'%prefix])
@@ -2002,7 +2017,7 @@ def level21_to_dict(L21_fns):
         except IOError as e:
             raise IOError('File not found: %s' % fn)
         sens  = d.Instrument[-1] # 'A' or 'B'
-        color = fn.split('/')[-1][:-29].split('_')[-1]     # RED or GREEN
+        color = fn.split('/')[-1].split('_')[3].split('-')[-1]     # RED or GREEN
         assert color == first_color, "Input files do not have the same emission color"
         prefix = 'ICON_L2_MIGHTI_%s_%s' % (sens, color)
 
@@ -2560,7 +2575,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
 
 
     ######################### Open file for writing ##############################
-    L22_fn = 'ICON_L2_MIGHTI_VECTOR_WIND_%s_%s_v%02ir%03i.NC' % (L22_dict['emission_color'].upper(),
+    L22_fn = 'ICON_L2_MIGHTI_VECTOR-WIND-%s_%s_v%02ir%03i.NC' % (L22_dict['emission_color'].upper(),
                                                         t_start.strftime('%Y-%m-%d_%H%M%S'),
                                                         data_version_major, data_revision)
     L22_full_fn = '%s%s'%(path, L22_fn)
@@ -3015,7 +3030,7 @@ def _test_level1_to_level21():
     
         print 'Comparing new file: %s\nWith old file:      %s\n' % (L21_fn, L21_old_fn)
         
-        emission_color = L21_fn.split('_')[5]
+        emission_color = L21_fn.split('_')[3].split('-')[-1]
         prefix = 'ICON_L2_MIGHTI_A_%s_' % (emission_color)
 
         d0 = netCDF4.Dataset(L21_fn)
@@ -3054,7 +3069,8 @@ def _test_level21_to_level22():
     
     # Find the new file that was created
     L22_fns = glob.glob('./Output/*')
-    assert len(L22_fns)==1, "Too many L2.2 files found"
+    assert len(L22_fns)<2, "Too many L2.2 files found"
+    assert len(L22_fns)>0, "No L2.2 file found"
     L22_fn = L22_fns[0]
     
     # Find the old truth file
