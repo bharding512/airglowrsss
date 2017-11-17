@@ -69,7 +69,7 @@ import sys
 def phase_to_wind_factor(sigma_opd):
     '''
     Return the value f that satisfies w = f*p, where w is a wind change and p is a phase change.
-    dphi = 2*pi*OPD*sigma*v/c (Eq 1 of Englert et al 2007 Appl Opt., and Eq 2 of Harding et al. 2016 SSR)
+    dphi = 2*pi*OPD*sigma*v/c (Eq 1 of Englert et al. 2007 Appl Opt., and Eq 2 of Harding et al. 2017 SSR)
                                
     INPUTS:
     
@@ -957,7 +957,7 @@ def interpolate_linear(x, y, x0, extrapolation='hold', prop_err = False, yerr = 
 
 
 
-def level1_to_dict(L1_fn, emission_color):
+def level1_to_dict(L1_fn, emission_color, startstop = True):
     '''
     Read a level 1 file and translate it into a dictionary that the 
     level 2.1 processing can use.
@@ -966,6 +966,10 @@ def level1_to_dict(L1_fn, emission_color):
     
       *  L1_fn          -- TYPE:str.  The full path and filename of the level 1 file.
       *  emission_color -- TYPE:str, 'green' or 'red'.
+      
+    OPTIONAL INPUTS:
+      *  startstop      -- TYPE:bool, If False, read the midpoint value and write it to
+                                      both the "start" and "stop" variables
         
     OUTPUTS:
     
@@ -986,6 +990,12 @@ def level1_to_dict(L1_fn, emission_color):
         sensor = 'B'
     else:
         raise Exception('Cannot determine sensor (A or B) from %s' % L1_fn)
+        
+    istop = 2  # index of stop in start/mid/stop
+    istart = 0 # index of start in start/mid/stop
+    if not startstop:
+        istop = 1
+        istart = 1
     
     L1_dict = {}
     L1_dict['L1_fn']                       = L1_fn
@@ -997,40 +1007,40 @@ def level1_to_dict(L1_fn, emission_color):
     # For tangent locations, only use the center, not the full horizontal distribution
     ny,nx = np.shape(L1_dict['I_amp'])
     tang_lla                               = f['ICON_L1_MIGHTI_%s_%s_TANGENT_LATLONALT' % (sensor, emission_color.upper())][0,:,:,:,nx/2] 
-    L1_dict['tang_alt_start']              = tang_lla[0,2,:]
-    L1_dict['tang_alt_stop']               = tang_lla[2,2,:]
-    L1_dict['tang_lat_start']              = tang_lla[0,0,:]
-    L1_dict['tang_lat_stop']               = tang_lla[2,0,:]
-    L1_dict['tang_lon_start']              = tang_lla[0,1,:]
-    L1_dict['tang_lon_stop']               = tang_lla[2,1,:]
+    L1_dict['tang_alt_start']              = tang_lla[istart,2,:]
+    L1_dict['tang_alt_stop']               = tang_lla[istop ,2,:]
+    L1_dict['tang_lat_start']              = tang_lla[istart,0,:]
+    L1_dict['tang_lat_stop']               = tang_lla[istop ,0,:]
+    L1_dict['tang_lon_start']              = tang_lla[istart,1,:]
+    L1_dict['tang_lon_stop']               = tang_lla[istop ,1,:]
     L1_dict['emission_color']              = emission_color
     # In the L1 file, the ECEF vectors are stored in multidimensional array: (time, start/mid/stop, vector_xyz, vert, horz)
     tmp                                    = f['ICON_L1_MIGHTI_%s_%s_ECEF_UNIT_VECTORS'% (sensor, emission_color.upper())][0,:,:,:,:]
-    L1_dict['mighti_ecef_vectors_start']   = np.transpose(tmp[0,:,:,:], (1,2,0)) # V x H x vector
-    L1_dict['mighti_ecef_vectors_stop']    = np.transpose(tmp[2,:,:,:], (1,2,0)) # V x H x vector
-    icon_vel_vec_start                     = f['ICON_L1_MIGHTI_%s_SC_VELOCITY_ECEF'% sensor][0,0,:]
-    icon_vel_vec_stop                      = f['ICON_L1_MIGHTI_%s_SC_VELOCITY_ECEF'% sensor][0,2,:]
+    L1_dict['mighti_ecef_vectors_start']   = np.transpose(tmp[istart,:,:,:], (1,2,0)) # V x H x vector
+    L1_dict['mighti_ecef_vectors_stop']    = np.transpose(tmp[istop ,:,:,:], (1,2,0)) # V x H x vector
+    icon_vel_vec_start                     = f['ICON_L1_MIGHTI_%s_SC_VELOCITY_ECEF'% sensor][0,istart,:]
+    icon_vel_vec_stop                      = f['ICON_L1_MIGHTI_%s_SC_VELOCITY_ECEF'% sensor][0,istop ,:]
     L1_dict['icon_ecef_ram_vector_start']  = icon_vel_vec_start/np.linalg.norm(icon_vel_vec_start)
     L1_dict['icon_ecef_ram_vector_stop']   = icon_vel_vec_stop/np.linalg.norm(icon_vel_vec_stop)
     L1_dict['icon_velocity_start']         = np.linalg.norm(icon_vel_vec_start)
     L1_dict['icon_velocity_stop']          = np.linalg.norm(icon_vel_vec_stop)
     L1_dict['source_files']                = [f.Parents]
-    tsec_start                             = f['ICON_L1_MIGHTI_%s_IMAGE_TIMES'% sensor][0,0]*1e-3
-    tsec_stop                              = f['ICON_L1_MIGHTI_%s_IMAGE_TIMES'% sensor][0,2]*1e-3
+    tsec_start                             = f['ICON_L1_MIGHTI_%s_IMAGE_TIMES'% sensor][0,istart]*1e-3
+    tsec_stop                              = f['ICON_L1_MIGHTI_%s_IMAGE_TIMES'% sensor][0,istop ]*1e-3
     L1_dict['time_start']                  = datetime(1970,1,1) + timedelta(seconds=tsec_start)
     L1_dict['time_stop']                   = datetime(1970,1,1) + timedelta(seconds=tsec_stop)
-    L1_dict['exp_time']                    = tsec_stop - tsec_start
-    L1_dict['optical_path_difference']     = f['ICON_L1_MIGHTI_%s_%s_ARRAY_OPD' % (sensor, emission_color.upper())][0,:]*1e-2 # convert to m
+    L1_dict['exp_time']                    = tsec_stop - tsec_start # Should this be replaced with the actual exposure time?
+    L1_dict['optical_path_difference']     = f['ICON_L1_MIGHTI_%s_%s_ARRAY_OPD' % (sensor, emission_color.upper())][0,:].astype(float)*1e-2 # convert to m
     icon_ecef                              = f['ICON_L1_MIGHTI_%s_SC_POSITION_ECEF'% sensor][:][0,:,:] # timetable x [x,y,z]
     icon_latlonalt = np.zeros((3,3))
     for i in range(3):
         icon_latlonalt[i,:] = ICON.ecef_to_wgs84(icon_ecef[i,:])
-    L1_dict['icon_alt_start'] = icon_latlonalt[0,2]
-    L1_dict['icon_alt_stop']  = icon_latlonalt[2,2]
-    L1_dict['icon_lat_start'] = icon_latlonalt[0,0]
-    L1_dict['icon_lat_stop']  = icon_latlonalt[2,0]
-    L1_dict['icon_lon_start'] = icon_latlonalt[0,1]
-    L1_dict['icon_lon_stop']  = icon_latlonalt[2,1]
+    L1_dict['icon_alt_start'] = icon_latlonalt[istart,2]
+    L1_dict['icon_alt_stop']  = icon_latlonalt[istop ,2]
+    L1_dict['icon_lat_start'] = icon_latlonalt[istart,0]
+    L1_dict['icon_lat_stop']  = icon_latlonalt[istop ,0]
+    L1_dict['icon_lon_start'] = icon_latlonalt[istart,1]
+    L1_dict['icon_lon_stop']  = icon_latlonalt[istop ,1]
     col = f.getncattr('Reference_Pixel_%s' % emission_color.capitalize())
     if not hasattr(col,'__len__'): # Only a single value was given. Expand to all rows
         col = col*np.ones(ny)
@@ -2170,15 +2180,6 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     if sph_asym_thresh is None:
         sph_asym_thresh = params['sph_asym_thresh']
     
-    if time_start is None:
-        # Default to first 0 UT after first file
-        t_first = min(L21_A_dict['time'][0], L21_B_dict['time'][0]) # first file time
-        time_start = datetime(t_first.year, t_first.month, t_first.day) + timedelta(days=1)
-        
-    if time_stop is None:
-        # Default to 24 hours after the start time
-        time_stop = time_start + timedelta(hours=24)
-    
     assert L21_A_dict['emission_color'] == L21_B_dict['emission_color'], "Files for A and B are for different emissions"
     
     
@@ -2205,6 +2206,20 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     exp_time_B =       L21_B_dict['exp_time']
     emission_color =   L21_B_dict['emission_color']
     N_alts_B, N_times_B = np.shape(lat_B)
+    
+    if time_start is None:
+        # Default to 0 UT on date of middle A image
+        t_mid = time_A[N_times_A/2]
+        time_start = datetime(t_mid.year, t_mid.month, t_mid.day)
+        
+    if time_stop is None:
+        # Default to 24 hours after the start time
+        time_stop = time_start + timedelta(hours=24)
+    
+    assert any(time_A < time_stop ), "No MIGHTI-A files found before time_stop=%s"%(time_stop)
+    assert any(time_B < time_stop ), "No MIGHTI-B files found before time_stop=%s"%(time_stop)
+    assert any(time_A > time_start), "No MIGHTI-A files found before time_start=%s"%(time_start)
+    assert any(time_B > time_start), "No MIGHTI-B files found before time_start=%s"%(time_start)
     
     ####################### Define reconstruction grid: lon/alt ########################
 
@@ -2864,7 +2879,7 @@ def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph
       *  time_start      -- TYPE:datetime. A timezone-naive datetime in UT, specifying the beginning of the interval
                                            which the Level 2.2 data product should span. (Some L2.1 files from before
                                            the start time are needed to handle the crossover). If None (default), 
-                                           the start time defaults to the first 0 UT after the first input file's time.
+                                           the start time defaults to 0 UT on the date of the middle input file's time.
       *  time_stop       -- TYPE:datetime. A timezone-naive datetime in UT, specifying the end of the interval
                                            which the Level 2.2 data product should span. (Some L2.1 files from after
                                            the stop time are needed to handle the crossover). If None (default), 
