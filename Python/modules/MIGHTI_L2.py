@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 0 # When this changes, the data version will automatically change as well
-software_version_minor = 6 # [0-99], resetting when the major version changes
+software_version_minor = 8 # [0-99], resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -2591,7 +2591,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
 
     ######################### Open file for writing ##############################
     L22_fn = 'ICON_L2_MIGHTI_VECTOR-WIND-%s_%s_v%02ir%03i.NC' % (L22_dict['emission_color'].upper(),
-                                                        t_start.strftime('%Y-%m-%d_%H%M%S'),
+                                                        t_start.strftime('%Y-%m-%d'),
                                                         data_version_major, data_revision)
     L22_full_fn = '%s%s'%(path, L22_fn)
     ncfile = netCDF4.Dataset(L22_full_fn,mode='w',format='NETCDF4') 
