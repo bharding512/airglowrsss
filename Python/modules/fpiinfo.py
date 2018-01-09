@@ -497,7 +497,7 @@ _sites['kwj'] = {
         'scpUser':      'meriwej',
         'scpPort':      19995,
         'Network':      'nation',
-        'sql_id':       22, # ID on the airglow SQL database
+        'sql_id':       None, # ID on the airglow SQL database
         'share':        False, # whether or not to save a copy of the npz file in a separate folder
         'borders':      True,
         'Directions':   {
