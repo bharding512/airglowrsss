@@ -77,11 +77,16 @@ def activeinstruments():
     #code['ann']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/fpi/My Documents/ClarityII/','email':UIemail}
     #code['ann']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.0.102/log.txt','email':UIemail}
     
-    # PAR deconstructed and being sent to Norway 2 Aug 2017 
+    # PAR deconstructed and being sent to S Africa 2 Aug 2017 
     #code['par']['fpi']['06'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
     #code['par']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/meriwej/My Documents/ClarityII/','email':UIemail}
     #code['par']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://10.20.1.2/log.txt','email':UIemail}
     #code['par']['fpi']['09'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+    
+    # SAO site is a copy of PAR
+    code['sao']['fpi']['06'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+    code['sao']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/meriwej/My Documents/ClarityII/','email':UIemail}
+    code['sao']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://10.20.1.2/log.txt','email':UIemail}
 
     # VTI offline
     #code['vti']['fpi']['09'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
@@ -138,7 +143,7 @@ def activeinstruments():
 #    code['bdr']['fpi']['94'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/FPIData/', 'split':'/usr/bin/split','email':UIemail}
 #    code['bdr']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/User/My Documents/ClarityII/','email':UIemail}
     #code['bdr']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.204/log.txt','email':UIemail}
- 
+
 #    code['arg']['fpi']['93'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/FPIData/', 'split':'/usr/bin/split','email':UIemail}
 #    code['arg']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/meriwej/Documents/ClarityII/','email':UIemail}
     #code['arg']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.204/log.txt','email':UIemail}

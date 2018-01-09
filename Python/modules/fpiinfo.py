@@ -48,6 +48,8 @@ _dates['minime05']['uao'] = { 'start': datetime.datetime(2012, 7, 3),
 
 _dates['minime06'] = {}
 _dates['minime06']['par'] = { 'start': datetime.datetime(2011, 6,21),
+                              'stop' : datetime.datetime(2017,12,31)}
+_dates['minime06']['sao'] = { 'start': datetime.datetime(2018, 1, 1),
                               'stop' : None, }
 
 _dates['minime07'] = {}
@@ -368,6 +370,36 @@ _sites['par'] = {
 		            'n_exp': 0, 'last_exp': None, 'delay':0},
 	            'MTM_Search_2': {'ze': -47.6, 'az': 31.63, 'exptime': 180, 
 		            'n_exp': 0, 'last_exp': None, 'delay':0},
+                },
+    }
+
+
+_sites['sao'] = {
+        'Location':     (-32.38, 20.81, 1700),
+        'Name':         'South African Astronomical Observatory',
+        'Abbreviation': 'sao',
+        'Timezone':     'UTC',
+        'BufferTime':   45,
+        'CloudThresh':  -25.0,
+        'scpUser':      'meriwej',
+        'scpPort':      19997,
+        'Network':      'nation',
+        'sql_id':       None, # ID on the airglow SQL database # NEED TO GET THIS FROM JONATHAN
+        'share':        False, # whether or not to save a copy of the npz file in a separate folder
+        'borders':      True,
+        'Directions':   {
+                'Laser': {'ze': -180, 'az': 88.5, 'exptime': 30, 
+	                'n_exp': 0, 'last_exp': None, 'delay':600,}, 
+                'Zenith': {'ze': 0, 'az': 0, 'exptime': 180, 
+	                'n_exp': 0, 'last_exp': None, 'delay':1500,}, 
+                'North': {'ze': 45, 'az': 0, 'exptime': 180, 
+	                'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+                'South': {'ze': -45, 'az': 0, 'exptime': 180, 
+	                'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+                'East': {'ze': 45, 'az': 90, 'exptime': 180, 
+	                'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+                'West': {'ze': -45, 'az': 90, 'exptime': 180, 
+	                'n_exp': 0, 'last_exp': None, 'delay':0,},
                 },
     }
 
