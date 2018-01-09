@@ -330,11 +330,17 @@ def sorter(san,pgm):
                         # Get correct doy from files
                         for r in result:
                             if r[-4:] in '.img':
-                                ldn = FPI.ReadIMG(dir_data+r).info['LocalTime']
-                                if ldn.hour < 12:
-                                    ldn -= dt.timedelta(days = 1)
-                                doy = ldn.timetuple().tm_yday
-                                year = ldn.year
+                                # Find solar local time and subtract 12 hours. That's the definition of date that we use for FPIs.
+                                # This is the only way to ensure that no matter what location and time zone, all files
+                                # from a night refer to the same date.
+                                ldn = FPI.ReadIMG(fn).info['LocalTime']
+                                site_info = fpiinfo.get_site_info(site, ldn)
+                                utdn = ldn.replace(tzinfo=pytz.timezone(site_info['Timezone'])).astimezone(pytz.utc).replace(tzinfo=None)
+                                site_lon = np.mod(site_info['Location'][1]+180,360)-180
+                                sltdn = utdn + datetime.timedelta(hours = 24*site_lon/360.)
+                                dn0 = sltdn - datetime.timedelta(hours=12) # No matter what time of night, and what location, this will be during the same date
+                                doy = dn0.timetuple().tm_yday
+                                year = dn0.year
                                 break
                         # Run processing script for site
                         try:
