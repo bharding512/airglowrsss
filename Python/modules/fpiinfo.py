@@ -60,11 +60,12 @@ _dates['minime08'] = {}
 _dates['minime08']['ann'] = { 'start': datetime.datetime(2012, 6,20),
                               'stop' : None, }
 
-# TODO: Fix me
 _dates['minime09'] = {}
 _dates['minime09']['par'] = { 'start': datetime.datetime(2013, 7,22), 
                               'stop' : datetime.datetime(2013, 7,31)}
 _dates['minime09']['vti'] = { 'start': datetime.datetime(2013, 8, 2),
+                              'stop' : datetime.datetime(2016, 2, 24),}
+_dates['minime09']['kwj'] = { 'start': datetime.datetime(2017, 8, 12),
                               'stop' : None, }
 
 
@@ -484,6 +485,60 @@ _sites['vti'] = {
 		            'n_exp': 0, 'last_exp': None, 'delay':0},
                 },
     }
+
+
+_sites['kwj'] = {
+        'Location':     (9.3966, 167.4716, 0),
+        'Name':         'Kwajalein - Roi Namur',
+        'Abbreviation': 'kwj',
+        'Timezone':     'UTC',
+        'BufferTime':   45,
+        'CloudThresh':  -25.0,
+        'scpUser':      'meriwej',
+        'scpPort':      19995,
+        'Network':      'nation',
+        'sql_id':       22, # ID on the airglow SQL database
+        'share':        False, # whether or not to save a copy of the npz file in a separate folder
+        'borders':      True,
+        'Directions':   {
+                'Laser': {'ze': -180, 'az': 82, 'exptime': 30, 
+		            'n_exp': 0, 'last_exp': None, 'delay':600,}, 
+	            'Zenith': {'ze': 0, 'az': 0, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':1500,}, 
+	            'North': {'ze': 45, 'az': 0, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+	            'South': {'ze': -45, 'az': 0, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+	            'East': {'ze': 45, 'az': 90, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+	            'West': {'ze': -45, 'az': 90, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0,},
+                'CV_EKU_VTI_1': {'ze': 46.22, 'az': -33.75, 'exptime': 300,
+                    'n_exp': 0, 'last_exp': None, 'delay':0,},
+		        'CV_EKU_VTI_2': {'ze': 46.23, 'az': -123.91, 'exptime': 300,
+                    'n_exp': 0, 'last_exp': None, 'delay':0,},
+                'IN_EKU_VTI': {'ze': 36.18, 'az': -78.82, 'exptime': 300,
+                    'n_exp': 0, 'last_exp': None, 'delay':0,},
+                'CV_PAR_VTI_1': {'ze': 43.02, 'az': -179.88, 'exptime': 300,
+                    'n_exp': 0, 'last_exp': None, 'delay':0,},
+		        'CV_PAR_VTI_2': {'ze': 43.06, 'az': -89.81, 'exptime': 300,
+                    'n_exp': 0, 'last_exp': None, 'delay':0,},
+                'IN_PAR_VTI': {'ze': 33.26, 'az': -134.81, 'exptime': 300,
+                    'n_exp': 0, 'last_exp': None, 'delay':0,},
+                'CV_VTI_EKU_PAR': {'ze': 38.20, 'az': -100.90, 'exptime': 180,
+                    'n_exp': 0, 'last_exp': None, 'delay':0,},
+	            'Windfield13': {'ze': 16.1, 'az': 69.2, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'Windfield14': {'ze': 58.4, 'az': 86.4, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'Windfield15': {'ze': -58.9, 'az': 139.2, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'Along_B': {'ze': -26.7, 'az': -7.5, 'exptime': 180, 
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+                },
+    }
+
+
 
 _sites['mor'] = {
         'Location':     (31.206, -7.866, 2700),
