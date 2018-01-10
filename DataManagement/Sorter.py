@@ -337,8 +337,8 @@ def sorter(san,pgm):
                                 site_info = fpiinfo.get_site_info(site, ldn)
                                 utdn = ldn.replace(tzinfo=pytz.timezone(site_info['Timezone'])).astimezone(pytz.utc).replace(tzinfo=None)
                                 site_lon = np.mod(site_info['Location'][1]+180,360)-180
-                                sltdn = utdn + datetime.timedelta(hours = 24*site_lon/360.)
-                                dn0 = sltdn - datetime.timedelta(hours=12) # No matter what time of night, and what location, this will be during the same date
+                                sltdn = utdn + dt.timedelta(hours = 24*site_lon/360.)
+                                dn0 = sltdn - dt.timedelta(hours=12) # No matter what time of night, and what location, this will be during the same date
                                 doy = dn0.timetuple().tm_yday
                                 year = dn0.year
                                 break
