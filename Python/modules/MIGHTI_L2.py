@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 0 # When this changes, the data version will automatically change as well
-software_version_minor = 8 # [0-99], resetting when the major version changes
+software_version_minor = 9 # [0-99], resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -34,6 +34,10 @@ global_params['red'] = {
     'sph_asym_thresh'   : 0.19,            # The relative difference in VER estimates from A&B,
                                            # beyond which the spherical asymmetry flag will be
                                            # raised in L2.2.
+    'min_amp'           : 5100.            # The amplitude of a row of the interferogram (summed over
+                                           # OPD) below which the data will be ignored. See the report
+                                           # for how these thresholds were determined:
+                                           # http://remote2.ece.illinois.edu/~bhardin2/MIGHTI/MIGHTI_Minimum_Amplitude.pdf
 }
 
 global_params['green'] = {
@@ -42,8 +46,11 @@ global_params['green'] = {
     'account_for_local_projection': True,
     'integration_order' : 0,
     'top_layer'         : 'exp',
-    'sph_asym_thresh'   : 0.19,            
+    'sph_asym_thresh'   : 0.19,
+    'min_amp'           : 5800.,
 }
+
+
 #####################################################################################################
 
 
@@ -116,14 +123,14 @@ def unwrap(x, start=0):
     # Go from start forwards
     dx = np.diff(x[start:])
     #idx = dx < 0 # This throws a warning for nans, so use a more complicated expression:
-    idx = np.array([dxi < 0 if not np.isnan(dxi) else False for dxi in dx])
+    idx = np.array([dxi < 0 if not np.isnan(dxi) else False for dxi in dx], dtype=bool)
     dx[idx] = dx[idx] + 2.*np.pi
     xnew[start+1:] = xnew[start] + np.cumsum(dx)
 
     # Go from start backwards
     dx = np.diff(x[start::-1])
     #idx = dx > 0 # This throws a warning for nans, so use a more complicated expression:
-    idx = np.array([dxi > 0 if not np.isnan(dxi) else False for dxi in dx])
+    idx = np.array([dxi > 0 if not np.isnan(dxi) else False for dxi in dx], dtype=bool)
     dx[idx] = dx[idx] - 2.*np.pi
     xnew[:start] = xnew[start] + np.cumsum(dx)[::-1]
     
@@ -182,12 +189,12 @@ def remove_satellite_velocity(I, sat_latlonalt, sat_velocity, sat_velocity_vecto
     # Loop over each pixel, calculating the look direction, projected satellite velocity
     # and the resulting phase shift in the interferogram
     sat_vel_phase = np.zeros((ny,nx))
-    for i in range(ny): # loop over rows
-        for j in range(nx): # Loop over columns
+    for j in range(nx): # Loop over columns
+        phase_to_wind = phase_to_wind_factor(sigma_opd[j]) # use a different phase-to-wind factor for each column
+        for i in range(ny): # loop over rows
             look_vector = mighti_vectors[i,j,:]
             proj_sat_vel = sat_velocity * np.dot(sat_velocity_vector, look_vector) # positive apparent wind towards MIGHTI
-            # use a different phase-to-wind factor for each column
-            sat_vel_phase[i,j] = proj_sat_vel/phase_to_wind_factor(sigma_opd[j])
+            sat_vel_phase[i,j] = proj_sat_vel/phase_to_wind
 
     # Subtract phase from the interferogram
     I2 = I*np.exp(-1j*sat_vel_phase)
@@ -411,32 +418,30 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_o
         # Define midpt of each layer
         rmid = (rbottom + rtop)/2
 
-        # Build observation matrix
-        for m in range(M):
-            for k in range(M):
-                th = theta[m]
-                rb = rbottom[k]
-                rt = rtop[k]
-                sb = np.cos(th)**2 - 1 + ((RE+rb)/(RE+icon_alt))**2
-                st = np.cos(th)**2 - 1 + ((RE+rt)/(RE+icon_alt))**2
-                if sb < 0: # there is no intersection of LOS with altitude rb. Set term to 0.
-                    # Note: this might be due to numerical rounding for tangent altitude. 
-                    # Do the same thing either way.
-                    sb = 0.
-                if st < 0: # there is no intersection of LOS with altitude rt. Set term to 0.
-                    st = 0.
-                D[m,k] = 2*(RE+icon_alt) * ( np.sqrt(st) - np.sqrt(sb) )
-           
-            if top_layer == 'exp': # Use exponential falloff model
+        
+        # Build observation matrix and other required matrix variables
+        # Thanks to JJM for the vectorized formulation which improved runtime.
+        th = np.tile(theta,(len(theta),1)).T
+        rb = np.tile(rbottom,(len(rbottom),1))
+        rt = np.tile(rtop,(len(rtop),1))
+        sb2 = -np.sin(th)**2 + ((RE+rb)/(RE+icon_alt))**2
+        st2 = -np.sin(th)**2 + ((RE+rt)/(RE+icon_alt))**2
+
+        sb2[sb2<0] = 0. # there is no intersection of LOS with altitude rb. Set term to 0.
+        st2[st2<0] = 0. # there is no intersection of LOS with altitude rt. Set term to 0.
+        D = 2*(RE + icon_alt) * (np.sqrt(st2) - np.sqrt(sb2))
+        
+        if top_layer == 'exp': # Use exponential falloff model
+            for m in range(M):
                 rt = tang_alt[m] + RE
                 r0 = tang_alt[-1] + RE
-                
                 def func(x, rt):
-                    # The extrapolation function to be numerically integrated. (Eq 6 in Harding et al. 2016 SSR)
+                    # The extrapolation function to be numerically integrated. (Eq 6 in Harding et al. 2017 SSR)
                     return np.exp(-1./H*(np.sqrt(x**2 + rt**2) - r0))
                 
                 x0 = np.sqrt(r0**2- rt**2)
                 D[m,M-1] = 2.*integrate.quad(func, x0, np.inf, args=(rt))[0]
+                
                 
     #################### First-order integration #######################
     # Assume airglow varies linearly within thin altitude shells. This is
@@ -470,7 +475,7 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_o
                 r0 = tang_alt[-1] + RE
                 
                 def func(x, rt):
-                    # The extrapolation function to be numerically integrated. (Eq 6 in Harding et al. 2016 SSR)
+                    # The extrapolation function to be numerically integrated. (Eq 6 in Harding et al. 2017 SSR)
                     return np.exp(-1./H*(np.sqrt(x**2 + rt**2) - r0))
                 
                 x0 = np.sqrt(r0**2- rt**2)
@@ -552,6 +557,8 @@ def extract_phase_from_row(row, unwrapping_column):
     # Fit line to non-NaN phase values
     col = np.arange(len(phaseu))
     idx = ~np.isnan(phaseu)
+    if all(~idx): # Everything in this row is nan. Return nan.
+        return np.nan
     p = np.polyfit(col[idx], phaseu[idx], 1)
 
     # Evaluate line at reference column
@@ -1061,11 +1068,12 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
 
 def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None, 
                                 integration_order = None, account_for_local_projection = None, 
-                                bin_size = None):
+                                bin_size = None, min_amp = None):
     '''
     High-level function to run the Level 2.1 processing. It takes a dictionary (containing
     input variables extracted from a Level 1 file) and outputs a dictionary (containing 
-    output variables, which can be written to a file using save_nc_level21).
+    output variables, which can be written to a file using save_nc_level21). Basic quality
+    control is performed.
     
     INPUTS:
     
@@ -1149,6 +1157,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                          perfectly tangent to each shell at each point along the ray.
       *  bin_size            -- TYPE:int, The number of rows of the interferogram to bin together to 
                                           improve statistics at the cost of altitude resolution.
+      *  min_amp             -- TYPE:float, UNITS:counts. The amplitude (summed over a row) below which
+                                          the data will be ignored.
                                                                           
     OUTPUTS:
     
@@ -1200,6 +1210,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     if bin_size is None:
         bin_size = params['bin_size']
     bin_size = int(bin_size)
+    if min_amp is None:
+        min_amp = params['min_amp']
 
     ####  Load parameters from input dictionary
     Iraw = L1_dict['I_amp']*np.exp(1j*L1_dict['I_phase'])
@@ -1230,7 +1242,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     icon_latlonalt = np.array([icon_lat, icon_lon, icon_alt])
     I = remove_satellite_velocity(Iraw, icon_latlonalt, icon_velocity, icon_ecef_ram_vector, mighti_ecef_vectors, sigma_opd)
                          
-    #### Bin data
+    #### Bin data: average nearby rows together
     I        = bin_image(bin_size, I)
     tang_lat = bin_array(bin_size, tang_lat)
     tang_lon = bin_array(bin_size, tang_lon, lon=True)
@@ -1243,8 +1255,16 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     mighti_ecef_vectors = mighti_ecef_vectors_new
     I_amp_uncertainty   = bin_uncertainty(bin_size, I_amp_uncertainty)
     I_phase_uncertainty = bin_uncertainty(bin_size, I_phase_uncertainty)
+    min_amp = min_amp/np.sqrt(bin_size) # Assuming uncorrelated errors row-to-row
     
-    
+    #### Quality control: low signal
+    I_amp = np.sum(abs(I),axis=1)
+    idx_dim = I_amp < min_amp
+    # Set values to zero, and uncertainties to zero, so it acts like these rows
+    # don't even exist. The uncertainties will be adjusted after the inversion.
+    I[idx_dim,:] = 0.0
+    I_amp_uncertainty[idx_dim] = 0.0 
+    I_phase_uncertainty[idx_dim] = 0.0
     
     #### Determine geographical locations of inverted wind
     lat, lon, alt = attribute_measurement_location(tang_lat, tang_lon, tang_alt,
@@ -1256,6 +1276,23 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                            I_phase_uncertainty, I_amp_uncertainty, unwrapping_column,
                            top_layer=top_layer, integration_order=integration_order,
                            account_for_local_projection=account_for_local_projection)
+    
+    #### Quality control
+    ## Filter samples that have uncertainties larger than 2pi
+    idx_2pi = phase_uncertainty > 2*np.pi
+    Ip[idx_2pi,:]  = np.nan
+    phase[idx_2pi] = np.nan
+    amp[idx_2pi]   = np.nan
+    phase_uncertainty[idx_2pi] = np.nan
+    amp_uncertainty[idx_2pi]   = np.nan
+    ## Revisit the low signal samples
+    phase[idx_dim] = np.nan
+    amp[idx_dim] = np.nan
+    phase_uncertainty[idx_dim] = np.nan
+    amp_uncertainty[idx_dim] = np.nan
+    ## Print information to log file. TODO: record error codes
+    print "Removing %i rows (low signal)" % sum(idx_dim)
+    print "Removing %i rows (large uncertainty)" % sum(idx_2pi)
 
 
     #### Transform from phase to wind
@@ -1761,7 +1798,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
     
     
 def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_revision=0, sigma=None, top_layer=None, integration_order=None, 
-                                        account_for_local_projection=None, bin_size = None):
+                                        account_for_local_projection=None, bin_size = None, min_amp = None):
     '''
     High-level function to apply the Level-1-to-Level-2.1 algorithm to a Level 1 file. This version
     of the function requires the user to input the arguments instead of specifying them with an 
@@ -1792,6 +1829,8 @@ def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_r
                                          perfectly tangent to each shell at each point along the ray.
       *  bin_size            -- TYPE:int, The number of rows of the interferogram to bin together to 
                                           improve statistics at the cost of altitude resolution.
+      *  min_amp             -- TYPE:float, UNITS:counts. The amplitude (summed over a row) below which
+                                          the data will be ignored.
                                            
     OUTPUTS:      
     
@@ -1811,7 +1850,7 @@ def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_r
     L21_dict = level1_dict_to_level21_dict(L1_dict, sigma, top_layer = top_layer, 
                                            integration_order = integration_order, 
                                            account_for_local_projection = account_for_local_projection, 
-                                           bin_size = bin_size)
+                                           bin_size = bin_size, min_amp = min_amp)
     
     
     # Save L2.1 file
