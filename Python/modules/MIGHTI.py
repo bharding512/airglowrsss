@@ -3,7 +3,13 @@ import numpy as np
        
     
 def add_noise(I, instr_params):
-    signal = I.copy() # in electrons
+    '''
+    I is in units of DN (not electrons). DN = gain*electrons.
+    '''
+    # This whole calculation is in electrons, and is converted back to DN
+    # right before returning.
+    
+    signal = I.copy()/instr_params['gain'] # in electrons
 
     # Add dark signal
     # (Adding shot noise on top of this will account for "dark noise")
@@ -19,6 +25,9 @@ def add_noise(I, instr_params):
     # Read noise
     readnoise = instr_params['readnoise']*np.random.randn(*np.shape(signal))
     signal += readnoise
+    
+    # Convert back from electrons to DN
+    signal = signal*instr_params['gain']
     
     return signal
 
@@ -78,6 +87,7 @@ def interferogram(params):
     opteff          = params['opteff']
     exptime         = params['exptime']
     fringe_contrast = params['fringe_contrast']
+    gain            = params['gain']
 
     # Calculate the thermal width of the line [cm^-1]
     sigma = 1./lam
@@ -104,6 +114,9 @@ def interferogram(params):
 
     # split up electrons into pixels in this row of the interferogram
     ccdslice = electrons * igram / np.sum(igram)
+    
+    # Account for gain (which will have to be handled in noise calculation)
+    ccdslice = gain*ccdslice
     
     return ccdslice
 
@@ -136,6 +149,7 @@ def get_instrument_constants():
         'readnoise': 16.8, # electrons rms, per binned pixel. Englert et al 2016
   'fringe_contrast': 0.72, # Englert et al 2016, Green Night (worst case)
          'exptime': 60., # Night.
+            'gain': 1.7,
                   }
 
     #### TEMPORARY INSTRUMENT TO RE-CREATE CSR ANALYSIS ####                 
