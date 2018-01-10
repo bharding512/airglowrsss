@@ -333,7 +333,7 @@ def sorter(san,pgm):
                                 # Find solar local time and subtract 12 hours. That's the definition of date that we use for FPIs.
                                 # This is the only way to ensure that no matter what location and time zone, all files
                                 # from a night refer to the same date.
-                                ldn = FPI.ReadIMG(fn).info['LocalTime']
+                                ldn = FPI.ReadIMG(dir_data+r).info['LocalTime']
                                 site_info = fpiinfo.get_site_info(site, ldn)
                                 utdn = ldn.replace(tzinfo=pytz.timezone(site_info['Timezone'])).astimezone(pytz.utc).replace(tzinfo=None)
                                 site_lon = np.mod(site_info['Location'][1]+180,360)-180
