@@ -65,7 +65,11 @@ _dates['minime09']['par'] = { 'start': datetime.datetime(2013, 7,22),
                               'stop' : datetime.datetime(2013, 7,31)}
 _dates['minime09']['vti'] = { 'start': datetime.datetime(2013, 8, 2),
                               'stop' : datetime.datetime(2016, 2, 24),}
-_dates['minime09']['kwj'] = { 'start': datetime.datetime(2017, 8, 12),
+# mm09 was moved to KWJ in mid-2017, but I don't trust the default params until
+# I started taking a closer look, in 2018, when the computer was replaced. I think
+# they may have tweaked the instrument, as the center location I had from 2017 didn't 
+# seem to match the 2018 data.
+_dates['minime09']['kwj'] = { 'start': datetime.datetime(2018, 1, 1),
                               'stop' : None, }
 
 
@@ -1543,6 +1547,40 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
                        'center':  (275.05, 261.21),
                        }
         instrument['skyI_quality_thresh'] = [0.112,0.0355]
+        
+        
+    # In 2018, the minime06 instrument was moved to SAO, and slightly new instrument parameters are needed
+    if instr_name == 'minime06' and dn > datetime.datetime(2018,1,1):
+        instrument['default_params'] = {# instrument params to be used if the laser fails (i.e., zenith reference)
+                             'R': 7.763e-01,
+                         'alpha': 7.740e-05,
+                             'I': 1.0,
+                             'B': 0.0,
+                            'a1': 2.916e-03,
+                            'a2': -1.729e-02,
+                            'b0': 1.715e+00,
+                            'b1': 3.970e-01,
+                            'b2': 4.601e-02,
+                       'center':  (264.293,261.976),
+                       }  
+        
+        
+    # In mid-2017, the minime09 instrument was moved to KWJ, and new instrument parameters are needed.
+    # I only trust these after Jan 1, 2018, however.
+    if instr_name == 'minime09' and dn > datetime.datetime(2018,1,1):
+        instrument['default_params'] = {# instrument params to be used if the laser fails (i.e., zenith reference)
+                             'R': 6.908e-01,
+                         'alpha': 8.404e-05,
+                             'I': 1.0,
+                             'B': 0.0,
+                            'a1': -2.722e-01,
+                            'a2': 2.960e-02,
+                            'b0': 1.115e+00,
+                            'b1': -1.659e-01,
+                            'b2': 4.122e-01,
+                       'center':  (254.13,270.78),
+                       }  
+
     return instrument
 
 def get_all_instr_names():
