@@ -389,7 +389,7 @@ _sites['sao'] = {
         'scpUser':      'meriwej',
         'scpPort':      19997,
         'Network':      'nation',
-        'sql_id':       None, # ID on the airglow SQL database # NEED TO GET THIS FROM JONATHAN
+        'sql_id':       30, # ID on the airglow SQL database
         'share':        False, # whether or not to save a copy of the npz file in a separate folder
         'borders':      True,
         'Directions':   {
@@ -501,7 +501,7 @@ _sites['kwj'] = {
         'scpUser':      'meriwej',
         'scpPort':      19995,
         'Network':      'nation',
-        'sql_id':       None, # ID on the airglow SQL database
+        'sql_id':       2, # ID on the airglow SQL database
         'share':        False, # whether or not to save a copy of the npz file in a separate folder
         'borders':      True,
         'Directions':   {
