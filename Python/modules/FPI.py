@@ -713,7 +713,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
         ESTIMATE_BLUR = False
     # The threshold for CCD temperature, above which a human should be
     # notified, because there is probably something wrong with the CCD.
-    MAX_CCD_TEMP = -60.0 # C
+    MAX_CCD_TEMP = -55.0 # C
     LAS_I_THRESH = 13. # counts. If the laser intensity is less than this, ignore it.
 
 
