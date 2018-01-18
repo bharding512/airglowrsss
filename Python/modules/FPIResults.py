@@ -519,11 +519,11 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIE
 
                 # Wind
                 if WMODEL.lower() == 'hwm93':
-                    pt.run_hwm93()
+                    pt.run_hwm(version=1993)
                 elif WMODEL.lower() == 'hwm07':
-                    pt.run_hwm07()
+                    pt.run_hwm(version=2007)
                 elif WMODEL.lower() == 'hwm14':
-                    pt.run_hwm14()
+                    pt.run_hwm(version=2014)
                 else:
                     print 'Bad Wind Model'
                 uData[tind] += pt.u*pt.ag6300
@@ -623,11 +623,11 @@ def _MPsinglemodel(T,ALTS,SITELLA,WMODEL,TMODEL,QUIET):
 
         # Wind
         if WMODEL.lower() == 'hwm93':
-            pt.run_hwm93()
+            pt.run_hwm(version=1993)
         elif WMODEL.lower() == 'hwm07':
-            pt.run_hwm07()
+            pt.run_hwm(version=2007)
         elif WMODEL.lower() == 'hwm14':
-            pt.run_hwm14()
+            pt.run_hwm(version=2014)
         else:
             print 'Bad Wind Model'
         uData  += pt.u*pt.ag6300
