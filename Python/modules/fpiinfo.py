@@ -1499,6 +1499,11 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
     if instr_name == 'minime06' and dn > datetime.datetime(2012,2,17,12,0,0):
         instrument['pix_size'] = 24e-6
 
+    # minime06 SQL ID's changed when moved to SAO site
+    if instr_name == 'minime06' and dn > datetime.datetime(2018,1,1):
+        instrument['sql_winds_id'] = 110
+        instrument['sql_temperatures_id'] = 111
+        instrument['sql_diagnostics_id'] = 112
 
     if instr_name == 'minime03':
         # minime03 had its laser installed on 12/16/2013.
