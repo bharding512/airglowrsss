@@ -500,7 +500,7 @@ _sites['kwj'] = {
         'CloudThresh':  -25.0,
         'scpUser':      'meriwej',
         'scpPort':      19995,
-        'Network':      'nation',
+        'Network':      None,
         'sql_id':       2, # ID on the airglow SQL database
         'share':        False, # whether or not to save a copy of the npz file in a separate folder
         'borders':      True,
