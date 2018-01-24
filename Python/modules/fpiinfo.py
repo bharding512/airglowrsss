@@ -1569,6 +1569,10 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
                        'center':  (264.293,261.976),
                        }  
         
+        # After the hailstorm on Jan 20, someone probably bumped the FPI and moved the center pixel
+        if dn >= datetime.datetime(2018,1,20):
+            instrument['default_params']['center'] = (266.106, 267.347)
+        
         
     # In mid-2017, the minime09 instrument was moved to KWJ, and new instrument parameters are needed.
     # I only trust these after Jan 1, 2018, however.
