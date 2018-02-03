@@ -206,7 +206,7 @@ def createL1ASCII(NPZ,OUT):
     
     
     
-def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zenith_times=[17.,7.],
+def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
                   wind_err_thresh=100., temp_err_thresh=100., cloud_thresh = [-22.,-10.],
                   send_to_website=True, enable_share=True, send_to_madrigal=True, 
                   enable_windfield_estimate=True,
@@ -231,8 +231,6 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
                   instead. Cloud and X300 data will be reloaded and added to the npz file.
                   New wind and temperature plots will be sent to the website,
                   along with the updated log file.
-        zenith_times - 2x1 array, The local times outside of which the zenith wind should
-                       be ignored for use as a reference.
         wind_err_thresh - float, m/s. Samples with a fit error above this should get a quality
                             flag of 2.
         temp_err_thresh - float, K. Samples with a fit error above this should get a quality
@@ -387,8 +385,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False, zen
             # Run the analysis
             (FPI_Results, notify_the_humans) = FPI.ParameterFit(instrument, site, laser_fns, sky_fns, \
                     direc_tol=direc_tol, N=instrument['N'], N0=instrument['N0'], N1=instrument['N1'], \
-                                logfile=logfile, diagnostic_fig=Diagnostic_Fig, reference=reference, \
-                                zenith_times=zenith_times)
+                                logfile=logfile, diagnostic_fig=Diagnostic_Fig, reference=reference)
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                 'Laser and sky image analysis complete.\n')
         except: 
@@ -831,7 +828,7 @@ def process_site(site_name, year, doy, reference='laser'):
     
     
 
-def process_directory(data_direc, results_direc, instrument, site, reference='laser', zenith_times=[17.,7.],
+def process_directory(data_direc, results_direc, instrument, site, reference='laser',
                       wind_err_thresh=100., temp_err_thresh=100., make_plots=True, Tmin=300., Tmax=1500., 
                       bw_cloud_file_1 = '', bw_cloud_file_2 = '', cloud_thresh = [-22.,-10.],):
     '''
@@ -849,8 +846,6 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
         site - dictionary containing necessary site parameters
     OPTIONAL INPUTS:
         reference - str, 'laser' or 'zenith'. Passed on to FPI.ParameterFit(...)
-        zenith_times - 2x1 array, The local times outside of which the zenith wind should
-                       be ignored for use as a reference.
         wind_err_thresh - float, m/s. Samples with a fit error above this should get a quality
                             flag of 2.
         temp_err_thresh - float, K. Samples with a fit error above this should get a quality
@@ -914,8 +909,7 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
         # Run the analysis
         (FPI_Results, notify_the_humans) = FPI.ParameterFit(instrument, site, laser_fns, sky_fns, \
                 direc_tol=direc_tol, N=instrument['N'], N0=instrument['N0'], N1=instrument['N1'], \
-                            logfile=logfile, diagnostic_fig=Diagnostic_Fig, reference=reference, \
-                            zenith_times=zenith_times)
+                            logfile=logfile, diagnostic_fig=Diagnostic_Fig, reference=reference)
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
             'Laser and sky image analysis complete.\n')
     except: 

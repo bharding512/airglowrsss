@@ -638,7 +638,7 @@ def get_conv_matrix_1D(instr_params, r, L, lam0, nFSRs = 4.):
     return A, lamvec
  
 
-def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, N0=0, N1=500, logfile=None, diagnostic_fig=None, horizon_cutoff = '-6:0', reference='laser', zenith_times = [17.,7.]):
+def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, N0=0, N1=500, logfile=None, diagnostic_fig=None, horizon_cutoff = '-6:0', reference='laser'):
     '''
      Function that solves for temperatures and Doppler velocities for all data
      in the present directory.  Uses a parameter fit algorithm to first estimate
@@ -667,9 +667,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
                        if the laser images are not usable, then specify 'Zenith', and default instrument
                        parameters (specified in the instruments dictionary) will be used in the
                        analysis.
-           zenith_times - [float, float] - the range of hours (LT) outside of which data will not be used for
-                          Doppler-referencing purposes. This is passed directly to the AVERAGING_TIME variable 
-                          of FPI.DopplerReference.
+
            
      OUTPUT:
            FPI_Results - a dictionary with many parameters pertaining to the inversion (see below)
@@ -1791,7 +1789,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
              'sky_annuli':sky_annuli,}
     
     # Apply Doppler reference
-    dref,drefe = DopplerReference(FPI_Results, reference=reference,AVERAGING_TIME=zenith_times)
+    dref,drefe = DopplerReference(FPI_Results, reference=reference)
     FPI_Results['LOSwind'] = FPI_Results['LOSwind'] - dref
     FPI_Results['doppler_reference'] = dref
     # For now, do not add extra error bar Doppler reference,
@@ -2170,7 +2168,7 @@ def average_data(files, bins=np.arange(17,32,0.25),
 
         return center_time, (bin_T, bin_eT), (bin_U, bin_eU), (bin_U2, bin_eU2), (bin_V, bin_eV), (bin_V2, bin_eV2)
 
-def DopplerReference(FPI_Results, reference='zenith', AVERAGING_TIME=[17.,7.], statistic='mode'):
+def DopplerReference(FPI_Results, reference='zenith', statistic='mode'):
 #
 # Function to calculate the Doppler reference for a night of observations.
 # By default, assumes zero vertical wind and uses the zenith measurements to
@@ -2185,7 +2183,6 @@ def DopplerReference(FPI_Results, reference='zenith', AVERAGING_TIME=[17.,7.], s
 ##                           This offset will be estimated.
 #                   'zenith': by choosing this, you do not trust, or do not have, a laser. The
 #                             vertical wind will be assumed to be zero at all times.
-#       AVERAGING_TIME - the range of hours (LT) outside of which data will not be used.
 #       statistic - only used if reference='laser'. Specifies the method used to estimate the offset:
 #                   'mean': assume the mean of the vertical wind is zero (minimize L2 norm of the residual)
 #                   'median': assume the median of the vertical wind is zero (minimize L1 norm of the residual)
@@ -2238,44 +2235,11 @@ def DopplerReference(FPI_Results, reference='zenith', AVERAGING_TIME=[17.,7.], s
                 sigma_v = FPI_Results['sigma_LOSwind'][ind]
                 ind_good = sigma_v < sigma_v_thresh
                 ind = np.array(ind)[ind_good]
+                
                 if len(ind)==0:
                     raise Exception('Cannot establish Doppler reference: No trustworthy zenith samples')
-                
-		if len(ind) == 0:
-			return(np.zeros(len(FPI_Results['LOSwind'])),np.zeros(len(FPI_Results['LOSwind'])))
-
-                # only use times given by AVERAGING TIME
-                # (tmd 4/8/13)
-                times = FPI_Results['sky_times'][ind]
-                if 'Clouds' in FPI_Results.keys():
-                    if FPI_Results['Clouds'] is not None:
-                        clouds = FPI_Results['Clouds']['mean'][ind]
-                    else:
-                        clouds = -999*np.ones(len(ind))
-                else:
-                    clouds = -999*np.ones(len(ind))
-                    
-                bad_time_indices = []
-                for (kk, dn) in enumerate(times):
-                    if (((dn.hour) < AVERAGING_TIME[0]) and \
-                            ((dn.hour) > AVERAGING_TIME[1])): #or \
-                            #(clouds[kk] > -25.): # Commented 3/4/14 BJH.
-                        bad_time_indices.append(kk)
-                ind = np.delete( ind, bad_time_indices)
-
-                if len(ind) == 0:
-                    # No clear data, need to fake a offset
-                    bad_time_indices = []
-                    ind = all_indices('Zenith',FPI_Results['direction'])
-                    for (kk, dn) in enumerate(times):
-                        if ((dn.hour) < AVERAGING_TIME[0]) and ((dn.hour) > AVERAGING_TIME[1]):
-                            bad_time_indices.append(kk)
-                    ind = np.delete(ind, bad_time_indices)
-
-                if len(ind) == 0:
-                    raise Exception('Cannot establish Doppler reference: No zenith samples in specified time range')
                 if len(ind) == 1:
-                    raise Exception('Cannot establish Doppler reference: Only 1 zenith sample in specified time range')                 
+                    raise Exception('Cannot establish Doppler reference: Only 1 trustworthy zenith sample')                 
                      
                 if np.array(FPI_Results['sigma_LOSwind'])[ind].sum() == 0:
                     ref_Dop = np.zeros(len(FPI_Results['LOSwind']))
@@ -2303,8 +2267,7 @@ def DopplerReference(FPI_Results, reference='zenith', AVERAGING_TIME=[17.,7.], s
                                 mnz = min(rawzenith)
                             N = int((mxz-mnz)/res)
                             if N > 1e6: # This is probably a low quality day. Try median instead of mode
-                                return DopplerReference(FPI_Results, reference=reference, \
-                                         AVERAGING_TIME=AVERAGING_TIME, statistic='median')
+                                return DopplerReference(FPI_Results, reference=reference, statistic='median')
                             dtest = np.linspace(mnz, mxz, N)
                             cost = np.zeros(N)
                             for j in range(N):
