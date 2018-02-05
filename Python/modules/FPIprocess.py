@@ -41,7 +41,7 @@ def quality_hack(instr_name, year, doy, FPI_Results, logfile):
     # ('minime08',2012,319) Doppler reference appears to fail. Only use the
     # first half of the night for Doppler referencing.
     if instr_name == 'minime08' and year == 2012 and doy == 319:
-        dref,drefe = FPI.DopplerReference(FPI_Results, reference='laser',AVERAGING_TIME=[17.,0.])
+        dref,drefe = FPI.DopplerReference(FPI_Results, reference='laser')
         FPI_Results['LOSwind'] = FPI_Results['LOSwind'] - dref
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                       'FPIprocess.quality_hack(): Manual intervention to tweak Doppler reference.\n')

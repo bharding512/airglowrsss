@@ -1007,14 +1007,11 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
             Tmin=300, Tmax=1500, Dmin=-200, Dmax=200,
             reference='laser',directions=None,
 	    Temperature_Fig = None, Temperature_Graph = None, Doppler_Fig = None, Doppler_Graph = None,
-        Zenith_Times=[21.,4.],cull=False):
+        cull=False):
 #
 # Function to plot a single night's data for a single station
 #
 # INPUTS:
-#
-#   Zenith_Times - 1x2 array containing the start and stop times outside of which
-#                  the zenith measurements should not be used for the zero reference.
 #
 # OPTION OUTPUTS:
 #
@@ -1026,6 +1023,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
 #   Defaulted reference to 'laser' on 22 Jul 2013 (bjh)
 #   Added color/format information here, because plot-specific
 #       information doesn't seem like it should belong to the instrument.
+#   Removed zenith_times argument (bjh)
 
     # Read in the file
     npzfile = np.load(f)
@@ -1077,7 +1075,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
         Doppler_Fig = plt.figure()
         Doppler_Graph = Doppler_Fig.add_subplot(111)
         
-    (ref_Dop, e_ref_Dop) = FPI.DopplerReference(FPI_Results,reference=reference,AVERAGING_TIME=Zenith_Times)
+    (ref_Dop, e_ref_Dop) = FPI.DopplerReference(FPI_Results,reference=reference)
 
     # Calculate the vertical wind and interpolate it
     ind = FPI.all_indices('Zenith',FPI_Results['direction'])
