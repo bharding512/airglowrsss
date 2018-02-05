@@ -642,7 +642,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
     if send_to_website: # For now, let's only make plots if we plan to send to the website.
         try: 
             # Plot some quick-look single-station data (LOSwinds and Temps)
-            (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, reference = reference, Zenith_Times=zenith_times)
+            (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, reference = reference)
             
             # Add Level 1 diagnostics to diagnostics fig
             ax = Diagnostic_Fig.add_subplot(427) # TODO: generalize diagnostic figure generation?
@@ -1116,8 +1116,7 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
     if make_plots:
         try: 
             # Plot some quick-look single-station data (LOSwinds and Temps)
-            (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, reference = reference, Zenith_Times=zenith_times,
-                                                                                                   Tmin=Tmin, Tmax=Tmax)
+            (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, reference = reference, Tmin=Tmin, Tmax=Tmax)
             
             # Add Level 1 diagnostics to diagnostics fig
             ax = Diagnostic_Fig.add_subplot(427) # TODO: generalize diagnostic figure generation?
