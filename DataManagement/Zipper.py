@@ -100,12 +100,12 @@ def activeinstruments():
 #    code['caj']['tec']['02'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps/data/', 'split':'/usr/bin/split','email':UIemail+BZemail}
 #    code['caj']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.2/log.txt','email':UIemail+BZemail}
 
-    # Car 
-    code['car']['fpi']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail+BZemail}
-    code['car']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/MiniME/My Documents/ClarityII/','email':UIemail+BZemail}
+    # Car offline due to water damage Feb 5 2018 
+    #code['car']['fpi']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail+BZemail}
+    #code['car']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Documents and Settings/MiniME/My Documents/ClarityII/','email':UIemail+BZemail}
     # code['car']['scn']['0S'] = {'send_dir':'F:/Sending/', 'local_dir':'F:/Data/ScintmonS/', 'split':'/usr/bin/split','email':UIemail+BZemail}
     # code['car']['scn']['0T'] = {'send_dir':'F:/Sending/', 'local_dir':'F:/Data/ScintmonT/', 'split':'/usr/bin/split','email':UIemail+BZemail}
-    code['car']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.2/log.txt','email':UIemail+BZemail}
+    #code['car']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.2/log.txt','email':UIemail+BZemail}
 
     # Morocco is offline while we figure out CCD problems (7 Sep 2017 BJH)
 #    code['mor']['fpi']['03'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
