@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 0 # When this changes, the data version will automatically change as well
-software_version_minor = 9 # [0-99], resetting when the major version changes
+software_version_minor = 10 # [0-99], resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -34,10 +34,9 @@ global_params['red'] = {
     'sph_asym_thresh'   : 0.19,            # The relative difference in VER estimates from A&B,
                                            # beyond which the spherical asymmetry flag will be
                                            # raised in L2.2.
-    'min_amp'           : 5100.            # The amplitude of a row of the interferogram (summed over
-                                           # OPD) below which the data will be ignored. See the report
-                                           # for how these thresholds were determined:
-                                           # http://remote2.ece.illinois.edu/~bhardin2/MIGHTI/MIGHTI_Minimum_Amplitude.pdf
+    'chi2_thresh'       : 0.2,             # [rad^2] Minimum value of chi^2, below which the line fit to extract phase 
+                                           # should not be trusted. As defined, it is normalized by the number of pixels
+                                           # in a row. If this threshold is being reached too often, then consider binning.
 }
 
 global_params['green'] = {
@@ -47,7 +46,7 @@ global_params['green'] = {
     'integration_order' : 0,
     'top_layer'         : 'exp',
     'sph_asym_thresh'   : 0.19,
-    'min_amp'           : 5800.,
+    'chi2_thresh'       : 0.25,
 }
 
 
@@ -533,10 +532,12 @@ def create_local_projection_matrix(tang_alt, icon_alt):
     
     
     
-def extract_phase_from_row(row, unwrapping_column):
+def analyze_row(row, unwrapping_column):
     '''
-    Given a 1-D interference pattern (i.e., a row of the intererogram), 
-    analyze it to get a single phase value, which represents the wind.
+    Given a 1-D interference pattern (i.e., a row of the complex intererogram), 
+    analyze it to get a scalar phase value, which represents the wind, and a
+    single amplitude value, which is roughly proportional to the emission rate.
+    Also return normalized chi^2 for the line fit used to determine the phase.
     
     INPUTS:
     
@@ -545,8 +546,11 @@ def extract_phase_from_row(row, unwrapping_column):
       
     OUTPUTS:
     
-      *  phase             -- TYPE:float,     UNITS:rad. 
-      
+      *  phase             -- TYPE:float,     UNITS:rad.   A scalar phase which represents the observed wind.
+      *  amp               -- TYPE:float,     UNITS:arb.   A scalar amplitude which represents the brightness.
+      *  chi2              -- TYPE:float,     UNITS:rad^2. Normalized chi^2 for the line fit to unwrapped phase.
+                                                           (normalized chi^2 = average value of (data - fit)**2)
+       
     '''
     
     row_phase = np.angle(row)
@@ -561,17 +565,27 @@ def extract_phase_from_row(row, unwrapping_column):
         return np.nan
     p = np.polyfit(col[idx], phaseu[idx], 1)
 
+    phaseline = np.polyval(p, col)
+    resid = phaseu - phaseline
+    chi2 = np.nansum(resid**2)/sum(idx)
+    
     # Evaluate line at reference column
     tot_phase = np.polyval(p,unwrapping_column)
     
-    return tot_phase
+    # Evaluate total amplitude
+    # Note: even though some rows are longer than others (near the bottom of the CCD),
+    # they are apodized and thus the missing pixels wouldn't contribute much anyway.
+    amp = np.nansum(abs(row))
+        
+    return tot_phase, amp, chi2
 
     
     
     
     
 def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertainty, unwrapping_column,
-                      top_layer='exp', integration_order=0, account_for_local_projection=True):
+                      top_layer='exp', integration_order=0, account_for_local_projection=True, chi2_thresh=np.inf,
+                      linear_amp = True):
     '''
     Perform the onion-peeling inversion on the interferogram to return
     a new interferogram, whose rows refer to specific altitudes. In effect,
@@ -601,69 +615,88 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
                                            If True, the inversion accounts for the fact that the ray is not 
                                            perfectly tangent to each shell at each point along the ray. 
                                            (default True)
-
+      *  chi2_thresh       -- TYPE:float. UNITS:rad^2. The chi^2 value for the line fit, below which the 
+                                                       data will be ignored, since it is mostly noise.
+                                                       Normalized by the number of samples. (default np.inf)
+      *  linear_amp        -- TYPE:bool.   If True, a linear inversion is used on fringe amplitude. If False, the 
+                                           fringe amplitude is estimated during the onion-peeling. These are the
+                                           same in the absence of noise, but may make a difference, especially
+                                           for computing uncertainties. (default True)
+                                           
+                                                           
     OUTPUTS:
     
       *  Ip                -- TYPE:array(ny,nx), UNITS:arb. The complex-valued, onion-peeled interferogram.
       *  phase             -- TYPE:array(ny),    UNITS:rad. The unwrapped, mean phase of each row of Ip.
       *  amp               -- TYPE:array(ny),    UNITS:arb. The amplitude of each row of Ip.
       *  phase_uncertainty -- TYPE:array(ny),    UNITS:rad. The uncertainty of phase
-      *  amp_uncertainty   -- TYPE:array(ny),    UNITS:rad. The uncertainty of amp
+      *  amp_uncertainty   -- TYPE:array(ny),    UNITS:arb. The uncertainty of amp
       
     '''
-    
+        
     if top_layer not in ['exp','thin']:
         raise ValueError('Argument top_layer=\'%s\' not recognized. Use \'exp\' or \'thin\'.' % top_layer)
     if integration_order not in [0,1]:
         raise ValueError('Argument integration_order=\'%s\' not recognized. Use 0 or 1')
-        
-        
+          
+    
     ny,nx = np.shape(I)
     
     # Create the path matrix
     D = create_observation_matrix(tang_alt, icon_alt, top_layer=top_layer, integration_order=integration_order)
-        
     
-    ######### Onion-peeling inversion and amp/phase extraction #########
-    # The inversion will proceed in different ways depending on whether
-    # we will try to account for the local horizontal projection.
-    phase = np.zeros(ny) # phases at each altitude
-    if not account_for_local_projection:
-        
-        # This is implemented with a simple linear inversion
-        Ip = np.linalg.solve(D,I)
-        for i in range(ny):
-            phase[i] = extract_phase_from_row(Ip[i,:], unwrapping_column[i])
-        
-    else:
-        # The problem becomes nonlinear, but still solvable in closed form.
-        # This code implements Eq (9) in the MIGHTI L2 Space Science Reviews
-        # paper (Harding et al. 2017).
-        
+    # Create local horizontal projection matrix (and set it to unity if we are to ignore this effect)
+    B = np.ones((ny,ny))
+    if account_for_local_projection:
         B = create_local_projection_matrix(tang_alt, icon_alt)
-        Ip = np.zeros((ny,nx), dtype=complex) # onion-peeled interferogram
-
-        for i in range(ny)[::-1]: # onion-peel from the top altitude down
-            dii = D[i,i] # path length
-            Li = I[i,:] # we will peel off the other layers from this row
-            # Loop over layers above this one
-            for j in range(i+1,ny):
-                dij = D[i,j]
-                # Calculate the normalized jth row without the wind component
-                Ij = Ip[j,:]*np.exp(-1j*phase[j])
-                # Calculate it with the projected wind component
-                Ij_proj = Ij*np.exp(1j*phase[j]*B[i,j])
-                # Remove this contribution from the current layer
-                Li = Li - dij*Ij_proj
-            # final normalization by this layer's path length
-            Li = Li/dii
-            Ip[i,:] = Li
-            # Analyze the layer to get the phase, and store it.
-            phase[i] = extract_phase_from_row(Li,  unwrapping_column[i])
-            
-    amp = np.nansum(abs(Ip),axis=1)        
+        
     
+    ######### Onion-peeling inversion and phase extraction #########
+    phase = np.zeros(ny) # phases at each altitude
+    amp   = np.zeros(ny) # fringe amplitude at each altitude
+    chi2  = np.zeros(ny) # chi^2 for line fit at each altitude
+    Ip = np.zeros((ny,nx), dtype=complex) # onion-peeled interferogram
 
+    # This code implements Eq (9) in the MIGHTI L2 Space Science Reviews
+    # paper (Harding et al. 2017).
+
+    for i in range(ny)[::-1]: # onion-peel from the top altitude down
+        dii = D[i,i] # path length
+        Li = I[i,:] # we will peel off the other layers from this row
+        # Loop over layers above this one
+        for j in range(i+1,ny):
+            dij = D[i,j]
+            # Calculate the normalized jth row without the wind component
+            Ij = Ip[j,:]*np.exp(-1j*phase[j])
+            # Calculate it with the projected wind component
+            Ij_proj = Ij*np.exp(1j*phase[j]*B[i,j])
+            # Remove this contribution from the current layer
+            Li = Li - dij*Ij_proj
+        # final normalization by this layer's path length
+        Li = Li/dii
+        Ip[i,:] = Li
+        # Analyze the layer to get the phase, and store it.
+        p,a,c = analyze_row(Ip[i,:],  unwrapping_column[i])
+        phase[i] = p
+        amp[i] = a
+        chi2[i] = c
+            
+        # Initial quality control
+        # (Note: comprehensive quality control is done in a different function)
+        if c > chi2_thresh:
+            Ip[i,:] = 0.0 # Zeroed out to not contaminate other rows
+            amp[i] = 0.0 # This is overly conservative. We probably trust
+                         # amplitudes more than phase. Note that this will
+                         # be overwritten if linear_amp=True
+            
+            
+    if linear_amp: # Replace the onion-peeled amplitude with the linear inversion
+        amp_L1 = np.zeros(ny) # fringe amplitude at each row of L1 interferogram
+        for i in range(ny):
+            _, a, _ = analyze_row(I[i,:], unwrapping_column[i])
+            amp_L1[i] = a
+        amp = np.linalg.solve(D, amp_L1) # fringe amplitude at each altitude  
+    
 
     ######### Uncertainty propagation #########
     # Uncertainties can be propagated using simple linear inversion formula
@@ -672,12 +705,14 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     
     ### Step 0: Characterize L1 and L2.1 interferograms with a single amp/phase per row
     ph_L1 = np.zeros(ny)
+    A_L1 = np.zeros(ny)
     for i in range(ny):
-        ph_L1[i] = extract_phase_from_row(I[i,:], unwrapping_column[i])
-    A_L1 = np.nansum(abs(I),axis=1)
+        p,a,_ = analyze_row(I[i,:], unwrapping_column[i])
+        ph_L1[i] = p
+        A_L1[i] = a
     ph_L2 = phase.copy() # this was calculated above
     A_L2 = amp.copy() # this was calculated above
-    # If amp is exactly zero (unlikely in practice), then replace it with a small number
+    # If amp is exactly zero, then replace it with a small number
     # so that uncertainties can be calculated.
     A_L2[A_L2==0.0] = 1e-6
         
@@ -717,8 +752,12 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     # Extract amplitude and phase uncertainties
     amp_uncertainty = np.sqrt(cov_amp_phase_L2[:,0,0])
     phase_uncertainty = np.sqrt(cov_amp_phase_L2[:,1,1])
+    
+    if linear_amp: # Use linear propagation formula to overwrite
+        DD = Dinv.dot(Dinv.T)
+        amp_uncertainty = I_amp_uncertainty * np.sqrt(np.diag(DD))
             
-    return Ip, phase, amp, phase_uncertainty, amp_uncertainty
+    return Ip, phase, amp, phase_uncertainty, amp_uncertainty, chi2
 
 
 
@@ -1068,7 +1107,7 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
 
 def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None, 
                                 integration_order = None, account_for_local_projection = None, 
-                                bin_size = None, min_amp = None):
+                                bin_size = None, chi2_thresh = None, linear_amp = True):
     '''
     High-level function to run the Level 2.1 processing. It takes a dictionary (containing
     input variables extracted from a Level 1 file) and outputs a dictionary (containing 
@@ -1157,8 +1196,13 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                          perfectly tangent to each shell at each point along the ray.
       *  bin_size            -- TYPE:int, The number of rows of the interferogram to bin together to 
                                           improve statistics at the cost of altitude resolution.
-      *  min_amp             -- TYPE:float, UNITS:counts. The amplitude (summed over a row) below which
-                                          the data will be ignored.
+      *  chi2_thresh         -- TYPE:float, UNITS:rad^2. The chi^2 value for the line fit (used to analyze
+                                                         the inteferogram), below which the data will be 
+                                                         ignored, since it is probably just noise.
+      *  linear_amp          -- TYPE:bool. If True, a linear inversion is used on fringe amplitude. If False, the 
+                                           fringe amplitude is estimated during the onion-peeling. These are the
+                                           same in the absence of noise, but different with noise, especially
+                                           for computing uncertainties. (default True)
                                                                           
     OUTPUTS:
     
@@ -1193,6 +1237,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                 * integration_order         -- TYPE:int.                      Order of integration used in inversion: 0 or 1
                                 * unwrapping_column         -- TYPE:array(ny) of int.         The reference column for unwrapping used in the processing
                                 * I                         -- TYPE:array(ny,nx) UNITS:arb.   The complex-valued, onion-peeled interferogram
+                                * chi2                      -- TYPE:array(ny)    UNITS:rad^2. The normalized chi^2 from the line fit during phase
+                                                                                              extraction from each row of the interferogram.
     
     '''
     
@@ -1210,8 +1256,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     if bin_size is None:
         bin_size = params['bin_size']
     bin_size = int(bin_size)
-    if min_amp is None:
-        min_amp = params['min_amp']
+    if chi2_thresh is None:
+        chi2_thresh = params['chi2_thresh']
 
     ####  Load parameters from input dictionary
     Iraw = L1_dict['I_amp']*np.exp(1j*L1_dict['I_phase'])
@@ -1236,8 +1282,6 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     icon_ecef_ram_vector = (L1_dict['icon_ecef_ram_vector_start'] + L1_dict['icon_ecef_ram_vector_stop'])/2
     icon_velocity = (L1_dict['icon_velocity_start'] + L1_dict['icon_velocity_stop'])/2
     
-    
-
     #### Remove Satellite Velocity
     icon_latlonalt = np.array([icon_lat, icon_lon, icon_alt])
     I = remove_satellite_velocity(Iraw, icon_latlonalt, icon_velocity, icon_ecef_ram_vector, mighti_ecef_vectors, sigma_opd)
@@ -1255,51 +1299,35 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     mighti_ecef_vectors = mighti_ecef_vectors_new
     I_amp_uncertainty   = bin_uncertainty(bin_size, I_amp_uncertainty)
     I_phase_uncertainty = bin_uncertainty(bin_size, I_phase_uncertainty)
-    min_amp = min_amp/np.sqrt(bin_size) # Assuming uncorrelated errors row-to-row
-    
-    #### Quality control: low signal
-    I_amp = np.sum(abs(I),axis=1)
-    idx_dim = I_amp < min_amp
-    # Set values to zero, and uncertainties to zero, so it acts like these rows
-    # don't even exist. The uncertainties will be adjusted after the inversion.
-    I[idx_dim,:] = 0.0
-    I_amp_uncertainty[idx_dim] = 0.0 
-    I_phase_uncertainty[idx_dim] = 0.0
     
     #### Determine geographical locations of inverted wind
     lat, lon, alt = attribute_measurement_location(tang_lat, tang_lon, tang_alt,
                                                    integration_order=integration_order)
     
-    
     #### Onion-peel interferogram
-    Ip, phase, amp, phase_uncertainty, amp_uncertainty = perform_inversion(I, tang_alt, icon_alt, 
+    Ip, phase, amp, phase_uncertainty, amp_uncertainty, chi2 = perform_inversion(I, tang_alt, icon_alt, 
                            I_phase_uncertainty, I_amp_uncertainty, unwrapping_column,
                            top_layer=top_layer, integration_order=integration_order,
-                           account_for_local_projection=account_for_local_projection)
+                           account_for_local_projection=account_for_local_projection,
+                           chi2_thresh=chi2_thresh, linear_amp=linear_amp)
     
-    #### Quality control
-    ## Filter samples that have uncertainties larger than 2pi
-    idx_2pi = phase_uncertainty > 2*np.pi
-    Ip[idx_2pi,:]  = np.nan
-    phase[idx_2pi] = np.nan
-    amp[idx_2pi]   = np.nan
-    phase_uncertainty[idx_2pi] = np.nan
-    amp_uncertainty[idx_2pi]   = np.nan
-    ## Revisit the low signal samples
-    phase[idx_dim] = np.nan
-    amp[idx_dim] = np.nan
-    phase_uncertainty[idx_dim] = np.nan
-    amp_uncertainty[idx_dim] = np.nan
-    ## Print information to log file. TODO: record error codes
-    print "Removing %i rows (low signal)" % sum(idx_dim)
-    print "Removing %i rows (large uncertainty)" % sum(idx_2pi)
-
-
     #### Transform from phase to wind
     f = phase_to_wind_factor(np.mean(sigma_opd)) # Use average OPD to analyze entire row
     v             = f * phase
     v_uncertainty = f * phase_uncertainty
-        
+    
+    #### Quality control (TODO: this ought to be its own function)
+    ## Chi^2 filtering: mask phase, but not amplitude
+    idx_chi2 = chi2 > chi2_thresh
+#    if sum(idx_chi2) > 0.0:
+#        print 'Removing %i wind samples (chi^2 > %.3f) with the following characteristics:' % (sum(idx_chi2), chi2_thresh)
+#        print '\t chi^2   wind [m/s]   wind_error [m/s]'
+#        for i in np.where(idx_chi2)[0]:
+#            print'\t %6.3f    %7.1f       %7.1f' % (chi2[i], v[i], v_uncertainty[i])
+#        print '\n'
+    v[idx_chi2] = np.nan
+    v_uncertainty[idx_chi2] = np.nan
+  
     #### Calculate azimuth angles at measurement locations
     az = los_az_angle(icon_latlonalt, lat, lon, alt)
 
@@ -1336,6 +1364,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
              'integration_order'            : integration_order,
              'unwrapping_column'            : unwrapping_column,
              'I'                            : Ip,
+             'chi2'                         : chi2,
     }
         
     return L21_dict
@@ -1501,7 +1530,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
     
 
 
-    L21_fn = 'ICON_L2_MIGHTI-%s_LINE-OF-SIGHT-WIND-%s_%s_v%02ir%03i.NC' % (sensor,L21_dict['emission_color'].upper(),
+    L21_fn = 'ICON_L2_MIGHTI-%s_Line-of-Sight-Wind-%s_%s_v%02ir%03i.NC' % (sensor,L21_dict['emission_color'].capitalize(),
                                                            t_mid.strftime('%Y-%m-%d_%H%M%S'),
                                                            data_version_major, data_revision)
     L21_full_fn = '%s%s'%(path, L21_fn)
@@ -1798,7 +1827,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
     
     
 def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_revision=0, sigma=None, top_layer=None, integration_order=None, 
-                                        account_for_local_projection=None, bin_size = None, min_amp = None):
+                                        account_for_local_projection=None, bin_size=None, chi2_thresh=None):
     '''
     High-level function to apply the Level-1-to-Level-2.1 algorithm to a Level 1 file. This version
     of the function requires the user to input the arguments instead of specifying them with an 
@@ -1829,8 +1858,9 @@ def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_r
                                          perfectly tangent to each shell at each point along the ray.
       *  bin_size            -- TYPE:int, The number of rows of the interferogram to bin together to 
                                           improve statistics at the cost of altitude resolution.
-      *  min_amp             -- TYPE:float, UNITS:counts. The amplitude (summed over a row) below which
-                                          the data will be ignored.
+      *  chi2_thresh         -- TYPE:float, UNITS:rad^2. The chi^2 value for the line fit (used to analyze
+                                                         the inteferogram), below which the data will be 
+                                                         ignored, since it is probably just noise.
                                            
     OUTPUTS:      
     
@@ -1850,7 +1880,7 @@ def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_r
     L21_dict = level1_dict_to_level21_dict(L1_dict, sigma, top_layer = top_layer, 
                                            integration_order = integration_order, 
                                            account_for_local_projection = account_for_local_projection, 
-                                           bin_size = bin_size, min_amp = min_amp)
+                                           bin_size = bin_size, chi2_thresh = chi2_thresh)
     
     
     # Save L2.1 file
@@ -2203,16 +2233,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                    * emission_color  -- TYPE:str,                         'red' or 'green'.        
                    * source_files    -- TYPE:list of str,                 All the files used to create the data product,
                                                                           including the full paths.
-                    
-    TODO:
-    
-        * only save the parent files that were actually used.
-        
     '''
 
-
-    
-    
     ################################## Parse Inputs ####################################
     emission_color = L21_A_dict['emission_color']
     params = global_params[emission_color]
@@ -2629,7 +2651,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
 
 
     ######################### Open file for writing ##############################
-    L22_fn = 'ICON_L2_MIGHTI_VECTOR-WIND-%s_%s_v%02ir%03i.NC' % (L22_dict['emission_color'].upper(),
+    L22_fn = 'ICON_L2_MIGHTI_Vector-Wind-%s_%s_v%02ir%03i.NC' % (L22_dict['emission_color'].capitalize(),
                                                         t_start.strftime('%Y-%m-%d'),
                                                         data_version_major, data_revision)
     L22_full_fn = '%s%s'%(path, L22_fn)
@@ -2826,7 +2848,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         ######### Other Metadata Variables #########
         
         # Fringe amplitude profile from MIGHTI-A
-        var = _create_variable(ncfile, '%s_FRINGE_AMPLTIUDE_A'%prefix, L22_dict['ver_A'], 
+        var = _create_variable(ncfile, '%s_FRINGE_AMPLITUDE_A'%prefix, L22_dict['ver_A'], 
                               dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Fringe Amplitude from MIGHTI-A', 
                               display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='', bin_location=0.5,
@@ -2836,7 +2858,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                     'of the fringes, which has a dependence on temperature and background emission.')
         
         # Fringe amplitude profile from MIGHTI-B
-        var = _create_variable(ncfile, '%s_FRINGE_AMPLTIUDE_B'%prefix, L22_dict['ver_B'], 
+        var = _create_variable(ncfile, '%s_FRINGE_AMPLITUDE_B'%prefix, L22_dict['ver_B'], 
                               dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Fringe Amplitude from MIGHTI-B', 
                               display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='', bin_location=0.5,
@@ -2846,7 +2868,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                     'of the fringes, which has a dependence on temperature and background emission.')
         
          # Fringe amplitude profile from MIGHTI-B
-        var = _create_variable(ncfile, '%s_FRINGE_AMPLTIUDE'%prefix, L22_dict['ver'], 
+        var = _create_variable(ncfile, '%s_FRINGE_AMPLITUDE'%prefix, L22_dict['ver'], 
                               dimensions=('Altitude','Longitude'), # depend_0 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Fringe Amplitude', 
                               display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='', bin_location=0.5,
@@ -3036,6 +3058,55 @@ def level21_to_level22(info_fn):
 
 
 
+    
+def level22_to_dict(L22_fn):
+    '''
+    Read a Level 2.2 file and store its contents in a dictionary
+    INPUTS:
+    
+      *  L22_fn          -- TYPE:str.   Full path to L2.2 file to be read
+      
+    OUTPUTS:
+    
+      *  L22_dict        -- TYPE:dict.  A dictionary containing the outputs of the Level 2.2 processing.
+                                        See documentation for level21_dict_to_level22_dict(...) for details
+                                        of the contents.
+    '''
+
+    L22_dict = {}
+
+    f = netCDF4.Dataset(L22_fn)
+
+    emission_color = L22_fn.split('/')[-1].split('_')[3].split('-')[-1]
+
+    L22_dict['lat']    = f['ICON_L2_MIGHTI_%s_LATITUDE'  % emission_color][:,:]
+    L22_dict['lon']    = f['ICON_L2_MIGHTI_%s_LONGITUDE' % emission_color][:,:] 
+
+    # Unwrap the sample longitude to avoid 0/360 jumps
+    lonu = L22_dict['lon'].copy()
+    lonu[:,0] = fix_longitudes(lonu[:,0], lonu[-1,0]) # Use top first longitude as target
+    for i in range(np.shape(lonu)[0]):
+        lonu[i,:] = fix_longitudes(lonu[i,:], lonu[i,0])
+    L22_dict['lon_unwrapped'] = lonu
+
+    L22_dict['alt']    = f['ICON_L2_MIGHTI_%s_ALTITUDE'  % emission_color][:,:]/1e3
+    L22_dict['u']      = f['ICON_L2_MIGHTI_%s_ZONAL_WIND' % emission_color][:,:] 
+    L22_dict['v']      = f['ICON_L2_MIGHTI_%s_MERIDIONAL_WIND' % emission_color][:,:] 
+    L22_dict['u_error']= f['ICON_L2_MIGHTI_%s_ZONAL_WIND_ERROR' % emission_color][:,:] 
+    L22_dict['v_error']= f['ICON_L2_MIGHTI_%s_MERIDIONAL_WIND_ERROR' % emission_color][:,:] 
+    L22_dict['error_flags'] = f['ICON_L2_MIGHTI_%s_ERROR_FLAG' % emission_color][:,:] 
+    L22_dict['time']   = f['ICON_L2_MIGHTI_%s_TIME' % emission_color][:,:] 
+    L22_dict['fringe_amp']   = f['ICON_L2_MIGHTI_%s_FRINGE_AMPLTIUDE' % emission_color][:,:] 
+    L22_dict['fringe_amp_A'] = f['ICON_L2_MIGHTI_%s_FRINGE_AMPLTIUDE_A' % emission_color][:,:] 
+    L22_dict['fringe_amp_B'] = f['ICON_L2_MIGHTI_%s_FRINGE_AMPLTIUDE_B' % emission_color][:,:] 
+    L22_dict['fringe_amp_rel_diff'] = f['ICON_L2_MIGHTI_%s_FRINGE_AMPLITUDE_RELATIVE_DIFFERENCE' % emission_color][:,:] 
+    L22_dict['emission_color'] = emission_color
+    L22_dict['source_files'] = ['.'.join(s.split(' > ')[::-1]) for s in f.Parents.split(', ')]
+    
+    f.close()
+    
+    return L22_dict
+
 
 
 ################################################################################################################
@@ -3085,7 +3156,7 @@ def _test_level1_to_level21():
         print 'Comparing new file: %s\nWith old file:      %s\n' % (L21_fn, L21_old_fn)
         
         emission_color = L21_fn.split('_')[3].split('-')[-1]
-        prefix = 'ICON_L2_MIGHTI_A_%s_' % (emission_color)
+        prefix = 'ICON_L2_MIGHTI_A_%s_' % (emission_color.upper())
 
         d0 = netCDF4.Dataset(L21_fn)
         d1 = netCDF4.Dataset(L21_old_fn)
@@ -3095,7 +3166,7 @@ def _test_level1_to_level21():
             v = prefix + stub
             v0 = d0.variables[v][...]
             v1 = d1.variables[v][...]
-            e = np.linalg.norm(v1-v0)
+            e = np.linalg.norm(v1-v0) # might want to do a "nannorm" here eventually
             print '%60s:  %e %s' % (v,e, d0.variables[v].Units)
 
         d0.close()
