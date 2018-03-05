@@ -205,6 +205,42 @@ def createL1ASCII(NPZ,OUT):
 
     
     
+def get_all_laser_images(direc):
+    '''
+    Return all laser images in the specified directory, as a list of strings.
+    Laser images are those of the following forms:
+    
+    L20091103001.img
+    UAO_L_20091103_210000_001.img
+    
+    Return empty list if none are found.
+    '''
+    
+    fns_1 = glob.glob(direc + '/L[0-9]*.img')
+    fns_2 = glob.glob(direc + '/*_L_*.img')
+
+    return fns_1 + fns_2
+
+
+
+def get_all_sky_images(direc):
+    '''
+    Return all sky (i.e., airglow) images in the specified directory, as a list of strings.
+    Sky images are those of the following forms:
+    
+    X20091103001.img
+    UAO_X_20091103_210000_001.img
+    
+    Return empty list if none are found.
+    '''
+    
+    fns_1 = glob.glob(direc + '/X[0-9]*.img')
+    fns_2 = glob.glob(direc + '/*_X_*.img')
+
+    return fns_1 + fns_2
+    
+    
+    
     
 def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
                   wind_err_thresh=100., temp_err_thresh=100., cloud_thresh = [-22.,-10.],
@@ -328,14 +364,14 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
         # Look in the data directory, and grab the files if they were
         # taken between the start and stop times.
         # First, lasers:
-        fns_all = glob.glob(data_dir + '*L*.img')
+        fns_all = get_all_laser_images(data_dir)
         for fn in fns_all:
             d = FPI.ReadIMG(fn)
             dtime = local.localize(d.info['LocalTime'])
             if dtime > start_dt and dtime < stop_dt:
                 laser_fns.append(fn)
         # Second, sky:
-        fns_all = glob.glob(data_dir + '*X*.img')
+        fns_all = get_all_sky_images(data_dir)
         for fn in fns_all:
             d = FPI.ReadIMG(fn)
             dtime = local.localize(d.info['LocalTime'])
@@ -875,8 +911,8 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
     notify_the_humans = False # default
 
     # Find laser and sky files
-    laser_fns = glob.glob(data_direc + '*L*.img')
-    sky_fns   = glob.glob(data_direc + '*X*.img')
+    laser_fns = get_all_laser_images(data_direc)
+    sky_fns   = get_all_sky_images(data_direc)
     local = pytz.timezone(site['Timezone'])
     laser_fns.sort()
     sky_fns.sort()

@@ -106,7 +106,7 @@ def circle_fit(x,y,method='geometric'):
     if method == 'algebraic':
         A = np.vstack((2.*x, 2.*y, np.ones(np.shape(x)))).T
         b = x**2 + y**2
-        p = np.linalg.lstsq(A,b)[0]
+        p = np.linalg.lstsq(A,b, rcond=-1)[0]
         x0 = p[0]
         y0 = p[1]
         R = np.sqrt(p[2] + x0**2 + y0**2)
