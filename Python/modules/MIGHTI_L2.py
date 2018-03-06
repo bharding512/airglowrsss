@@ -10,8 +10,8 @@
 # These need to be manually changed, when necessary.
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
-software_version_major = 0 # When this changes, the data version will automatically change as well
-software_version_minor = 11 # [0-99], resetting when the major version changes
+software_version_major = 1 # When this changes, the data version will automatically change as well
+software_version_minor = 0 # [0-99], resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
