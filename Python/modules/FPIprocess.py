@@ -128,7 +128,7 @@ def createL1ASCII(NPZ,OUT):
     data = np.load(NPZ)
     FPI_Results = data['FPI_Results'].ravel()[0]
     reference = data['FPI_Results'].ravel()[0]['reference']
-    instr = data['instrument'].ravel()[0]['Abbreviation']
+    #instr = data['instrument'].ravel()[0]['Abbreviation']
     direction = data['FPI_Results'].ravel()[0]['direction']
     temps = data['FPI_Results'].ravel()[0]['T']
     e_temps = data['FPI_Results'].ravel()[0]['sigma_T']
