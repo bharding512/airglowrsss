@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 1 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 2 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -63,6 +63,7 @@ import getpass # for determining who is running the script
 import glob
 import traceback # for printing detailed error traces
 import sys
+import copy
 
 # Ignore errors having to do with NaN. These clog up the log file.
 np.seterr(invalid='ignore')
@@ -124,15 +125,15 @@ def unwrap(x, start=0):
 
     # Go from start forwards
     dx = np.diff(x[start:])
-    #idx = dx < 0 # This throws a warning for nans, so use a more complicated expression:
-    idx = np.array([dxi < 0 if not np.isnan(dxi) else False for dxi in dx], dtype=bool)
+    #idx = dx < -np.pi # This throws a warning for nans, so use a more complicated expression:
+    idx = np.array([dxi < -np.pi if not np.isnan(dxi) else False for dxi in dx], dtype=bool)
     dx[idx] = dx[idx] + 2.*np.pi
     xnew[start+1:] = xnew[start] + np.cumsum(dx)
 
     # Go from start backwards
     dx = np.diff(x[start::-1])
-    #idx = dx > 0 # This throws a warning for nans, so use a more complicated expression:
-    idx = np.array([dxi > 0 if not np.isnan(dxi) else False for dxi in dx], dtype=bool)
+    #idx = dx > np.pi # This throws a warning for nans, so use a more complicated expression:
+    idx = np.array([dxi > np.pi if not np.isnan(dxi) else False for dxi in dx], dtype=bool)
     dx[idx] = dx[idx] - 2.*np.pi
     xnew[:start] = xnew[start] + np.cumsum(dx)[::-1]
     
@@ -540,7 +541,7 @@ def analyze_row(row, unwrapping_column):
     Given a 1-D interference pattern (i.e., a row of the complex intererogram), 
     analyze it to get a scalar phase value, which represents the wind, and a
     single amplitude value, which is roughly proportional to the emission rate.
-    Also return normalized chi^2 for the line fit used to determine the phase.
+    Also return normalized chi^2 for the fit used to determine the phase.
     
     INPUTS:
     
@@ -557,23 +558,11 @@ def analyze_row(row, unwrapping_column):
     '''
     
     row_phase = np.angle(row)
-
-    # Unwrap phase
-    phaseu = unwrap(row_phase, unwrapping_column)
-
-    # Fit line to non-NaN phase values
-    col = np.arange(len(phaseu))
-    idx = ~np.isnan(phaseu)
-    if all(~idx): # Everything in this row is nan. Return nan.
-        return np.nan, np.nan, np.nan
-    p = np.polyfit(col[idx], phaseu[idx], 1)
-
-    phaseline = np.polyval(p, col)
-    resid = phaseu - phaseline
-    chi2 = np.nansum(resid**2)/sum(idx)
     
-    # Evaluate line at reference column
-    tot_phase = np.polyval(p,unwrapping_column)
+    tot_phase = np.nanmean(row_phase)
+    
+    resid = row_phase - tot_phase
+    chi2 = np.nanmean(resid**2)
     
     # Evaluate total amplitude
     # Note: even though some rows are longer than others (near the bottom of the CCD),
@@ -1502,6 +1491,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
       * How can we append to global attributes History and MODS when the processing is re-run?
       
     '''
+    
+    L21_dict = copy.deepcopy(L21_dict) # because netCDF4 seems to change the input when nans are involved
     
     data_version_major = software_version_major # enforced as per Data Product Conventions Document
 
@@ -2738,6 +2729,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
       *  L22_fn      -- TYPE:str.  The full path to the saved file.
 
     '''
+    
+    L22_dict = copy.deepcopy(L22_dict) # because netCDF4 actually modifies its input
    
     data_version_major = software_version_major # enforced as per Data Product Conventions Document
     
