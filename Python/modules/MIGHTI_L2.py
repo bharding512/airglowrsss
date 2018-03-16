@@ -10,8 +10,8 @@
 # These need to be manually changed, when necessary.
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
-software_version_major = 1 # When this changes, the data version will automatically change as well
-software_version_minor = 0 # [0-99], resetting when the major version changes
+software_version_major = 1 # Should only be incremented on major changes
+software_version_minor = 1 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -63,6 +63,9 @@ import getpass # for determining who is running the script
 import glob
 import traceback # for printing detailed error traces
 import sys
+
+# Ignore errors having to do with NaN. These clog up the log file.
+np.seterr(invalid='ignore')
 
 
 ############################################################################################################
@@ -1052,7 +1055,7 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     L1_dict['I_phase_uncertainty']         = f['ICON_L1_MIGHTI_%s_%s_PHASE_UNCERTAINTIES' % (sensor, emission_color.upper())][0,:]
     # For tangent locations, only use the center, not the full horizontal distribution
     ny,nx = np.shape(L1_dict['I_amp'])
-    tang_lla                               = f['ICON_L1_MIGHTI_%s_%s_TANGENT_LATLONALT' % (sensor, emission_color.upper())][0,:,:,:,nx/2] 
+    tang_lla                               = f['ICON_L1_MIGHTI_%s_%s_TANGENT_LATLONALT' % (sensor, emission_color.upper())][0,:,:,:] 
     L1_dict['tang_alt_start']              = tang_lla[istart,2,:]
     L1_dict['tang_alt_stop']               = tang_lla[istop ,2,:]
     L1_dict['tang_lat_start']              = tang_lla[istart,0,:]
@@ -1061,9 +1064,8 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     L1_dict['tang_lon_stop']               = tang_lla[istop ,1,:]
     L1_dict['emission_color']              = emission_color
     # In the L1 file, the ECEF vectors are stored in multidimensional array: (time, start/mid/stop, vector_xyz, vert, horz)
-    tmp                                    = f['ICON_L1_MIGHTI_%s_%s_ECEF_UNIT_VECTORS'% (sensor, emission_color.upper())][0,:,:,:,:]
-    L1_dict['mighti_ecef_vectors_start']   = np.transpose(tmp[istart,:,:,:], (1,2,0)) # V x H x vector
-    L1_dict['mighti_ecef_vectors_stop']    = np.transpose(tmp[istop ,:,:,:], (1,2,0)) # V x H x vector
+    tmp                                    = f['ICON_L1_MIGHTI_%s_%s_ECEF_UNIT_VECTORS'% (sensor, emission_color.upper())][0,:,:,:]
+    L1_dict['mighti_ecef_vectors']         = np.transpose(tmp, (1,2,0)) # V x H x vector
     icon_vel_vec_start                     = f['ICON_L1_MIGHTI_%s_SC_VELOCITY_ECEF'% sensor][0,istart,:]
     icon_vel_vec_stop                      = f['ICON_L1_MIGHTI_%s_SC_VELOCITY_ECEF'% sensor][0,istop ,:]
     L1_dict['icon_ecef_ram_vector_start']  = icon_vel_vec_start/np.linalg.norm(icon_vel_vec_start)
@@ -1157,10 +1159,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                                                       Spacecraft longitude at beginning of exposure
                                       * icon_lon_stop              -- TYPE:float,        UNITS:deg.  
                                                                        Spacecraft longitude at end of exposure
-                                      * mighti_ecef_vectors_start  -- TYPE:array(ny,nx,3).           
-                                                                      Unit ECEF vector of line of sight of each pixel at beginning of exposure 
-                                      * mighti_ecef_vectors_stop   -- TYPE:array(ny,nx,3).           
-                                                                      Unit ECEF vector of line of sight of each pixel at end of exposure 
+                                      * mighti_ecef_vectors        -- TYPE:array(ny,nx,3).           
+                                                                      Unit ECEF vector of line of sight of each pixel at middle of exposure 
                                       * icon_ecef_ram_vector_start -- TYPE:array(3).                 
                                                                       Unit ECEF vector of spacecraft ram at beginning of exposure
                                       * icon_ecef_ram_vector_stop  -- TYPE:array(3).                 
@@ -1276,7 +1276,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     icon_alt = (L1_dict['icon_alt_start'] + L1_dict['icon_alt_stop'])/2
     icon_lat = (L1_dict['icon_lat_start'] + L1_dict['icon_lat_stop'])/2
     icon_lon = circular_mean(L1_dict['icon_lon_start'], L1_dict['icon_lon_stop'])
-    mighti_ecef_vectors = (L1_dict['mighti_ecef_vectors_start'] + L1_dict['mighti_ecef_vectors_stop'])/2
+    mighti_ecef_vectors = L1_dict['mighti_ecef_vectors']
     tang_alt = (L1_dict['tang_alt_start'] + L1_dict['tang_alt_stop'])/2
     tang_lat = (L1_dict['tang_lat_start'] + L1_dict['tang_lat_stop'])/2
     tang_lon = circular_mean(L1_dict['tang_lon_start'], L1_dict['tang_lon_stop'])
@@ -1616,7 +1616,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         spans from ~90 km (for green) or ~150 km (for red) to ~300 km, though altitudes with low signal levels are masked out. This data product is 
         generated from the Level 1 MIGHTI product, which is a calibrated interferogram. The spacecraft velocity is removed from the interferogram phase, 
         then an onion-peeling inversion is performed to remove the effect of the line-of-sight integration. After the inversion, each row (i.e., altitude) 
-        is analyzed to extract the phase, and thus the line-of-sight wind. Level 2.1 iles from MIGHTI-A and MIGHTI-B are combined during the Level 2.2 
+        is analyzed to extract the phase, and thus the line-of-sight wind. Level 2.1 files from MIGHTI-A and MIGHTI-B are combined during the Level 2.2 
         processing (not discussed here). See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for more details of the inversion algorithm. One update 
         to this paper is relevant: Zero wind removal is now performed prior to the creation of the Level 1 file, instead of during the L2.1 processing. 
         """])
@@ -1678,7 +1678,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               by the LINE_OF_SIGHT_AZIMUTH variable. It is assumed that the vertical wind is zero, but even large vertical winds 
                               (~100 m/s) do not significantly affect this data product, since the line of sight is nearly horizontal everywhere. It 
                               should be noted that while this measurement is ascribed to a particular latitude, longitude and altitude, it is actually 
-                              an average over many thousands of kilometers horizontally, and 2.5-30 kilometers vertically (depending on the binning). 
+                              an average over many hundreds of kilometers horizontally, and 2.5-30 kilometers vertically (depending on the binning). 
                               See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm.
                               """)
 
@@ -1717,7 +1717,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               display_type='altitude_profile', field_name='Fringe Amplitude', fill_value=None, label_axis='Fringe Amp', bin_location=0.5,
                               units='arb', valid_min=-1e30, valid_max=1e30, var_type='data', chunk_sizes=[n],
                               notes="""An approximate volume emission rate (VER) profile in arbitrary units. Technically this a profile of the 
-                              visibility of the fringes, which has a dependence on thermospheric temperature and background emission. Thus, it does not 
+                              amplitude of the fringes, which has a dependence on thermospheric temperature and background emission. Thus, it does not 
                               truly represent volume emission rate. However, it is a useful proxy. The units are arbitrary, but an attempt has 
                               been made to cross-calibrate MIGHTI-A with MIGHTI-B. In contrast with the wind inversion, which is nonlinear due to the 
                               phase extraction step, the amplitude inversion is purely linear. The Level 1 interferogram is analyzed to obtain a single 
@@ -1761,7 +1761,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               notes="""The latitudes of each point in the wind profile, evaluated using the WGS84 ellipsoid. The latitude only 
                               varies by several degrees from the bottom of the profile to the top. It should be noted that while a single latitude 
                               value (the tangent latitude) is given for each point, the observation is inherently a horizontal average 
-                              over many thousands of kilometers.
+                              over many hundreds of kilometers.
                               """
                               )
 
@@ -1774,7 +1774,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               notes="""The longitudes (0-360) of each point in the wind profile, evaluated using the WGS84 ellipsoid. The longitude only 
                               varies by several degrees from the bottom of the profile to the top. It should be noted that while a single longitude 
                               value (the tangent longitude) is given for each point, the observation is inherently a horizontal average 
-                              over many thousands of kilometers.
+                              over many hundreds of kilometers.
                               """
                               )
 
@@ -1892,8 +1892,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               display_type='scalar', field_name='Bin Size', fill_value=None, label_axis='Bin Size', bin_location=0.5,
                               units='', valid_min=np.int8(1), valid_max=np.int8(100), var_type='metadata', chunk_sizes=1,
                               notes="""To improve statistics, adjacent rows of the interferogram can be averaged together before the inversion. 
-                              This improves precision at the cost of vertical resolution. If no binning is performed, this value will be 1 
-                              (corresponding to ~2.5 km resolution).
+                              This improves precision at the cost of vertical resolution. If no binning is performed, this value will be 1, 
+                              corresponding to ~2.5 km resolution. A value of 2 corresponds to ~5 km resolution, etc.
                               """)
 
         # Integration order
@@ -2962,12 +2962,12 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               format_nc='f8', format_fortran='F', desc='Zonal component of the horizontal wind. Positive Eastward.', 
                               display_type='image', field_name='Zonal Wind', fill_value=None, label_axis='', bin_location=0.5,
                               units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
-                              notes="""The zonal (positive eastward) and meridional (postive northward) winds are the primary 
+                              notes="""The zonal (positive eastward) and meridional (positive northward) winds are the primary 
                               data product in this file. They are defined on a grid with dimensions of time and altitude, 
                               spanning 24 hours and nominally 90-300 km (150-300 km for the red channel). The altitude, time, 
                               latitude and longitude corresponding to each point in the grid are given by other variables in 
                               this file. It should be noted that while each measurement is ascribed to a particular latitude, 
-                              longitude, altitude, and time, it is actually an average over many thousands of kilometers 
+                              longitude, altitude, and time, it is actually an average over many hundreds of kilometers 
                               horizontally and 2.5-30 kilometers vertically (depending on the binning). It also assumes stationarity 
                               over the 5-8 minutes between the MIGHTI-A and B measurements used for each point. See Harding et 
                               al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm.
@@ -2979,12 +2979,12 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               format_nc='f8', format_fortran='F', desc='Meridional component of the horizontal wind. Positive Northward.', 
                               display_type='image', field_name='Meridional Wind', fill_value=None, label_axis='', bin_location=0.5,
                               units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
-                              notes="""The zonal (positive eastward) and meridional (postive northward) winds are the primary 
+                              notes="""The zonal (positive eastward) and meridional (positive northward) winds are the primary 
                               data product in this file. They are defined on a grid with dimensions of time and altitude, 
                               spanning 24 hours and nominally 90-300 km (150-300 km for the red channel). The altitude, time, 
                               latitude and longitude corresponding to each point in the grid are given by other variables in 
                               this file. It should be noted that while each measurement is ascribed to a particular latitude, 
-                              longitude, altitude, and time, it is actually an average over many thousands of kilometers 
+                              longitude, altitude, and time, it is actually an average over many hundreds of kilometers 
                               horizontally and 2.5-30 kilometers vertically (depending on the binning). It also assumes stationarity 
                               over the 5-8 minutes between the MIGHTI-A and B measurements used for each point. See Harding et 
                               al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm.
@@ -3040,11 +3040,11 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='', bin_location=0.5,
                               units='arb', valid_min=-1e30, valid_max=1e30, var_type='data', chunk_sizes=[nx,ny],
                               notes="""An approximate volume emission rate (VER) profile in arbitrary units, estimated by combining 
-                              MIGHTI-A and MIGHTI-B data. Technically this is not the VER, but rather the visibility of the fringes, 
+                              MIGHTI-A and MIGHTI-B data. Technically this is not the VER, but rather the amplitude of the fringes, 
                               which has a dependence on thermospheric temperature and background emission. Thus, it does not truly 
                               represent volume emission rate. However, it is a useful proxy. The units are arbitrary, as the 
-                              calibration is uncertain. See also variables FRINGE_AMPLITUDE_RELATIVE_DIFFERENCE, FRINGE_AMPLITUDE_A, 
-                              and FRINGE_AMPLITUDE_B.
+                              fringe amplitudes are not calibrated. See also variables FRINGE_AMPLITUDE_RELATIVE_DIFFERENCE, 
+                              FRINGE_AMPLITUDE_A, and FRINGE_AMPLITUDE_B.
                               """
                               )
         
@@ -3075,7 +3075,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               initial implementation, the longitude is constant with altitude, but this may change in the future to capture 
                               the slight (few deg) variation with altitude. Longitude is defined using the WGS84 ellipsoid. It should be noted 
                               that while a single longitude value is given for each point, the observation is 
-                              inherently a horizontal average over many thousands of kilometers.
+                              inherently a horizontal average over many hundreds of kilometers.
                               """)
                               
         # Latitude
@@ -3087,7 +3087,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               notes=""" A two-dimensional array defining the latitude of the two-dimensional data grid. The latitude varies 
                               only slightly (a few deg) with altitude, but this variation is included. Latitude is defined using the WGS84 
                               ellipsoid. It should be noted that while a single longitude value is given for each point, the observation is 
-                              inherently a horizontal average over many thousands of kilometers.
+                              inherently a horizontal average over many hundreds of kilometers.
                               """)
                               
             
@@ -3346,18 +3346,19 @@ def level22_to_dict(L22_fn):
 
     # Unwrap the sample longitude to avoid 0/360 jumps
     lonu = L22_dict['lon'].copy()
-    lonu[:,0] = fix_longitudes(lonu[:,0], lonu[-1,0]) # Use top first longitude as target
-    for i in range(np.shape(lonu)[0]):
-        lonu[i,:] = fix_longitudes(lonu[i,:], lonu[i,0])
+    lonu[0,:] = fix_longitudes(lonu[0,:], lonu[0,-1]) # Use top first longitude as target
+    for i in range(np.shape(lonu)[1]):
+        lonu[:,i] = fix_longitudes(lonu[:,i], lonu[0,i])
     L22_dict['lon_unwrapped'] = lonu
 
-    L22_dict['alt']    = f['ICON_L2_MIGHTI_%s_ALTITUDE'  % emission_color][:,:]/1e3
+    L22_dict['alt']    = f['ICON_L2_MIGHTI_%s_ALTITUDE'  % emission_color][:]/1e3
     L22_dict['u']      = f['ICON_L2_MIGHTI_%s_ZONAL_WIND' % emission_color][:,:] 
     L22_dict['v']      = f['ICON_L2_MIGHTI_%s_MERIDIONAL_WIND' % emission_color][:,:] 
     L22_dict['u_error']= f['ICON_L2_MIGHTI_%s_ZONAL_WIND_ERROR' % emission_color][:,:] 
     L22_dict['v_error']= f['ICON_L2_MIGHTI_%s_MERIDIONAL_WIND_ERROR' % emission_color][:,:] 
-    L22_dict['error_flags'] = f['ICON_L2_MIGHTI_%s_ERROR_FLAG' % emission_color][:,:] 
-    L22_dict['time']   = f['ICON_L2_MIGHTI_%s_TIME' % emission_color][:,:] # TODO: convert to datetime
+    L22_dict['error_flags'] = f['ICON_L2_MIGHTI_%s_ERROR_FLAG' % emission_color][:,:,:] 
+    L22_dict['epoch_ms']  = f['EPOCH'][:]
+    L22_dict['time_ms']   = f['ICON_L2_MIGHTI_%s_TIME' % emission_color][:,:] # TODO: convert to datetime
     L22_dict['time_delta'] = f['ICON_L2_MIGHTI_%s_TIME_DELTA' % emission_color][:,:]
     L22_dict['fringe_amp']   = f['ICON_L2_MIGHTI_%s_FRINGE_AMPLITUDE' % emission_color][:,:] 
     L22_dict['fringe_amp_A'] = f['ICON_L2_MIGHTI_%s_FRINGE_AMPLITUDE_A' % emission_color][:,:] 
@@ -3365,6 +3366,26 @@ def level22_to_dict(L22_fn):
     L22_dict['fringe_amp_rel_diff'] = f['ICON_L2_MIGHTI_%s_FRINGE_AMPLITUDE_RELATIVE_DIFFERENCE' % emission_color][:,:] 
     L22_dict['emission_color'] = emission_color
     L22_dict['source_files'] = f.Parents
+    
+    # Convert time to datetime
+    epoch = np.ma.empty(len(L22_dict['epoch_ms']), dtype=datetime)
+    for i in range(len(epoch)):
+        if L22_dict['epoch_ms'].mask[i]:
+            epoch[i] = datetime(1989,4,18) # arbitrary fill value
+            epoch[i] = np.ma.masked # mask it
+        else:
+            epoch[i] = datetime(1970,1,1) + timedelta(seconds = L22_dict['epoch_ms'][i]/1e3)
+    time = np.ma.empty(np.shape(L22_dict['time_ms']), dtype=datetime)
+    for i in range(np.shape(time)[0]):
+        for j in range(np.shape(time)[1]):
+            if L22_dict['time_ms'].mask[i,j]:
+                time[i] = datetime(1989,4,18) # arbitrary fill value
+                time[i] = np.ma.masked # mask it
+            else:
+                time[i] = datetime(1970,1,1) + timedelta(seconds = L22_dict['time_ms'][i,j]/1e3)
+                
+    L22_dict['time'] = time
+    L22_dict['epoch'] = epoch
     
     f.close()
     
