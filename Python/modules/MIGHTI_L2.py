@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 2 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 3 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -3295,7 +3295,7 @@ def level21_to_level22(info_fn):
     failure_messages = []
     for emission_color in ['red','green']:
         # Extract L2.1 files with this color
-        L21_fns_color = [fn for fn in L21_full_fns if emission_color.upper() in fn]
+        L21_fns_color = [fn for fn in L21_full_fns if emission_color.lower() in fn.lower()]
         try:
             L22_fn = level21_to_level22_without_info_file(L21_fns_color, direc + 'Output/', data_revision=data_revision)       
             L22_fns.append(L22_fn)
