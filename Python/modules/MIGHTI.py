@@ -223,8 +223,8 @@ def get_solar_zenith_angle(pt):
     import ephem
     sun = ephem.Sun()
     obs = ephem.Observer()
-    obs.lon = str(pt.lon)
-    obs.lat = str(pt.lat)
+    obs.lon = '%f' % (pt.lon)
+    obs.lat = '%f' % (pt.lat)
     obs.date = pt.dn.strftime('%Y/%m/%d %H:%M:%S')
     obs.pressure = 0. # ignore refraction. This makes a negligible difference.
     obs.elevation = 1000*pt.alt # This makes a negligible difference.
@@ -379,7 +379,37 @@ def get_greenline_airglow(pt):
     return V_5577
 
     
-    
+  
+def L1_filt(f, showplot=False):
+    '''
+    Filter a row of the interferogram as done in the L1 processing, with a 
+    Hann window surrounding the peak.
+    '''
+    F = np.fft.fft(f)
+    N = len(F)
+    n = np.arange(N)
+    # Create filter as per Ken Marr's email 2013/10/29
+    peaki = abs(F[5:int(np.floor(N/2))]).argmax() + 5
+    width1 = 20 # width of Hann window
+    width2 = 5 # width of plateau
+    if peaki-width1/2-(width2-1)/2 < 0: # this row is probably mostly noise
+        # Just do something as a placeholder
+        peaki = width1/2 + (width2-1)/2 + 1
+    hann = np.hanning(width1)
+    # Create full filter
+    H = np.hstack((np.zeros(peaki-width1/2-(width2-1)/2), 
+                hann[:width1/2], 
+                np.ones(width2), 
+                hann[width1/2:], 
+                np.zeros(N - peaki - width1/2 - (width2-1)/2 - 1)))
+    ap = np.hanning(N)
+    f = f - f.mean()
+    fap = f*ap
+    Fnew = np.fft.fft(fap)
+    F2 = Fnew * H
+    f2 = np.fft.ifft(F2)
+
+    return f2
     
     
     
