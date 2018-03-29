@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 3 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 4 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -34,7 +34,7 @@ global_params['red'] = {
     'sph_asym_thresh'   : 0.19,            # The relative difference in VER estimates from A&B,
                                            # beyond which the spherical asymmetry flag will be
                                            # raised in L2.2.
-    'chi2_thresh'       : 0.2,             # [rad^2] Minimum value of chi^2, below which the line fit to extract phase 
+    'chi2_thresh'       : 0.5,             # [rad^2] Minimum value of chi^2, below which the line fit to extract phase 
                                            # should not be trusted. As defined, it is normalized by the number of pixels
                                            # in a row. If this threshold is being reached too often, then consider binning.
 }
@@ -46,7 +46,7 @@ global_params['green'] = {
     'integration_order' : 0,
     'top_layer'         : 'exp',
     'sph_asym_thresh'   : 0.19,
-    'chi2_thresh'       : 0.25,
+    'chi2_thresh'       : 0.5,
 }
 
 
@@ -64,6 +64,23 @@ import glob
 import traceback # for printing detailed error traces
 import sys
 import copy
+
+import matplotlib
+import matplotlib.pyplot as plt
+from matplotlib import dates
+from matplotlib.colors import LogNorm
+
+# Custom colormap for plots, and other aesthetics
+from matplotlib.colors import LinearSegmentedColormap
+cdict = {'red':   ((0.0, 0.7, 0.7),
+                   (1.0, 0.7, 0.7)),
+         'green': ((0.0, 0.7, 0.7),
+                   (1.0, 0.0, 0.0)),
+         'blue':  ((0.0, 1.0, 1.0),
+                   (1.0, 0.0, 0.0))}
+cmap_custom = LinearSegmentedColormap('Custom', cdict)
+matplotlib.rcParams['xtick.labelsize'] = 'small'
+matplotlib.rcParams['ytick.labelsize'] = 'small'
 
 # Ignore errors having to do with NaN. These clog up the log file.
 np.seterr(invalid='ignore')
@@ -496,7 +513,7 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_o
 
 def create_local_projection_matrix(tang_alt, icon_alt):
     '''
-    Define the matrix B whose entries give the factor by which a horizontal wind
+    Define the matrix B whose entries give the factor byF which a horizontal wind
     would be projected onto the line of sight. This has the same shape as the
     observation matrix (i.e., distance matrix). At the tangent point, this factor
     is 1.0. Far from the tangent point, this factor is smaller. If this effect is 
@@ -1038,13 +1055,13 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     L1_dict = {}
     L1_dict['L1_fn']                       = L1_fn
     L1_dict['sensor']                      = sensor
-    L1_dict['I_amp']                       = f['ICON_L1_MIGHTI_%s_%s_ENVELOPE' % (sensor, emission_color.upper())][0,:,:]
-    L1_dict['I_phase']                     = f['ICON_L1_MIGHTI_%s_%s_PHASE' % (sensor, emission_color.upper())][0,:,:]
-    L1_dict['I_amp_uncertainty']           = f['ICON_L1_MIGHTI_%s_%s_ENVELOPE_UNCERTAINTIES' % (sensor, emission_color.upper())][0,:]
-    L1_dict['I_phase_uncertainty']         = f['ICON_L1_MIGHTI_%s_%s_PHASE_UNCERTAINTIES' % (sensor, emission_color.upper())][0,:]
+    L1_dict['I_amp']                       = f['ICON_L1_MIGHTI_%s_%s_Envelope' % (sensor, emission_color.capitalize())][0,:,:]
+    L1_dict['I_phase']                     = f['ICON_L1_MIGHTI_%s_%s_Phase' % (sensor, emission_color.capitalize())][0,:,:]
+    L1_dict['I_amp_uncertainty']           = f['ICON_L1_MIGHTI_%s_%s_Envelope_Uncertainties' % (sensor, emission_color.capitalize())][0,:]
+    L1_dict['I_phase_uncertainty']         = f['ICON_L1_MIGHTI_%s_%s_Phase_Uncertainties' % (sensor, emission_color.capitalize())][0,:]
     # For tangent locations, only use the center, not the full horizontal distribution
     ny,nx = np.shape(L1_dict['I_amp'])
-    tang_lla                               = f['ICON_L1_MIGHTI_%s_%s_TANGENT_LATLONALT' % (sensor, emission_color.upper())][0,:,:,:] 
+    tang_lla                               = f['ICON_L1_MIGHTI_%s_%s_Tangent_LatLonAlt' % (sensor, emission_color.capitalize())][0,:,:,:] 
     L1_dict['tang_alt_start']              = tang_lla[istart,2,:]
     L1_dict['tang_alt_stop']               = tang_lla[istop ,2,:]
     L1_dict['tang_lat_start']              = tang_lla[istart,0,:]
@@ -1053,22 +1070,23 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     L1_dict['tang_lon_stop']               = tang_lla[istop ,1,:]
     L1_dict['emission_color']              = emission_color
     # In the L1 file, the ECEF vectors are stored in multidimensional array: (time, start/mid/stop, vector_xyz, vert, horz)
-    tmp                                    = f['ICON_L1_MIGHTI_%s_%s_ECEF_UNIT_VECTORS'% (sensor, emission_color.upper())][0,:,:,:]
+    tmp                                    = f['ICON_L1_MIGHTI_%s_%s_ECEF_Unit_Vectors'% (sensor, emission_color.capitalize())][0,:,:,:]
     L1_dict['mighti_ecef_vectors']         = np.transpose(tmp, (1,2,0)) # V x H x vector
-    icon_vel_vec_start                     = f['ICON_L1_MIGHTI_%s_SC_VELOCITY_ECEF'% sensor][0,istart,:]
-    icon_vel_vec_stop                      = f['ICON_L1_MIGHTI_%s_SC_VELOCITY_ECEF'% sensor][0,istop ,:]
+    icon_vel_vec_start                     = f['ICON_L1_MIGHTI_%s_SC_Velocity_ECEF'% sensor][0,istart,:]
+    icon_vel_vec_stop                      = f['ICON_L1_MIGHTI_%s_SC_Velocity_ECEF'% sensor][0,istop ,:]
     L1_dict['icon_ecef_ram_vector_start']  = icon_vel_vec_start/np.linalg.norm(icon_vel_vec_start)
     L1_dict['icon_ecef_ram_vector_stop']   = icon_vel_vec_stop/np.linalg.norm(icon_vel_vec_stop)
     L1_dict['icon_velocity_start']         = np.linalg.norm(icon_vel_vec_start)
     L1_dict['icon_velocity_stop']          = np.linalg.norm(icon_vel_vec_stop)
     L1_dict['source_files']                = [f.Parents]
-    tsec_start                             = f['ICON_L1_MIGHTI_%s_IMAGE_TIMES'% sensor][0,istart]*1e-3
-    tsec_stop                              = f['ICON_L1_MIGHTI_%s_IMAGE_TIMES'% sensor][0,istop ]*1e-3
+    L1_dict['acknowledgement']             = f.Acknowledgement
+    tsec_start                             = f['ICON_L1_MIGHTI_%s_Image_Times'% sensor][0,istart]*1e-3
+    tsec_stop                              = f['ICON_L1_MIGHTI_%s_Image_Times'% sensor][0,istop ]*1e-3
     L1_dict['time_start']                  = datetime(1970,1,1) + timedelta(seconds=tsec_start)
     L1_dict['time_stop']                   = datetime(1970,1,1) + timedelta(seconds=tsec_stop)
     L1_dict['exp_time']                    = tsec_stop - tsec_start # Should this be replaced with the actual exposure time?
-    L1_dict['optical_path_difference']     = f['ICON_L1_MIGHTI_%s_%s_ARRAY_OPD' % (sensor, emission_color.upper())][0,:].astype(float)*1e-2 # convert to m
-    icon_ecef                              = f['ICON_L1_MIGHTI_%s_SC_POSITION_ECEF'% sensor][:][0,:,:] # timetable x [x,y,z]
+    L1_dict['optical_path_difference']     = f['ICON_L1_MIGHTI_%s_%s_Array_OPD' % (sensor, emission_color.capitalize())][0,:].astype(float)*1e-2 # convert to m
+    icon_ecef                              = f['ICON_L1_MIGHTI_%s_SC_Position_ECEF'% sensor][:][0,:,:] # timetable x [x,y,z]
     icon_latlonalt = np.zeros((3,3))
     for i in range(3):
         icon_latlonalt[i,:] = ICON.ecef_to_wgs84(icon_ecef[i,:])
@@ -1172,6 +1190,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                                                       The column at which to begin unwrapping the phase of the interferogram.
                                                                       This is necessary to ensure that the zero wind phase (which was removed
                                                                       in the L1 processing) does not have a 2pi ambiguity. It is a function of row.
+                                      * acknowledgements           -- TYPE:str.
+                                                                      The value in the global attribute "Acknowledgement" which will be propagated
                                              
     OPTIONAL INPUTS - If None, defaults from MIGHTI_L2.global_params will be used 
     
@@ -1229,6 +1249,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                 * chi2                      -- TYPE:array(ny)    UNITS:rad^2. The normalized chi^2 from the line fit during phase
                                                                                               extraction from each row of the interferogram.
                                 * quality                   -- TYPE:array(ny)    UNITS:arb.   A number from 0 (Bad) to 1 (Good) for each altitude.
+                                * acknowledgement           -- TYPE:str.                      A copy of the Acknowledgement attribute in the L1 file.
     
     '''
     
@@ -1356,6 +1377,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
              'I'                            : Ip,
              'chi2'                         : chi2,
              'wind_quality'                 : np.nan, # TODO
+             'acknowledgement'              : L1_dict['acknowledgement'],
     }
         
     return L21_dict
@@ -1377,7 +1399,7 @@ def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', di
       *  Self evident from the parameters above. Notes:
       
             * fill_value = None --> default fill values will be used, if they exist. See netCDF4.default_fillvals
-            * display_type: for now, 'scalar', 'altitude_profile', or 'image' will be used
+            * display_type: for now, 'scalar', 'time_series', 'altitude_profile', or 'image' will be used
             * var_type: one of 'data', 'support_data', 'metadata', 'ignore_data'
             * format_fortran: Used by ISTP. See http://www.cs.mtu.edu/~shene/COURSES/cs201/NOTES/chap05/format.html
             * except as specified above, if a variable attribute is left as the default None, it will not be written to the file
@@ -1529,38 +1551,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
     try:
         ########################## Global Attributes #################################
-        ncfile.setncattr_string('Acknowledgement',       ''.join(("This is a data product from the NASA Ionospheric Connection Explorer mission, ",
-                                                                  "an Explorer launched in June 2017.\n",
-                                                                  "\n",
-                                                                  "Responsibility of the mission science falls to the Principal Investigator, ",
-                                                                  "Dr. Thomas Immel at UC Berkeley.\n",
-                                                                  "\n",
-                                                                  "Validation of the L1 data products falls to the instrument lead ",
-                                                                  "investigators/scientists.\n",
-                                                                  "  * EUV  Dr. Eric Korpela\n",
-                                                                  "  * FUV  Dr. Harald Frey\n",
-                                                                  "  * MIGHTI  Dr. Chris Englert\n",
-                                                                  "  * IVM  Dr. Roderick Heelis\n",
-                                                                  "\n",
-                                                                  "Validation of the L2 data products falls to those responsible for those products.\n",
-                                                                  "  * O/N2  Dr. Andrew Stephan\n",
-                                                                  "  * Daytime (EUV) O+ profiles  Dr. Andrew Stephan\n",
-                                                                  "  * Nighttime (FUV) O+ profiles  Dr. Farzad Kamalabadi\n",
-                                                                  "  * Neutral Wind profiles  Dr. Jonathan Makela\n",
-                                                                  "  * Neutral Temperature profiles  Dr. Chris Englert\n",
-                                                                  "\n",
-                                                                  "Responsibility for Level 4 products are detailed on the ICON website ",
-                                                                  "(http://icon.ssl.berkeley.edu).\n",
-                                                                  "\n",
-                                                                  "Overall validation of the products is overseen by the ICON Project Scientist ",
-                                                                  "Dr. Scott England.\n",
-                                                                  "\n",
-                                                                  "NASA oversight for all products is provided by the Mission Scientist ",
-                                                                  "Dr. Douglas Rowland.\n",
-                                                                  "\n",
-                                                                  "Users of these data should contact and acknowledge the Principal Investigator ",
-                                                                  "Dr. Immel and the party directly responsible for the data product and the NASA ",
-                                                                  "Contract Number NNG12FA45C from the Explorers Project Office." )))
+        ncfile.setncattr_string('Acknowledgement',                L21_dict['acknowledgement'])
         ncfile.setncattr_string('ADID_Ref',                       'NASA Contract > NNG12FA45C')
         ncfile.setncattr_string('Calibration_File',               '')
         ncfile.setncattr_string('Conventions',                    'SPDF ISTP/IACG Modified for NetCDF')
@@ -1598,32 +1589,32 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ncfile.setncattr_string('Software_Version',               'ICON SDC > ICON UIUC MIGHTI L2.1 Processor v%s' % __version__)
         ncfile.setncattr_string('Source_Name',                    'ICON > Ionospheric Connection Explorer')
         ncfile.setncattr_string('Spacecraft_ID',                  'NASA > ICON - 493')
-        ncfile.setncattr_string('Text',                           'ICON explores the boundary between Earth and space - the ionosphere - ' +\
-                                                                  'to understand the physical connection between our world and the immediate '+\
+        ncfile.setncattr_string('Text',                           'ICON explores the boundary between Earth and space - the ionosphere - '
+                                                                  'to understand the physical connection between our world and the immediate '
                                                                   'space environment around us. Visit \'http://icon.ssl.berkeley.edu\' for more details.')
-        ncfile.setncattr_string('Text_Supplement',                ["""This data product contains an altitude profile of the line-of-sight winds for a single 
-        image taken by MIGHTI. There is one file for each sensor (A or B), for each color (red or green) and for each image (usually every 30 or 
-        60 seconds). The profile 
-        spans from ~90 km (for green) or ~150 km (for red) to ~300 km, though altitudes with low signal levels are masked out. This data product is 
-        generated from the Level 1 MIGHTI product, which is a calibrated interferogram. The spacecraft velocity is removed from the interferogram phase, 
-        then an onion-peeling inversion is performed to remove the effect of the line-of-sight integration. After the inversion, each row (i.e., altitude) 
-        is analyzed to extract the phase, and thus the line-of-sight wind. Level 2.1 files from MIGHTI-A and MIGHTI-B are combined during the Level 2.2 
-        processing (not discussed here). See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for more details of the inversion algorithm. One update 
-        to this paper is relevant: Zero wind removal is now performed prior to the creation of the Level 1 file, instead of during the L2.1 processing. 
-        """])
+        ncfile.setncattr_string('Text_Supplement',                ["This data product contains an altitude profile of the line-of-sight winds for a single "
+        "image taken by MIGHTI. There is one file for each sensor (A or B), for each color (red or green) and for each image (usually every 30 or "
+        "60 seconds). The profile "
+        "spans from ~90 km (for green) or ~150 km (for red) to ~300 km, though altitudes with low signal levels are masked out. This data product is "
+        "generated from the Level 1 MIGHTI product, which is a calibrated interferogram. The spacecraft velocity is removed from the interferogram phase, "
+        "then an onion-peeling inversion is performed to remove the effect of the line-of-sight integration. After the inversion, each row (i.e., altitude) "
+        "is analyzed to extract the phase, and thus the line-of-sight wind. Level 2.1 files from MIGHTI-A and MIGHTI-B are combined during the Level 2.2 "
+        "processing (not discussed here). See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for more details of the inversion algorithm. One update "
+        "to this paper is relevant: Zero wind removal is now performed prior to the creation of the Level 1 file, instead of during the L2.1 processing. "
+        ])
         ncfile.setncattr_string('Time_Resolution',                '%.1f seconds' % L21_dict['exp_time'])
         ncfile.setncattr_string('Title',                          'ICON MIGHTI Line-of-sight Wind Profile (DP 2.1)')
 
 
         ################################## Dimensions ########################################
-        prefix = 'ICON_L2_MIGHTI_%s_%s' % (sensor, L21_dict['emission_color'].upper()) # prefix of each variable,
-                                                                                         # e.g., ICON_L2_MIGHTI_A_RED     
+        prefix = 'ICON_L2_MIGHTI_%s_%s' % (sensor, L21_dict['emission_color'].capitalize()) # prefix of each variable,
+                                                                                            # e.g., ICON_L2_MIGHTI_A_Red
         n = len(L21_dict['alt'])
-        var_alt_name = '%s_ALTITUDE'%prefix
-        ncfile.createDimension('EPOCH',1)
+        var_alt_name = '%s_Altitude'%prefix
+        ncfile.createDimension('Epoch',1)
         ncfile.createDimension(var_alt_name, n)
-        ncfile.createDimension('VECTOR',3)
-        ncfile.createDimension('START_MID_STOP',3)
+        ncfile.createDimension('Vector',3)
+        ncfile.createDimension('Start_Mid_Stop',3)
 
 
         ################################## Variables #########################################
@@ -1632,155 +1623,158 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ######### Timing Variables #########
 
         # Time midpoint (the official required "Epoch" variable)
-        var = _create_variable(ncfile, 'EPOCH', t_mid_msec, 
+        var = _create_variable(ncfile, 'Epoch', t_mid_msec, 
                               dimensions=(),
                               format_nc='i8', format_fortran='I', desc='Sample time, midpoint of exposure. Number of msec since Jan 1, 1970.', 
                               display_type='scalar', field_name='Time', fill_value=None, label_axis='Time', bin_location=0.5,
                               units='ms', valid_min=0, valid_max=1000*365*86400*1000, var_type='support_data', chunk_sizes=1,
-                              notes="""This variable contains the time corresponding to the wind profile reported in this file. It is evaluated 
-                                       at the midpoint of the exposure time. It is in UTC and has units of milliseconds since 
-                                       Jan 1, 1970. A human-readable version of the time can be found in the global attributes 
-                                       Date_Start and Date_Stop."""
+                              notes="This variable contains the time corresponding to the wind profile reported in this file. It is evaluated "
+                                    "at the midpoint of the exposure time. It is in UTC and has units of milliseconds since "
+                                    "Jan 1, 1970. A human-readable version of the time can be found in the global attributes "
+                                    "Date_Start and Date_Stop."
                               )
 
         # Time start/mid/stop
-        var = _create_variable(ncfile, '%s_TIME'%prefix, np.array([t_start_msec, t_mid_msec, t_stop_msec]),
-                              dimensions=('START_MID_STOP'),
+        var = _create_variable(ncfile, '%s_Time'%prefix, np.array([t_start_msec, t_mid_msec, t_stop_msec]),
+                              dimensions=('Start_Mid_Stop'),
                               format_nc='i8', format_fortran='I', desc='Sample time at start, mid, stop of exposure. Number of msec since Jan 1, 1970.', 
                               display_type='scalar', field_name='Time', fill_value=None, label_axis='Time', bin_location=[0.0,0.5,1.0],
                               units='ms', valid_min=0, valid_max=1000*365*86400*1000, var_type='support_data', chunk_sizes=[3],
-                              notes="""This variable is the same as EPOCH, except it includes the start time and stop time. 
-                                       This variable has length 3: [start_time, mid_time, stop_time]."""
+                              notes="This variable is the same as Epoch, except it includes the start time and stop time. "
+                                    "This variable has length 3: [start_time, mid_time, stop_time]."
                               )
+        
+        # Human readable version of midpoint time
+        var = _create_variable(ncfile, '%s_UTC_Time'%prefix, t_mid.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3], 
+                              dimensions=(),
+                              format_nc=str, format_fortran='A', desc='Sample time, midpoint of exposure.', 
+                              display_type='time_series', field_name='Time', fill_value=None, label_axis='Time', bin_location=0.5,
+                              units='', valid_min=None, valid_max=None, var_type='support_data', chunk_sizes=1,
+                              notes="This variable is the same as Epoch but is formatted as a human-readable string.")
                                
             
         ######### Data Variables #########
 
         # Line-of-sight wind profile
-        var = _create_variable(ncfile, '%s_LINE_OF_SIGHT_WIND'%prefix, L21_dict['los_wind'], 
+        var = _create_variable(ncfile, '%s_Line_of_Sight_Wind'%prefix, L21_dict['los_wind'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Line-of-sight horizontal wind profile. A positive wind is towards MIGHTI.', 
                               display_type='altitude_profile', field_name='Line-of-sight Wind', fill_value=None, label_axis='LoS Wind', bin_location=0.5,
                               units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[n],
-                              notes="""The wind is the primary data product in this file. This variable contains the projection of the horizontal wind
-                              (at the tangent point) onto the line of sight. An entire altitude profile is observed simultaneously. An onion-peeling
-                              inversion is used on the raw observations to remove the effects of the integration along the line of sight. The 
-                              line-of-sight wind is defined such that a positive value indicates motion towards the spacecraft. This direction is given 
-                              by the LINE_OF_SIGHT_AZIMUTH variable. It is assumed that the vertical wind is zero, but even large vertical winds 
-                              (~100 m/s) do not significantly affect this data product, since the line of sight is nearly horizontal everywhere. It 
-                              should be noted that while this measurement is ascribed to a particular latitude, longitude and altitude, it is actually 
-                              an average over many hundreds of kilometers horizontally, and 2.5-30 kilometers vertically (depending on the binning). 
-                              See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm.
-                              """)
+                              notes="The wind is the primary data product in this file. This variable contains the projection of the horizontal wind "
+                              "(at the tangent point) onto the line of sight. An entire altitude profile is observed simultaneously. An onion-peeling "
+                              "inversion is used on the raw observations to remove the effects of the integration along the line of sight. The "
+                              "line-of-sight wind is defined such that a positive value indicates motion towards the spacecraft. This direction is given "
+                              "by the Line_of_Sight_Azimuth variable. It is assumed that the vertical wind is zero, but even large vertical winds "
+                              "(~100 m/s) do not significantly affect this data product, since the line of sight is nearly horizontal everywhere. It "
+                              "should be noted that while this measurement is ascribed to a particular latitude, longitude and altitude, it is actually "
+                              "an average over many hundreds of kilometers horizontally, and 2.5-30 kilometers vertically (depending on the binning). "
+                              "See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."
+                              )
 
         # Line-of-sight wind error profile
-        var = _create_variable(ncfile, '%s_LINE_OF_SIGHT_WIND_ERROR'%prefix, L21_dict['los_wind_error'], 
+        var = _create_variable(ncfile, '%s_Line_of_Sight_Wind_Error'%prefix, L21_dict['los_wind_error'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Line-of-sight horizontal wind error profile', 
                               display_type='altitude_profile', field_name='Line-of-sight Wind Error', fill_value=None, label_axis='Wind Error', bin_location=0.5,
                               units='m/s', valid_min=0.0, valid_max=4000., var_type='data', chunk_sizes=[n],
-                              notes="""The statistical (1-sigma) error in the line-of-sight wind. This is usually dominated by shot noise, but 
-                              also includes the effects of dark and read noise, as well as calibrations errors (e.g., the zero wind calibration), 
-                              and spacecraft pointing error (which affects the uncertainty in removing the spacecraft velocity from the observed 
-                              velocity). Other systematic errors or biases may exist (e.g., the effect of gradients along the line of sight) 
-                              which are not included in this variable.
-                              """)
+                              notes="The statistical (1-sigma) error in the line-of-sight wind. This is usually dominated by shot noise, but "
+                              "also includes the effects of dark and read noise, as well as calibrations errors (e.g., the zero wind calibration), "
+                              "and spacecraft pointing error (which affects the uncertainty in removing the spacecraft velocity from the observed "
+                              "velocity). Other systematic errors or biases may exist (e.g., the effect of gradients along the line of sight) "
+                              "which are not included in this variable."
+                              )
         
         # Quality code
-        var = _create_variable(ncfile, '%s_WIND_QUALITY'%prefix, L21_dict['wind_quality'], 
+        var = _create_variable(ncfile, '%s_Wind_Quality'%prefix, L21_dict['wind_quality'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='A quantification of the quality, from 0 (Bad) to 1 (Good)', 
                               display_type='altitude_profile', field_name='Wind Quality', fill_value=None, label_axis='Quality', bin_location=0.5,
                               units='arb', valid_min=0.0, valid_max=1.0, var_type='data', chunk_sizes=[n],
-                              notes=["""NOT YET IMPLEMENTED""",
-                                     """While the intent is that the variable LINE_OF_SIGHT_WIND_ERROR accurately characterizes the statistical 
-                                     error in the wind data, it is possible that systematic errors are present, or that the statistical error 
-                                     estimation is not accurate. If it is suspected that this is the case, the quality will be less than 1.0. If 
-                                     the data are definitely unusable, the the quality will be 0.0 and the sample will be masked. Users should 
-                                     exercise caution when the quality is less than 1.0.
-                                     """]
-                                     )
+                              notes=["NOT YET IMPLEMENTED",
+                                     "While the intent is that the variable Line_of_Sight_Wind_Error accurately characterizes the statistical "
+                                     "error in the wind data, it is possible that systematic errors are present, or that the statistical error "
+                                     "estimation is not accurate. If it is suspected that this is the case, the quality will be less than 1.0. If "
+                                     "the data are definitely unusable, the the quality will be 0.0 and the sample will be masked. Users should "
+                                     "exercise caution when the quality is less than 1.0."
+                                     ])
 
         # Fringe amplitude profile (TODO: will this be replaced by a VER data product?)
-        var = _create_variable(ncfile, '%s_FRINGE_AMPLITUDE'%prefix, L21_dict['fringe_amplitude'], 
+        var = _create_variable(ncfile, '%s_Fringe_Amplitude'%prefix, L21_dict['fringe_amplitude'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Fringe amplitude profile', 
                               display_type='altitude_profile', field_name='Fringe Amplitude', fill_value=None, label_axis='Fringe Amp', bin_location=0.5,
                               units='arb', valid_min=-1e30, valid_max=1e30, var_type='data', chunk_sizes=[n],
-                              notes="""An approximate volume emission rate (VER) profile in arbitrary units. Technically this a profile of the 
-                              amplitude of the fringes, which has a dependence on thermospheric temperature and background emission. Thus, it does not 
-                              truly represent volume emission rate. However, it is a useful proxy. The units are arbitrary, but an attempt has 
-                              been made to cross-calibrate MIGHTI-A with MIGHTI-B. In contrast with the wind inversion, which is nonlinear due to the 
-                              phase extraction step, the amplitude inversion is purely linear. The Level 1 interferogram is analyzed to obtain a single 
-                              brightness value per observing angle, and this is inverted with the distance matrix to obtain a value of the amplitude 
-                              per altitude.
-                              """
+                              notes="An approximate volume emission rate (VER) profile in arbitrary units. Technically this a profile of the "
+                              "amplitude of the fringes, which has a dependence on thermospheric temperature and background emission. Thus, it does not "
+                              "truly represent volume emission rate. However, it is a useful proxy. The units are arbitrary, but an attempt has "
+                              "been made to cross-calibrate MIGHTI-A with MIGHTI-B. In contrast with the wind inversion, which is nonlinear due to the "
+                              "phase extraction step, the amplitude inversion is purely linear. The Level 1 interferogram is analyzed to obtain a single "
+                              "brightness value per observing angle, and this is inverted with the distance matrix to obtain a value of the amplitude "
+                              "per altitude."
                               )
 
         # Fringe amplitude error profile (TODO: will this be replaced by a VER data product?)
-        var = _create_variable(ncfile, '%s_FRINGE_AMPLITUDE_ERROR'%prefix, L21_dict['fringe_amplitude_error'], 
+        var = _create_variable(ncfile, '%s_Fringe_Amplitude_Error'%prefix, L21_dict['fringe_amplitude_error'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Fringe amplitude error profile', 
                               display_type='altitude_profile', field_name='Fringe Amplitude Error', fill_value=None, label_axis='Amp Err', bin_location=0.5,
                               units='arb', valid_min=0.0, valid_max=1e30, var_type='data', chunk_sizes=[n],
-                              notes="""The statistical (1-sigma) error in the fringe amplitude. As with the wind, systematic errors are not 
-                              included, but can arise from sources such as horizontal gradients and inaccurate calibration.""")
+                              notes="The statistical (1-sigma) error in the fringe amplitude. As with the wind, systematic errors are not "
+                              "included, but can arise from sources such as horizontal gradients and inaccurate calibration.")
         
 
         ######### Data Location and Direction Variables #########
         
         # Altitude
         val = L21_dict['alt']*1e3 # convert to meters
-        var = _create_variable(ncfile, '%s_ALTITUDE'%prefix, val, 
+        var = _create_variable(ncfile, '%s_Altitude'%prefix, val, 
                               dimensions=(var_alt_name),  depend_0 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='WGS84 altitude of each wind sample', 
                               display_type='altitude_profile', field_name='Altitude', fill_value=None, label_axis='Altitude', bin_location=0.5,
                               units='m', valid_min=50e3, valid_max=1000e3, var_type='support_data', chunk_sizes=[n], monoton='Increase',
-                              notes="""The altitudes of each point in the wind profile, evaluated using the WGS84 ellipsoid. If the variable 
-                                       INTEGRATION_ORDER=0 (which is the default value), then these altitudes are one half sample above 
-                                       the tangent altitudes of each pixel's line of sight (consistent with the assumption implicit 
-                                       in the inversion that the wind and emission rate are constant within the layer between tangent 
-                                       altitudes). If INTEGRATION_ORDER=1, this variable contains the tangent altitudes."""
+                              notes="The altitudes of each point in the wind profile, evaluated using the WGS84 ellipsoid. If the variable "
+                                    "Integration_Order=0 (which is the default value), then these altitudes are one half sample above "
+                                    "the tangent altitudes of each pixel's line of sight (consistent with the assumption implicit "
+                                    "in the inversion that the wind and emission rate are constant within the layer between tangent "
+                                    "altitudes). If Integration_Order=1, this variable contains the tangent altitudes."
                               )
 
         # Latitude
-        var = _create_variable(ncfile, '%s_LATITUDE'%prefix, L21_dict['lat'], 
+        var = _create_variable(ncfile, '%s_Latitude'%prefix, L21_dict['lat'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='WGS84 latitude of each wind sample', 
                               display_type='altitude_profile', field_name='Latitude', fill_value=None, label_axis='Latitude', bin_location=0.5,
                               units='deg', valid_min=-90., valid_max=90., var_type='support_data', chunk_sizes=[n],
-                              notes="""The latitudes of each point in the wind profile, evaluated using the WGS84 ellipsoid. The latitude only 
-                              varies by several degrees from the bottom of the profile to the top. It should be noted that while a single latitude 
-                              value (the tangent latitude) is given for each point, the observation is inherently a horizontal average 
-                              over many hundreds of kilometers.
-                              """
+                              notes="The latitudes of each point in the wind profile, evaluated using the WGS84 ellipsoid. The latitude only "
+                              "varies by several degrees from the bottom of the profile to the top. It should be noted that while a single latitude "
+                              "value (the tangent latitude) is given for each point, the observation is inherently a horizontal average "
+                              "over many hundreds of kilometers."
                               )
 
         # Longitude
-        var = _create_variable(ncfile, '%s_LONGITUDE'%prefix, L21_dict['lon'], 
+        var = _create_variable(ncfile, '%s_Longitude'%prefix, L21_dict['lon'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='WGS84 longitude of each wind sample', 
                               display_type='altitude_profile', field_name='Longitude', fill_value=None, label_axis='Longitude', bin_location=0.5,
                               units='deg', valid_min=0., valid_max=360., var_type='support_data', chunk_sizes=[n],
-                              notes="""The longitudes (0-360) of each point in the wind profile, evaluated using the WGS84 ellipsoid. The longitude only 
-                              varies by several degrees from the bottom of the profile to the top. It should be noted that while a single longitude 
-                              value (the tangent longitude) is given for each point, the observation is inherently a horizontal average 
-                              over many hundreds of kilometers.
-                              """
+                              notes="The longitudes (0-360) of each point in the wind profile, evaluated using the WGS84 ellipsoid. The longitude only "
+                              "varies by several degrees from the bottom of the profile to the top. It should be noted that while a single longitude "
+                              "value (the tangent longitude) is given for each point, the observation is inherently a horizontal average "
+                              "over many hundreds of kilometers."
                               )
 
         # Azimuth angle of line of sight
-        var = _create_variable(ncfile, '%s_LINE_OF_SIGHT_AZIMUTH'%prefix, L21_dict['az'], 
+        var = _create_variable(ncfile, '%s_Line_of_Sight_Azimuth'%prefix, L21_dict['az'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Azimuth angle of the line of sight at the tangent point. Deg East of North.', 
                               display_type='altitude_profile', field_name='Line-of-sight Azimuth', fill_value=None, label_axis='Azimuth', bin_location=0.5,
                               units='deg', valid_min=0., valid_max=360., var_type='support_data', chunk_sizes=[n],
-                              notes="""Consider the vector pointing from the spacecraft to the tangent point (i.e., the line of sight). At the tangent
-                              point, this vector is parallel to the ground. This variable contains the azimuth angle of this vector, evaluated at 
-                              the tangent point. It follows the typical geophysical convention of degrees East of North (North=0, East=90, South=180, 
-                              West=270). It can vary by a few degrees from the top of the profile to the bottom, so one value is reported per altitude. 
-                              MIGHTI-A and MIGHTI-B will have values approximately 90 degrees apart.
-                              """
+                              notes="Consider the vector pointing from the spacecraft to the tangent point (i.e., the line of sight). At the tangent "
+                              "point, this vector is parallel to the ground. This variable contains the azimuth angle of this vector, evaluated at "
+                              "the tangent point. It follows the typical geophysical convention of degrees East of North (North=0, East=90, South=180, "
+                              "West=270). It can vary by a few degrees from the top of the profile to the bottom, so one value is reported per altitude. "
+                              "MIGHTI-A and MIGHTI-B will have values approximately 90 degrees apart."
                               )
 
 
@@ -1788,30 +1782,29 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ######### Other Metadata Variables #########
 
         # Chi^2 of line fit to phase
-        var = _create_variable(ncfile, '%s_CHI2'%prefix, L21_dict['chi2'], 
+        var = _create_variable(ncfile, '%s_Chi2'%prefix, L21_dict['chi2'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Chi^2 of the line fit to unwrapped phase used to determine wind', 
                               display_type='altitude_profile', field_name='Chi^2 of line fit to phase', fill_value=None, label_axis='Chi^2', bin_location=0.5,
                               units='rad^2', valid_min=0., valid_max=1e30, var_type='metadata', chunk_sizes=[n],
-                              notes="""To convert a complex interferogram to a wind value, a line is fit to the unwrapped phase vs optical path 
-                              difference. The chi^2 value of that fit (here defined as the square of the residual, averaged over optical path 
-                              difference) can be used as a quality-of-fit metric. It is used to find and mask values which have a unusably low 
-                              SNR.
-                              """
+                              notes="To convert a complex interferogram to a wind value, a line is fit to the unwrapped phase vs optical path "
+                              "difference. The chi^2 value of that fit (here defined as the square of the residual, averaged over optical path "
+                              "difference) can be used as a quality-of-fit metric. It is used to find and mask values which have a unusably low "
+                              "SNR."
                               )
         
         # ICON velocity vector
-        var = _create_variable(ncfile, '%s_SPACECRAFT_VELOCITY_VECTOR'%prefix, L21_dict['icon_velocity_ecef_vector'], 
-                              dimensions=('VECTOR'),# depend_0 = 'Vector',
+        var = _create_variable(ncfile, '%s_Spacecraft_Velocity_Vector'%prefix, L21_dict['icon_velocity_ecef_vector'], 
+                              dimensions=('Vector'),
                               format_nc='f8', format_fortran='F', desc="ICON's velocity vector in Earth-centered, Earth-fixed coordinates", 
                               display_type='scalar', field_name='ICON Velocity Vector', fill_value=None, label_axis='S/C Vel', bin_location=0.5,
                               units='m/s', valid_min=-100e6, valid_max=100e6, var_type='metadata', chunk_sizes=[3],
-                              notes="""A length-3 vector [vx,vy,vz] of ICON's velocity in Earth-centered Earth-fixed (ECEF) coordinates at the 
-                              midpoint time of the observation. The effect of spacecraft velocity has already been removed from the LINE_OF_SIGHT_WIND 
-                              variable.""")
+                              notes="A length-3 vector [vx,vy,vz] of ICON's velocity in Earth-centered Earth-fixed (ECEF) coordinates at the "
+                              "midpoint time of the observation. The effect of spacecraft velocity has already been removed from the Line_of_Sight_Wind "
+                              "variable.")
 
         # ICON latitude
-        var = _create_variable(ncfile, '%s_SPACECRAFT_LATITUDE'%prefix, L21_dict['icon_lat'], 
+        var = _create_variable(ncfile, '%s_Spacecraft_Latitude'%prefix, L21_dict['icon_lat'], 
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The WGS84 latitude of ICON', 
                               display_type='scalar', field_name='Spacecraft Latitude', fill_value=None, label_axis='S/C Lat', bin_location=0.5,
@@ -1819,7 +1812,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               notes='The latitude of ICON at the midpoint time of the observation, using the WGS84 ellipsoid.')
 
         # ICON longitude
-        var = _create_variable(ncfile, '%s_SPACECRAFT_LONGITUDE'%prefix, L21_dict['icon_lon'], 
+        var = _create_variable(ncfile, '%s_Spacecraft_Longitude'%prefix, L21_dict['icon_lon'], 
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The WGS84 longitude of ICON', 
                               display_type='scalar', field_name='Spacecraft Longitude', fill_value=None, label_axis='S/C Lon', bin_location=0.5,
@@ -1828,7 +1821,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
         # ICON altitude
         val = L21_dict['icon_alt']*1e3 # convert to m
-        var = _create_variable(ncfile, '%s_SPACECRAFT_ALTITUDE'%prefix, val, 
+        var = _create_variable(ncfile, '%s_Spacecraft_Altitude'%prefix, val, 
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The WGS84 altitude of ICON', 
                               display_type='scalar', field_name='Spacecraft Altitude', fill_value=None, label_axis='S/C Alt', bin_location=0.5,
@@ -1837,81 +1830,81 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
         # Along-track resolution
         val = L21_dict['resolution_along_track']*1e3 # convert to meters
-        var = _create_variable(ncfile, '%s_RESOLUTION_ALONG_TRACK'%prefix, val, 
+        var = _create_variable(ncfile, '%s_Resolution_Along_Track'%prefix, val, 
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The horizontal resolution in the spacecraft velocity direction', 
                               display_type='scalar', field_name='Along-Track Resolution', fill_value=None, label_axis='Hor Res AT', bin_location=0.5,
                               units='m', valid_min=0., valid_max=1e30, var_type='metadata', chunk_sizes=1,
-                              notes=["""NOT YET IMPLEMENTED""",]
+                              notes=["NOT YET IMPLEMENTED",]
                                      )
 
         # Cross-track resolution
         val = L21_dict['resolution_cross_track']*1e3 # convert to meters
-        var = _create_variable(ncfile, '%s_RESOLUTION_CROSS_TRACK'%prefix, val, 
+        var = _create_variable(ncfile, '%s_Resolution_Cross_Track'%prefix, val, 
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The horizontal resolution perpendicular to the spacecraft velocity direction', 
                               display_type='scalar', field_name='Cross-Track Resolution', fill_value=None, label_axis='Hor Res CT', bin_location=0.5,
                               units='m', valid_min=0., valid_max=1e30, var_type='metadata', chunk_sizes=1,
-                              notes=["""NOT YET IMPLEMENTED""",]
+                              notes=["NOT YET IMPLEMENTED",]
                                      )
 
         # Altitude resolution
-        var = _create_variable(ncfile, '%s_RESOLUTION_ALTITUDE'%prefix, L21_dict['resolution_alt']*1e3, # km to meters
+        var = _create_variable(ncfile, '%s_Resolution_Altitude'%prefix, L21_dict['resolution_alt']*1e3, # km to meters
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The vertical resolution', 
                               display_type='scalar', field_name='Vertical Resolution', fill_value=None, label_axis='Vert Res', bin_location=0.5,
                               units='m', valid_min=0., valid_max=1e30, var_type='metadata', chunk_sizes=1,
-                              notes=["""NOT YET IMPLEMENTED""",]
+                              notes=["NOT YET IMPLEMENTED",]
                                      )
 
         # MIGHTI ECEF vectors
-        var = _create_variable(ncfile, '%s_LINE_OF_SIGHT_VECTOR'%prefix, L21_dict['mighti_ecef_vectors'], 
-                              dimensions=(var_alt_name,'VECTOR'), depend_0 = var_alt_name, # depend_1 = 'Vector',
+        var = _create_variable(ncfile, '%s_Line_of_Sight_Vector'%prefix, L21_dict['mighti_ecef_vectors'], 
+                              dimensions=(var_alt_name,'Vector'), depend_0 = var_alt_name, # depend_1 = 'Vector',
                               format_nc='f8', format_fortran='F', desc='The look direction of each MIGHTI line of sight, as a vector in ECEF', 
                               display_type='altitude_profile', field_name='Line-of-sight Vector', fill_value=None, label_axis='LoS Vec', bin_location=0.5,
                               units='', valid_min=-1., valid_max=1., var_type='metadata', chunk_sizes=[n,3],
-                              notes="""The vector from the spacecraft to the tangent point (i.e., along MIGHTI's line of sight), as a unit 
-                              vector in Earth-centered Earth-fixed (ECEF) coordinates. A vector is provided for each tangent point. If this 
-                              vector is transformed to an azimuth and zenith angle at the tangent point, the zenith angle will be 90 deg, and 
-                              the azimuth angle will be the same as the LINE_OF_SIGHT_AZIMUTH variable.
-                              """)
+                              notes="The vector from the spacecraft to the tangent point (i.e., along MIGHTI's line of sight), as a unit "
+                              "vector in Earth-centered Earth-fixed (ECEF) coordinates. A vector is provided for each tangent point. If this "
+                              "vector is transformed to an azimuth and zenith angle at the tangent point, the zenith angle will be 90 deg, and "
+                              "the azimuth angle will be the same as the Line_of_Sight_Azimuth variable."
+                              )
 
         # Bin Size
-        var = _create_variable(ncfile, '%s_BIN_SIZE'%prefix, L21_dict['bin_size'], 
+        var = _create_variable(ncfile, '%s_Bin_Size'%prefix, L21_dict['bin_size'], 
                               dimensions=(),
                               format_nc='i1', format_fortran='I', desc='How many raw samples were binned vertically for each reported sample', 
                               display_type='scalar', field_name='Bin Size', fill_value=None, label_axis='Bin Size', bin_location=0.5,
                               units='', valid_min=np.int8(1), valid_max=np.int8(100), var_type='metadata', chunk_sizes=1,
-                              notes="""To improve statistics, adjacent rows of the interferogram can be averaged together before the inversion. 
-                              This improves precision at the cost of vertical resolution. If no binning is performed, this value will be 1, 
-                              corresponding to ~2.5 km resolution. A value of 2 corresponds to ~5 km resolution, etc.
-                              """)
+                              notes="To improve statistics, adjacent rows of the interferogram can be averaged together before the inversion. "
+                              "This improves precision at the cost of vertical resolution. If no binning is performed, this value will be 1, "
+                              "corresponding to ~2.5 km resolution. A value of 2 corresponds to ~5 km resolution, etc."
+                              )
 
         # Integration order
-        var = _create_variable(ncfile, '%s_INTEGRATION_ORDER'%prefix, L21_dict['integration_order'], 
+        var = _create_variable(ncfile, '%s_Integration_Order'%prefix, L21_dict['integration_order'], 
                               dimensions=(),
                               format_nc='i1', format_fortran='I', desc='Order used to discretize the integral for inversion: 0=Riemann, 1=Trapezoidal', 
                               display_type='scalar', field_name='Order', fill_value=None, label_axis='Order', bin_location=0.5,
                               units='', valid_min=np.int8(0), valid_max=np.int8(1), var_type='metadata', chunk_sizes=1,
-                              notes="""In formulating the inversion, an assumption must be made regarding the choice of basis functions, 
-                              which can be thought of as an assumption regarding the behavior of the wind and amplitude within each altitude 
-                              layer. The most basic assumption is that these quantities are constant within each altitude layer, which corresponds 
-                              to INTEGRATION_ORDER=0. However, if it is assumed that the variation within each layer is linear, 
-                              INTEGRATION_ORDER=1. This sacrifices precision to improve vertical resolution.
-                              """)
+                              notes="In formulating the inversion, an assumption must be made regarding the choice of basis functions, "
+                              "which can be thought of as an assumption regarding the behavior of the wind and amplitude within each altitude "
+                              "layer. The most basic assumption is that these quantities are constant within each altitude layer, which corresponds "
+                              "to Integration_Order=0. However, if it is assumed that the variation within each layer is linear, "
+                              "Integration_Order=1. This sacrifices precision to improve vertical resolution."
+                              )
 
         # How the top layer was handled in the inversion
-        var = _create_variable(ncfile, '%s_TOP_LAYER_MODEL'%prefix, L21_dict['top_layer'], 
+        var = _create_variable(ncfile, '%s_Top_Layer_Model'%prefix, L21_dict['top_layer'], 
                               dimensions=(),
                               format_nc=str, format_fortran='A', desc='How the top altitudinal layer is handled in the inversion: "exp" or "thin"', 
                               display_type='scalar', field_name='Top Layer', fill_value=None, label_axis='Top Layer', bin_location=0.5,
                               units='', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
-                              notes="""In formulating the inversion, an assumption must be made about the shape of the emission rate profile 
-                              above the top measured altitude, since this shape is not measured. It can be assumed to go to zero 
-                              (TOP_LAYER_MODEL="thin") or assumed to fall off exponentially with a scale height of 26 km, a value extracted 
-                              from running a variety of airglow models (TOP_LAYER_MODEL="exp"). Usually this choice will not affect the 
-                              inversion significantly. In cases where it does, the quality variable will be decreased. 
-                              """)    
+                              notes="In formulating the inversion, an assumption must be made about the shape of the emission rate profile "
+                              "above the top measured altitude, since this shape is not measured. It can be assumed to go to zero "
+                              "(Top_Layer_Model=\"thin\") or assumed to fall off exponentially with a scale height of 26 km, a value extracted "
+                              "from running a variety of airglow models (Top_Layer_Model=\"exp\"). Usually this choice will not affect the "
+                              "inversion significantly. In cases where it does, the quality variable will be decreased."
+                              )    
             
         ncfile.close()
         
@@ -2007,7 +2000,7 @@ def read_info_file(info_fn):
                                         <other parameters>
 
                                         [FILES]
-                                        ICON_L1_MIGHTI-A_SCIENCE_2017-03-03_191803_v04r006.NC
+                                        ICON_L1_MIGHTI-A_Science_2017-03-03_191803_v04r006.NC
                                         
                                         
     OUTPUTS:
@@ -2057,7 +2050,8 @@ def level1_to_level21(info_fn):
     input arguments specified via an information file. Many files may be specified in the information
     file; this routine loops over all files specified. For each file, the processing is run twice:
     once for 'red' and once for 'green'. The output L2.1 files will be saved to the Output folder in
-    the directory specified in the information file.
+    the directory specified in the information file. Summary plot(s) will also be created in the Output
+    folder.
     
     INPUTS:
     
@@ -2069,14 +2063,13 @@ def level1_to_level21(info_fn):
                                         <other parameters>
 
                                         [FILES]
-                                        ICON_L1_MIGHTI-A_SCIENCE_2017-03-03_191803_v04r006.NC
+                                        ICON_L1_MIGHTI-A_Science_2017-03-03_191803_v04r006.NC
                                         
     OUTPUTS:   
     
       *  ret     -- TYPE:str. '' if everything worked. If not, a human-readable error message for each file that failed
     
     '''    
-    
     
     info, L1_fns = read_info_file(info_fn)
     
@@ -2110,7 +2103,13 @@ def level1_to_level21(info_fn):
             except Exception as e:
                 failed_L1_fns.append(L1_fn)
                 failure_messages.append('Failed processing:\n\tL1_file = %s\n\tColor   = %s\n%s\n'%(L1_fn,emission_color,traceback.format_exc()))
-                
+    
+    # Summary plots
+    try:
+        plot_level21(L21_fns, direc + 'Output/')
+    except Exception as e:
+        failure_messages.append('Failed creating summary plot:\n%s\n'%(traceback.format_exc()))
+    
     if not failure_messages: # Everything worked
         return ''
     
@@ -2154,86 +2153,83 @@ def level21_to_dict(L21_fns):
                   * emission_color  -- TYPE:str,                     'red' or 'green'.
                   * sensor          -- TYPE:list(nt),                each element is 'A' or 'B'
                   * source_files    -- TYPE:list of str,             A copy of the input.
+                  * acknowledgement -- TYPE:str,                     The Acknowledgment attribute in the first file
                   
     '''
     
     if len(L21_fns)==0:
         raise ValueError('No files specified')
     
-    # Open the first file to see how many altitude bins there are
-    fn = L21_fns[0]
-    try:
-        d = netCDF4.Dataset(fn)
-    except IOError as e:
-        raise IOError('File not found: %s' % fn)
-    sens  = d.Instrument[-1] # 'A' or 'B'
-    color = fn.split('/')[-1].split('_')[3].split('-')[-1]     # RED or GREEN
-    first_color = color
-    prefix = 'ICON_L2_MIGHTI_%s_%s' % (sens, color.upper())
-    ny = len(d.variables['%s_ALTITUDE'%prefix])
-    nt = len(L21_fns)
-    d.close()
-    
-    lat = np.zeros((ny,nt))
-    lon = np.zeros((ny,nt))
-    alt = np.zeros((ny,nt))
-    los_wind = np.zeros((ny,nt))
-    los_wind_error = np.zeros((ny,nt))
-    local_az = np.zeros((ny,nt))   
-    amp = np.zeros((ny,nt))
-    time = np.zeros(nt, dtype=object)
-    exp_time = np.zeros(nt)
-    icon_lat = np.zeros(nt)
-    icon_lon = np.zeros(nt)
-    icon_alt = np.zeros(nt)
-    sensor = []
+    # Initialize variables to empty list
+    variables = ['lat',
+                 'lon',
+                 'alt',
+                 'los_wind',
+                 'los_wind_error',
+                 'local_az',
+                 'amp',
+                 'time',
+                 'icon_lat',
+                 'icon_lon',
+                 'icon_alt',
+                 'exp_time',
+                 'sensor',]
 
-    for i in range(nt):
-        fn = L21_fns[i]
-        d = netCDF4.Dataset(fn)
+    z = {}
+    for v in variables:
+        z[v] = []
+
+    first_color = L21_fns[0].split('/')[-1].split('_')[3].split('-')[-1] # Red or Green
+    for fn in L21_fns:
         try:
             d = netCDF4.Dataset(fn)
         except IOError as e:
-            raise IOError('File not found: %s' % fn)
+            d.close()
+            print 'Error reading file: %s' % fn
+            raise
         sens  = d.Instrument[-1] # 'A' or 'B'
-        color = fn.split('/')[-1].split('_')[3].split('-')[-1]     # Red or Green
-        assert color == first_color, "Input files do not have the same emission color"
-        prefix = 'ICON_L2_MIGHTI_%s_%s' % (sens, color.upper())
+        color = fn.split('/')[-1].split('_')[3].split('-')[-1] # Red or Green
+        prefix = 'ICON_L2_MIGHTI_%s_%s' % (sens, color.capitalize())    
 
-        lat[:,i] =            d.variables['%s_LATITUDE' % prefix][...]
-        lon[:,i] =            d.variables['%s_LONGITUDE' % prefix][...]
-        alt[:,i] =     1e-3 * d.variables['%s_ALTITUDE' % prefix][...] # m to km
-        los_wind[:,i] =       d.variables['%s_LINE_OF_SIGHT_WIND' % prefix][...]
-        los_wind_error[:,i] = d.variables['%s_LINE_OF_SIGHT_WIND_ERROR' % prefix][...]
-        local_az[:,i] =       d.variables['%s_LINE_OF_SIGHT_AZIMUTH' % prefix][...]
-        amp[:,i] =            d.variables['%s_FRINGE_AMPLITUDE' % prefix][...]
-        icon_lat[i] =         d.variables['%s_SPACECRAFT_LATITUDE' % prefix][...].item()
-        icon_lon[i] =         d.variables['%s_SPACECRAFT_LONGITUDE' % prefix][...].item()
-        icon_alt[i] =         d.variables['%s_SPACECRAFT_ALTITUDE' % prefix][...].item()
-        time_msec =           d.variables['EPOCH'][...].item()
-        time[i] = datetime(1970,1,1) + timedelta(seconds = 1e-3*time_msec)
-        exp_time[i] = float(d.Time_Resolution.split(' ')[0])
-        sensor.append(sens)
-        d.close()    
+        # Load all variables
+        z['lat'].append(           d.variables['%s_Latitude' % prefix][...])
+        z['lon'].append(           d.variables['%s_Longitude' % prefix][...])
+        z['alt'].append(           d.variables['%s_Altitude' % prefix][...]*1e-3) # m to km
+        z['los_wind'].append(      d.variables['%s_Line_of_Sight_Wind' % prefix][...])
+        z['los_wind_error'].append(d.variables['%s_Line_of_Sight_Wind_Error' % prefix][...])
+        z['local_az'].append(      d.variables['%s_Line_of_Sight_Azimuth' % prefix][...])
+        z['amp'].append(           d.variables['%s_Fringe_Amplitude' % prefix][...])
+        time_msec =                d.variables['Epoch'][...].item()
+        z['time'].append(datetime(1970,1,1) + timedelta(seconds = 1e-3*time_msec))
+        z['icon_lat'].append(      d.variables['%s_Spacecraft_Latitude' % prefix][...].item())
+        z['icon_lon'].append(      d.variables['%s_Spacecraft_Longitude' % prefix][...].item())
+        z['icon_alt'].append(      d.variables['%s_Spacecraft_Altitude' % prefix][...].item())
+        z['exp_time'].append(float(d.Time_Resolution.split(' ')[0]))
+        z['sensor'].append(sens)
+
+        ack = d.Acknowledgement    
+        assert color == first_color, "Input files do not have the same emission color"
+        d.close()
+
+    # Reorganize into masked arrays or arrays, as appropriate
+    for v in variables:
+        # Check if the variable should be cast to a masked array or regular array
+        ismasked = any([isinstance(x,np.ma.MaskedArray) for x in z[v]])
+        if ismasked:
+            z[v] = np.ma.vstack(z[v]).T
+        else:
+            z[v] = np.vstack(z[v]).T
+        # If the shape is 1 by something (i.e., only one value per time),
+        # then just make it a 1D array instead of 2D
+        if np.shape(z[v])[0] == 1:
+            z[v] = z[v][0,:]
+
+    # Add extra global information
+    z['acknowledgement'] = ack
+    z['emission_color'] = color.lower()
+    z['source_files'] = L21_fns
     
-    L21_dict = {}
-    L21_dict['lat'] = lat
-    L21_dict['lon'] = lon
-    L21_dict['alt'] = alt
-    L21_dict['los_wind'] = los_wind
-    L21_dict['los_wind_error'] = los_wind_error
-    L21_dict['local_az'] = local_az
-    L21_dict['amp'] = amp
-    L21_dict['time'] = time
-    L21_dict['icon_lat'] = icon_lat
-    L21_dict['icon_lon'] = icon_lon
-    L21_dict['icon_alt'] = icon_alt
-    L21_dict['exp_time'] = exp_time
-    L21_dict['emission_color'] = color.lower()
-    L21_dict['sensor'] = sensor
-    L21_dict['source_files'] = L21_fns
-    
-    return L21_dict
+    return z
 
     
     
@@ -2312,10 +2308,10 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                                                                    estimates disagree
                                                                             * 9  = unknown error
                                                                             
-                   * time            -- TYPE:array(ny,nx),    UNITS:none. The average between the time of the MIGHTI A 
+                   * epoch_full      -- TYPE:array(ny,nx),    UNITS:none. The average between the time of the MIGHTI A 
                                                                           and B measurements that contribute to this 
                                                                           grid point, given as a datetime object. 
-                   * epoch           -- TYPE:array(nx),       UNITS:none. mean(time,axis=0), accounting for missing values, and
+                   * epoch           -- TYPE:array(nx),       UNITS:none. mean(epoch_full,axis=0), accounting for missing values, and
                                                                           given as a datetime object. This is useful because 
                                                                           while the time varies along a column, it doesn't vary 
                                                                           much (+/- 30 seconds or so).
@@ -2324,12 +2320,12 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                    * time_delta      -- TYPE:array(ny,nx),    UNITS:s.    The difference between the time of the MIGHTI
                                                                           A and B measurements that contribute to this 
                                                                           grid point.
-                   * ver_A           -- TYPE:array(ny,nc),    UNITS:none. The fringe amplitude measured by MIGHTI A (roughly
+                   * fringe_amp_A    -- TYPE:array(ny,nc),    UNITS:none. The fringe amplitude measured by MIGHTI A (roughly
                                                                           proportional to VER)
-                   * ver_B           -- TYPE:array(ny,nc),    UNITS:none. The fringe amplitude measured by MIGHTI B (roughly
+                   * fringe_amp_B    -- TYPE:array(ny,nc),    UNITS:none. The fringe amplitude measured by MIGHTI B (roughly
                                                                           proportional to VER)
-                   * ver             -- TYPE:array(ny,nc),    UNITS:none. Mean of the above two quantitiies.
-                   * ver_rel_diff    -- TYPE:array(ny,nx),    UNITS:none. The difference between the fringe amplitude 
+                   * fringe_amp      -- TYPE:array(ny,nc),    UNITS:none. Mean of the above two quantitiies.
+                   * fringe_amp_rel_diff -- TYPE:array(ny,nx),UNITS:none. The difference between the fringe amplitude 
                                                                           of the MIGHTI A and B measurements that 
                                                                           contribute to this grid point, divided by the
                                                                           mean. When this is high, it indicates that 
@@ -2337,6 +2333,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                    * emission_color  -- TYPE:str,                         'red' or 'green'.        
                    * source_files    -- TYPE:list of str,                 All the files used to create the data product,
                                                                           including the full paths.
+                   * acknowledgement -- TYPE:str,                         The Acknowlegment copied from the L2.1 files
     '''
 
     ################################## Parse Inputs ####################################
@@ -2351,8 +2348,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     lat_A      =       L21_A_dict['lat']
     lon_A_raw  =       L21_A_dict['lon']
     alt_A      =       L21_A_dict['alt']
-    los_wind_A =       L21_A_dict['los_wind']
-    los_wind_A_err =   L21_A_dict['los_wind_error']
+    los_wind_A =       np.ma.filled(L21_A_dict['los_wind'], np.nan) # convert from masked array to numpy array
+    los_wind_A_err =   np.ma.filled(L21_A_dict['los_wind_error'], np.nan) # convert from masked array to numpy array
     local_az_A =       L21_A_dict['local_az']
     amp_A      =       L21_A_dict['amp']
     time_A     =       L21_A_dict['time']
@@ -2363,8 +2360,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     lat_B      =       L21_B_dict['lat']
     lon_B_raw  =       L21_B_dict['lon']
     alt_B      =       L21_B_dict['alt']
-    los_wind_B =       L21_B_dict['los_wind']
-    los_wind_B_err =   L21_B_dict['los_wind_error']
+    los_wind_B =       np.ma.filled(L21_B_dict['los_wind'], np.nan) # convert from masked array to numpy array
+    los_wind_B_err =   np.ma.filled(L21_B_dict['los_wind_error'], np.nan) # convert from masked array to numpy array
     local_az_B =       L21_B_dict['local_az']
     amp_B      =       L21_B_dict['amp']
     time_B     =       L21_B_dict['time']
@@ -2688,17 +2685,18 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     L22_dict['u_error'] = U_err
     L22_dict['v_error'] = V_err
     L22_dict['error_flags'] = error_flags
-    L22_dict['time'] = time # 2D
+    L22_dict['epoch_full'] = time # 2D
     L22_dict['epoch'] = epoch # 1D
     L22_dict['time_delta'] = time_delta
     L22_dict['time_start'] = time_start
     L22_dict['time_stop'] = time_stop
-    L22_dict['ver_A'] = ver_A
-    L22_dict['ver_B'] = ver_B
-    L22_dict['ver'] = ver
-    L22_dict['ver_rel_diff'] = ver_rel_diff
+    L22_dict['fringe_amp_A'] = ver_A
+    L22_dict['fringe_amp_B'] = ver_B
+    L22_dict['fringe_amp'] = ver
+    L22_dict['fringe_amp_rel_diff'] = ver_rel_diff
     L22_dict['emission_color'] = emission_color
     L22_dict['source_files'] = np.concatenate((L21_A_dict['source_files'], L21_B_dict['source_files']))
+    L22_dict['acknowledgement'] = L21_A_dict['acknowledgement']
     L22_dict['wind_quality'] = np.nan*np.ones((N_alts,N_lons)) # TODO
     
     return L22_dict
@@ -2736,7 +2734,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
     
     #################### Compile variables to write in file ######################
     ### Timing:
-    t_all = filter(None, L22_dict['time'].flatten()) # Extract all non-None grid times as a 1-D array
+    t_all = filter(None, L22_dict['epoch_full'].flatten()) # Extract all non-None grid times as a 1-D array
     t_start = L22_dict['time_start']
     t_stop  = L22_dict['time_stop']
     t_mid   = t_start + timedelta(seconds=(t_stop - t_start).total_seconds()/2) # midpoint time
@@ -2751,41 +2749,12 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
     user_name = getpass.getuser()
     
     ### Parent files
-    # Since there are so many inputs, let's just use filenames with Linux-style wildcards for
-    # date, version, revision, and (for the previous and next day's only) hour.
-    # Read source filenames and record unique dates, versions, revisions, etc
-    uniq_dates = []
-    uniq_ver = []
-    uniq_rev = []
-    hours_per_date = {}
+    parents = [] # This will go in global attr Parents
     for source_fn in L22_dict['source_files']:
-        datestr, hhmmss, verrev = source_fn.split('/')[-1].split('.')[0].split('_')[-3:] 
-        hh = hhmmss[:2]
-        ver = verrev[:3]
-        rev = verrev[3:]
-        if datestr not in uniq_dates:
-            uniq_dates.append(datestr)
-            hours_per_date[datestr] = []
-        if hh not in hours_per_date[datestr]:
-            hours_per_date[datestr].append(hh)
-        if ver not in uniq_ver:
-            uniq_ver.append(ver)
-        if rev not in uniq_rev:
-            uniq_rev.append(rev)
-    # Construct filenames with Linux-style wildcards
-    parents = []
-    ver = uniq_ver[0] # e.g., "v01"
-    if len(uniq_ver) > 1: # Then just use "v??"
-        ver = 'v??'
-    rev = uniq_rev[0] # e.g., "r001"
-    if len(uniq_rev) > 1: # Then jus tuse "r???"
-        rev = 'r???'
-    for date in uniq_dates:
-        hhmmss = '??????'
-        if len(hours_per_date[date]) == 1: # <1 hour of data was used from this date, so explicitly state it
-            hhmmss = '%s????' % (hours_per_date[date][0])
-        parents.append('NC > ICON_L2_MIGHTI-?_Line-of-Sight-Wind-%s_%s_%s_%s%s' % (L22_dict['emission_color'].capitalize(), date, hhmmss, ver, rev))
-
+        s = source_fn.split('/')[-1].split('.')
+        pre = '.'.join(s[:-1])
+        post = s[-1].upper()
+        parents.append('%s > %s' % (post, pre))
 
     ######################### Open file for writing ##############################
     L22_fn = 'ICON_L2_MIGHTI_Vector-Wind-%s_%s_v%02ir%03i.NC' % (L22_dict['emission_color'].capitalize(),
@@ -2797,38 +2766,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
     try: # always close file if an error occurs
     
         ########################## Global Attributes #################################
-        ncfile.setncattr_string('Acknowledgement',       ''.join(("This is a data product from the NASA Ionospheric Connection Explorer mission, ",
-                                                                  "an Explorer launched in June 2017.\n",
-                                                                  "\n",
-                                                                  "Responsibility of the mission science falls to the Principal Investigator, ",
-                                                                  "Dr. Thomas Immel at UC Berkeley.\n",
-                                                                  "\n",
-                                                                  "Validation of the L1 data products falls to the instrument lead ",
-                                                                  "investigators/scientists.\n",
-                                                                  "  * EUV  Dr. Eric Korpela\n",
-                                                                  "  * FUV  Dr. Harald Frey\n",
-                                                                  "  * MIGHTI  Dr. Chris Englert\n",
-                                                                  "  * IVM  Dr. Roderick Heelis\n",
-                                                                  "\n",
-                                                                  "Validation of the L2 data products falls to those responsible for those products.\n",
-                                                                  "  * O/N2  Dr. Andrew Stephan\n",
-                                                                  "  * Daytime (EUV) O+ profiles  Dr. Andrew Stephan\n",
-                                                                  "  * Nighttime (FUV) O+ profiles  Dr. Farzad Kamalabadi\n",
-                                                                  "  * Neutral Wind profiles  Dr. Jonathan Makela\n",
-                                                                  "  * Neutral Temperature profiles  Dr. Chris Englert\n",
-                                                                  "\n",
-                                                                  "Responsibility for Level 4 products are detailed on the ICON website ",
-                                                                  "(http://icon.ssl.berkeley.edu).\n",
-                                                                  "\n",
-                                                                  "Overall validation of the products is overseen by the ICON Project Scientist ",
-                                                                  "Dr. Scott England.\n",
-                                                                  "\n",
-                                                                  "NASA oversight for all products is provided by the Mission Scientist ",
-                                                                  "Dr. Douglas Rowland.\n",
-                                                                  "\n",
-                                                                  "Users of these data should contact and acknowledge the Principal Investigator ",
-                                                                  "Dr. Immel and the party directly responsible for the data product and the NASA ",
-                                                                  "Contract Number NNG12FA45C from the Explorers Project Office." )))
+        ncfile.setncattr_string('Acknowledgement',                L22_dict['acknowledgement'])
         ncfile.setncattr_string('ADID_Ref',                       'NASA Contract > NNG12FA45C')
         ncfile.setncattr_string('Calibration_File',               '')
         ncfile.setncattr_string('Conventions',                    'SPDF ISTP/IACG Modified for NetCDF')
@@ -2868,31 +2806,30 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         ncfile.setncattr_string('Text',                           'ICON explores the boundary between Earth and space - the ionosphere - ' +\
                                                                   'to understand the physical connection between our world and the immediate '+\
                                                                   'space environment around us. Visit \'http://icon.ssl.berkeley.edu\' for more details.')
-        ncfile.setncattr_string('Text_Supplement',                ["""This data product contains cardinal (i.e., zonal and meridional) thermospheric winds 
-        obtained by combining Level 2.1 (line-of-sight winds) from MIGHTI A and MIGHTI B. The cardinal winds are given as a function of time 
-        (spanning 24 hours) and altitude (spanning nominally 90-300 km). There is one file per emission color (red or green).""",
-        """
-        Cardinal wind observations are enabled by the 90-degree offset between the two MIGHTI sensors. First, MIGHTI A measures a wind component along 
-        its line of sight. Five to eight minutes later, depending on tangent point altitude, the spacecraft has moved to a position such that MIGHTI B 
-        measures a nearly orthogonal wind component at approximately the same location. A coordinate rotation is performed on the two line-of-sight 
-        components to obtain the northward and eastward components reported in this file. The assumption is that the thermospheric wind has not changed 
-        during this interval. Because the Level 2.1 data are naturally on an irregular grid, 
-        they are first interpolated to a regular grid of longitude and altitude before the coordinate rotation is performed. See Harding et al. [2017, 
-        doi:10.1007/s11214-017-0359-3] for more details of the Level 2.2 algorithm.
-        """])
+        ncfile.setncattr_string('Text_Supplement',                ['This data product contains cardinal (i.e., zonal and meridional) thermospheric winds ' +
+        'obtained by combining Level 2.1 (line-of-sight winds) from MIGHTI A and MIGHTI B. The cardinal winds are given as a function of time ' +
+        '(spanning 24 hours) and altitude (spanning nominally 90-300 km). There is one file per emission color (red or green).',
+         
+        'Cardinal wind observations are enabled by the 90-degree offset between the two MIGHTI sensors. First, MIGHTI A measures a wind component along '+
+        'its line of sight. Five to eight minutes later, depending on tangent point altitude, the spacecraft has moved to a position such that MIGHTI B '+
+        'measures a nearly orthogonal wind component at approximately the same location. A coordinate rotation is performed on the two line-of-sight '+
+        'components to obtain the northward and eastward components reported in this file. The assumption is that the thermospheric wind has not changed '+
+        'during this interval. Because the Level 2.1 data are naturally on an irregular grid, '+
+        'they are first interpolated to a regular grid of longitude and altitude before the coordinate rotation is performed. See Harding et al. [2017, '+
+        'doi:10.1007/s11214-017-0359-3] for more details of the Level 2.2 algorithm.'])
         ncfile.setncattr_string('Time_Resolution',                '30 or 60 seconds')
         ncfile.setncattr_string('Title',                          'ICON MIGHTI Cardinal Vector Winds (DP 2.2)')
         
 
 
         ################################## Dimensions ########################################
-        prefix = 'ICON_L2_MIGHTI_%s' % (L22_dict['emission_color'].upper()) # variable prefix
-        var_alt_name = '%s_ALTITUDE'%prefix
+        prefix = 'ICON_L2_MIGHTI_%s' % (L22_dict['emission_color'].capitalize()) # variable prefix
+        var_alt_name = '%s_Altitude'%prefix
         
         ny,nx = np.shape(L22_dict['u'])
-        ncfile.createDimension('EPOCH',nx)
+        ncfile.createDimension('Epoch',nx)
         ncfile.createDimension(var_alt_name, ny)
-        ncfile.createDimension('N_FLAGS', np.shape(L22_dict['error_flags'])[2])
+        ncfile.createDimension('N_Flags', np.shape(L22_dict['error_flags'])[2])
         
 
 
@@ -2903,8 +2840,9 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         # Two timing variables are used: The simple one which is 1 dimensional, and the 
         # more correct 2 dimensional one, since the time can vary slightly along altitude,
         # but only by +/- 30-60 seconds.
-        # EPOCH = 1 dimensional
-        # ICON_L2_RED/GREEN_MIGHTI_TIME = 2 dimensional
+        # Epoch = 1 dimensional
+        # Epoch_Full = 2 dimensional
+        # Each variable has two forms: "milliseconds since Jan 1, 1970" and a human-readable string
         
         epoch_msec = np.zeros(nx, dtype=np.int64)
         t_fillval = np.int64(-1)
@@ -2913,132 +2851,161 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                 epoch_msec[j] = t_fillval
             else:
                 epoch_msec[j] = np.int64(np.round((L22_dict['epoch'][j] - datetime(1970,1,1)).total_seconds()*1e3))
-        var = _create_variable(ncfile, 'EPOCH', epoch_msec, 
-                              dimensions=('EPOCH'), depend_0 = 'EPOCH',
+        var = _create_variable(ncfile, 'Epoch', epoch_msec, 
+                              dimensions=('Epoch'), depend_0 = 'Epoch',
                               format_nc='i8', format_fortran='I', desc='Sample time, average of A and B measurements. Number of msec since Jan 1, 1970.', 
-                              display_type='scalar', field_name='Time', fill_value=t_fillval, label_axis='Time', bin_location=0.5,
+                              display_type='time_series', field_name='Time', fill_value=t_fillval, label_axis='Time', bin_location=0.5,
                               units='ms', valid_min=0, valid_max=1000*365*86400*1000, var_type='support_data', chunk_sizes=[nx],
-                              notes="""A one-dimensional array defining the time dimension of the two-dimensional data grid (the other dimension being 
-                              altitude). This is the average of the MIGHTI-A and 
-                              MIGHTI-B sample times, which differ by 5-8 minutes. The matchup between MIGHTI-A and B happens at slightly different 
-                              times at different altitudes, a complication which is ignored by this variable. The effect is small (plus or minus 30-60 
-                              seconds), but in cases where it is important, it is recommended to use the alternative time variable 
-                              ICON_L2_MIGHTI_RED/GREEN_TIME, which is two dimensional and captures the variation with altitude.
-                              """)
+                              notes="A one-dimensional array defining the time dimension of the two-dimensional data grid (the other dimension being "
+                              "altitude). This is the average of the MIGHTI-A and "
+                              "MIGHTI-B sample times, which differ by 5-8 minutes. The matchup between MIGHTI-A and B happens at slightly different "
+                              "times at different altitudes, a complication which is ignored by this variable. The effect is small (plus or minus 30-60 "
+                              "seconds), but in cases where it is important, it is recommended to use the alternative time variable "
+                              "Epoch_Full, which is two dimensional and captures the variation with altitude."
+                              )
         
-        t_msec = np.zeros((ny,nx),dtype=np.int64)
+        epoch_full_msec = np.zeros((ny,nx),dtype=np.int64)
         for i in range(ny):
             for j in range(nx):
-                if L22_dict['time'][i,j] is None:
-                    t_msec[i,j] = t_fillval
+                if L22_dict['epoch_full'][i,j] is None:
+                    epoch_full_msec[i,j] = t_fillval
                 else:
-                    t_msec[i,j] = np.int64(np.round((L22_dict['time'][i,j] - datetime(1970,1,1)).total_seconds()*1e3))        
-        # Also include a more human-readable, intuitive variable
-        var = _create_variable(ncfile, '%s_TIME'%prefix, t_msec.T, 
-                              dimensions=('EPOCH', var_alt_name), depend_0 = 'EPOCH', depend_1 = var_alt_name,
+                    epoch_full_msec[i,j] = np.int64(np.round((L22_dict['epoch_full'][i,j] - datetime(1970,1,1)).total_seconds()*1e3))        
+        var = _create_variable(ncfile, 'Epoch_Full', epoch_full_msec.T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='i8', format_fortran='I', desc='Sample time, midpoint of A and B measurements. Number of msec since Jan 1, 1970.', 
-                              display_type='scalar', field_name='Time', fill_value=t_fillval, label_axis='Time', bin_location=0.5,
+                              display_type='image', field_name='Time', fill_value=t_fillval, label_axis='Time', bin_location=0.5,
                               units='ms', valid_min=0, valid_max=1000*365*86400*1000, var_type='support_data', chunk_sizes=[nx,ny],
-                              notes="""See the notes for the variable EPOCH. This variable is the same as EPOCH but contains a second dimension, 
-                              which captures the small (30-60 second) variation of time with altitude. For most applications this is expected to 
-                              be negligible, and EPOCH can be used instead of this variable. Also see the variable TIME_DELTA, which contains 
-                              the difference between the MIGHTI-A and MIGHTI-B times that contributed to each point. (This variable 
-                              contains the average).
-                              """)
+                              notes="See the notes for the variable Epoch. This variable is the same as Epoch but contains a second dimension, "
+                              "which captures the small (30-60 second) variation of time with altitude. For most applications this is expected to "
+                              "be negligible, and Epoch can be used instead of this variable. Also see the variable Time_Delta, which contains "
+                              "the difference between the MIGHTI-A and MIGHTI-B times that contributed to each point. (This variable "
+                              "contains the average)."
+                              )
         
+        # Human readable versions of those two variables
+        utctime = []
+        for t in L22_dict['epoch']:
+            if t is None:
+                utctime.append('')
+            else:
+                utctime.append(t.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3])
+        utctime = np.array(utctime)
+        var = _create_variable(ncfile, '%s_UTC_Time'%prefix, utctime, 
+                              dimensions=('Epoch'), depend_0 = 'Epoch',
+                              format_nc=str, format_fortran='A', desc='Sample time, average of A and B measurements.', 
+                              display_type='time_series', field_name='Time', fill_value=None, label_axis='Time', bin_location=0.5,
+                              units='', valid_min=None, valid_max=None, var_type='support_data', chunk_sizes=[nx],
+                              notes="This variable is the same as Epoch but is formatted as a human-readable string. Missing "
+                              "grid points are labeled with empty strings.")       
+        
+        utctime_full = np.empty((ny,nx), dtype='S23')
+        for i in range(ny):
+            for j in range(nx):
+                t = L22_dict['epoch_full'][i,j]
+                if t is None:
+                    utctime_full[i,j] = ''
+                else:
+                    utctime_full[i,j] = t.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]
+        #utctime_full = np.array(utctime_full)
+        var = _create_variable(ncfile, '%s_UTC_Time_Full'%prefix, utctime_full.T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc=str, format_fortran='A', desc='Sample time, average of A and B measurements.', 
+                              display_type='image', field_name='Time', fill_value=None, label_axis='Time', bin_location=0.5,
+                              units='', valid_min=None, valid_max=None, var_type='support_data', chunk_sizes=[nx,ny],
+                              notes="This variable is the same as Epoch_Full but is formatted as a human-readable string. Missing "
+                              "grid points are labeled with empty strings.")       
         
         ######### Data Variables #########
         
         # Zonal Wind
-        var = _create_variable(ncfile, '%s_ZONAL_WIND'%prefix, L22_dict['u'].T, 
-                              dimensions=('EPOCH', var_alt_name), depend_0 = 'EPOCH', depend_1 = var_alt_name,
+        var = _create_variable(ncfile, '%s_Zonal_Wind'%prefix, L22_dict['u'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Zonal component of the horizontal wind. Positive Eastward.', 
                               display_type='image', field_name='Zonal Wind', fill_value=None, label_axis='', bin_location=0.5,
                               units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
-                              notes="""The zonal (positive eastward) and meridional (positive northward) winds are the primary 
-                              data product in this file. They are defined on a grid with dimensions of time and altitude, 
-                              spanning 24 hours and nominally 90-300 km (150-300 km for the red channel). The altitude, time, 
-                              latitude and longitude corresponding to each point in the grid are given by other variables in 
-                              this file. It should be noted that while each measurement is ascribed to a particular latitude, 
-                              longitude, altitude, and time, it is actually an average over many hundreds of kilometers 
-                              horizontally and 2.5-30 kilometers vertically (depending on the binning). It also assumes stationarity 
-                              over the 5-8 minutes between the MIGHTI-A and B measurements used for each point. See Harding et 
-                              al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm.
-                              """)
+                              notes="The zonal (positive eastward) and meridional (positive northward) winds are the primary "
+                              "data product in this file. They are defined on a grid with dimensions of time and altitude, "
+                              "spanning 24 hours and nominally 90-300 km (150-300 km for the red channel). The altitude, time, "
+                              "latitude and longitude corresponding to each point in the grid are given by other variables in "
+                              "this file. It should be noted that while each measurement is ascribed to a particular latitude, "
+                              "longitude, altitude, and time, it is actually an average over many hundreds of kilometers "
+                              "horizontally and 2.5-30 kilometers vertically (depending on the binning). It also assumes stationarity "
+                              "over the 5-8 minutes between the MIGHTI-A and B measurements used for each point. See Harding et "
+                              "al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."
+                              )
         
         # Meridional Wind
-        var = _create_variable(ncfile, '%s_MERIDIONAL_WIND'%prefix, L22_dict['v'].T, 
-                              dimensions=('EPOCH', var_alt_name), depend_0 = 'EPOCH', depend_1 = var_alt_name,
+        var = _create_variable(ncfile, '%s_Meridional_Wind'%prefix, L22_dict['v'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Meridional component of the horizontal wind. Positive Northward.', 
                               display_type='image', field_name='Meridional Wind', fill_value=None, label_axis='', bin_location=0.5,
                               units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
-                              notes="""The zonal (positive eastward) and meridional (positive northward) winds are the primary 
-                              data product in this file. They are defined on a grid with dimensions of time and altitude, 
-                              spanning 24 hours and nominally 90-300 km (150-300 km for the red channel). The altitude, time, 
-                              latitude and longitude corresponding to each point in the grid are given by other variables in 
-                              this file. It should be noted that while each measurement is ascribed to a particular latitude, 
-                              longitude, altitude, and time, it is actually an average over many hundreds of kilometers 
-                              horizontally and 2.5-30 kilometers vertically (depending on the binning). It also assumes stationarity 
-                              over the 5-8 minutes between the MIGHTI-A and B measurements used for each point. See Harding et 
-                              al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm.
-                              """)    
+                              notes="The zonal (positive eastward) and meridional (positive northward) winds are the primary "
+                              "data product in this file. They are defined on a grid with dimensions of time and altitude, "
+                              "spanning 24 hours and nominally 90-300 km (150-300 km for the red channel). The altitude, time, "
+                              "latitude and longitude corresponding to each point in the grid are given by other variables in "
+                              "this file. It should be noted that while each measurement is ascribed to a particular latitude, "
+                              "longitude, altitude, and time, it is actually an average over many hundreds of kilometers "
+                              "horizontally and 2.5-30 kilometers vertically (depending on the binning). It also assumes stationarity "
+                              "over the 5-8 minutes between the MIGHTI-A and B measurements used for each point. See Harding et "
+                              "al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."
+                              )    
                                       
         # Zonal Wind Error
-        var = _create_variable(ncfile, '%s_ZONAL_WIND_ERROR'%prefix, L22_dict['u_error'].T, 
-                              dimensions=('EPOCH', var_alt_name), depend_0 = 'EPOCH', depend_1 = var_alt_name,
+        var = _create_variable(ncfile, '%s_Zonal_Wind_Error'%prefix, L22_dict['u_error'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Error in the zonal wind estimate.', 
                               display_type='image', field_name='Zonal Wind Error', fill_value=None, label_axis='', bin_location=0.5,
                               units='m/s', valid_min=0.0, valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
-                              notes="""The statistical (1-sigma) error in the zonal wind, propagated from the error in the 
-                              L2.1 (line-of-sight wind) files. This is usually dominated by shot noise in the detectors, but 
-                              also includes the effects of dark and read noise, as well as calibrations errors  (e.g., the 
-                              zero wind calibration), and spacecraft pointing error (which affects the uncertainty in removing 
-                              the spacecraft velocity from the observed velocity). Other systematic errors or biases may exist 
-                              (e.g., the effect of gradients along the line of sight) which are not included in this variable.
-                              """)
+                              notes="The statistical (1-sigma) error in the zonal wind, propagated from the error in the "
+                              "L2.1 (line-of-sight wind) files. This is usually dominated by shot noise in the detectors, but "
+                              "also includes the effects of dark and read noise, as well as calibrations errors  (e.g., the "
+                              "zero wind calibration), and spacecraft pointing error (which affects the uncertainty in removing "
+                              "the spacecraft velocity from the observed velocity). Other systematic errors or biases may exist "
+                              "(e.g., the effect of gradients along the line of sight) which are not included in this variable."
+                              )
         
         # Meridional Wind Error
-        var = _create_variable(ncfile, '%s_MERIDIONAL_WIND_ERROR'%prefix, L22_dict['v_error'].T, 
-                              dimensions=('EPOCH', var_alt_name), depend_0 = 'EPOCH', depend_1 = var_alt_name,
+        var = _create_variable(ncfile, '%s_Meridional_Wind_Error'%prefix, L22_dict['v_error'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Error in the meridional wind estimate.', 
                               display_type='image', field_name='Meridional Wind Error', fill_value=None, label_axis='', bin_location=0.5,
                               units='m/s', valid_min=0.0, valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
-                              notes="""The statistical (1-sigma) error in the meridional wind, propagated from the error in the 
-                              L2.1 (line-of-sight wind) files. This is usually dominated by shot noise in the detectors, but 
-                              also includes the effects of dark and read noise, as well as calibrations errors  (e.g., the 
-                              zero wind calibration), and spacecraft pointing error (which affects the uncertainty in removing 
-                              the spacecraft velocity from the observed velocity). Other systematic errors or biases may exist 
-                              (e.g., the effect of gradients along the line of sight) which are not included in this variable.
-                              """) 
+                              notes="The statistical (1-sigma) error in the meridional wind, propagated from the error in the "
+                              "L2.1 (line-of-sight wind) files. This is usually dominated by shot noise in the detectors, but "
+                              "also includes the effects of dark and read noise, as well as calibrations errors  (e.g., the "
+                              "zero wind calibration), and spacecraft pointing error (which affects the uncertainty in removing "
+                              "the spacecraft velocity from the observed velocity). Other systematic errors or biases may exist "
+                              "(e.g., the effect of gradients along the line of sight) which are not included in this variable."
+                              ) 
         
         # Quality code
-        var = _create_variable(ncfile, '%s_WIND_QUALITY'%prefix, L22_dict['wind_quality'].T, 
-                              dimensions=('EPOCH', var_alt_name), depend_0 = 'EPOCH', depend_1 = var_alt_name,
+        var = _create_variable(ncfile, '%s_Wind_Quality'%prefix, L22_dict['wind_quality'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='A quantification of the quality, from 0 (Bad) to 1 (Good)', 
                               display_type='image', field_name='Wind Quality', fill_value=None, label_axis='Quality', bin_location=0.5,
                               units='arb', valid_min=0.0, valid_max=1.0, var_type='data', chunk_sizes=[nx,ny],
-                              notes=["""NOT YET IMPLEMENTED""",
-                                     """While the intent is that the WIND_ERROR variable accurately characterizes the statistical 
-                                     error in the wind data, it is possible that systematic errors are present, or that the statistical error 
-                                     estimation is not accurate. If it is suspected that this is the case, the quality will be less than 1.0. If 
-                                     the data are definitely unusable, the the quality will be 0.0 and the sample will be masked. Users should 
-                                     exercise caution when the quality is less than 1.0.
-                                     """]
-                                     )
+                              notes=["NOT YET IMPLEMENTED",
+                                     "While the intent is that the Wind_Error variable accurately characterizes the statistical "
+                                     "error in the wind data, it is possible that systematic errors are present, or that the statistical error "
+                                     "estimation is not accurate. If it is suspected that this is the case, the quality will be less than 1.0. If "
+                                     "the data are definitely unusable, the the quality will be 0.0 and the sample will be masked. Users should "
+                                     "exercise caution when the quality is less than 1.0."
+                                     ])
         
          # Fringe amplitude (combining MIGHTI-A and MIGHTI-B)
-        var = _create_variable(ncfile, '%s_FRINGE_AMPLITUDE'%prefix, L22_dict['ver'].T, 
-                              dimensions=('EPOCH', var_alt_name), depend_0 = 'EPOCH', depend_1 = var_alt_name,
+        var = _create_variable(ncfile, '%s_Fringe_Amplitude'%prefix, L22_dict['fringe_amp'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Fringe Amplitude', 
                               display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='', bin_location=0.5,
                               units='arb', valid_min=-1e30, valid_max=1e30, var_type='data', chunk_sizes=[nx,ny],
-                              notes="""An approximate volume emission rate (VER) profile in arbitrary units, estimated by combining 
-                              MIGHTI-A and MIGHTI-B data. Technically this is not the VER, but rather the amplitude of the fringes, 
-                              which has a dependence on thermospheric temperature and background emission. Thus, it does not truly 
-                              represent volume emission rate. However, it is a useful proxy. The units are arbitrary, as the 
-                              fringe amplitudes are not calibrated. See also variables FRINGE_AMPLITUDE_RELATIVE_DIFFERENCE, 
-                              FRINGE_AMPLITUDE_A, and FRINGE_AMPLITUDE_B.
-                              """
+                              notes="An approximate volume emission rate (VER) profile in arbitrary units, estimated by combining "
+                              "MIGHTI-A and MIGHTI-B data. Technically this is not the VER, but rather the amplitude of the fringes, "
+                              "which has a dependence on thermospheric temperature and background emission. Thus, it does not truly "
+                              "represent volume emission rate. However, it is a useful proxy. The units are arbitrary, as the "
+                              "fringe amplitudes are not calibrated. See also variables Fringe_Amplitude_Relative_Difference, "
+                              "Fringe_Amplitude_A, and Fringe_Amplitude_B."
                               )
         
         
@@ -3052,36 +3019,36 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               format_nc='f8', format_fortran='F', desc='WGS84 altitude of each wind sample', 
                               display_type='image', field_name='Altitude', fill_value=None, label_axis='', bin_location=0.5,
                               units='m', valid_min=50e3, valid_max=1000e3, var_type='support_data', chunk_sizes=[ny], monoton='Increase',
-                              notes="""A one-dimensional array defining the altitude dimension of the data grid (the other dimension 
-                              being time). For each Level 2.2 file, the altitude grid is defined based on the minimum and maximum altitudes, 
-                              (and highest resolution) in the Level 2.1 (line-of-sight wind) files. Altitude is defined using the WGS84 ellipsoid.
-                              """)
+                              notes="A one-dimensional array defining the altitude dimension of the data grid (the other dimension "
+                              "being time). For each Level 2.2 file, the altitude grid is defined based on the minimum and maximum altitudes, "
+                              "(and highest resolution) in the Level 2.1 (line-of-sight wind) files. Altitude is defined using the WGS84 ellipsoid."
+                              )
 
         
         # Longitude
-        var = _create_variable(ncfile, '%s_LONGITUDE'%prefix, L22_dict['lon'].T, 
-                              dimensions=('EPOCH', var_alt_name), depend_0 = 'EPOCH', depend_1 = var_alt_name,
+        var = _create_variable(ncfile, '%s_Longitude'%prefix, L22_dict['lon'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='WGS84 longitude of each wind sample', 
                               display_type='image', field_name='Longitude', fill_value=None, label_axis='', bin_location=0.5,
                               units='deg', valid_min=0., valid_max=360., var_type='support_data', chunk_sizes=[nx,ny],
-                              notes=""" A two-dimensional array defining the longitude (0-360 deg) of the two-dimensional data grid. In the
-                              initial implementation, the longitude is constant with altitude, but this may change in the future to capture 
-                              the slight (few deg) variation with altitude. Longitude is defined using the WGS84 ellipsoid. It should be noted 
-                              that while a single longitude value is given for each point, the observation is 
-                              inherently a horizontal average over many hundreds of kilometers.
-                              """)
+                              notes="A two-dimensional array defining the longitude (0-360 deg) of the two-dimensional data grid. In the "
+                              "initial implementation, the longitude is constant with altitude, but this may change in the future to capture "
+                              "the slight (few deg) variation with altitude. Longitude is defined using the WGS84 ellipsoid. It should be noted "
+                              "that while a single longitude value is given for each point, the observation is "
+                              "inherently a horizontal average over many hundreds of kilometers."
+                              )
                               
         # Latitude
-        var = _create_variable(ncfile, '%s_LATITUDE'%prefix, L22_dict['lat'].T, 
-                              dimensions=('EPOCH', var_alt_name), depend_0 = 'EPOCH', depend_1 = var_alt_name,
+        var = _create_variable(ncfile, '%s_Latitude'%prefix, L22_dict['lat'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='WGS84 latitude of each wind sample', 
                               display_type='image', field_name='Latitude', fill_value=None, label_axis='', bin_location=0.5,
                               units='deg', valid_min=-90., valid_max=90., var_type='support_data', chunk_sizes=[nx,ny],
-                              notes=""" A two-dimensional array defining the latitude of the two-dimensional data grid. The latitude varies 
-                              only slightly (a few deg) with altitude, but this variation is included. Latitude is defined using the WGS84 
-                              ellipsoid. It should be noted that while a single longitude value is given for each point, the observation is 
-                              inherently a horizontal average over many hundreds of kilometers.
-                              """)
+                              notes="A two-dimensional array defining the latitude of the two-dimensional data grid. The latitude varies "
+                              "only slightly (a few deg) with altitude, but this variation is included. Latitude is defined using the WGS84 "
+                              "ellipsoid. It should be noted that while a single longitude value is given for each point, the observation is "
+                              "inherently a horizontal average over many hundreds of kilometers."
+                              )
                               
             
 
@@ -3089,73 +3056,73 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         
         
         # Difference between the MIGHTI-A and MIGHTI-B times contributing to each point
-        var = _create_variable(ncfile, '%s_TIME_DELTA'%prefix, L22_dict['time_delta'].T, 
-                              dimensions=('EPOCH', var_alt_name), depend_0 = 'EPOCH', depend_1 = var_alt_name,
+        var = _create_variable(ncfile, '%s_Time_Delta'%prefix, L22_dict['time_delta'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Difference between MIGHTI-A and B times contributing to each point', 
                               display_type='image', field_name='Time Delta', fill_value=t_fillval, label_axis='Time Delta', bin_location=0.5,
                               units='s', valid_min=-30.*60, valid_max=30.*60, var_type='support_data', chunk_sizes=[nx,ny],
-                              notes="""To determine the cardinal wind at each point, a MIGHTI-A line-of-sight wind is combined 
-                              with a MIGHTI-B line-of-sight wind from several minutes later. This variable contains this time 
-                              difference for every point. During standard operations, this variable should be positive, but can 
-                              potentially become negative during conjugate operations or when ICON is observing to the south.
-                              """)
+                              notes="To determine the cardinal wind at each point, a MIGHTI-A line-of-sight wind is combined "
+                              "with a MIGHTI-B line-of-sight wind from several minutes later. This variable contains this time "
+                              "difference for every point. During standard operations, this variable should be positive, but can "
+                              "potentially become negative during conjugate operations or when ICON is observing to the south."
+                              )
         
         # Fringe amplitude profile from MIGHTI-A
-        var = _create_variable(ncfile, '%s_FRINGE_AMPLITUDE_A'%prefix, L22_dict['ver_A'].T, 
-                              dimensions=('EPOCH', var_alt_name), depend_0 = 'EPOCH', depend_1 = var_alt_name,
+        var = _create_variable(ncfile, '%s_Fringe_Amplitude_A'%prefix, L22_dict['fringe_amp_A'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Fringe Amplitude from MIGHTI-A', 
                               display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='', bin_location=0.5,
                               units='', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=[nx,ny],
-                              notes="""See FRINGE_AMPLITUDE. This variable contains the fringe amplitude measured 
-                              by MIGHTI-A, interpolated to the reconstruction grid. This is one of two variables 
-                              used to create FRINGE_AMPLITUDE. When A and B are significantly different, large
-                              gradients are suspected, and the quality is reduced.
-                              """)
+                              notes="See Fringe_Amplitude. This variable contains the fringe amplitude measured "
+                              "by MIGHTI-A, interpolated to the reconstruction grid. This is one of two variables "
+                              "used to create Fringe_Amplitude. When A and B are significantly different, large "
+                              "gradients are suspected, and the quality is reduced."
+                              )
         
         # Fringe amplitude profile from MIGHTI-B
-        var = _create_variable(ncfile, '%s_FRINGE_AMPLITUDE_B'%prefix, L22_dict['ver_B'].T, 
-                              dimensions=('EPOCH', var_alt_name), depend_0 = 'EPOCH', depend_1 = var_alt_name,
+        var = _create_variable(ncfile, '%s_Fringe_Amplitude_B'%prefix, L22_dict['fringe_amp_B'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Fringe Amplitude from MIGHTI-B', 
                               display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='', bin_location=0.5,
                               units='', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=[nx,ny],
-                              notes="""See FRINGE_AMPLITUDE. This variable contains the fringe amplitude measured 
-                              by MIGHTI-B, interpolated to the reconstruction grid. This is one of two variables 
-                              used to create FRINGE_AMPLITUDE. When A and B are significantly different, large
-                              gradients are suspected, and the quality is reduced.
-                              """)
+                              notes="See Fringe_Amplitude. This variable contains the fringe amplitude measured "
+                              "by MIGHTI-B, interpolated to the reconstruction grid. This is one of two variables "
+                              "used to create Fringe_Amplitude. When A and B are significantly different, large "
+                              "gradients are suspected, and the quality is reduced."
+                              )
        
 
         # Fringe amplitude relative difference
-        var = _create_variable(ncfile, '%s_FRINGE_AMPLITUDE_RELATIVE_DIFFERENCE'%prefix, L22_dict['ver_rel_diff'].T, 
-                              dimensions=('EPOCH', var_alt_name), depend_0 = 'EPOCH', depend_1 = var_alt_name,
+        var = _create_variable(ncfile, '%s_Fringe_Amplitude_Relative_Difference'%prefix, L22_dict['fringe_amp_rel_diff'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc="Difference in MIGHTI A and B's amplitude estimates, divided by the mean", 
                               display_type='image', field_name='Fringe Amplitude Difference', fill_value=None, label_axis='', bin_location=0.5,
                               units='', valid_min=0.0, valid_max=1e10, var_type='metadata', chunk_sizes=[nx,ny],
-                              notes="""The absolute value of the difference between FRINGE_AMPLITUDE_A and FRINGE_AMPLITUDE_B, divided 
-                              by the average. Ideally, MIGHTI A and B should measure the same amplitude. When they do not, this is an 
-                              indication of potential violations of the spherical symmetry assumption inherent to the inversion. This 
-                              is the quantity used to determine if spherical asymmetry flag is raised.
-                              """)
+                              notes="The absolute value of the difference between Fringe_Amplitude_A and Fringe_Amplitude_B, divided "
+                              "by the average. Ideally, MIGHTI A and B should measure the same amplitude. When they do not, this is an "
+                              "indication of potential violations of the spherical symmetry assumption inherent to the inversion. This "
+                              "is the quantity used to determine if spherical asymmetry flag is raised."
+                              )
         
         # Error flags      
-        var = _create_variable(ncfile, '%s_ERROR_FLAG'%prefix, np.transpose(L22_dict['error_flags'], (1,0,2)), 
-                              dimensions=('EPOCH', var_alt_name, 'N_FLAGS'), depend_0 = 'EPOCH', depend_1 = var_alt_name, depend_2 = 'N_FLAGS',
-                              format_nc='i8', format_fortran='I', desc='Error flags. Descriptions of each flag are below.', 
+        var = _create_variable(ncfile, '%s_Error_Flag'%prefix, np.transpose(L22_dict['error_flags'], (1,0,2)), 
+                              dimensions=('Epoch', var_alt_name, 'N_Flags'), depend_0 = 'Epoch', depend_1 = var_alt_name, depend_2 = 'N_Flags',
+                              format_nc='i8', format_fortran='I', desc='Error flags', 
                               display_type='image', field_name='Error Flags', fill_value=None, label_axis='', bin_location=0.5,
                               units='', valid_min=0, valid_max=1, var_type='metadata', chunk_sizes=[nx,ny,10],
-                              notes=["""This variable provides information on why the QUALITY code is reduced. Ten error flags can 
-                              exist for each grid point, each either 0 or 1. More than one flag can be raised per point. This variable 
-                              is a three-dimensional array with dimensions time, altitude, and number of flags.""",
-                                    """    0 = missing MIGHTI A file""",
-                                    """    1 = missing MIGHTI B file""",
-                                    """    2 = A signal too weak""",
-                                    """    3 = B signal too weak""",
-                                    """    4 = A did not sample this altitude""",
-                                    """    5 = B did not sample this altitude """,
-                                    """    6 = A sample exists but is NaN""",
-                                    """    7 = B sample exists but is NaN""",
-                                    """    8 = Spherical asymmetry: A and B VER estimates disagree""",
-                                    """    9 = Unknown Error""",
+                              notes=["This variable provides information on why the Quality variable is reduced from 1.0. Ten error flags can "
+                              "exist for each grid point, each either 0 or 1. More than one flag can be raised per point. This variable "
+                              "is a three-dimensional array with dimensions time, altitude, and number of flags.",
+                                    "    0 = missing MIGHTI A file",
+                                    "    1 = missing MIGHTI B file",
+                                    "    2 = A signal too weak",
+                                    "    3 = B signal too weak",
+                                    "    4 = A did not sample this altitude",
+                                    "    5 = B did not sample this altitude",
+                                    "    6 = A sample exists but is NaN",
+                                    "    7 = B sample exists but is NaN",
+                                    "    8 = Spherical asymmetry: A and B VER estimates disagree",
+                                    "    9 = Unknown Error",
                                     ])
         
         ncfile.close()
@@ -3248,7 +3215,7 @@ def level21_to_level22(info_fn):
     Files should be listed in the information file for a 24 hour period (0 UT to 0 UT), plus >15 minutes of files on either
     side. If files from green and red are both specified (as expected when run at the Science Data Center), they will be split
     and run separately by this function. The output Level 2.2 file(s) will be saved to the "Output" folder in the directory
-    specified by the information file.
+    specified by the information file. Summary plots will also be created in that directory.
     
     INPUTS:
     
@@ -3260,9 +3227,9 @@ def level21_to_level22(info_fn):
                                         <other parameters>
 
                                         [FILES]
-                                        ICON_L2_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2009-03-23_23.30.00_v01r001.NC
-                                        ICON_L2_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2009-03-23_23.31.00_v01r001.NC
-                                        ICON_L2_MIGHTI-A_LINE-OF-SIGHT_WIND_GREEN_2009-03-23_23.32.00_v01r001.NC
+                                        ICON_L2_MIGHTI-A_Line-of-Sight-Wind-Green_2017-05-27_000027_v01r001.NC
+                                        ICON_L2_MIGHTI-A_Line-of-Sight-Wind-Green_2017-05-27_000057_v01r001.NC
+                                        ICON_L2_MIGHTI-A_Line-of-Sight-Wind-Green_2017-05-27_000128_v01r001.NC
                                         etc... including files from MIGHTI-B
                                       
     OUTPUTS:
@@ -3302,7 +3269,13 @@ def level21_to_level22(info_fn):
         except Exception as e:
             failure_messages.append('Failed processing:\n\tColor   = %s\n%s\n'%(emission_color,traceback.format_exc()))
                 
-                
+    # For both red and green, create summary plots
+    for fn in L22_fns:
+        try:
+            plot_level22(fn, direc + 'Output/')
+        except Exception as e:
+            failure_messages.append('Failed creating summary plot for %s:\n%s\n'%(fn, traceback.format_exc()))
+    
     if not failure_messages: # Everything worked
         return ''
     
@@ -3327,15 +3300,13 @@ def level22_to_dict(L22_fn):
                                         See documentation for level21_dict_to_level22_dict(...) for details
                                         of the contents.
     '''
-
+    
     L22_dict = {}
-
     f = netCDF4.Dataset(L22_fn)
+    emission_color = L22_fn.split('/')[-1].split('_')[3].split('-')[-1].capitalize() # Red or Green
 
-    emission_color = L22_fn.split('/')[-1].split('_')[3].split('-')[-1].upper() # RED or GREEN
-
-    L22_dict['lat']    = f['ICON_L2_MIGHTI_%s_LATITUDE'  % emission_color][:,:]
-    L22_dict['lon']    = f['ICON_L2_MIGHTI_%s_LONGITUDE' % emission_color][:,:] 
+    L22_dict['lat']    = f['ICON_L2_MIGHTI_%s_Latitude'  % emission_color][:,:].T
+    L22_dict['lon']    = f['ICON_L2_MIGHTI_%s_Longitude' % emission_color][:,:].T
 
     # Unwrap the sample longitude to avoid 0/360 jumps
     lonu = L22_dict['lon'].copy()
@@ -3344,41 +3315,48 @@ def level22_to_dict(L22_fn):
         lonu[:,i] = fix_longitudes(lonu[:,i], lonu[0,i])
     L22_dict['lon_unwrapped'] = lonu
 
-    L22_dict['alt']    = f['ICON_L2_MIGHTI_%s_ALTITUDE'  % emission_color][:]/1e3
-    L22_dict['u']      = f['ICON_L2_MIGHTI_%s_ZONAL_WIND' % emission_color][:,:] 
-    L22_dict['v']      = f['ICON_L2_MIGHTI_%s_MERIDIONAL_WIND' % emission_color][:,:] 
-    L22_dict['u_error']= f['ICON_L2_MIGHTI_%s_ZONAL_WIND_ERROR' % emission_color][:,:] 
-    L22_dict['v_error']= f['ICON_L2_MIGHTI_%s_MERIDIONAL_WIND_ERROR' % emission_color][:,:] 
-    L22_dict['error_flags'] = f['ICON_L2_MIGHTI_%s_ERROR_FLAG' % emission_color][:,:,:] 
-    L22_dict['epoch_ms']  = f['EPOCH'][:]
-    L22_dict['time_ms']   = f['ICON_L2_MIGHTI_%s_TIME' % emission_color][:,:] # TODO: convert to datetime
-    L22_dict['time_delta'] = f['ICON_L2_MIGHTI_%s_TIME_DELTA' % emission_color][:,:]
-    L22_dict['fringe_amp']   = f['ICON_L2_MIGHTI_%s_FRINGE_AMPLITUDE' % emission_color][:,:] 
-    L22_dict['fringe_amp_A'] = f['ICON_L2_MIGHTI_%s_FRINGE_AMPLITUDE_A' % emission_color][:,:] 
-    L22_dict['fringe_amp_B'] = f['ICON_L2_MIGHTI_%s_FRINGE_AMPLITUDE_B' % emission_color][:,:] 
-    L22_dict['fringe_amp_rel_diff'] = f['ICON_L2_MIGHTI_%s_FRINGE_AMPLITUDE_RELATIVE_DIFFERENCE' % emission_color][:,:] 
+    L22_dict['alt']    = f['ICON_L2_MIGHTI_%s_Altitude'  % emission_color][:].T/1e3
+    L22_dict['u']      = f['ICON_L2_MIGHTI_%s_Zonal_Wind' % emission_color][:,:].T
+    L22_dict['v']      = f['ICON_L2_MIGHTI_%s_Meridional_Wind' % emission_color][:,:].T
+    L22_dict['u_error']= f['ICON_L2_MIGHTI_%s_Zonal_Wind_Error' % emission_color][:,:].T
+    L22_dict['v_error']= f['ICON_L2_MIGHTI_%s_Meridional_Wind_Error' % emission_color][:,:].T
+    e                  = f['ICON_L2_MIGHTI_%s_Error_Flag' % emission_color][:,:,:]
+    L22_dict['error_flags'] = np.transpose(e, (1,0,2))
+    L22_dict['epoch_ms']      = f['Epoch'][:]
+    L22_dict['epoch_full_ms'] = f['Epoch_Full'][:,:].T
+    L22_dict['time_delta']    = f['ICON_L2_MIGHTI_%s_Time_Delta' % emission_color][:,:].T
+    L22_dict['fringe_amp']    = f['ICON_L2_MIGHTI_%s_Fringe_Amplitude' % emission_color][:,:].T
+    L22_dict['fringe_amp_A']  = f['ICON_L2_MIGHTI_%s_Fringe_Amplitude_A' % emission_color][:,:].T 
+    L22_dict['fringe_amp_B']  = f['ICON_L2_MIGHTI_%s_Fringe_Amplitude_B' % emission_color][:,:].T
+    L22_dict['fringe_amp_rel_diff'] = f['ICON_L2_MIGHTI_%s_Fringe_Amplitude_Relative_Difference' % emission_color][:,:].T
+    L22_dict['wind_quality']  = f['ICON_L2_MIGHTI_%s_Wind_Quality' % emission_color][:,:].T
     L22_dict['emission_color'] = emission_color
     L22_dict['source_files'] = f.Parents
+    L22_dict['acknowledgement'] = f.Acknowledgement
+    L22_dict['time_start'] = datetime.strptime(f.Date_Start[-27:-4], '%Y-%m-%dT%H:%M:%S.%f')
+    L22_dict['time_stop']  = datetime.strptime(f.Date_Stop [-27:-4], '%Y-%m-%dT%H:%M:%S.%f')
+                                  
     
-    # Convert time to datetime
+    # Convert times to datetime
     epoch = np.ma.empty(len(L22_dict['epoch_ms']), dtype=datetime)
     for i in range(len(epoch)):
-        if L22_dict['epoch_ms'].mask[i]:
+        if isinstance(L22_dict['epoch_ms'],np.ma.MaskedArray) and L22_dict['epoch_ms'].mask[i]:
             epoch[i] = datetime(1989,4,18) # arbitrary fill value
             epoch[i] = np.ma.masked # mask it
         else:
             epoch[i] = datetime(1970,1,1) + timedelta(seconds = L22_dict['epoch_ms'][i]/1e3)
-    time = np.ma.empty(np.shape(L22_dict['time_ms']), dtype=datetime)
-    for i in range(np.shape(time)[0]):
-        for j in range(np.shape(time)[1]):
-            if L22_dict['time_ms'].mask[i,j]:
-                time[i] = datetime(1989,4,18) # arbitrary fill value
-                time[i] = np.ma.masked # mask it
+            
+    epoch_full = np.ma.empty(np.shape(L22_dict['epoch_full_ms']), dtype=datetime)
+    for i in range(np.shape(epoch_full)[0]):
+        for j in range(np.shape(epoch_full)[1]):
+            if isinstance(L22_dict['epoch_full_ms'],np.ma.MaskedArray) and L22_dict['epoch_full_ms'].mask[i,j]:
+                epoch_full[i] = datetime(1989,4,18) # arbitrary fill value
+                epoch_full[i] = np.ma.masked # mask it
             else:
-                time[i] = datetime(1970,1,1) + timedelta(seconds = L22_dict['time_ms'][i,j]/1e3)
+                epoch_full[i] = datetime(1970,1,1) + timedelta(seconds = L22_dict['epoch_full_ms'][i,j]/1e3)
                 
-    L22_dict['time'] = time
     L22_dict['epoch'] = epoch
+    L22_dict['epoch_full'] = epoch_full
     
     f.close()
     
@@ -3386,129 +3364,289 @@ def level22_to_dict(L22_fn):
 
 
 
+
 ################################################################################################################
-#############################################    Unit Tests    #################################################
+##########################################   TOHBAN PLOTS    ###################################################
 ################################################################################################################
+# TODO for Tohban plots:
+# - specify corners of pixels for pcolormesh instead of middle
+# - break up by SLT instead of longitude or time
+# - add map?
+# - L2.1: identify gaps and mark as missing? Right now pcolormesh just interpolates over gaps
+# - L2.2: What's the best x-axis for L2.2? Time seems good, but there are masked data points.
+#         These could probably be interpolated over reasonably well. Perhaps this should be 
+#         done as part of the L2.2 product?
 
-
-def _test_level1_to_level21():
+def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_max = 100.):
     '''
-    Special-purpose function to test the installation of the Level 1 to Level 2.1 processing code. This assumes that 
-    the user is in the directory containing the test data.
+    Create Tohban plots for Level 2.1 data. Files from either MIGHTI-A or MIGHTI-B should
+    be provided. The files will be broken into separate plots of length "timechunk" hours.
+    
+    INPUTS:
+    
+      *  L21_fns      --TYPE:list of str, Full paths to L2.1 files to be plotted. A or B.
+      *  pngpath      --TYPE:str,         Directory to save the resulting pngs to
+      
+    OPTIONAL INPUTS:
+    
+      *  timechunk    --TYPE:float,       Time period to plot in a single file. [hr]
+                                          (TODO: eventually this should be based on SLT).
+      *  v_max        --TYPE:float,       Maximum wind velocity for colorbar [m/s]
+      *  ve_min       --TYPE:float,       Minimum wind error for colorbar [m/s]
+      *  ve_max       --TYPE:float,       Maximum wind error for colorbar [m/s]
+                                   
+    OUTPUT:
+    
+      *  L21_pngs     --TYPE:list of str,  Full path to the saved png files
     '''
-
-    variable_stubs =    ['TIME',
-                         'ALTITUDE',
-                         'LATITUDE',
-                         'LONGITUDE',
-                         'LINE_OF_SIGHT_AZIMUTH',
-                         'LINE_OF_SIGHT_WIND',
-                         'LINE_OF_SIGHT_WIND_ERROR',
-                         'FRINGE_AMPLITUDE',
-                         'FRINGE_AMPLITUDE_ERROR',
-                         'SPACECRAFT_VELOCITY_VECTOR',
-                         'SPACECRAFT_LATITUDE',
-                         'SPACECRAFT_LONGITUDE',
-                         'SPACECRAFT_ALTITUDE',
-                         'LINE_OF_SIGHT_VECTOR',]
-
-    print '\nMIGHTI L1-L2.1 PROCESSING v%s\n' % (__version__)
     
-    print 'Processing L1 file...'
-    err = level1_to_level21('./Input/Information.TXT')
-    print 'Complete\n'
+    assert len(L21_fns)>0, "No files specified"
     
-    # Find new files that were created 
-    L21_fns = glob.glob('./Output/*')
+    if pngpath[-1] != '/':
+        pngpath += '/'
+    
+    # Split up red/green and read
     L21_fns.sort()
+    d = {} # keys are 'red' or 'green
+    for color in ['red','green']:
+        fns_short = [fn for fn in L21_fns if color in fn.lower()]
+        if len(fns_short)>0:
+            d[color] = level21_to_dict(fns_short)
     
-    # Find old truth files
-    L21_old_fns = glob.glob('./Output_Truth/*')
-    L21_old_fns.sort()
+    # For each, add a variable giving the time as a matrix (to be used for plotting)
+    for color in ['red','green']:
+        if color in d.keys():
+            dk = d[color]
+            Nz,Nx = np.shape(dk['alt'])
+            time_mat = np.empty((Nz,Nx),dtype=object)
+            for j in range(Nx):
+                time_mat[:,j] = dk['time'][j]
+            dk['time_mat'] = time_mat    
     
-    assert L21_fns, "No output data files found."
-    
-    for L21_fn, L21_old_fn in zip(L21_fns, L21_old_fns):
-    
-        print 'Comparing new file: %s\nWith old file:      %s\n' % (L21_fn, L21_old_fn)
+    nx,ny = 2,3
+
+    # Determine how many figures need to be made
+    t_g = d['green']['time'] if 'green' in d.keys() else []
+    t_r = d['red'  ]['time'] if 'red'   in d.keys() else []
+    t = np.concatenate((t_g, t_r))
+    tallmin = t.min()
+    tallmax = t.max()
+    if tallmax==tallmin: tallmax += timedelta(seconds=0.0001) # corner case: only one file
+    nfigs = int(np.ceil((tallmax-tallmin).total_seconds()/3600./timechunk))
+
+    # Determine if this is MIGHTI-A or MIGHTI-B
+    first_sensor = L21_fns[0].split('/')[-1].split('_')[2] # MIGHTI-A or MIGHTI-B
+    for fn in L21_fns:
+        sensor = fn.split('/')[-1].split('_')[2]
+        assert sensor == first_sensor, "Files from purely MIGHTI-A or purely MIGHTI-B must be specified."
+
+    L21_pngs = []
+    for n in range(nfigs):
+
+        # Define time range for this plot
+        tmin = tallmin + timedelta(hours=n*timechunk)
+        tmax = tmin + timedelta(hours=timechunk)
+
+
+        fig = plt.figure(figsize=(16,10))
+        tmin_title = datetime(2100,1,1) # for specifying the title of each plot (updated below)
+        tmax_title = datetime(1970,1,1)
+        ################## Plot ###################
+        colors = ['red', 'green']
+        cmaps = ['inferno', 'viridis']
+        for i,color in enumerate(colors):
+            if color in d.keys():
+                dk = d[color]
+                i1 = bisect.bisect(dk['time'],tmin) - 1
+                i2 = bisect.bisect(dk['time'],tmax)
+                if dk['time'][i1] < tmin_title:
+                    tmin_title = dk['time'][i1]
+                if dk['time'][i2-1] > tmax_title:
+                    tmax_title = dk['time'][i2-1]
+
+                plt.subplot(ny,nx,i+1)
+                plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2], dk['los_wind'][:,i1:i2],
+                               vmin=-v_max, vmax=v_max, cmap='RdBu')
+                plt.title('%s LoS Wind'% (color.capitalize()))
+                cb = plt.colorbar()
+                cb.set_label('m/s',rotation=-90,labelpad=10)
+
+                plt.subplot(ny,nx,i+3)
+                plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2],dk['los_wind_error'][:,i1:i2],
+                               norm=LogNorm(vmin=ve_min, vmax=ve_max), cmap=cmaps[i]+'_r')
+                plt.title('%s LoS Wind Error'% (color.capitalize()))
+                cb = plt.colorbar()
+                cb.set_label('m/s',rotation=-90,labelpad=10)
+
+                plt.subplot(ny,nx,i+5)
+                amp = dk['amp']
+                amp_min = 1e-3*amp.max()
+                amp[amp<amp_min] = amp_min # so it's plotted as dark instead of missing
+                plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2], amp[:,i1:i2],
+                               norm=LogNorm(vmin=amp_min, vmax=amp.max()), cmap=cmaps[i])
+                plt.title('%s Fringe Amplitude'% (color.capitalize()))
+                cb = plt.colorbar()
+                cb.set_label('arb',rotation=-90,labelpad=10)
+
+                ###### Prettify the axes, labels, etc #####
+                for sp in [i+1,i+3,i+5]:
+                    plt.subplot(ny,nx,sp)
+                    plt.gca().patch.set_facecolor('gray')
+                    plt.gca().xaxis.set_major_formatter(dates.DateFormatter('%H:%M'))
+                    plt.ylabel('Altitude [km]')
+                    plt.gca().yaxis.set_ticks([100,200,300])
+                    plt.ylim((85,320))
+                    plt.yscale('log')
+                    plt.gca().yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
+                    plt.gca().yaxis.set_minor_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
+                    plt.xlim((tmin,tmax))
+
+        # Determine min and max time for the title
+        if tmin_title.date() == tmax_title.date():
+            datestr = '%s - %s' % (tmin_title.strftime('%Y-%m-%d %H:%M:%S'), tmax_title.strftime('%H:%M:%S'))
+        else:
+            datestr = '%s - %s' % (tmin_title.strftime('%Y-%m-%d %H:%M:%S'), tmax_title.strftime('%Y-%m-%d %H:%M:%S'))
+        fig.suptitle('%s  %s' % (sensor, datestr), fontsize=28)
+
+        fig.autofmt_xdate()
+        fig.tight_layout(rect=[0,0.03,1,0.95]) # leave room for suptitle
+
+        #### Save
+        pngfn = pngpath + 'ICON_L2_%s_Line-of-Sight-Wind_%s.png' % (sensor, tmin_title.strftime('%Y-%m-%d_%H%M%S'))
+        plt.savefig(pngfn, dpi=70)
+        plt.close()
+        L21_pngs.append(pngfn)
         
-        emission_color = L21_fn.split('_')[3].split('-')[-1]
-        prefix = 'ICON_L2_MIGHTI_A_%s_' % (emission_color.upper())
-
-        d0 = netCDF4.Dataset(L21_fn)
-        d1 = netCDF4.Dataset(L21_old_fn)
-
-        print '%60s:  Difference' % ('Variable')
-        for stub in variable_stubs:
-            v = prefix + stub
-            v0 = d0.variables[v][...]
-            v1 = d1.variables[v][...]
-            e = np.linalg.norm(v1-v0) # might want to do a "nannorm" here eventually
-            print '%60s:  %e %s' % (v,e, d0.variables[v].Units)
-
-        d0.close()
-        d1.close()
-
-        print ''
+    return L21_pngs
 
 
-        
-    
-    
-def _test_level21_to_level22():
+
+def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 100.):
     '''
-    Special-purpose function to test the installation of the Level 2.1 to Level 2.2 processing code. This assumes that 
-    the user is in the directory containing the test data. Here we just test green, since red is identical. Both
-    red and green are tested in L2.1.
+    Create Tohban plots for Level 2.2 data.
+    
+    INPUTS:
+    
+      *  L22_fn       --TYPE:str,   Full path to a L2.2 file
+      *  pngpath      --TYPE:str,   Directory to save the resulting png to
+   
+   OPTIONAL INPUTS:
+   
+      *  nfigs        --TYPE:int,   How many figures to break the data into
+                                    (TODO: eventually this should be based on SLT).
+      *  v_max        --TYPE:float, Maximum wind velocity for colorbar [m/s]
+      *  ve_min       --TYPE:float, Minimum wind error for colorbar [m/s]
+      *  ve_max       --TYPE:float, Maximum wind error for colorbar [m/s]
+                                   
+    OUTPUT:
+    
+      *  L22_pngs     --TYPE:list of str,  Full path to the saved png files
+      
     '''
+    
+    if pngpath[-1] != '/':
+        pngpath += '/'
+    
+    L22_dict = level22_to_dict(L22_fn)
+
+    # Error flag meanings:
+    error_str = {
+        0: 'Error: missing MIGHTI-A file',
+        1: 'Error: missing MIGHTI-B file',
+        2: 'Error: MIGHTI-A weak signal',
+        3: 'Error: MIGHTI-B weak signal',
+        4: 'Error: MIGHTI-A missing this altitude',
+        5: 'Error: MIGHTI-B missing this altitude',
+        6: 'Error: MIGHTI-A sample is NaN',
+        7: 'Error: MIGHTI-B sample is NaN',
+        8: 'Error: Spherical asymmetry detected',
+        9: 'Error: Unknown' 
+    }
+
+    Nalt, Nlon, Nflags = np.shape(L22_dict['error_flags'])
+    lonu = L22_dict['lon_unwrapped']
+    alt = L22_dict['alt']
+    alt_mat = np.tile(alt, (Nlon,1)).T
+    L22_pngs = []
+    
+    for n in range(nfigs):
+
+        # Define grid range for this plot
+        i1 = int(np.floor(1.0*Nlon/nfigs*n))
+        i2 = int(np.floor(1.0*Nlon/nfigs*(n+1)))
+
+        fig = plt.figure(figsize=(16,(Nflags/2+2)*3))
         
-    print '\nMIGHTI L2.1-L2.2 PROCESSING v%s\n' % (__version__)
-    print 'Reading ./Input/Information.TXT and running L2.1-to-L2.2 code. Red will fail and Green will succeed.'
-    print 'This will take a few minutes....\n'
-    # Run processing on test data
-    msg = level21_to_level22('./Input/Information.TXT')
-    print 'Processing complete. Output message:\n\n%s\n\n---------------------------------------\n' % msg
-    
-    # Find the new file that was created
-    L22_fns = glob.glob('./Output/*')
-    assert len(L22_fns)<2, "Too many L2.2 files found"
-    assert len(L22_fns)>0, "No L2.2 file found"
-    L22_fn = L22_fns[0]
-    
-    # Find the old truth file
-    L22_old_fns = glob.glob('./Output_Truth/*')
-    assert len(L22_old_fns)==1, "Too many L2.2 truth files found"
-    L22_old_fn = L22_old_fns[0]    
-    
-    print 'Comparing new file: %s\nWith old file:      %s\n' % (L22_fn, L22_old_fn)
-    variables = ['EPOCH',
-                 'ICON_L2_MIGHTI_GREEN_TIME',
-                 'ICON_L2_MIGHTI_GREEN_ALTITUDE',
-                 'ICON_L2_MIGHTI_GREEN_LONGITUDE',
-                 'ICON_L2_MIGHTI_GREEN_LATITUDE',
-                 'ICON_L2_MIGHTI_GREEN_ZONAL_WIND',
-                 'ICON_L2_MIGHTI_GREEN_MERIDIONAL_WIND',
-                 'ICON_L2_MIGHTI_GREEN_ZONAL_WIND_ERROR',
-                 'ICON_L2_MIGHTI_GREEN_MERIDIONAL_WIND_ERROR',
-                 'ICON_L2_MIGHTI_GREEN_FRINGE_AMPLITUDE_RELATIVE_DIFFERENCE',
-                 'ICON_L2_MIGHTI_GREEN_ERROR_FLAG']
+        #### WINDS
+        for i,W in enumerate([L22_dict['u'],L22_dict['v']]):
+            plt.subplot(Nflags/2 + 2, 2, i+1)
+            plt.pcolormesh(lonu   [:,i1:i2], 
+                           alt_mat[:,i1:i2],
+                           W      [:,i1:i2],
+                           cmap='RdBu')
+            plt.clim((-v_max,v_max))
+            if i==0:
+                plt.title('Zonal Wind')
+            else:
+                plt.title('Meridional Wind')
+            cb = plt.colorbar()
+            cb.set_label('Wind [m/s]',rotation=-90,labelpad=15)
 
-    d0 = netCDF4.Dataset(L22_fn)
-    d1 = netCDF4.Dataset(L22_old_fn)
-
-    print '%60s:  Difference' % ('Variable')
-    for v in variables:
-        v0 = d0.variables[v][...]
-        v1 = d1.variables[v][...]
-        e =  np.linalg.norm(v1-v0)
-        print '%60s:  %e %s' % (v,e, d0.variables[v].Units)
-    d0.close()
-    d1.close()
-    print ''
-
-
+        #### WIND ERROR
+        for i,W in enumerate([L22_dict['u_error'],L22_dict['v_error']]):
+            plt.subplot(Nflags/2 + 2, 2, i+3)
+            plt.pcolormesh(lonu   [:,i1:i2], 
+                           alt_mat[:,i1:i2],
+                           W      [:,i1:i2],
+                           cmap='viridis_r', norm=LogNorm(vmin=ve_min, vmax=ve_max))
+            if i==0:
+                plt.title('Zonal Wind Error')
+            else:
+                plt.title('Meridional Wind Error')
+            cb = plt.colorbar()
+            cb.set_label('Wind Error [m/s]',rotation=-90,labelpad=15)
     
-    
+        #### ERROR FLAGS
+        for i in range(Nflags):
+            plt.subplot(Nflags/2 + 2,2,i+5)
+            # define the bins and normalize
+            cmap=cmap_custom
+            bounds = [-0.5,0.5,1.5]
+            norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
+            plt.pcolormesh(lonu   [:,i1:i2],
+                           alt_mat[:,i1:i2],
+                           L22_dict['error_flags'][:,i1:i2,i],
+                           cmap=cmap, norm=norm)
+            plt.title(error_str[i])
+            plt.axis('tight')
+            cb = plt.colorbar(ticks=[0,1])
+
+        #### Make plots look nice
+        for sp in range(Nflags+4):
+            plt.subplot(Nflags/2 + 2,2, sp+1)
+            plt.gca().patch.set_facecolor('gray')
+            plt.ylabel('Altitude [km]')
+            plt.xlabel('Longitude [deg]')
+            plt.gca().yaxis.set_ticks([100,200,300])
+            plt.ylim((85,320))
+            plt.yscale('log')
+            plt.gca().yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
+            plt.gca().yaxis.set_minor_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
+            # Replace unwrapped longitude with mod 360
+            xt = plt.gca().get_xticks()
+            plt.gca().set_xticklabels(['%.0f' % np.mod(x,360) for x in xt])
+
+        plt.tight_layout(rect=[0,0.02,1,0.97]) # leave room for suptitle
+        datestr = L22_fn.split('/')[-1].split('_')[-2]
+        fig.suptitle('%s %s Plot %i/%i' % (datestr, L22_dict['emission_color'], n+1,nfigs), fontsize=28)
+        
+        #### Save
+        pngfn = pngpath + L22_fn.split('/')[-1][:-3] + '_p%02i.png'%n
+        plt.savefig(pngfn, dpi=70)
+        plt.close()
+        L22_pngs.append(pngfn)
+        
+    return L22_pngs
     
     
 ################################################################################################################
@@ -3523,11 +3661,8 @@ def main(argv):
     
     $ python /path/to/MIGHTI_L2.py -L2.1
     $ python /path/to/MIGHTI_L2.py -L2.2
-    $ python /path/to/MIGHTI_L2.py -L2.1test
-    $ python /path/to/MIGHTI_L2.py -L2.2test
     
-    The latter two are not intended for general use. The script will return with 
-    exit code 0 on success, exit code 1 on failure. If exit code 1, that usually
+    The script will return with exit code 0 on success, exit code 1 on failure. If exit code 1, that usually
     means there's a bug in the code or something completely unexpected in the data.
     
     INPUT:
@@ -3541,6 +3676,8 @@ def main(argv):
         print usagestr
         sys.exit(1)
         
+    plt.switch_backend('Agg') # to generate pngs without opening windows
+        
     # Call the L2.1 or L2.2 algorithms, as specified.
     # Also possibly call the unit test functions
     err = ''
@@ -3548,10 +3685,6 @@ def main(argv):
         err = level1_to_level21(info_fn)
     elif argv[1] == '-L2.2':
         err = level21_to_level22(info_fn)
-    elif argv[1] == '-L2.1test':
-        _test_level1_to_level21()
-    elif argv[1] == '-L2.2test':
-        _test_level21_to_level22()
     else:
         print usagestr
         sys.exit(1)
