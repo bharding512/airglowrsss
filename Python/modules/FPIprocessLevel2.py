@@ -1830,7 +1830,7 @@ def GetLevel2(project,dn,dnstart='noon',dnend='noon',w_is_0=False):
         psites = fpiinfo.get_network_info(fpiinfo.get_site_info(project)['Network']).keys()
         editlist = True
 
-    print editlist
+    #print editlist
 
     # with these sites, look up the corresponding sites.
     # these are the instruments used for a given day & project.

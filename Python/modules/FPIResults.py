@@ -411,7 +411,6 @@ def BinDailyData(SITE,YEAR,DOY,SPLIT=False,KP=[0,10],CV=True,QF=1,WIS0=False):
     d.cvs = cvc
     d.bads = bc
     d.doabarrelroll()
-    
     return d
     
     
@@ -428,7 +427,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIE
         TMODEL    = name of temp model [default = 'msis']
         ALT       = altitude of desired profile in km [default = 250]
         WEIGHTED  = flag to intensity weight winds [default = True]
-        QUIET     = flag to set Kp=0 and Ap=Ap_daily [default = False]
+        QUIET     = flag to set Kp=0 and Ap=0.0 [default = False]
         MULTICORE = flag to allow multicore processing [default = True]
 
     Outputs:
@@ -683,7 +682,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,DLIST=[],YLIST=[],SPLIT=False,KP=[0,10],CV=Tr
         TMODEL   = [model param] name of temp model [default = 'msis']
         ALT      = [model param] altitude of desired profile in km [default = 250]
         WEIGHTED = [model param] flag to intensity weight winds [default = False]
-        QUIET    = [model param] flag to set Kp=0 and Ap=Ap_daily [default = False]
+        QUIET    = [model param] flag to set Kp=0 and Ap=0.0 [default = False]
         VERBOSE  = Print information to stdout [default = True]
 
     Outputs:
@@ -1013,7 +1012,7 @@ def _MPsingleday(SITE_YEAR_DOY,SPLIT,KP,CV,QF,SITELLA,TMODEL,ALT,WEIGHTED,QUIET)
         TMODEL        = [model param] name of temp model [default = 'msis']
         ALT           = [model param] altitude of desired profile in km [default = 250]
         WEIGHTED      = [model param] flag to intensity weight winds [default = True]
-        QUIET         = [model param] flag to set Kp=0 and Ap=Ap_daily [default = False]
+        QUIET         = [model param] flag to set Kp=0 and Ap=0.0 [default = False]
 
     Outputs:
         DD = Daily Data binned object
