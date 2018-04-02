@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 4 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 5 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -21,8 +21,9 @@ __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g
 global_params = {}
 
 global_params['red'] = {
-    'sigma'             : 1.0/630.0304e-9, # reciprocal of center wavelength of emission [m^-1] 
-                                           # (Osterbrock et al. 1996)  
+#    'sigma'             : 1.0/630.0304e-9, # reciprocal of center wavelength of emission [m^-1] 
+#                                           # (Osterbrock et al. 1996)  
+    'sigma'             : 1.0/630.0e-9, # reciprocal of center wavelength of emission [m^-1]
     'bin_size'          : 1,               # The number of rows of the interferogram to bin together to 
                                            # improve statistics at the cost of altitude resolution.   
     'account_for_local_projection': True,  # Whether to account for the fact that the line of sight is not
@@ -40,7 +41,8 @@ global_params['red'] = {
 }
 
 global_params['green'] = {
-    'sigma'             : 1.0/557.7338e-9,
+#    'sigma'             : 1.0/557.7338e-9,
+    'sigma'             : 1.0/557.7e-9,
     'bin_size'          : 1,
     'account_for_local_projection': True,
     'integration_order' : 0,
@@ -733,6 +735,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
         J = np.array([[np.cos(ph_L1[m]), -A_L1[m]*np.sin(ph_L1[m])],
                       [np.sin(ph_L1[m]),  A_L1[m]*np.cos(ph_L1[m])]])
         cov_amp_phase = np.diag([I_amp_uncertainty[m], I_phase_uncertainty[m]])**2 # assuming uncorrelated
+        cov_amp_phase[np.isnan(cov_amp_phase)] = 0.0 # so nan columns don't corrupt the entire image
         cov_real_imag_L1[m,:,:] = J.dot(cov_amp_phase).dot(J.T) # Error propagation
 
     ### Step 2: Propagate uncertainties through the path length inversion
@@ -746,7 +749,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     cov_imag_L2 = Dinv.dot(cov_imag_L1).dot(Dinv.T)
     sigma_real_L2 = np.sqrt(np.diag(cov_real_L2))
     sigma_imag_L2 = np.sqrt(np.diag(cov_imag_L2))
-    
+
     ### Step 3: Transform back to amp/phase #########
     # Each row will have a 2x2 covariance matrix describing the amplitude and phase
     cov_amp_phase_L2 = np.zeros((ny,2,2))
