@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 5 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 6 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -21,10 +21,9 @@ __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g
 global_params = {}
 
 global_params['red'] = {
-#    'sigma'             : 1.0/630.0304e-9, # reciprocal of center wavelength of emission [m^-1] 
-#                                           # (Osterbrock et al. 1996)  
-    'sigma'             : 1.0/630.0e-9, # reciprocal of center wavelength of emission [m^-1]
-    'bin_size'          : 1,               # The number of rows of the interferogram to bin together to 
+    'sigma'             : 1.0/630.0304e-9, # reciprocal of center wavelength of emission [m^-1] 
+                                           # (from John Harlander)  
+    'bin_size'          : 11,               # The number of rows of the interferogram to bin together to 
                                            # improve statistics at the cost of altitude resolution.   
     'account_for_local_projection': True,  # Whether to account for the fact that the line of sight is not
                                            # quite horizontal everywhere along the line of sight
@@ -41,9 +40,8 @@ global_params['red'] = {
 }
 
 global_params['green'] = {
-#    'sigma'             : 1.0/557.7338e-9,
-    'sigma'             : 1.0/557.7e-9,
-    'bin_size'          : 1,
+    'sigma'             : 1.0/557.7339e-9,
+    'bin_size'          : 2,
     'account_for_local_projection': True,
     'integration_order' : 0,
     'top_layer'         : 'exp',
@@ -682,7 +680,9 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
             # Calculate it with the projected wind component
             Ij_proj = Ij*np.exp(1j*phase[j]*B[i,j])
             # Remove this contribution from the current layer
-            Li = Li - dij*Ij_proj
+            # If the subtracted layer is nan, subtract nothing
+            if not all(np.isnan(Ij_proj)):
+                Li = Li - dij*Ij_proj
         # final normalization by this layer's path length
         Li = Li/dii
         Ip[i,:] = Li
@@ -714,6 +714,8 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     # (i.e., as if account_for_local_projection=False) to a very good approximation
     # (less than 1% error).
     
+
+    
     ### Step 0: Characterize L1 and L2.1 interferograms with a single amp/phase per row
     ph_L1 = np.zeros(ny)
     A_L1 = np.zeros(ny)
@@ -723,10 +725,19 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
         A_L1[i] = a
     ph_L2 = phase.copy() # this was calculated above
     A_L2 = amp.copy() # this was calculated above
+    
+    ### Step 0.5: Handle nans and bad rows
+    # For purposes of computing uncertainty, nans are like signal that we know is zero
+    # to good precision.
+    ph_L1[np.isnan(ph_L1)] = 0.0
+    ph_L2[np.isnan(ph_L2)] = 0.0
+    A_L1[np.isnan(A_L1)] = 0.0
+    A_L2[np.isnan(A_L2)] = 0.0
     # If amp is exactly zero, then replace it with a small number
     # so that uncertainties can be calculated.
+    A_L1[A_L1==0.0] = 1e-6
     A_L2[A_L2==0.0] = 1e-6
-        
+    
     ### Step 1: Transform amp/phase uncertainties to real/imag uncertainties
     # Each row will have a 2x2 covariance matrix describing the real and imaginary parts
     cov_real_imag_L1 = np.zeros((ny,2,2))
@@ -1599,7 +1610,9 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         "image taken by MIGHTI. There is one file for each sensor (A or B), for each color (red or green) and for each image (usually every 30 or "
         "60 seconds). The profile "
         "spans from ~90 km (for green) or ~150 km (for red) to ~300 km, though altitudes with low signal levels are masked out. This data product is "
-        "generated from the Level 1 MIGHTI product, which is a calibrated interferogram. The spacecraft velocity is removed from the interferogram phase, "
+        "generated from the Level 1 MIGHTI product, which comprises calibrated amplitudes and phases. The spacecraft velocity is removed from the "
+        "interferogram phase, , then (optionally) the data are binned from their native altitude resolution (~2.5 km) to improve statistics. "
+        "An onion-peeling inversion"
         "then an onion-peeling inversion is performed to remove the effect of the line-of-sight integration. After the inversion, each row (i.e., altitude) "
         "is analyzed to extract the phase, and thus the line-of-sight wind. Level 2.1 files from MIGHTI-A and MIGHTI-B are combined during the Level 2.2 "
         "processing (not discussed here). See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for more details of the inversion algorithm. One update "
@@ -2305,11 +2318,9 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                                                             * 3  = B signal too weak
                                                                             * 4  = A did not sample this altitude
                                                                             * 5  = B did not sample this altitude
-                                                                            * 6  = A sample exists but equals np.nan
-                                                                            * 7  = B sample exists but equals np.nan
-                                                                            * 8  = spherical asymmetry: A&B VER 
+                                                                            * 6  = spherical asymmetry: A&B VER 
                                                                                    estimates disagree
-                                                                            * 9  = unknown error
+                                                                            * 7  = unknown error
                                                                             
                    * epoch_full      -- TYPE:array(ny,nx),    UNITS:none. The average between the time of the MIGHTI A 
                                                                           and B measurements that contribute to this 
@@ -2405,7 +2416,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     iB = bisect.bisect(time_B, time_start) # First B file after start time.
     start_lon_A = lon_A[-1,iA]
     start_lon_B = lon_B[-1,iB]
-    assert abs(start_lon_A - start_lon_B) < 90.,"A and B start longitudes are off by 360 deg. Bug in unwrapping code."
+    assert abs(start_lon_A - start_lon_B) < 90.,"A and B start longitudes are off by 360 deg."
     start_lon = np.mean([start_lon_A, start_lon_B])
 
     # Determine stop longitude
@@ -2415,7 +2426,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     iB = bisect.bisect(time_B, time_stop) - 1 # First B file before (or equal to) stop time
     stop_lon_A = lon_A[-1,iA]
     stop_lon_B = lon_B[-1,iB]
-    assert abs(stop_lon_A - stop_lon_B) < 90.,"A and B start longitudes are off by 360 deg. Bug in unwrapping code."
+    assert abs(stop_lon_A - stop_lon_B) < 90.,"A and B start longitudes are off by 360 deg."
     stop_lon = np.mean([stop_lon_A, stop_lon_B])
     
     time_min = min(min(time_A), min(time_B))
@@ -2468,7 +2479,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     ver_B = np.nan*np.zeros((N_alts, N_lons))            # fringe amplitude from B (related to VER)
     ver   = np.nan*np.zeros((N_alts, N_lons))            # fringe amplitude (mean of A and B)
     ver_rel_diff = np.nan*np.zeros((N_alts, N_lons))     # relative difference in A and B VER
-    error_flags = np.zeros((N_alts, N_lons, 10), dtype=bool)      # Error flags, one set per grid point. See above for definition.
+    error_flags = np.zeros((N_alts, N_lons, 8), dtype=bool)      # Error flags, one set per grid point. See above for definition.
     
     # Loop over the reconstruction altitudes
     for i in range(N_alts):
@@ -2640,19 +2651,24 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             v_err = np.sqrt(Sig_x[1,1])
 
             
-            ###################### Final error flagging #######################
+            ###################### Final error flagging #######################            
+            
+            # Check if the interpolated L2.1 data were np.nan, which would have to 
+            # indicate weak signal (or is there another reason they might be masked?)
+            if np.isnan(los_wind_A_pt):
+                error_flags[i,k,2] = 1
+            if np.isnan(los_wind_B_pt):
+                error_flags[i,k,3] = 1
+                
             # Check spherical symmetry
             ver_rel_diff_pt = abs(ver_A_pt - ver_B_pt)/np.mean([ver_A_pt,ver_B_pt])
             if ver_rel_diff_pt > sph_asym_thresh:
-                error_flags[i,k,8] = 1
-        
-            # Check if L2.1 data were nan
-            if np.isnan(los_wind_A_pt):
                 error_flags[i,k,6] = 1
-            if np.isnan(los_wind_B_pt):
+                # Should we nan the data too?
+            
+            # Unknown error - this should never happen
+            if (np.isnan(u) or np.isnan(v)) and all(error_flags[i,k,:] == 0): # Unknown error
                 error_flags[i,k,7] = 1
-            if np.isnan(u) or np.isnan(v) and all(error_flags[i,k,:] == 0): # Unknown error
-                error_flags[i,k,9] = 1
                 
                 
             # Fill in all the relevant variables at this grid point
@@ -2676,6 +2692,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             # Take mean of that array
             dt_k = np.array([(ti - t_k[0]).total_seconds() for ti in t_k])
             epoch[k] = t_k[0] + timedelta(seconds=np.mean(dt_k))
+    
     
     # Create dictionary to be returned
     L22_dict = {}
@@ -3111,9 +3128,9 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         var = _create_variable(ncfile, '%s_Error_Flag'%prefix, np.transpose(L22_dict['error_flags'], (1,0,2)), 
                               dimensions=('Epoch', var_alt_name, 'N_Flags'), depend_0 = 'Epoch', depend_1 = var_alt_name, depend_2 = 'N_Flags',
                               format_nc='i8', format_fortran='I', desc='Error flags', 
-                              display_type='image', field_name='Error Flags', fill_value=None, label_axis='', bin_location=0.5,
-                              units='', valid_min=0, valid_max=1, var_type='metadata', chunk_sizes=[nx,ny,10],
-                              notes=["This variable provides information on why the Quality variable is reduced from 1.0. Ten error flags can "
+                              display_type='image', field_name='Error Flags', fill_value=-1, label_axis='', bin_location=0.5,
+                              units='', valid_min=0, valid_max=1, var_type='metadata', chunk_sizes=[nx,ny,8],
+                              notes=["This variable provides information on why the Quality variable is reduced from 1.0. Eight error flags can "
                               "exist for each grid point, each either 0 or 1. More than one flag can be raised per point. This variable "
                               "is a three-dimensional array with dimensions time, altitude, and number of flags.",
                                     "    0 = missing MIGHTI A file",
@@ -3122,10 +3139,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                     "    3 = B signal too weak",
                                     "    4 = A did not sample this altitude",
                                     "    5 = B did not sample this altitude",
-                                    "    6 = A sample exists but is NaN",
-                                    "    7 = B sample exists but is NaN",
-                                    "    8 = Spherical asymmetry: A and B VER estimates disagree",
-                                    "    9 = Unknown Error",
+                                    "    6 = Spherical asymmetry: A and B VER estimates disagree",
+                                    "    7 = Unknown Error",
                                     ])
         
         ncfile.close()
@@ -3275,7 +3290,9 @@ def level21_to_level22(info_fn):
     # For both red and green, create summary plots
     for fn in L22_fns:
         try:
-            plot_level22(fn, direc + 'Output/')
+            # Create a 24-hour plot and 6 4-hour plots. This may change.
+            plot_level22(fn, direc + 'Output/', nfigs=1)
+            plot_level22(fn, direc + 'Output/', nfigs=6)
         except Exception as e:
             failure_messages.append('Failed creating summary plot for %s:\n%s\n'%(fn, traceback.format_exc()))
     
@@ -3469,7 +3486,7 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
 
                 plt.subplot(ny,nx,i+1)
                 plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2], dk['los_wind'][:,i1:i2],
-                               vmin=-v_max, vmax=v_max, cmap='RdBu')
+                               vmin=-v_max, vmax=v_max, cmap='bwr')
                 plt.title('%s LoS Wind'% (color.capitalize()))
                 cb = plt.colorbar()
                 cb.set_label('m/s',rotation=-90,labelpad=10)
@@ -3560,10 +3577,8 @@ def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 1
         3: 'Error: MIGHTI-B weak signal',
         4: 'Error: MIGHTI-A missing this altitude',
         5: 'Error: MIGHTI-B missing this altitude',
-        6: 'Error: MIGHTI-A sample is NaN',
-        7: 'Error: MIGHTI-B sample is NaN',
-        8: 'Error: Spherical asymmetry detected',
-        9: 'Error: Unknown' 
+        6: 'Error: Spherical asymmetry detected',
+        7: 'Error: Unknown' 
     }
 
     Nalt, Nlon, Nflags = np.shape(L22_dict['error_flags'])
@@ -3586,7 +3601,7 @@ def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 1
             plt.pcolormesh(lonu   [:,i1:i2], 
                            alt_mat[:,i1:i2],
                            W      [:,i1:i2],
-                           cmap='RdBu')
+                           cmap='bwr')
             plt.clim((-v_max,v_max))
             if i==0:
                 plt.title('Zonal Wind')
@@ -3615,10 +3630,17 @@ def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 1
             # define the bins and normalize
             cmap=cmap_custom
             bounds = [-0.5,0.5,1.5]
-            norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
+            norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)            
+            e = L22_dict['error_flags'][:,i1:i2,i].astype(float)
+            # For spherical symmetry flag, mask it to look like data so we can see where
+            # this flag actually matters
+            if i==6:
+                e = np.ma.masked_array(e, L22_dict['u'].mask[:,i1:i2])
+                #e[L22_dict['u'].mask[:,i1:i2]] = np.nan
+            #em = np.ma.masked_array(e, np.isnan(e))
             plt.pcolormesh(lonu   [:,i1:i2],
                            alt_mat[:,i1:i2],
-                           L22_dict['error_flags'][:,i1:i2,i],
+                           e,
                            cmap=cmap, norm=norm)
             plt.title(error_str[i])
             plt.axis('tight')
@@ -3644,7 +3666,7 @@ def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 1
         fig.suptitle('%s %s Plot %i/%i' % (datestr, L22_dict['emission_color'], n+1,nfigs), fontsize=28)
         
         #### Save
-        pngfn = pngpath + L22_fn.split('/')[-1][:-3] + '_p%02i.png'%n
+        pngfn = pngpath + L22_fn.split('/')[-1][:-3] + '_p%02i_%02i.png'%(n+1,nfigs)
         plt.savefig(pngfn, dpi=70)
         plt.close()
         L22_pngs.append(pngfn)
