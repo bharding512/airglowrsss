@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 6 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 7 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -2121,8 +2121,13 @@ def level1_to_level21(info_fn):
                 failure_messages.append('Failed processing:\n\tL1_file = %s\n\tColor   = %s\n%s\n'%(L1_fn,emission_color,traceback.format_exc()))
     
     # Summary plots
+    Afns = [fn for fn in L21_fns if 'MIGHTI-A' in fn]
+    Bfns = [fn for fn in L21_fns if 'MIGHTI-B' in fn]
     try:
-        plot_level21(L21_fns, direc + 'Output/')
+        if Afns:
+            plot_level21(Afns, direc + 'Output/')
+        if Bfns:
+            plot_level21(Bfns, direc + 'Output/')
     except Exception as e:
         failure_messages.append('Failed creating summary plot:\n%s\n'%(traceback.format_exc()))
     
@@ -3432,6 +3437,7 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
         fns_short = [fn for fn in L21_fns if color in fn.lower()]
         if len(fns_short)>0:
             d[color] = level21_to_dict(fns_short)
+            # HACK: if amplitude or error is 0 (causes problems with Log scale plotting) make it np.nan
     
     # For each, add a variable giving the time as a matrix (to be used for plotting)
     for color in ['red','green']:
@@ -3462,80 +3468,102 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
 
     L21_pngs = []
     for n in range(nfigs):
+        try:
 
-        # Define time range for this plot
-        tmin = tallmin + timedelta(hours=n*timechunk)
-        tmax = tmin + timedelta(hours=timechunk)
+            # Define time range for this plot
+            tmin = tallmin + timedelta(hours=n*timechunk)
+            tmax = tmin + timedelta(hours=timechunk)
 
 
-        fig = plt.figure(figsize=(16,10))
-        tmin_title = datetime(2100,1,1) # for specifying the title of each plot (updated below)
-        tmax_title = datetime(1970,1,1)
-        ################## Plot ###################
-        colors = ['red', 'green']
-        cmaps = ['inferno', 'viridis']
-        for i,color in enumerate(colors):
-            if color in d.keys():
-                dk = d[color]
-                i1 = bisect.bisect(dk['time'],tmin) - 1
-                i2 = bisect.bisect(dk['time'],tmax)
-                if dk['time'][i1] < tmin_title:
-                    tmin_title = dk['time'][i1]
-                if dk['time'][i2-1] > tmax_title:
-                    tmax_title = dk['time'][i2-1]
+            fig = plt.figure(figsize=(16,10))
+            tmin_title = datetime(2100,1,1) # for specifying the title of each plot (updated below)
+            tmax_title = datetime(1970,1,1)
+            ################## Plot ###################
+            colors = ['red', 'green']
+            cmaps = ['inferno', 'viridis']
+            for i,color in enumerate(colors):
+                if color in d.keys():
+                    dk = d[color]
+                    i1 = bisect.bisect(dk['time'],tmin) - 1
+                    i2 = bisect.bisect(dk['time'],tmax)
+                    if dk['time'][i1] < tmin_title:
+                        tmin_title = dk['time'][i1]
+                    if dk['time'][i2-1] > tmax_title:
+                        tmax_title = dk['time'][i2-1]
+                    
+                    plt.subplot(ny,nx,i+1)
+                    plt.title('%s LoS Wind'% (color.capitalize()))
+                    try: # These are wrapped in try blocks so that if something unexpected happens, a plot is still created.
+                        plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2], dk['los_wind'][:,i1:i2],
+                                       vmin=-v_max, vmax=v_max, cmap='bwr')
+                        cb = plt.colorbar()
+                        cb.set_label('m/s',rotation=-90,labelpad=10)
+                    except:
+                        print 'Failed to produce wind plot:'
+                        print traceback.format_exc()
+                        pass
+                    
+                    plt.subplot(ny,nx,i+3)
+                    plt.title('%s LoS Wind Error'% (color.capitalize()))
+                    try:
+                        plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2],dk['los_wind_error'][:,i1:i2],
+                                       norm=LogNorm(vmin=ve_min, vmax=ve_max), cmap=cmaps[i]+'_r')
+                        cb = plt.colorbar()
+                        cb.set_label('m/s',rotation=-90,labelpad=10)
+                    except:
+                        print 'Failed to produce wind error plot:'
+                        print traceback.format_exc()
+                        pass
 
-                plt.subplot(ny,nx,i+1)
-                plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2], dk['los_wind'][:,i1:i2],
-                               vmin=-v_max, vmax=v_max, cmap='bwr')
-                plt.title('%s LoS Wind'% (color.capitalize()))
-                cb = plt.colorbar()
-                cb.set_label('m/s',rotation=-90,labelpad=10)
+                    plt.subplot(ny,nx,i+5)
+                    plt.title('%s Fringe Amplitude'% (color.capitalize()))
+                    try:
+                        amp = dk['amp']
+                        amp_min = 1e-3*amp.max()
+                        amp[amp<amp_min] = amp_min # so it's plotted as dark instead of missing
+                        if (amp==0.0).all(): # Hack for the case where all data are invalid (still make a plot)
+                            raise ValueError('All data are zero')
+                        plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2], amp[:,i1:i2],
+                                       norm=LogNorm(vmin=amp_min, vmax=amp.max()), cmap=cmaps[i])
+                        cb = plt.colorbar()
+                        cb.set_label('arb',rotation=-90,labelpad=10)
+                    except:
+                        print 'Failed to produce amplitude plot:'
+                        print traceback.format_exc()
+                        pass
 
-                plt.subplot(ny,nx,i+3)
-                plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2],dk['los_wind_error'][:,i1:i2],
-                               norm=LogNorm(vmin=ve_min, vmax=ve_max), cmap=cmaps[i]+'_r')
-                plt.title('%s LoS Wind Error'% (color.capitalize()))
-                cb = plt.colorbar()
-                cb.set_label('m/s',rotation=-90,labelpad=10)
+                    ###### Prettify the axes, labels, etc #####
+                    for sp in [i+1,i+3,i+5]:
+                        plt.subplot(ny,nx,sp)
+                        plt.gca().patch.set_facecolor('gray')
+                        plt.gca().xaxis.set_major_formatter(dates.DateFormatter('%H:%M'))
+                        plt.ylabel('Altitude [km]')
+                        plt.gca().yaxis.set_ticks([100,200,300])
+                        plt.ylim((85,320))
+                        plt.yscale('log')
+                        plt.gca().yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
+                        plt.gca().yaxis.set_minor_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
+                        plt.xlim((tmin,tmax))
 
-                plt.subplot(ny,nx,i+5)
-                amp = dk['amp']
-                amp_min = 1e-3*amp.max()
-                amp[amp<amp_min] = amp_min # so it's plotted as dark instead of missing
-                plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2], amp[:,i1:i2],
-                               norm=LogNorm(vmin=amp_min, vmax=amp.max()), cmap=cmaps[i])
-                plt.title('%s Fringe Amplitude'% (color.capitalize()))
-                cb = plt.colorbar()
-                cb.set_label('arb',rotation=-90,labelpad=10)
+            # Determine min and max time for the title
+            if tmin_title.date() == tmax_title.date():
+                datestr = '%s - %s' % (tmin_title.strftime('%Y-%m-%d %H:%M:%S'), tmax_title.strftime('%H:%M:%S'))
+            else:
+                datestr = '%s - %s' % (tmin_title.strftime('%Y-%m-%d %H:%M:%S'), tmax_title.strftime('%Y-%m-%d %H:%M:%S'))
+            fig.suptitle('%s  %s' % (sensor, datestr), fontsize=28)
 
-                ###### Prettify the axes, labels, etc #####
-                for sp in [i+1,i+3,i+5]:
-                    plt.subplot(ny,nx,sp)
-                    plt.gca().patch.set_facecolor('gray')
-                    plt.gca().xaxis.set_major_formatter(dates.DateFormatter('%H:%M'))
-                    plt.ylabel('Altitude [km]')
-                    plt.gca().yaxis.set_ticks([100,200,300])
-                    plt.ylim((85,320))
-                    plt.yscale('log')
-                    plt.gca().yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
-                    plt.gca().yaxis.set_minor_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
-                    plt.xlim((tmin,tmax))
+            fig.autofmt_xdate()
+            fig.tight_layout(rect=[0,0.03,1,0.95]) # leave room for suptitle
 
-        # Determine min and max time for the title
-        if tmin_title.date() == tmax_title.date():
-            datestr = '%s - %s' % (tmin_title.strftime('%Y-%m-%d %H:%M:%S'), tmax_title.strftime('%H:%M:%S'))
-        else:
-            datestr = '%s - %s' % (tmin_title.strftime('%Y-%m-%d %H:%M:%S'), tmax_title.strftime('%Y-%m-%d %H:%M:%S'))
-        fig.suptitle('%s  %s' % (sensor, datestr), fontsize=28)
-
-        fig.autofmt_xdate()
-        fig.tight_layout(rect=[0,0.03,1,0.95]) # leave room for suptitle
-
-        #### Save
-        pngfn = pngpath + 'ICON_L2_%s_Line-of-Sight-Wind_%s.png' % (sensor, tmin_title.strftime('%Y-%m-%d_%H%M%S'))
-        plt.savefig(pngfn, dpi=70)
-        plt.close()
-        L21_pngs.append(pngfn)
+            #### Save
+            pngfn = pngpath + 'ICON_L2_%s_Line-of-Sight-Wind_%s.png' % (sensor, tmin_title.strftime('%Y-%m-%d_%H%M%S'))
+            plt.savefig(pngfn, dpi=70)
+            plt.close()
+            L21_pngs.append(pngfn)
+        except:
+            print 'Failed to produce plot %i (out of %i):' % (n+1,nfigs)
+            print traceback.format_exc()
+            raise # This should never happen, so let it crash
         
     return L21_pngs
 
