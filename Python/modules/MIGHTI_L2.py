@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 7 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 8 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -23,7 +23,7 @@ global_params = {}
 global_params['red'] = {
     'sigma'             : 1.0/630.0304e-9, # reciprocal of center wavelength of emission [m^-1] 
                                            # (from John Harlander)  
-    'bin_size'          : 11,               # The number of rows of the interferogram to bin together to 
+    'bin_size'          : 1,               # The number of rows of the interferogram to bin together to 
                                            # improve statistics at the cost of altitude resolution.   
     'account_for_local_projection': True,  # Whether to account for the fact that the line of sight is not
                                            # quite horizontal everywhere along the line of sight
@@ -41,7 +41,7 @@ global_params['red'] = {
 
 global_params['green'] = {
     'sigma'             : 1.0/557.7339e-9,
-    'bin_size'          : 2,
+    'bin_size'          : 1,
     'account_for_local_projection': True,
     'integration_order' : 0,
     'top_layer'         : 'exp',
@@ -116,49 +116,6 @@ def phase_to_wind_factor(sigma_opd):
 
 
 
-def unwrap(x, start=0):
-    '''
-    Unwrap a monotonically increasing phase signal to remove -2*pi jumps.
-    This is very similar to np.unwrap, but only unwraps negative jumps. 
-    
-    INPUTS:
-    
-      *  x     -- TYPE:array, UNITS:rad. Signal that has -2*pi jumps to remove
-      
-    OPTIONAL INPUTS:
-    
-      * start  -- TYPE:int.              The pixel at which to begin unwrapping
-      
-    OUTPUTS:
-    
-      *  xnew  -- TYPE:array, UNITS:rad. Copy of x with -2*pi jumps removed
-      
-    '''
-    
-    assert(isinstance(start,int)), "Input 'start' must be an integer"
-    
-    xnew = np.zeros(len(x))
-    xnew[start] = x[start]
-
-    # Go from start forwards
-    dx = np.diff(x[start:])
-    #idx = dx < -np.pi # This throws a warning for nans, so use a more complicated expression:
-    idx = np.array([dxi < -np.pi if not np.isnan(dxi) else False for dxi in dx], dtype=bool)
-    dx[idx] = dx[idx] + 2.*np.pi
-    xnew[start+1:] = xnew[start] + np.cumsum(dx)
-
-    # Go from start backwards
-    dx = np.diff(x[start::-1])
-    #idx = dx > np.pi # This throws a warning for nans, so use a more complicated expression:
-    idx = np.array([dxi > np.pi if not np.isnan(dxi) else False for dxi in dx], dtype=bool)
-    dx[idx] = dx[idx] - 2.*np.pi
-    xnew[:start] = xnew[start] + np.cumsum(dx)[::-1]
-    
-    return xnew
-
-
-
-
 def circular_mean(angle0,angle1):
     '''
     Find the mean angle, taking into account 0/360 crossover. For example,
@@ -181,7 +138,7 @@ def circular_mean(angle0,angle1):
 
 
 
-def remove_satellite_velocity(I, sat_latlonalt, sat_velocity, sat_velocity_vector, mighti_vectors, sigma_opd,):
+def remove_satellite_velocity(I, sat_latlonalt, sat_velocity_vector, mighti_vectors, sigma_opd,):
     '''
     Modify the interferogram to remove the effect of satellite velocity upon the phase. 
     
@@ -189,9 +146,7 @@ def remove_satellite_velocity(I, sat_latlonalt, sat_velocity, sat_velocity_vecto
     
       *  I                   -- TYPE:array(ny,nx),    UNITS:arb.  The MIGHTI interferogram. 
       *  sat_latlonalt       -- TYPE:array(3),        UNITS:(deg,deg,km). Satellite location in WGS84.
-      *  sat_velocity        -- TYPE:float,           UNITS:m/s.  ICON velocity.
-      *  sat_velocity_vector -- TYPE:array(3),        UNITS:none. The unit ECEF vector describing
-                                                                  the direction of ICON's velocity vector.
+      *  sat_velocity_vector -- TYPE:array(3),        UNITS:m/s.  Satellite velocity vector in ECEF
       *  mighti_vectors      -- TYPE:array(ny,nx,3),  UNITS:none. mighti_vectors[i,j,:] is a unit 3-vector in ECEF
                                                                   coordinates defining the look direction of pixel (i,j).
       *  sigma_opd           -- TYPE:array(nx),       UNITS:none. The optical path difference (measured in wavelengths)
@@ -213,7 +168,7 @@ def remove_satellite_velocity(I, sat_latlonalt, sat_velocity, sat_velocity_vecto
         phase_to_wind = phase_to_wind_factor(sigma_opd[j]) # use a different phase-to-wind factor for each column
         for i in range(ny): # loop over rows
             look_vector = mighti_vectors[i,j,:]
-            proj_sat_vel = sat_velocity * np.dot(sat_velocity_vector, look_vector) # positive apparent wind towards MIGHTI
+            proj_sat_vel = np.dot(sat_velocity_vector, look_vector) # positive apparent wind towards MIGHTI
             sat_vel_phase[i,j] = proj_sat_vel/phase_to_wind
 
     # Subtract phase from the interferogram
@@ -267,7 +222,14 @@ def bin_array(b, y, lon = False):
 
         if lon:
             y_samps = fix_longitudes(y_samps, 180.)
-        y_b[i_new] = np.nanmean(y_samps)
+            
+        if all(np.isnan(y_samps)): # If all the values are nan, return nan
+            if y_b.dtype == complex:
+                y_b[i_new] = np.nan + 1j*np.nan
+            else:
+                y_b[i_new] = np.nan
+        else: # if there are non-nan values, take the nanmean
+            y_b[i_new] = np.nanmean(y_samps)
         
     return y_b
     
@@ -315,7 +277,7 @@ def bin_uncertainty(b, ye):
         else: # grab 
             ye_samps = ye[i_start:i_stop]
 
-        ye_b[i_new] = 1.0/len(ye_samps) * np.sqrt(np.nansum(ye_samps**2))
+        ye_b[i_new] = 1.0/sum(~np.isnan(ye_samps)) * np.sqrt(np.nansum(ye_samps**2))
         
     return ye_b
     
@@ -517,7 +479,8 @@ def create_local_projection_matrix(tang_alt, icon_alt):
     would be projected onto the line of sight. This has the same shape as the
     observation matrix (i.e., distance matrix). At the tangent point, this factor
     is 1.0. Far from the tangent point, this factor is smaller. If this effect is 
-    accounted for, it makes a small change in the winds (less than 5 m/s).
+    accounted for, it makes a small change in the winds (less than 5 m/s). 
+    Currently implemented as a simple unweighted average of the phase across the row.
     
     INPUTS:
     
@@ -553,7 +516,7 @@ def create_local_projection_matrix(tang_alt, icon_alt):
     
     
     
-def analyze_row(row, unwrapping_column):
+def analyze_row(row):
     '''
     Given a 1-D interference pattern (i.e., a row of the complex intererogram), 
     analyze it to get a scalar phase value, which represents the wind, and a
@@ -563,7 +526,6 @@ def analyze_row(row, unwrapping_column):
     INPUTS:
     
       *  row               -- TYPE:array(nx), UNITS:arb.   A row of the complex-valued, MIGHTI interferogram.
-      *  unwrapping_column -- TYPE:int.                    The column at which to begin unwrapping.
       
     OUTPUTS:
     
@@ -573,6 +535,8 @@ def analyze_row(row, unwrapping_column):
                                                            (normalized chi^2 = average value of (data - fit)**2)
        
     '''
+    if all(np.isnan(row)):
+        return np.nan, np.nan, np.nan
     
     row_phase = np.angle(row)
     
@@ -592,7 +556,7 @@ def analyze_row(row, unwrapping_column):
     
     
     
-def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertainty, unwrapping_column,
+def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertainty,
                       top_layer='exp', integration_order=0, account_for_local_projection=True, chi2_thresh=np.inf,
                       linear_amp = True):
     '''
@@ -609,7 +573,6 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
                                                            This is provided in L1 file.
       *  I_amp_uncertainty   -- TYPE:array(ny), UNITS:arb. Uncertainty in the summed amplitude of each row of I.
                                                            This is provided in L1 file.
-      *  unwrapping_column -- TYPE:array(ny).              The column at which to begin unwrapping the phase. 
       
     OPTIONAL INPUTS:
     
@@ -629,20 +592,20 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
                                                        Normalized by the number of samples. (default np.inf)
       *  linear_amp        -- TYPE:bool.   If True, a linear inversion is used on fringe amplitude. If False, the 
                                            fringe amplitude is estimated during the onion-peeling. These are the
-                                           same in the absence of noise, but may make a difference, especially
-                                           for computing uncertainties. (default True)
+                                           same in the absence of noise, but may make a difference at low SNR,
+                                           especially for computing uncertainties. (default True)
                                            
                                                            
     OUTPUTS:
     
       *  Ip                -- TYPE:array(ny,nx), UNITS:arb. The complex-valued, onion-peeled interferogram.
-      *  phase             -- TYPE:array(ny),    UNITS:rad. The unwrapped, mean phase of each row of Ip.
+      *  phase             -- TYPE:array(ny),    UNITS:rad. The mean phase of each row of Ip.
       *  amp               -- TYPE:array(ny),    UNITS:arb. The amplitude of each row of Ip.
-      *  phase_uncertainty -- TYPE:array(ny),    UNITS:rad. The uncertainty of phase
-      *  amp_uncertainty   -- TYPE:array(ny),    UNITS:arb. The uncertainty of amp
+      *  phase_uncertainty -- TYPE:array(ny),    UNITS:rad. The uncertainty of phase.
+      *  amp_uncertainty   -- TYPE:array(ny),    UNITS:arb. The uncertainty of amp.
       
     '''
-        
+    
     if top_layer not in ['exp','thin']:
         raise ValueError('Argument top_layer=\'%s\' not recognized. Use \'exp\' or \'thin\'.' % top_layer)
     if integration_order not in [0,1]:
@@ -687,7 +650,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
         Li = Li/dii
         Ip[i,:] = Li
         # Analyze the layer to get the phase, and store it.
-        p,a,c = analyze_row(Ip[i,:],  unwrapping_column[i])
+        p,a,c = analyze_row(Ip[i,:])
         phase[i] = p
         amp[i] = a
         chi2[i] = c
@@ -704,28 +667,31 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     if linear_amp: # Replace the onion-peeled amplitude with the linear inversion
         amp_L1 = np.zeros(ny) # fringe amplitude at each row of L1 interferogram
         for i in range(ny):
-            _, a, _ = analyze_row(I[i,:], unwrapping_column[i])
+            _, a, _ = analyze_row(I[i,:])
             amp_L1[i] = a
-        amp = np.linalg.solve(D, amp_L1) # fringe amplitude at each altitude  
-    
+        # Be careful with nans. If left unchecked they will contaminate other
+        # altitudes. For purposes of inverting amplitude/VER, treat nan 
+        # rows as 0 signal, but replace with nan at the end.
+        inan = np.isnan(amp_L1)
+        amp_L1[inan] = 0.0
+        amp = np.linalg.solve(D, amp_L1) # fringe amplitude at each altitude
+        amp[inan] = np.nan
 
     ######### Uncertainty propagation #########
     # Uncertainties can be propagated using simple linear inversion formula
     # (i.e., as if account_for_local_projection=False) to a very good approximation
     # (less than 1% error).
     
-
-    
     ### Step 0: Characterize L1 and L2.1 interferograms with a single amp/phase per row
     ph_L1 = np.zeros(ny)
     A_L1 = np.zeros(ny)
     for i in range(ny):
-        p,a,_ = analyze_row(I[i,:], unwrapping_column[i])
+        p,a,_ = analyze_row(I[i,:])
         ph_L1[i] = p
         A_L1[i] = a
     ph_L2 = phase.copy() # this was calculated above
     A_L2 = amp.copy() # this was calculated above
-    
+
     ### Step 0.5: Handle nans and bad rows
     # For purposes of computing uncertainty, nans are like signal that we know is zero
     # to good precision.
@@ -746,7 +712,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
         J = np.array([[np.cos(ph_L1[m]), -A_L1[m]*np.sin(ph_L1[m])],
                       [np.sin(ph_L1[m]),  A_L1[m]*np.cos(ph_L1[m])]])
         cov_amp_phase = np.diag([I_amp_uncertainty[m], I_phase_uncertainty[m]])**2 # assuming uncorrelated
-        cov_amp_phase[np.isnan(cov_amp_phase)] = 0.0 # so nan columns don't corrupt the entire image
+        cov_amp_phase[np.isnan(cov_amp_phase)] = 0.0 # so the few nan *columns* don't corrupt the entire image
         cov_real_imag_L1[m,:,:] = J.dot(cov_amp_phase).dot(J.T) # Error propagation
 
     ### Step 2: Propagate uncertainties through the path length inversion
@@ -779,6 +745,12 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     if linear_amp: # Use linear propagation formula to overwrite
         DD = Dinv.dot(Dinv.T)
         amp_uncertainty = I_amp_uncertainty * np.sqrt(np.diag(DD))
+        
+    # Places where the values are nan should have nan uncertainty
+    # (It was temporarily set to zero above for the purposes of 
+    # propagating uncertainty, but should now be corrected)
+    amp_uncertainty[np.isnan(amp)] = np.nan
+    phase_uncertainty[np.isnan(phase)] = np.nan
             
     return Ip, phase, amp, phase_uncertainty, amp_uncertainty, chi2
 
@@ -1038,7 +1010,7 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
       
     OPTIONAL INPUTS:
       *  startstop      -- TYPE:bool, If False, read the midpoint value and write it to
-                                      both the "start" and "stop" variables
+                                      both the "start" and "stop" variables. (default True)
         
     OUTPUTS:
     
@@ -1086,12 +1058,7 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     # In the L1 file, the ECEF vectors are stored in multidimensional array: (time, start/mid/stop, vector_xyz, vert, horz)
     tmp                                    = f['ICON_L1_MIGHTI_%s_%s_ECEF_Unit_Vectors'% (sensor, emission_color.capitalize())][0,:,:,:]
     L1_dict['mighti_ecef_vectors']         = np.transpose(tmp, (1,2,0)) # V x H x vector
-    icon_vel_vec_start                     = f['ICON_L1_MIGHTI_%s_SC_Velocity_ECEF'% sensor][0,istart,:]
-    icon_vel_vec_stop                      = f['ICON_L1_MIGHTI_%s_SC_Velocity_ECEF'% sensor][0,istop ,:]
-    L1_dict['icon_ecef_ram_vector_start']  = icon_vel_vec_start/np.linalg.norm(icon_vel_vec_start)
-    L1_dict['icon_ecef_ram_vector_stop']   = icon_vel_vec_stop/np.linalg.norm(icon_vel_vec_stop)
-    L1_dict['icon_velocity_start']         = np.linalg.norm(icon_vel_vec_start)
-    L1_dict['icon_velocity_stop']          = np.linalg.norm(icon_vel_vec_stop)
+    L1_dict['icon_velocity_vector']        = f['ICON_L1_MIGHTI_%s_SC_Velocity_ECEF'% sensor][0,1,:] # at middle of exposure
     L1_dict['source_files']                = [f.Parents]
     L1_dict['acknowledgement']             = f.Acknowledgement
     tsec_start                             = f['ICON_L1_MIGHTI_%s_Image_Times'% sensor][0,istart]*1e-3
@@ -1113,7 +1080,6 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     col = f.getncattr('Reference_Pixel_%s' % emission_color.capitalize())
     if not hasattr(col,'__len__'): # Only a single value was given. Expand to all rows
         col = col*np.ones(ny)
-    L1_dict['unwrapping_column'] = np.array([int(x) for x in col]) # convert to integer
     
     # Dummy placeholder code for reading global attributes, if that matters
     nc_attrs = f.ncattrs()
@@ -1181,15 +1147,9 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                       * icon_lon_stop              -- TYPE:float,        UNITS:deg.  
                                                                        Spacecraft longitude at end of exposure
                                       * mighti_ecef_vectors        -- TYPE:array(ny,nx,3).           
-                                                                      Unit ECEF vector of line of sight of each pixel at middle of exposure 
-                                      * icon_ecef_ram_vector_start -- TYPE:array(3).                 
-                                                                      Unit ECEF vector of spacecraft ram at beginning of exposure
-                                      * icon_ecef_ram_vector_stop  -- TYPE:array(3).                 
-                                                                      Unit ECEF vector of spacecraft ram at end of exposure
-                                      * icon_velocity_start        -- TYPE:float.        UNITS:m/s.  
-                                                                      Spacecraft velocity at beginning of exposure
-                                      * icon_velocity_stop         -- TYPE:float.        UNITS:m/s.  
-                                                                      Spacecraft velocity at end of exposure
+                                                                      Unit ECEF vector of line of sight of each pixel at middle of exposure
+                                      * icon_velocity_vector       -- TYPE:array(3),     UNITS:m/s.
+                                                                      Spacecraft velocity vector in ECEF coordinates at middle of exposure
                                       * source_files               -- TYPE:list of strs.             
                                                                       All files that were used to generate this L1 file
                                       * time_start                 -- TYPE:datetime (timezone naive).                
@@ -1200,10 +1160,6 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                                                       Length of exposure
                                       * optical_path_difference    -- TYPE:array(nx).    UNITS:m.    
                                                                       Optical path difference for each column of interferogram
-                                      * unwrapping_column          -- TYPE:array(ny) of int.           
-                                                                      The column at which to begin unwrapping the phase of the interferogram.
-                                                                      This is necessary to ensure that the zero wind phase (which was removed
-                                                                      in the L1 processing) does not have a 2pi ambiguity. It is a function of row.
                                       * acknowledgements           -- TYPE:str.
                                                                       The value in the global attribute "Acknowledgement" which will be propagated
                                              
@@ -1258,9 +1214,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                 * bin_size                  -- TYPE:int.                      Bin size used in the processing
                                 * top_layer                 -- TYPE:str.                      How the top layer was handled: 'thin' or 'exp'
                                 * integration_order         -- TYPE:int.                      Order of integration used in inversion: 0 or 1
-                                * unwrapping_column         -- TYPE:array(ny) of int.         The reference column for unwrapping used in the processing
                                 * I                         -- TYPE:array(ny,nx) UNITS:arb.   The complex-valued, onion-peeled interferogram
-                                * chi2                      -- TYPE:array(ny)    UNITS:rad^2. The normalized chi^2 from the line fit during phase
+                                * chi2                      -- TYPE:array(ny)    UNITS:rad^2. The normalized chi^2 from the phase
                                                                                               extraction from each row of the interferogram.
                                 * quality                   -- TYPE:array(ny)    UNITS:arb.   A number from 0 (Bad) to 1 (Good) for each altitude.
                                 * acknowledgement           -- TYPE:str.                      A copy of the Acknowledgement attribute in the L1 file.
@@ -1294,22 +1249,20 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     opd = L1_dict['optical_path_difference']
     sigma_opd = sigma * opd # Optical path difference, in units of wavelengths
     sensor = L1_dict['sensor']
-    unwrapping_column = L1_dict['unwrapping_column']
+    mighti_ecef_vectors = L1_dict['mighti_ecef_vectors']
+    icon_velocity_vector = L1_dict['icon_velocity_vector']
     
     # Load parameters which are averaged from start to stop of exposure.
     icon_alt = (L1_dict['icon_alt_start'] + L1_dict['icon_alt_stop'])/2
     icon_lat = (L1_dict['icon_lat_start'] + L1_dict['icon_lat_stop'])/2
     icon_lon = circular_mean(L1_dict['icon_lon_start'], L1_dict['icon_lon_stop'])
-    mighti_ecef_vectors = L1_dict['mighti_ecef_vectors']
     tang_alt = (L1_dict['tang_alt_start'] + L1_dict['tang_alt_stop'])/2
     tang_lat = (L1_dict['tang_lat_start'] + L1_dict['tang_lat_stop'])/2
     tang_lon = circular_mean(L1_dict['tang_lon_start'], L1_dict['tang_lon_stop'])
-    icon_ecef_ram_vector = (L1_dict['icon_ecef_ram_vector_start'] + L1_dict['icon_ecef_ram_vector_stop'])/2
-    icon_velocity = (L1_dict['icon_velocity_start'] + L1_dict['icon_velocity_stop'])/2
     
     #### Remove Satellite Velocity
     icon_latlonalt = np.array([icon_lat, icon_lon, icon_alt])
-    I = remove_satellite_velocity(Iraw, icon_latlonalt, icon_velocity, icon_ecef_ram_vector, mighti_ecef_vectors, sigma_opd)
+    I = remove_satellite_velocity(Iraw, icon_latlonalt, icon_velocity_vector, mighti_ecef_vectors, sigma_opd)
                          
     #### Bin data: average nearby rows together
     I        = bin_image(bin_size, I)
@@ -1317,11 +1270,8 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     tang_lon = bin_array(bin_size, tang_lon, lon=True)
     tang_alt = bin_array(bin_size, tang_alt)
     ny, nx = np.shape(I)
-    mighti_ecef_vectors_new = np.zeros((ny,nx,3))
-    mighti_ecef_vectors_new[:,:,0] = bin_image(bin_size, mighti_ecef_vectors[:,:,0]) # bin each component separately
-    mighti_ecef_vectors_new[:,:,1] = bin_image(bin_size, mighti_ecef_vectors[:,:,1]) # bin each component separately
-    mighti_ecef_vectors_new[:,:,2] = bin_image(bin_size, mighti_ecef_vectors[:,:,2]) # bin each component separately
-    mighti_ecef_vectors = mighti_ecef_vectors_new
+    mighti_ecef_vectors_center = mighti_ecef_vectors[:,nx/2,:] # For reporting in output file, determine ecef vector at center of row
+    mighti_ecef_vectors_center = bin_image(bin_size, mighti_ecef_vectors_center) # bin each component separately
     I_amp_uncertainty   = bin_uncertainty(bin_size, I_amp_uncertainty)
     I_phase_uncertainty = bin_uncertainty(bin_size, I_phase_uncertainty)
     
@@ -1331,7 +1281,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     
     #### Onion-peel interferogram
     Ip, phase, amp, phase_uncertainty, amp_uncertainty, chi2 = perform_inversion(I, tang_alt, icon_alt, 
-                           I_phase_uncertainty, I_amp_uncertainty, unwrapping_column,
+                           I_phase_uncertainty, I_amp_uncertainty,
                            top_layer=top_layer, integration_order=integration_order,
                            account_for_local_projection=account_for_local_projection,
                            chi2_thresh=chi2_thresh, linear_amp=linear_amp)
@@ -1355,9 +1305,6 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
   
     #### Calculate azimuth angles at measurement locations
     az = los_az_angle(icon_latlonalt, lat, lon, alt)
-
-    #### For reporting in output file, determine ecef vector at center of row
-    mighti_ecef_vectors_center = mighti_ecef_vectors[:,nx/2,:]
     
     # Make a L2.1 dictionary
     L21_dict = {
@@ -1381,13 +1328,12 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
              'fringe_amplitude'             : amp,
              'fringe_amplitude_error'       : amp_uncertainty,
              'mighti_ecef_vectors'          : mighti_ecef_vectors_center,
-             'icon_velocity_ecef_vector'    : icon_velocity * icon_ecef_ram_vector,
+             'icon_velocity_ecef_vector'    : icon_velocity_vector,
              'file_creation_time'           : datetime.now(),
              'source_files'                 : [L1_fn],
              'bin_size'                     : bin_size,
              'top_layer'                    : top_layer,
              'integration_order'            : integration_order,
-             'unwrapping_column'            : unwrapping_column,
              'I'                            : Ip,
              'chi2'                         : chi2,
              'wind_quality'                 : np.nan, # TODO
@@ -2106,7 +2052,7 @@ def level1_to_level21(info_fn):
         data_revision = [data_revision[0]]*len(L1_fns)
     assert len(L1_fns)==len(data_revision), "Length of revision list != Length of file list"
     
-    
+    tstart = datetime.now()
     # Loop and call the lower-level function which does all the real work.
     L21_fns = []
     failed_L1_fns = []
@@ -2119,6 +2065,8 @@ def level1_to_level21(info_fn):
             except Exception as e:
                 failed_L1_fns.append(L1_fn)
                 failure_messages.append('Failed processing:\n\tL1_file = %s\n\tColor   = %s\n%s\n'%(L1_fn,emission_color,traceback.format_exc()))
+    tfiles = datetime.now()
+    #print 'Finished creating L2.1 files (%.2f min)' % ((tfiles-tstart).total_seconds()/60.)
     
     # Summary plots
     Afns = [fn for fn in L21_fns if 'MIGHTI-A' in fn]
@@ -2130,6 +2078,9 @@ def level1_to_level21(info_fn):
             plot_level21(Bfns, direc + 'Output/')
     except Exception as e:
         failure_messages.append('Failed creating summary plot:\n%s\n'%(traceback.format_exc()))
+    tplots = datetime.now()
+    #print 'Finished making L2.1 plots (%.2f min)' % ((tplots-tfiles).total_seconds()/60.)
+
     
     if not failure_messages: # Everything worked
         return ''
@@ -2165,7 +2116,8 @@ def level21_to_dict(L21_fns):
                   * los_wind_error  -- TYPE:array(ny,nt), UNITS:m/s. Error in los_wind variable.
                   * local_az        -- TYPE:array(ny,nt), UNITS:deg. Azimuth angle of vector pointing from 
                                        MIGHTI towards the sample location, at the sample location (deg E of N).
-                  * amp             -- TYPE:array(ny,nt), UNITS:arb. Fringe amplitude at sample locations
+                  * amp             -- TYPE:array(ny,nt), UNITS:arb. Fringe amplitude at sample locations.
+                  * amp_error       -- TYPE:array(ny,nt), UNITS:arb. Error in amp variable.
                   * time            -- TYPE:array(nt).               Array of datetime objects, one per file.
                   * icon_lat        -- TYPE:array(nt),    UNITS:deg. Spacecraft latitude.
                   * icon_lon        -- TYPE:array(nt),    UNITS:deg. Spacecraft longitude.
@@ -2189,6 +2141,7 @@ def level21_to_dict(L21_fns):
                  'los_wind_error',
                  'local_az',
                  'amp',
+                 'amp_error',
                  'time',
                  'icon_lat',
                  'icon_lon',
@@ -2205,7 +2158,6 @@ def level21_to_dict(L21_fns):
         try:
             d = netCDF4.Dataset(fn)
         except IOError as e:
-            d.close()
             print 'Error reading file: %s' % fn
             raise
         sens  = d.Instrument[-1] # 'A' or 'B'
@@ -2220,6 +2172,7 @@ def level21_to_dict(L21_fns):
         z['los_wind_error'].append(d.variables['%s_Line_of_Sight_Wind_Error' % prefix][...])
         z['local_az'].append(      d.variables['%s_Line_of_Sight_Azimuth' % prefix][...])
         z['amp'].append(           d.variables['%s_Fringe_Amplitude' % prefix][...])
+        z['amp_error'].append(     d.variables['%s_Fringe_Amplitude_Error' % prefix][...])
         time_msec =                d.variables['Epoch'][...].item()
         z['time'].append(datetime(1970,1,1) + timedelta(seconds = 1e-3*time_msec))
         z['icon_lat'].append(      d.variables['%s_Spacecraft_Latitude' % prefix][...].item())
@@ -2232,14 +2185,10 @@ def level21_to_dict(L21_fns):
         assert color == first_color, "Input files do not have the same emission color"
         d.close()
 
-    # Reorganize into masked arrays or arrays, as appropriate
+    # Replace masked arrays with nan and other minor things
     for v in variables:
-        # Check if the variable should be cast to a masked array or regular array
-        ismasked = any([isinstance(x,np.ma.MaskedArray) for x in z[v]])
-        if ismasked:
-            z[v] = np.ma.vstack(z[v]).T
-        else:
-            z[v] = np.vstack(z[v]).T
+        tmp = [np.ma.filled(x, np.nan) for x in z[v]]
+        z[v] = np.vstack(tmp).T
         # If the shape is 1 by something (i.e., only one value per time),
         # then just make it a 1D array instead of 2D
         if np.shape(z[v])[0] == 1:
@@ -2367,8 +2316,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     lat_A      =       L21_A_dict['lat']
     lon_A_raw  =       L21_A_dict['lon']
     alt_A      =       L21_A_dict['alt']
-    los_wind_A =       np.ma.filled(L21_A_dict['los_wind'], np.nan) # convert from masked array to numpy array
-    los_wind_A_err =   np.ma.filled(L21_A_dict['los_wind_error'], np.nan) # convert from masked array to numpy array
+    los_wind_A =       L21_A_dict['los_wind']
+    los_wind_A_err =   L21_A_dict['los_wind_error']
     local_az_A =       L21_A_dict['local_az']
     amp_A      =       L21_A_dict['amp']
     time_A     =       L21_A_dict['time']
@@ -2379,8 +2328,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     lat_B      =       L21_B_dict['lat']
     lon_B_raw  =       L21_B_dict['lon']
     alt_B      =       L21_B_dict['alt']
-    los_wind_B =       np.ma.filled(L21_B_dict['los_wind'], np.nan) # convert from masked array to numpy array
-    los_wind_B_err =   np.ma.filled(L21_B_dict['los_wind_error'], np.nan) # convert from masked array to numpy array
+    los_wind_B =       L21_B_dict['los_wind']
+    los_wind_B_err =   L21_B_dict['los_wind_error']
     local_az_B =       L21_B_dict['local_az']
     amp_B      =       L21_B_dict['amp']
     time_B     =       L21_B_dict['time']
@@ -3402,7 +3351,7 @@ def level22_to_dict(L22_fn):
 #         These could probably be interpolated over reasonably well. Perhaps this should be 
 #         done as part of the L2.2 product?
 
-def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_max = 100.):
+def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_max = 100., amp_min = 1., amp_max = 1000.):
     '''
     Create Tohban plots for Level 2.1 data. Files from either MIGHTI-A or MIGHTI-B should
     be provided. The files will be broken into separate plots of length "timechunk" hours.
@@ -3419,17 +3368,20 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
       *  v_max        --TYPE:float,       Maximum wind velocity for colorbar [m/s]
       *  ve_min       --TYPE:float,       Minimum wind error for colorbar [m/s]
       *  ve_max       --TYPE:float,       Maximum wind error for colorbar [m/s]
+      *  amp_min       --TYPE:float,      Minimum fringe amplitude for colorbar [m/s]
+      *  amp_max       --TYPE:float,      Maximum fringe amplitude for colorbar [m/s]
                                    
     OUTPUT:
     
       *  L21_pngs     --TYPE:list of str,  Full path to the saved png files
     '''
     
+
     assert len(L21_fns)>0, "No files specified"
-    
+
     if pngpath[-1] != '/':
         pngpath += '/'
-    
+
     # Split up red/green and read
     L21_fns.sort()
     d = {} # keys are 'red' or 'green
@@ -3437,8 +3389,13 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
         fns_short = [fn for fn in L21_fns if color in fn.lower()]
         if len(fns_short)>0:
             d[color] = level21_to_dict(fns_short)
-            # HACK: if amplitude or error is 0 (causes problems with Log scale plotting) make it np.nan
-    
+
+    # Make nans into masked arrays so pcolormesh looks nicer.
+    # (Not necessary if we upgrade to matplotlib 2.1.0)
+    for color in ['red','green']:
+        for v in ['los_wind','los_wind_error','amp']:
+            d[color][v] = np.ma.masked_array(d[color][v], np.isnan(d[color][v]))
+
     # For each, add a variable giving the time as a matrix (to be used for plotting)
     for color in ['red','green']:
         if color in d.keys():
@@ -3448,7 +3405,7 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
             for j in range(Nx):
                 time_mat[:,j] = dk['time'][j]
             dk['time_mat'] = time_mat    
-    
+
     nx,ny = 2,3
 
     # Determine how many figures need to be made
@@ -3490,7 +3447,7 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
                         tmin_title = dk['time'][i1]
                     if dk['time'][i2-1] > tmax_title:
                         tmax_title = dk['time'][i2-1]
-                    
+
                     plt.subplot(ny,nx,i+1)
                     plt.title('%s LoS Wind'% (color.capitalize()))
                     try: # These are wrapped in try blocks so that if something unexpected happens, a plot is still created.
@@ -3502,7 +3459,7 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
                         print 'Failed to produce wind plot:'
                         print traceback.format_exc()
                         pass
-                    
+
                     plt.subplot(ny,nx,i+3)
                     plt.title('%s LoS Wind Error'% (color.capitalize()))
                     try:
@@ -3519,12 +3476,9 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
                     plt.title('%s Fringe Amplitude'% (color.capitalize()))
                     try:
                         amp = dk['amp']
-                        amp_min = 1e-3*amp.max()
                         amp[amp<amp_min] = amp_min # so it's plotted as dark instead of missing
-                        if (amp==0.0).all(): # Hack for the case where all data are invalid (still make a plot)
-                            raise ValueError('All data are zero')
                         plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2], amp[:,i1:i2],
-                                       norm=LogNorm(vmin=amp_min, vmax=amp.max()), cmap=cmaps[i])
+                                       norm=LogNorm(vmin=amp_min, vmax=amp_max), cmap=cmaps[i])
                         cb = plt.colorbar()
                         cb.set_label('arb',rotation=-90,labelpad=10)
                     except:
@@ -3556,15 +3510,17 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
             fig.tight_layout(rect=[0,0.03,1,0.95]) # leave room for suptitle
 
             #### Save
-            pngfn = pngpath + 'ICON_L2_%s_Line-of-Sight-Wind_%s.png' % (sensor, tmin_title.strftime('%Y-%m-%d_%H%M%S'))
+            pngfn = pngpath + 'ICON_L2_%s_Line-of-Sight-Wind_%s_to_%s.png' % (sensor, tmin_title.strftime('%Y-%m-%d_%H%M%S'),
+                                                                                      tmax_title.strftime('%Y-%m-%d_%H%M%S'))
             plt.savefig(pngfn, dpi=70)
             plt.close()
             L21_pngs.append(pngfn)
         except:
-            print 'Failed to produce plot %i (out of %i):' % (n+1,nfigs)
-            print traceback.format_exc()
+            # Should we catch this or let it fly? If a plot was not created, that's a failure.
+            #print 'Failed to produce plot %i (out of %i):' % (n+1,nfigs)
+            #print traceback.format_exc()
             raise # This should never happen, so let it crash
-        
+
     return L21_pngs
 
 
@@ -3662,10 +3618,9 @@ def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 1
             e = L22_dict['error_flags'][:,i1:i2,i].astype(float)
             # For spherical symmetry flag, mask it to look like data so we can see where
             # this flag actually matters
-            if i==6:
+            if i==6 and isinstance(L22_dict['u'],np.ma.MaskedArray):
                 e = np.ma.masked_array(e, L22_dict['u'].mask[:,i1:i2])
-                #e[L22_dict['u'].mask[:,i1:i2]] = np.nan
-            #em = np.ma.masked_array(e, np.isnan(e))
+                
             plt.pcolormesh(lonu   [:,i1:i2],
                            alt_mat[:,i1:i2],
                            e,
