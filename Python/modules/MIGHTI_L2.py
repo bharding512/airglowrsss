@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 9 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 10 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -2124,9 +2124,11 @@ def level21_to_dict(L21_fns):
                   * icon_alt        -- TYPE:array(nt),    UNITS:km.  Spacecraft altitude
                   * exp_time        -- TYPE:array(nt),    UNITS:sec. Exposure time of each sample.
                   * emission_color  -- TYPE:str,                     'red' or 'green'.
-                  * sensor          -- TYPE:list(nt),                each element is 'A' or 'B'
+                  * sensor          -- TYPE:list(nt).                Each element is 'A' or 'B'
                   * source_files    -- TYPE:list of str,             A copy of the input.
-                  * acknowledgement -- TYPE:str,                     The Acknowledgment attribute in the first file
+                  * version         -- TYPE:array(nt).               Version number of each file.
+                  * revision        -- TYPE:array(nt).               Revision number of each file.
+                  * acknowledgement -- TYPE:str.                     The Acknowledgment attribute in the first file
                   
     '''
     
@@ -2147,7 +2149,9 @@ def level21_to_dict(L21_fns):
                  'icon_lon',
                  'icon_alt',
                  'exp_time',
-                 'sensor',]
+                 'sensor',
+                 'version',
+                 'revision',]
 
     z = {}
     for v in variables:
@@ -2162,7 +2166,10 @@ def level21_to_dict(L21_fns):
             raise
         sens  = d.Instrument[-1] # 'A' or 'B'
         color = fn.split('/')[-1].split('_')[3].split('-')[-1] # Red or Green
-        prefix = 'ICON_L2_MIGHTI_%s_%s' % (sens, color.capitalize())    
+        versrev = fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
+        vers = int(versrev[1:3])
+        rev = int(versrev[4:])
+        prefix = 'ICON_L2_MIGHTI_%s_%s' % (sens, color.capitalize())
 
         # Load all variables
         z['lat'].append(           d.variables['%s_Latitude' % prefix][...])
@@ -2180,6 +2187,8 @@ def level21_to_dict(L21_fns):
         z['icon_alt'].append(      d.variables['%s_Spacecraft_Altitude' % prefix][...].item())
         z['exp_time'].append(float(d.Time_Resolution.split(' ')[0]))
         z['sensor'].append(sens)
+        z['version'].append(vers)
+        z['revision'].append(rev)
 
         ack = d.Acknowledgement    
         assert color == first_color, "Input files do not have the same emission color"
@@ -3507,7 +3516,12 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
                         plt.gca().yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
                         plt.gca().yaxis.set_minor_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
                         plt.xlim((tmin,tmax))
-
+            
+                    # Save max version/revision for this color for this plot
+                    # (filename should have max version/revision of source files per Tori's email 2018/05/08)
+                    dk['maxvers'] = max(dk['version'][i1:i2])
+                    dk['maxrev'] = max(dk['revision'][i1:i2])
+                    
             # Determine min and max time for the title
             if tmin_title.date() == tmax_title.date():
                 datestr = '%s - %s' % (tmin_title.strftime('%Y-%m-%d %H:%M:%S'), tmax_title.strftime('%H:%M:%S'))
@@ -3519,8 +3533,10 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
             fig.tight_layout(rect=[0,0.03,1,0.95]) # leave room for suptitle
 
             #### Save
-            pngfn = pngpath + 'ICON_L2_%s_Line-of-Sight-Wind_%s_to_%s.png' % (sensor, tmin_title.strftime('%Y-%m-%d_%H%M%S'),
-                                                                                      tmax_title.strftime('%Y-%m-%d_%H%M%S'))
+            vers = max(d['red']['maxvers'], d['green']['maxvers'])
+            rev  = max(d['red']['maxrev'],  d['green']['maxrev'])
+            pngfn = pngpath + 'ICON_L2_%s_Plot-Line-of-Sight-Wind_%s_to_%s_v%02ir%03i.png' % (sensor, tmin_title.strftime('%Y-%m-%d_%H%M%S'),
+                                                                                              tmax_title.strftime('%Y-%m-%d_%H%M%S'),vers,rev)
             plt.savefig(pngfn, dpi=70)
             plt.close()
             L21_pngs.append(pngfn)
