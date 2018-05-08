@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 10 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 11 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -3535,7 +3535,7 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
             #### Save
             vers = max(d['red']['maxvers'], d['green']['maxvers'])
             rev  = max(d['red']['maxrev'],  d['green']['maxrev'])
-            pngfn = pngpath + 'ICON_L2_%s_Plot-Line-of-Sight-Wind_%s_to_%s_v%02ir%03i.png' % (sensor, tmin_title.strftime('%Y-%m-%d_%H%M%S'),
+            pngfn = pngpath + 'ICON_L2_%s_Plot-Line-of-Sight-Wind_%s-to-%s_v%02ir%03i.png' % (sensor, tmin_title.strftime('%Y-%m-%d_%H%M%S'),
                                                                                               tmax_title.strftime('%Y-%m-%d_%H%M%S'),vers,rev)
             plt.savefig(pngfn, dpi=70)
             plt.close()
