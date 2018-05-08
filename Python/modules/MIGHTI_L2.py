@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 8 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 9 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -475,12 +475,12 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_o
 
 def create_local_projection_matrix(tang_alt, icon_alt):
     '''
-    Define the matrix B whose entries give the factor byF which a horizontal wind
+    Define the matrix B whose entries give the factor by which a horizontal wind
     would be projected onto the line of sight. This has the same shape as the
     observation matrix (i.e., distance matrix). At the tangent point, this factor
     is 1.0. Far from the tangent point, this factor is smaller. If this effect is 
-    accounted for, it makes a small change in the winds (less than 5 m/s). 
-    Currently implemented as a simple unweighted average of the phase across the row.
+    accounted for, it makes a small change in the winds (less than 5 m/s), mostly on
+    the bottomside. 
     
     INPUTS:
     
@@ -2302,6 +2302,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                    * source_files    -- TYPE:list of str,                 All the files used to create the data product,
                                                                           including the full paths.
                    * acknowledgement -- TYPE:str,                         The Acknowlegment copied from the L2.1 files
+                   * N_used_A        -- TYPE:array(n_files_A)             How many times each input MIGHTI-A file was used
+                   * N_used_B        -- TYPE:array(n_files_B)             How many times each input MIGHTI-B file was used
     '''
 
     ################################## Parse Inputs ####################################
@@ -2434,6 +2436,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     ver   = np.nan*np.zeros((N_alts, N_lons))            # fringe amplitude (mean of A and B)
     ver_rel_diff = np.nan*np.zeros((N_alts, N_lons))     # relative difference in A and B VER
     error_flags = np.zeros((N_alts, N_lons, 8), dtype=bool)      # Error flags, one set per grid point. See above for definition.
+    N_used_A = np.zeros(N_times_A)                       # Number of times each L2.1 MIGHTI-A file was used
+    N_used_B = np.zeros(N_times_B)                       # Same for MIGHTI-B
     
     # Loop over the reconstruction altitudes
     for i in range(N_alts):
@@ -2564,6 +2568,9 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             lat_B_pt      = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], lat_B     [:,kB0:kB1+1])
             ver_A_pt      = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], amp_A     [:,kA0:kA1+1])
             ver_B_pt      = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], amp_B     [:,kB0:kB1+1])
+            # Record files used
+            N_used_A[kA0:kA1+1] += 1
+            N_used_B[kB0:kB1+1] += 1
             
             # Interpolate time, which is more complicated because it's a datetime object
             t_A_0 = time_A[kA0]
@@ -2672,6 +2679,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     L22_dict['source_files'] = np.concatenate((L21_A_dict['source_files'], L21_B_dict['source_files']))
     L22_dict['acknowledgement'] = L21_A_dict['acknowledgement']
     L22_dict['wind_quality'] = np.nan*np.ones((N_alts,N_lons)) # TODO
+    L22_dict['N_used_A'] = N_used_A
+    L22_dict['N_used_B'] = N_used_B
     
     return L22_dict
 
@@ -3649,7 +3658,9 @@ def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 1
         fig.suptitle('%s %s Plot %i/%i' % (datestr, L22_dict['emission_color'], n+1,nfigs), fontsize=28)
         
         #### Save
-        pngfn = pngpath + L22_fn.split('/')[-1][:-3] + '_p%02i_%02i.png'%(n+1,nfigs)
+        versrev = L22_fn.split('/')[-1].split('_')[-1].split('.')[0]
+        desc = L22_fn.split('/')[-1].split('_')[-3] #e.g., Vector-Wind-Green
+        pngfn = pngpath + 'ICON_L2_MIGHTI_Plot-%s-%02i-%02i_%s.png'%(desc, n+1,nfigs, versrev)
         plt.savefig(pngfn, dpi=70)
         plt.close()
         L22_pngs.append(pngfn)
