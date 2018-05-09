@@ -7,7 +7,15 @@ Includes:
     - the calculation of the electron density content assuming radiative recombination and mutual neutralization
 Todo:
     - error flags (e.g., chi^2, ill-defined hmF2-finding)
-'''
+'''    
+
+####################################### VERSION CONTROL ############################################
+# These need to be manually changed, when necessary.
+# NOTE: When the major version is updated, you should change the History global attribute
+software_version_major = 1 # Should only be incremented on major changes
+software_version_minor = 1 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version = float(software_version_major)+software_version_minor/1000.
+####################################################################################################
 
 # Basic numerical python and math modules
 import numpy as np
@@ -867,7 +875,7 @@ L2 Calculation top-level function
 
 '''
 
-def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze, Sig_Bright = None, weight_resid = False, limb = 150.,Spherical = True,reg_method='Tikhonov',regu_order = 2,reg_param=0,contribution='RRMN', VER_mean=0.,VER_profiles=0,dn = datetime.datetime(2012, 9, 26, 20, 0, 0), f107=None, f107a=None, apmsis=None):
+def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze, Sig_Bright = None, weight_resid = False, limb = 250.,Spherical = True,reg_method='Tikhonov',regu_order = 2,reg_param=0,contribution='RRMN', VER_mean=0.,VER_profiles=0,dn = datetime.datetime(2012, 9, 26, 20, 0, 0), f107=None, f107a=None, apmsis=None):
     '''
     Within this function, given data from LVL1 Input file, the VER and Ne profiles for the tangent altitude point are
     calculated
@@ -897,6 +905,7 @@ def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze, Sig_Br
         h           - Truncated tangent altitude vector [km]
         Sig_VER     - (OPTIONAL) Returned if Sig_Bright is not None. Covariance matrix of VER.
         Sig_Bright  - (OPTIONAL) Returned if Sig_Bright is not None. Covariance matrix of Ne.
+        inv_quality - The integer showing how reliable our inversion is. (1: Unreliable, 2: Use with caution, 3: Reliable)
     NOTES:
 
     HISTORY:
@@ -913,11 +922,23 @@ def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze, Sig_Br
 
     # Truncate the tangent altitude vector to include only limb measurements
     h = alt_vector[np.where(alt_vector>limb)]
+    # Shift the altitude vector half shell above so that the altitudes are centered in the shells
+    # The last shell altitude is shifted for the same amount as the previous shell
+    h_centered = h + ( np.roll(h,-1) - h )/2
+    h_centered[-1] = h[-1] + ( h_centered[-2] - h[-2] )
+    
     Bright= Bright[0:len(h)]
     Sig_Bright = Sig_Bright[:len(h),:len(h)]
     ze = ze[:len(h)]
     az = az[:len(h)]
-
+    
+    # Implement a simple quality metric based on the peak brightness value
+    if np.max(Bright) > 20:
+        quality = 1.0
+    elif np.max(Bright) > 5:
+        quality = 0.5
+    else:
+        quality = 0.0
 
     # Check of we are estimating the distance matrix for a spherical or ellipsoid earth
     # Spherical earth calculations need ~0.26 secs
@@ -938,12 +959,12 @@ def FUV_Level_2_Density_Calculation(Bright,alt_vector,satlatlonalt,az,ze, Sig_Br
     else:
         raise Exception('Incorrect regularization method chosen. Choices are: Tikhonov or MAP')
 
-    Ne, Sig_Ne = calculate_electron_density(VER, satlatlonalt, h, dn, Sig_VER=Sig_VER, contribution=contribution,f107=f107, f107a=f107a, apmsis=apmsis, az=az, ze=ze)
+    Ne, Sig_Ne = calculate_electron_density(VER, satlatlonalt, h_centered, dn, Sig_VER=Sig_VER, contribution=contribution,f107=f107, f107a=f107a, apmsis=apmsis, az=az, ze=ze)
 
     if ret_cov:
-        return VER, Ne, h, Sig_VER, Sig_Ne
+        return VER, Ne, h_centered, Sig_VER, Sig_Ne, quality
     else:
-        return VER,Ne,h
+        return VER,Ne,h_centered, quality
 
 '''
 
@@ -951,30 +972,30 @@ HELPER FUNCTION FOR CREATING NETCDF4 variables
 
 '''
 
-def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', dimensions=(), zlib=True, complevel=6,
-                    shuffle=True,  depend_0=None, depend_1=None, depend_2=None, depend_3=None, chunk_sizes=None, desc='',
-                    display_type='scalar', field_name='', fill_value=None,label_axis='', bin_location=0.5,
-                    time_base='FIXED: 1970 (POSIX)', time_scale='UTC', units='', valid_min=None, valid_max=None,
-                    notes='', var_type='data'):
+def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', dimensions=(), zlib=True, complevel=6, 
+                    shuffle=True,  depend_0=None, depend_1=None, depend_2=None, chunk_sizes=None, desc='', 
+                    display_type='scalar', field_name='', fill_value=None,label_axis='', bin_location=0.5, 
+                    time_base='FIXED: 1970 (POSIX)', time_scale='UTC', units='', valid_min=None, valid_max=None, 
+                    notes='', var_type='data', monoton=None):
     '''
     A helper function to write a variable to a netCDF file.
-
+    
     INPUTS:
-
+    
       *  Self evident from the parameters above. Notes:
-
+      
             * fill_value = None --> default fill values will be used, if they exist. See netCDF4.default_fillvals
-            * display_type: for now, 'scalar', 'altitude_profile', or 'image' will be used
+            * display_type: for now, 'scalar', 'time_series', 'altitude_profile', or 'image' will be used
             * var_type: one of 'data', 'support_data', 'metadata', 'ignore_data'
             * format_fortran: Used by ISTP. See http://www.cs.mtu.edu/~shene/COURSES/cs201/NOTES/chap05/format.html
             * except as specified above, if a variable attribute is left as the default None, it will not be written to the file
-
+            
     OUTPUT:
-
+    
       *  The netCDF4._netCDF4.Variable object that was created and to which was written
-
-    '''
-
+    
+    '''    
+        
     # Rudimentary error-checking:
     valid_var_types = ['data','support_data','metadata','ignore_data']
     if var_type not in valid_var_types:
@@ -982,44 +1003,42 @@ def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', di
     if len(desc) > 80:
         raise Exception('"desc" is too long (%i chars). Shorten to 80 characters:\n"%s"' % (len(desc),desc))
     if len(field_name) > 30:
-        raise Exception('field_name="%s" is too long (%i chars). Shorten to 30 characters:\n' % (field_name,len(field_name)))
+        raise Exception('field_name="%s" is too long (%i chars). Shorten to 30 characters:\n"%s"' % (field_name,len(field_name)))
     if len(label_axis) > 10:
         raise Exception('label_axis="%s" is too long (%i chars). Shorten to 10 characters.' % (label_axis,len(label_axis)))
-
+    if monoton not in ['Increase', 'Decrease', None]:
+        raise Exception('Input "monoton" must be either "Increase", "Decrease" or None.')
+    
     # If fill value was not specified, use the default value, if it exists.
     # It will not exist for strings, for example, for which fill values
     # cannot be set. (TODO: is this right?)
     if fill_value is None and format_nc in netCDF4.default_fillvals.keys():
         fill_value = netCDF4.default_fillvals[format_nc]
-
+    
     var = ncfile.createVariable(name, format_nc, dimensions=dimensions, zlib=zlib, complevel=complevel,
                                shuffle=shuffle, chunksizes=chunk_sizes, fill_value=fill_value)
     var.CatDesc            = desc
     var.Long_Name          = desc
-    if chunk_sizes is not None:
-        var._ChunkingSizes = chunk_sizes
-    var._DeflateLevel      = complevel
-    var._Shuffle           = str(shuffle).lower()
     if depend_0 is not None:
         var.Depend_0       = depend_0
     if depend_1 is not None:
         var.Depend_1       = depend_1
     if depend_2 is not None:
         var.Depend_2       = depend_2
-    if depend_3 is not None:
-        var.Depend_3       = depend_3
-    var.Display_Type       = display_type
+    var.Display_Type       = display_type 
     var.FieldNam           = field_name
     # Note: t_var._FillValue not expliclity needed since that is set by the createVariable function argument "fill_value"
     #var._FillValue         = fill_value
     if fill_value is not None:
         var.FillVal        = var._FillValue
-    elif fill_value is None and format_nc == str:
-        # Special case for strings. Make sure to set FillVal even thought _FillValue can't be set
+    elif fill_value is None and format_nc == str: 
+        # Special case for strings. Make sure to set FillVal even though _FillValue can't be set
         var.FillVal        = ''
-
+        
     var.Format             = format_fortran
     var.LablAxis           = label_axis
+    if monoton is not None:
+        var.MonoTon        = monoton
     var.Bin_Location       = bin_location
     var.Time_Base          = time_base
     var.Time_Scale         = time_scale
@@ -1030,9 +1049,11 @@ def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', di
     if valid_max is not None:
         var.ValidMax       = valid_max
         var.Valid_Max      = valid_max
-    var.Var_Notes          = notes
+    if valid_min is not None and valid_max is not None:
+        var.Valid_Range    = [valid_min, valid_max]
+    var.setncattr_string('Var_Notes', notes) # to allow for multi-strings
     var.Var_Type           = var_type
-
+    
     # If a fill_value was specified, and if there are any np.nan values in
     # the variable, replace them with the fill value.
     if fill_value is not None:
@@ -1042,10 +1063,10 @@ def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', di
         # For non-sequences and strings:
         elif np.isnan(value):
             value = var._FillValue
-
+    
     # Assign value
     var[...] = value
-
+    
     return var
 
 '''
@@ -1076,26 +1097,32 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
     data_versionmajor = np.int(L25_full_fn[-9:-7])
     data_revision = np.int(L25_full_fn[-6:-3])
     data_version =  np.float(data_versionmajor)+data_revision/1000.# TODO: how will this be calculated? It goes into global attr Data_Version
-    software_versionmajor = data_versionmajor
-    software_revision = 0   # Increment this when making a revision!
-    software_version =  np.float(software_versionmajor)+software_revision/1000.
 
+    ####################################### VERSION CONTROL ############################################
+    # These need to be manually changed, when necessary.
+    # NOTE: When the major version is updated, you should change the History global attribute
+#    software_version_major = 1 # Should only be incremented on major changes
+#    software_version_minor = 1 # [0-99], increment on ALL published changes, resetting when the major version changes
+#    software_version = np.float(software_version_major)+software_version_minor/1000.
+    ####################################################################################################
+    
     # TODO: How will sensor be determined? Will it be in L1 file?
-    source_files = ' '.join(L25_dict['source_files'])
+    source_files = L25_dict['source_files']
     sensor = 'FUV'
 
     #################### Compile variables to write in file ######################
     t_file  = datetime.datetime.now()   # time this file was created
     ### Who's running this process
     user_name = getpass.getuser()
+    
     ### Parent files
-    parents = '' # This will go in global attr Parents
-    for source_fn in L25_dict['source_files']:
+    parents = []
+    for source_fn in source_files:
         s = source_fn.split('/')[-1].split('.')
         pre = '.'.join(s[:-1])
         post = s[-1].upper()
-        parents += '%s > %s, ' % (post, pre)
-    if parents: parents = parents[:-2] # trim trailing comma
+        parents.append('%s > %s' % (post,pre))
+             
     ### Parameters file, if there is one (note, that this will go in Calibration_File global attribute)
     param_fn = L25_dict['param_fn']
     if param_fn is None:
@@ -1108,39 +1135,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
     L25_fn = os.path.basename(L25_full_fn)
 
     ########################## Global Attributes #################################
-    ncfile.Acknowledgement =       ''.join(("This is a data product from the NASA Ionospheric Connection Explorer mission, ",
-                                            "an Explorer launched in June 2017.\n",
-                                            "\n",
-                                            "Responsibility of the mission science falls to the Principal Investigator, ",
-                                            "Dr. Thomas Immel at UC Berkeley.\n",
-                                            "\n",
-                                            "Validation of the L1 data products falls to the instrument lead ",
-                                            "investigators/scientists.\n",
-                                            "  * EUV  Dr. Eric Korpela\n",
-                                            "  * FUV  Dr. Harald Frey\n",
-                                            "  * MIGHTI  Dr. Chris Englert\n",
-                                            "  * IVM  Dr. Roderick Heelis\n",
-                                            "\n",
-                                            "Validation of the L2 data products falls to those responsible for those products.\n",
-                                            "  * O/N2  Dr. Andrew Stephan\n",
-                                            "  * Daytime (EUV) O+ profiles  Dr. Andrew Stephan\n",
-                                            "  * Nighttime (FUV) O+ profiles  Dr. Farzad Kamalabadi\n",
-                                            "  * Neutral Wind profiles  Dr. Jonathan Makela\n",
-                                            "  * Neutral Temperature profiles  Dr. Chris Englert\n",
-                                            "\n",
-                                            "Responsibility for Level 4 products are detailed on the ICON website ",
-                                            "(http://icon.ssl.berkeley.edu).\n",
-                                            "\n",
-                                            "Overall validation of the products is overseen by the ICON Project Scientist ",
-                                            "Dr. Scott England.\n",
-                                            "\n",
-                                            "NASA oversight for all products is provided by the Mission Scientist ",
-                                            "Dr. Douglas Rowland.\n",
-                                            "\n",
-                                            "Users of these data should contact and acknowledge the Principal Investigator ",
-                                            "Dr. Immel and the party directly responsible for the data product and the NASA ",
-                                            "Contract Number NNG12FA45C from the Explorers Project Office." ))
-
+    ncfile.setncattr_string('Acknowledgement',      L25_dict['acknowledgement'])
     ncfile.ADID_Ref =                       'NASA Contract > NNG12FA45C'
     ncfile.Calibration_File =               param_fn
     ncfile.Conventions =                    'SPDF ISTP/IACG Modified for NetCDF'
@@ -1171,7 +1166,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
     ncfile.Logical_Source_Description =     'FUV Short Wavelength Channel - 135.6 Altitude Profiles'
     ncfile.Mission_Group =                  'Ionospheric Investigations'
     ncfile.MODS =                           ncfile.History
-    ncfile.Parents =                        parents
+    ncfile.setncattr_string('Parents',      parents)
     ncfile.PI_Affiliation =                 'UC Berkeley > SSL'
     ncfile.PI_Name =                        'T. J. Immel'
     ncfile.Project =                        'NASA > ICON'
@@ -1182,7 +1177,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
     ncfile.Text =                           'ICON explores the boundary between Earth and space - the ionosphere - ' +\
                                             'to understand the physical connection between our world and the immediate '+\
                                             'space environment around us. Visit \'http://icon.ssl.berkeley.edu\' for more details.'
-    ncfile.Text_Supplement =                '((TODO: Insert reference to Kamalabadi et al [2017] paper))'
+    ncfile.Text_Supplement =                'This data product contains (nominally) 24 hours of data, including O+ density profiles of the nighttime ionosphere as well as ancillary data such as satellite locations and measurement times. In this data product, all the time variables and time dependent variables (with dimension Epoch) contain only the "nighttime" measurements. We neither use any daytime measurements nor output them in this data product. The O+ density profiles are estimated from the measured brightness profiles of 135.6 nm emissions by solving a regularized linear inverse problem. Due to multiple scattering (yields non-linearity) and low brightness (yields low SNR), we do not use the brightness measurements having tangent altitudes below 250 km, consequently we do not estimate the O+ density profile at altitudes below 250 km. The Altitude dimension is the maximum number of tangent points that are above 250 km for the entire 24-hour period. The Stripe dimension represents the dimension from left to right along the horizon. Nominally 6 stripes are used, and each stripe samples a 3-degree wide field of view. O+ density profiles are estimated separately for each stripe.' 
     ncfile.Time_Resolution =                '12 seconds'
     ncfile.Title =                          'ICON FUV O+ Altitude Profiles (DP 2.5)'
 
@@ -1190,9 +1185,8 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
     n = np.shape(L25_dict['FUV_TANGENT_ALT'])[1]
     t = np.shape(L25_dict['FUV_TANGENT_ALT'])[0]
     ncfile.createDimension('Epoch',t)
-    ncfile.createDimension('Vertical', n)
-    ncfile.createDimension('Horizontal',6)
-    ncfile.createDimension('Vector',3)
+    ncfile.createDimension('Altitude', n)
+    ncfile.createDimension('Stripe',6)
 
     # Get instrument name (FUVA or FUVB)
     inst = 'FUVA' # TODO: This needs to be automatically calculated
@@ -1202,212 +1196,188 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
     ######### Timing Variables #########
 
     # Time midpoint (the official required "Epoch" variable)
-    var_epoch = _create_variable(ncfile, 'EPOCH', L25_dict['FUV_EPOCH'],
+    var_epoch = _create_variable(ncfile, 'Epoch', L25_dict['FUV_EPOCH'],
                           dimensions=('Epoch'),
-                          format_nc='i8', format_fortran='I', desc='Milliseconds since 1970-01-01 00:00:00 UTC at middle of measurement integration.',
+                          format_nc='i8', format_fortran='I', desc='Milliseconds since 1970-01-01 00:00:00 UTC at middle of measurement integration',
                           display_type='Time_Series', field_name='ms epoch', fill_value=-1, label_axis='Time', bin_location=0.5,
                           units='ms', valid_min=np.int64(0), valid_max=np.int64(1000*365*86400e3), var_type='support_data', chunk_sizes=[1],
-                          depend_0 = 'Epoch', notes='')
+                          depend_0 = 'Epoch', monoton='Increase', notes='The center times of the exposures, measured as milliseconds after 1970-01-01/00:00:00 UT. There might be time jumps that are larger than the nominal measurement integration time between two consecutive elements of this array, which is because we neither include daytime measurements nor their times. There also could be larger time jumps due to calibration maneuvers or turret movements.')
 
-    var_time = _create_variable(ncfile, 'ICON_L2_%s_SWP_CENTER_TIMES' % inst, L25_dict['FUV_CENTER_TIMES'],
+    var_time = _create_variable(ncfile, 'ICON_L2_%s_SWP_Center_Times' % inst, L25_dict['FUV_CENTER_TIMES'],
                           dimensions=('Epoch'),
                           format_nc=str, format_fortran='A23', desc='Center time of 12-second profile integration',
                           display_type='Time_Series', field_name='Center time', fill_value=None, label_axis='Time', bin_location=0.5,
-                          units='s', valid_min='1970-01-01/00:00:00', valid_max='2100-12-31/23:59:59', var_type='support_data', chunk_sizes=[1],
-                          depend_0 = 'Epoch', notes='')
+                          units=' ', valid_min='1970-01-01/00:00:00', valid_max='2100-12-31/23:59:59', var_type='support_data', chunk_sizes=[1],
+                          depend_0 = 'Epoch', notes='The center times of the exposures. Different than Epoch, array elements are not in milliseconds, but they are strings of the date in UT, with the format YYYY-MM-DD/HH:MM:SS.')
 
-    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_START_TIMES' % inst, L25_dict['FUV_START_TIMES'],
+    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_Start_Times' % inst, L25_dict['FUV_START_TIMES'],
                           dimensions=('Epoch'),
                           format_nc=str, format_fortran='A23', desc='Start time of 12-second profile integration',
                           display_type='Time_Series', field_name='Start time', fill_value=None, label_axis='Time', bin_location=0.5,
-                          units='s', valid_min='1970-01-01/00:00:00', valid_max='2100-12-31/23:59:59', var_type='support_data', chunk_sizes=[1],
-                          depend_0 = 'Epoch', notes='')
+                          units=' ', valid_min='1970-01-01/00:00:00', valid_max='2100-12-31/23:59:59', var_type='support_data', chunk_sizes=[1],
+                          depend_0 = 'Epoch', notes='The start times of the exposures, in UT, with the format YYYY-MM-DD/HH:MM:SS.')
 
-    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_STOP_TIMES' % inst, L25_dict['FUV_STOP_TIMES'],
+    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_Stop_Times' % inst, L25_dict['FUV_STOP_TIMES'],
                           dimensions=('Epoch'),
                           format_nc=str, format_fortran='A23', desc='Stop time of 12-second profile integration',
                           display_type='Time_Series', field_name='Stop time', fill_value=None, label_axis='Time', bin_location=0.5,
-                          units='s', valid_min='1970-01-01/00:00:00', valid_max='2100-12-31/23:59:59', var_type='support_data', chunk_sizes=[1],
-                          depend_0 = 'Epoch', notes='')
+                          units=' ', valid_min='1970-01-01/00:00:00', valid_max='2100-12-31/23:59:59', var_type='support_data', chunk_sizes=[1],
+                          depend_0 = 'Epoch', notes='The stop times of the exposures, in UT, with the format YYYY-MM-DD/HH:MM:SS.')
 
     ######### Geometry Variables #########
 
     # ICON Spacecraft location in WGS
-    var = _create_variable(ncfile, 'ICON_L2_FUV_SC_LAT', L25_dict['ICON_WGS_LATITUDE'],
+    var = _create_variable(ncfile, 'ICON_L2_FUV_SC_Latitude', L25_dict['ICON_WGS_LATITUDE'],
                           dimensions=('Epoch'),
-                          format_nc='f8', format_fortran='F', desc='Spacecraft WGS84 latitude.',
+                          format_nc='f8', format_fortran='F', desc='Spacecraft WGS84 latitude',
                           display_type='Time_Series', field_name='Spacecraft WGS84 latitude', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='degress North', valid_min=-90., valid_max=90., var_type='support_data', chunk_sizes=[1],
-                          depend_0 = 'Epoch', notes='')
+                          units='degrees North', valid_min=-90., valid_max=90., var_type='support_data', chunk_sizes=[1],
+                          depend_0 = 'Epoch', notes='The geodetic latitudes of the spacecraft, evaluated using the WGS84 ellipsoid.')
 
-    var = _create_variable(ncfile, 'ICON_L2_FUV_SC_LON', L25_dict['ICON_WGS_LONGITUDE'],
+    var = _create_variable(ncfile, 'ICON_L2_FUV_SC_Longitude', L25_dict['ICON_WGS_LONGITUDE'],
                           dimensions=('Epoch'),
-                          format_nc='f8', format_fortran='F', desc='Spacecraft WGS84 longitude.',
+                          format_nc='f8', format_fortran='F', desc='Spacecraft WGS84 longitude',
                           display_type='Time_Series', field_name='Spacecraft WGS84 longitude', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='degrees East', valid_min=-360., valid_max=360., var_type='support_data', chunk_sizes=[1],
-                          depend_0 = 'Epoch', notes='')
+                          units='degrees East', valid_min=0., valid_max=360., var_type='support_data', chunk_sizes=[1],
+                          depend_0 = 'Epoch', notes='The geodetic longitudes of the spacecraft, evaluated using the WGS84 ellipsoid.')
 
-    var = _create_variable(ncfile, 'ICON_L2_FUV_SC_ALT', L25_dict['ICON_WGS_ALTITUDE'],
+    var = _create_variable(ncfile, 'ICON_L2_FUV_SC_Altitude', 1e3 * L25_dict['ICON_WGS_ALTITUDE'],
                           dimensions=('Epoch'),
-                          format_nc='f8', format_fortran='F', desc='Spacecraft WGS84 altitude.',
+                          format_nc='f8', format_fortran='F', desc='Spacecraft WGS84 altitude',
                           display_type='Time_Series', field_name='Spacecraft WGS84 altitude', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='km', valid_min=0., valid_max=1000., var_type='support_data', chunk_sizes=[1],
-                          depend_0 = 'Epoch', notes='')
+                          units='m', valid_min=0., valid_max=1000e3, var_type='support_data', chunk_sizes=[1],
+                          depend_0 = 'Epoch', notes='The geodetic altitudes of the spacecraft, evaluated using the WGS84 ellipsoid.')
 
     # ICON Orbit number
-    var = _create_variable(ncfile, 'ICON_L2_ORBIT_NUMBER', L25_dict['ICON_ORBIT'],
+    var = _create_variable(ncfile, 'ICON_L2_Orbit_Number', L25_dict['ICON_ORBIT'],
                           dimensions=('Epoch'),
                           format_nc='i4', format_fortran='I', desc='ICON Orbit Number',
                           display_type='Time_Series', field_name='ICON Orbit Number', fill_value=-999, label_axis='Time', bin_location=0.5,
                           units=' ', valid_min=0, valid_max=105000, var_type='support_data', chunk_sizes=[1],
-                          depend_0 = 'Epoch', notes='')
+                          depend_0 = 'Epoch', notes='Integer orbit numbers for each measurement.')
 
     # FUV tangent point locations in WGS
-    var = _create_variable(ncfile, 'ICON_L2_%s_TANGENT_LAT' % inst, L25_dict['FUV_TANGENT_LAT'],
-                          dimensions=('Epoch','Vertical','Horizontal'),
-                          format_nc='f8', format_fortran='F', desc='Tangent latitude in WGS84.',
-                          display_type='Time_Series', field_name='Tangent latitude in WGS84', fill_value=-999, label_axis='Time', bin_location=0.5,
+    var = _create_variable(ncfile, 'ICON_L2_%s_O_Plus_Latitude' % inst, L25_dict['FUV_TANGENT_LAT'],
+                          dimensions=('Epoch','Altitude','Stripe'),
+                          format_nc='f8', format_fortran='F', desc='O+ latitude in WGS84',
+                          display_type='Time_Series', field_name='O+ latitude in WGS84', fill_value=-999, label_axis='Time', bin_location=0.5,
                           units='degrees North', valid_min=-90., valid_max=90., var_type='support_data',
-                          chunk_sizes=[1,ncfile.dimensions['Vertical'].size,ncfile.dimensions['Horizontal'].size],
-                          depend_0 = 'Epoch', depend_1='Vertical',depend_2='Horizontal', notes='')
+                          chunk_sizes=[1,ncfile.dimensions['Altitude'].size,ncfile.dimensions['Stripe'].size],
+                          depend_0 = 'Epoch', depend_1='Altitude',depend_2='Stripe', notes='The latitudes of each point in the O+ profile, evaluated using the WGS84 ellipsoid. It should be noted that while a single latitude value (the tangent latitude) is given for each point, the observation is inherently a horizontal average over many hundreds of kilometers.')
 
-    var = _create_variable(ncfile, 'ICON_L2_%s_TANGENT_LON' % inst, L25_dict['FUV_TANGENT_LON'],
-                          dimensions=('Epoch','Vertical','Horizontal'),
-                          format_nc='f8', format_fortran='F', desc='Tangent longitude in WGS84.',
-                          display_type='Time_Series', field_name='Tangent longitude in WGS84', fill_value=-999, label_axis='Time', bin_location=0.5,
+    var = _create_variable(ncfile, 'ICON_L2_%s_O_Plus_Longitude' % inst, L25_dict['FUV_TANGENT_LON'],
+                          dimensions=('Epoch','Altitude','Stripe'),
+                          format_nc='f8', format_fortran='F', desc='O+ longitude in WGS84',
+                          display_type='Time_Series', field_name='O+ longitude in WGS84', fill_value=-999, label_axis='Time', bin_location=0.5,
                           units='degrees East', valid_min=0., valid_max=360., var_type='support_data',
-                          chunk_sizes=[1,ncfile.dimensions['Vertical'].size,ncfile.dimensions['Horizontal'].size],
-                          depend_0 = 'Epoch', depend_1='Vertical',depend_2='Horizontal', notes='')
+                          chunk_sizes=[1,ncfile.dimensions['Altitude'].size,ncfile.dimensions['Stripe'].size],
+                          depend_0 = 'Epoch', depend_1='Altitude',depend_2='Stripe', notes='The longitudes of each point in the O+ profile, evaluated using the WGS84 ellipsoid. It should be noted that while a single longitude value (the tangent longitude) is given for each point, the observation is inherently a horizontal average over many hundreds of kilometers.')
 
-    var = _create_variable(ncfile, 'ICON_L2_%s_TANGENT_ALT' % inst, L25_dict['FUV_TANGENT_ALT'],
-                          dimensions=('Epoch','Vertical','Horizontal'),
-                          format_nc='f8', format_fortran='F', desc='Tangent altitude in WGS84.',
-                          display_type='Time_Series', field_name='Tangent altitude in WGS84', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='km', valid_min=-90., valid_max=90., var_type='support_data',
-                          chunk_sizes=[1,ncfile.dimensions['Vertical'].size,ncfile.dimensions['Horizontal'].size],
-                          depend_0 = 'Epoch', depend_1='Vertical',depend_2='Horizontal', notes='')
+    var = _create_variable(ncfile, 'ICON_L2_%s_O_Plus_Altitude' % inst, 1e3 * L25_dict['FUV_TANGENT_ALT'],
+                          dimensions=('Epoch','Altitude','Stripe'),
+                          format_nc='f8', format_fortran='F', desc='O+ altitude in WGS84',
+                          display_type='Time_Series', field_name='O+ altitude in WGS84', fill_value=-999, label_axis='Time', bin_location=0.5,
+                          units='m', valid_min=100e3, valid_max=600e3, var_type='support_data',
+                          chunk_sizes=[1,ncfile.dimensions['Altitude'].size,ncfile.dimensions['Stripe'].size],
+                          depend_0 = 'Epoch', depend_1='Altitude',depend_2='Stripe', notes='The altitudes of each point in the O+ profile, evaluated using the WGS84 ellipsoid. These altitudes are one half sample above the tangent altitudes of each pixel\'s line of sight (consistent with the assumption implicit in the inversion that the emission rate is constant within the layer between tangent altitudes).')
 
     # FUV look direction AZ and ZE
-    var = _create_variable(ncfile, 'ICON_L2_%s_FOV_AZIMUTH_ANGLE' % inst, L25_dict['FUV_AZ'],
-                          dimensions=('Epoch','Vertical','Horizontal'),
+    var = _create_variable(ncfile, 'ICON_L2_%s_FOV_Azimuth_Angle' % inst, L25_dict['FUV_AZ'],
+                          dimensions=('Epoch','Altitude','Stripe'),
                           format_nc='f8', format_fortran='F', desc='FOV Celestial Azimuth',
                           display_type='Time_Series', field_name='FOV Celestial Azimuth', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='degrees', valid_min=-180., valid_max=180., var_type='support_data',
-                          chunk_sizes=[1,ncfile.dimensions['Vertical'].size,ncfile.dimensions['Horizontal'].size],
-                          depend_0 = 'Epoch', depend_1='Vertical',depend_2='Horizontal', notes='')
+                          units='degrees', valid_min=0., valid_max=360., var_type='support_data',
+                          chunk_sizes=[1,ncfile.dimensions['Altitude'].size,ncfile.dimensions['Stripe'].size],
+                          depend_0 = 'Epoch', depend_1='Altitude',depend_2='Stripe', notes='The azimuth angles associated with the brightness measurements. Each pixel of the instrument has its own azimuth angle associated with its line of sight.')
 
-    var = _create_variable(ncfile, 'ICON_L2_%s_FOV_ZENITH_ANGLE' % inst, L25_dict['FUV_ZE'],
-                          dimensions=('Epoch','Vertical','Horizontal'),
+    var = _create_variable(ncfile, 'ICON_L2_%s_FOV_Zenith_Angle' % inst, L25_dict['FUV_ZE'],
+                          dimensions=('Epoch','Altitude','Stripe'),
                           format_nc='f8', format_fortran='F', desc='FOV Celestial Zenith',
-                          display_type='Time_Series', field_name='FOV Celestial Azimuth', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='degrees', valid_min=-90., valid_max=90., var_type='support_data',
-                          chunk_sizes=[1,ncfile.dimensions['Vertical'].size,ncfile.dimensions['Horizontal'].size],
-                          depend_0 = 'Epoch', depend_1='Vertical',depend_2='Horizontal', notes='')
+                          display_type='Time_Series', field_name='FOV Celestial Zenith', fill_value=-999, label_axis='Time', bin_location=0.5,
+                          units='degrees', valid_min=0., valid_max=180., var_type='support_data',
+                          chunk_sizes=[1,ncfile.dimensions['Altitude'].size,ncfile.dimensions['Stripe'].size],
+                          depend_0 = 'Epoch', depend_1='Altitude',depend_2='Stripe', notes='The zenith angles associated with the brightness measurements. Each pixel of the instrument has its own zenith angle associated with its line of sight.')
     ######### Results Variables #########
 
     # FUV inverted volume emission rate
-    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_VER_ALTITUDE_PROFILE' % inst, L25_dict['FUV_ver'],
-                          dimensions=('Epoch','Vertical','Horizontal'),
-                          format_nc='f8', format_fortran='F', desc='VER of 135.6-nm emission at each observing angle',
+    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_VER' % inst, 1e6 * L25_dict['FUV_ver'],
+                          dimensions=('Epoch','Altitude','Stripe'),
+                          format_nc='f8', format_fortran='F', desc='VER of 135.6-nm emission as a function of altitude',
                           display_type='Time_Series', field_name='VER', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='ph/cm^3/s', valid_min=0., valid_max=100., var_type='data',
-                          chunk_sizes=[1,ncfile.dimensions['Vertical'].size,ncfile.dimensions['Horizontal'].size],
-                          depend_0 = 'Epoch', depend_1='Vertical',depend_2='Horizontal', notes='')
+                          units='ph/m^3/s', valid_min=0., valid_max=100e6, var_type='data',
+                          chunk_sizes=[1,ncfile.dimensions['Altitude'].size,ncfile.dimensions['Stripe'].size],
+                          depend_0 = 'Epoch', depend_1='Altitude',depend_2='Stripe', notes='The volume emission rates (VER) are estimated from the brightness profiles of the 135.6 nm emissions by solving a regularized linear (multiple scattering is negligible) inverse problem. In the inverse problem, atmosphere is divided into spherical shells with boundaries determined by the tangent altitudes, and VER is assumed to be uniform inside those shells. Solving the inverse problem, VER value for each shell is estimated. The details of the inversion are given in Kamalabadi et al. [2018, doi: 10.1007/s11214-018-0502-9].')
 
-    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_VER_ERROR_ALTITUDE_PROFILE' % inst, L25_dict['FUV_ver_error'],
-                          dimensions=('Epoch','Vertical','Horizontal'),
-                          format_nc='f8', format_fortran='F', desc='Error in VER of 135.6-nm emission at each observing angle',
+    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_VER_Error' % inst, 1e6 * L25_dict['FUV_ver_error'],
+                          dimensions=('Epoch','Altitude','Stripe'),
+                          format_nc='f8', format_fortran='F', desc='Error in VER of 135.6-nm emission as a function of altitude',
                           display_type='Time_Series', field_name='VER', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='ph/cm^3/s', valid_min=0., valid_max=100., var_type='data',
-                          chunk_sizes=[1,ncfile.dimensions['Vertical'].size,ncfile.dimensions['Horizontal'].size],
-                          depend_0 = 'Epoch', depend_1='Vertical',depend_2='Horizontal', notes='')
+                          units='ph/m^3/s', valid_min=0., valid_max=100e6, var_type='data',
+                          chunk_sizes=[1,ncfile.dimensions['Altitude'].size,ncfile.dimensions['Stripe'].size],
+                          depend_0 = 'Epoch', depend_1='Altitude',depend_2='Stripe', notes='The statistical 1-sigma errors computed for the estimated VER values. Errors are obtained by propagating the uncertainties in the given brightness profiles (provided in the L1 input file) through the VER estimation process. Some other error sources are not included in this variable (such as the bias introduced by the regularization, or the errors due to the assumption that the VER is uniform between two adjacent tangent altitudes).')
 
     # FUV inverted electron density
-    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_ELECTRON_DENSITY_ALTITUDE_PROFILE' % inst, L25_dict['FUV_Ne'],
-                          dimensions=('Epoch','Vertical','Horizontal'),
-                          format_nc='f8', format_fortran='F', desc='Electron density at each observing angle',
+    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_O_Plus_Density' % inst, 1e6 * L25_dict['FUV_Ne'],
+                          dimensions=('Epoch','Altitude','Stripe'),
+                          format_nc='f8', format_fortran='F', desc='O+ density as a function of altitude',
                           display_type='Time_Series', field_name='Ne', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='1/cm^3', valid_min=0., valid_max=1e10, var_type='data',
-                          chunk_sizes=[1,ncfile.dimensions['Vertical'].size,ncfile.dimensions['Horizontal'].size],
-                          depend_0 = 'Epoch', depend_1='Vertical',depend_2='Horizontal', notes='')
+                          units='1/m^3', valid_min=0., valid_max=1e16, var_type='data',
+                          chunk_sizes=[1,ncfile.dimensions['Altitude'].size,ncfile.dimensions['Stripe'].size],
+                          depend_0 = 'Epoch', depend_1='Altitude',depend_2='Stripe', notes='The O+ profiles are obtained from the estimated volume emission rate (VER) profiles assuming the emission arises from radiative recombination and mutual neutralization. The NRLMSISE00 model is used to characterize the oxygen density needed to model the mutual neutralization contribution.')
 
-    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_ELECTRON_DENSITY_ERROR_ALTITUDE_PROFILE' % inst, L25_dict['FUV_Ne_error'],
-                          dimensions=('Epoch','Vertical','Horizontal'),
-                          format_nc='f8', format_fortran='F', desc='Error in electron density at each observing angle',
+    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_O_Plus_Density_Error' % inst, 1e6 * L25_dict['FUV_Ne_error'],
+                          dimensions=('Epoch','Altitude','Stripe'),
+                          format_nc='f8', format_fortran='F', desc='Error in O+ density as a function of altitude',
                           display_type='Time_Series', field_name='Ne', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='1/cm^3', valid_min=0., valid_max=1e10, var_type='data',
-                          chunk_sizes=[1,ncfile.dimensions['Vertical'].size,ncfile.dimensions['Horizontal'].size],
-                          depend_0 = 'Epoch', depend_1='Vertical',depend_2='Horizontal', notes='')
+                          units='1/m^3', valid_min=0., valid_max=1e16, var_type='data',
+                          chunk_sizes=[1,ncfile.dimensions['Altitude'].size,ncfile.dimensions['Stripe'].size],
+                          depend_0 = 'Epoch', depend_1='Altitude',depend_2='Stripe', notes='The statistical 1-sigma errors computed for the estimated O+ density profiles. Errors are obtained by propagating the uncertainties in the estimated VER profiles through the O+ density profile calculations. Some other error sources are not included in this variable (such as the bias introduced by the regularization, or the errors due to the assumption that the VER is uniform between two adjacent tangent altitudes).')
 
     # FUV inverted hmF2
-    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_HMF2' % inst, L25_dict['FUV_hmF2'],
-                          dimensions=('Epoch','Horizontal'),
-                          format_nc='f4', format_fortran='F', desc='FUV F2-peak height estimate',
+    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_HMF2' % inst, 1e3 * L25_dict['FUV_hmF2'],
+                          dimensions=('Epoch','Stripe'),
+                          format_nc='f4', format_fortran='F', desc='Estimated altitudes of the peak O+ densities',
                           display_type='Time_Series', field_name='hmF2', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='km', valid_min=130., valid_max=580., var_type='data', chunk_sizes=[1,1],
-                          depend_0 = 'Epoch',depend_1='Horizontal', notes='')
+                          units='m', valid_min=130e3, valid_max=580e3, var_type='data', chunk_sizes=[1,1],
+                          depend_0 = 'Epoch',depend_1='Stripe', notes='The altitudes of the peak O+ densities that are obtained by performing cubic spline interpolation on each profile.')
 
-    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_HMF2_ERROR' % inst, L25_dict['FUV_hmF2_error'],
-                          dimensions=('Epoch','Horizontal'),
-                          format_nc='f4', format_fortran='F', desc='FUV F2-peak height estimate',
+    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_HMF2_Error' % inst, 1e3 * L25_dict['FUV_hmF2_error'],
+                          dimensions=('Epoch','Stripe'),
+                          format_nc='f4', format_fortran='F', desc='Error in estimated altitudes of the peak O+ densities',
                           display_type='Time_Series', field_name='hmF2', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='km', valid_min=130., valid_max=580., var_type='data', chunk_sizes=[1,1],
-                          depend_0 = 'Epoch',depend_1='Horizontal', notes='')
+                          units='m', valid_min=130e3, valid_max=580e3, var_type='data', chunk_sizes=[1,1],
+                          depend_0 = 'Epoch',depend_1='Stripe', notes='The propagated statistical errors from the O+ density profiles through the hmF2 estimation. Errors are propagated through the cubic spline interpolation using a Monte Carlo method. The details can be found in Kamalabadi et al. [2018, doi: 10.1007/s11214-018-0502-9].')
 
     # FUV inverted NmF2
-    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_NMF2' % inst, L25_dict['FUV_NmF2'],
-                          dimensions=('Epoch','Horizontal'),
-                          format_nc='f4', format_fortran='F', desc='FUV F2-peak density estimate',
+    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_NMF2' % inst, 1e6 * L25_dict['FUV_NmF2'],
+                          dimensions=('Epoch','Stripe'),
+                          format_nc='f4', format_fortran='F', desc='Estimated peak O+ densities',
                           display_type='Time_Series', field_name='NmF2', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='1/cm^3', valid_min=0., valid_max=1e10, var_type='data', chunk_sizes=[1,1],
-                          depend_0 = 'Epoch',depend_1='Horizontal', notes='')
+                          units='1/m^3', valid_min=0., valid_max=1e16, var_type='data', chunk_sizes=[1,1],
+                          depend_0 = 'Epoch',depend_1='Stripe', notes='The peak O+ densities that are obtained by performing cubic spline interpolation on each profile.')
 
-    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_NMF2_ERROR' % inst, L25_dict['FUV_NmF2_error'],
-                          dimensions=('Epoch','Horizontal'),
-                          format_nc='f4', format_fortran='F', desc='FUV F2-peak density estimate',
+    var = _create_variable(ncfile, 'ICON_L2_%s_SWP_NMF2_Error' % inst, 1e6 * L25_dict['FUV_NmF2_error'],
+                          dimensions=('Epoch','Stripe'),
+                          format_nc='f4', format_fortran='F', desc='Error in estimated peak O+ densities',
                           display_type='Time_Series', field_name='NmF2', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='1/cm^3', valid_min=0., valid_max=1e10, var_type='data', chunk_sizes=[1,1],
-                          depend_0 = 'Epoch',depend_1='Horizontal', notes='')
+                          units='1/m^3', valid_min=0., valid_max=1e16, var_type='data', chunk_sizes=[1,1],
+                          depend_0 = 'Epoch',depend_1='Stripe', notes='The propagated statistical 1-sigma errors from the O+ density profiles through the NmF2 estimation. Errors are propagated through the cubic spline interpolation using a Monte Carlo method. The details can be found in Kamalabadi et al. [2018, doi: 10.1007/s11214-018-0502-9].')
 
     # FUV inversion quality flag
-    var = _create_variable(ncfile, 'ICON_L2_%s_QUALITY' % inst, L25_dict['FUV_Quality'],
-                          dimensions=('Epoch','Horizontal'),
-                          format_nc='i1', format_fortran='I', desc='FUV inversion quality flag',
+    var = _create_variable(ncfile, 'ICON_L2_%s_Quality' % inst, L25_dict['FUV_Quality'],
+                          dimensions=('Epoch','Stripe'),
+                          format_nc='f8', format_fortran='F', desc='A quantification of the inversion quality, from 0 (Bad) to 1 (Good)',
                           display_type='Time_Series', field_name='Quality', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units=' ', valid_min=0., valid_max=8, var_type='data', chunk_sizes=[1,1],
-                          depend_0 = 'Epoch',depend_1='Horizontal', notes='Flag is 0 if the inversion is valid.')
+                          units=' ', valid_min=0.0, valid_max=1.0, var_type='data', chunk_sizes=[1,1],
+                          depend_0 = 'Epoch',depend_1='Stripe', notes='While the intent is that the variable ICON_L2_FUVA_SWP_O+_Density_Error accurately characterizes the statistical error in the O+ density data, it is possible that systematic errors are present, or that the statistical error estimation is not accurate. If it is suspected that this is the case, the quality will be less than 1.0, which is determined based on the peak brightness values and other considerations. If the data are definitely unusable, the the quality will be 0.0. Users should exercise caution when the quality is less than 1.0.')
 
-    # Regularization type
-    var = _create_variable(ncfile, 'ICON_L2_REGULARIZATION_METHOD', L25_dict['reg_method'],
+    # Inversion Method
+    var = _create_variable(ncfile, 'ICON_L2_Inversion_Method', L25_dict['inv_method'],
                           dimensions=(),
-                          format_nc=str, format_fortran='A', desc='Regularization method: Tikhonov or MAP',
-                          display_type='scalar', field_name='Regularzation Method', fill_value=None, label_axis='Method', bin_location=0.5,
+                          format_nc=str, format_fortran='A', desc='Used inversion method to get VER from brightness',
+                          display_type='scalar', field_name='Inversion Method', fill_value=None, label_axis='Method', bin_location=0.5,
                           units=' ', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
-                          notes='')
-
-    # Regularization order
-    var = _create_variable(ncfile, 'ICON_L2_REGULARIZATION_ORDER', L25_dict['regu_order'],
-                          dimensions=(),
-                          format_nc='i1', format_fortran='I', desc='Regularization order',
-                          display_type='scalar', field_name='Regularzation Order', fill_value=None, label_axis='Order', bin_location=0.5,
-                          units=' ', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
-                          notes='')
-
-    # Contribution type
-    var = _create_variable(ncfile, 'ICON_L2_1356_CONTRIBUTION', L25_dict['contribution'],
-                          dimensions=(),
-                          format_nc=str, format_fortran='A', desc='Chemestry considered in 135.6-nm emission: RR or RRMN',
-                          display_type='scalar', field_name='1356 Contribution', fill_value=None, label_axis='Contrib', bin_location=0.5,
-                          units=' ', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
-                          notes='')
-
-    # Limb value used in inversion
-    var = _create_variable(ncfile, 'ICON_L2_INVERSION_LIMB', L25_dict['limb'],
-                          dimensions=(),
-                          format_nc='f4', format_fortran='F', desc='Limb altitude used in inversion',
-                          display_type='scalar', field_name='Inversion Limb Alt', fill_value=None, label_axis='Alt', bin_location=0.5,
-                          units=' ', valid_min=None, valid_max=None, var_type='metadata', chunk_sizes=1,
-                          notes='')
+                          notes='This string specifies the inversion method used in the estimation of the VER profiles from the brightness profiles. It has the form "Tikhonov_k" where k (0,1, or 2) specifies the order used in the Tikhonov regularization. Since the brightness profiles are noisy, we incorporate our prior knowledge on the characteristics of the VER profiles into the inverse problem for regularization. The order k is determined by what kind of prior knowledge we want to incorporate. The estimation of VER profile can be considered as choosing one among infinitely many: order 0 (zero) penalizes VER profiles with high l2 norm, but does not incorporate any structural information about the profile ; order 1 (one) penalizes VER profiles whose first derivatives have high l2 norm (meaning that it penalizes high VER variations through altitudes) ; order 2 (two) penalizes VER profiles whose second derivatives have high l2 norm (meaning that it penalizes VER profiles with high VER curvatures through altitudes).')
 
     ncfile.close()
 
@@ -1418,7 +1388,7 @@ NETCDF ATTRIBUTE COMPLETE FUNCTION
 
 def set_variable_attributes(var, catdesc, depend, displayType, Fieldname, form, labelAxis, scaletype, units, minmax,Notes, varType,monotone = ''):
 
-      # 3.3.3.1
+    # 3.3.3.1
     var.CatDesc = catdesc
     var.Long_Name = catdesc
 
@@ -1462,31 +1432,27 @@ def set_variable_attributes(var, catdesc, depend, displayType, Fieldname, form, 
     # 3.3.3.13
     var.Var_Type = varType
 
-
-
+    
 '''
 
 FUV LEVEL 2 TOP LEVEL FUNCTION
 
 '''
-def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r006.NC',
-                       file_ancillary='/home/jmakela/ICON_L0P_FUV_ANCILLARY_2009-03-20_v001_r003.nc',
+def Get_lvl2_5_product(file_input,
+                       file_ancillary,
+                       file_output,
                        file_GPI=None,
-                       file_output='/home/jmakela/ICON_L2-5_FUV-2009-03-20_00.18.54_v01_r00.nc',
-                       limb = 150.,Spherical = True,
-                       reg_method = 'Tikhonov',regu_order = 2, contribution ='RRMN'):
+                       Spherical = True,
+                       regu_order = 2):
     '''
     Operational Code that reads Lvl1 file and creates the corresponding Lvl2.5
     INPUTS:
         file_input  - Input file path
         file_ancillary - Ancillary file path
-        file_GPI - GPI file path; default to None which uses GPIs saved in PyGlow
         file_output - Full output file path for the resultant netCDF4 file
-        limb        - Defines the lower bound that defines the limb [km]
+        file_GPI - GPI file path; default to None which uses GPIs saved in PyGlow
         Spherical   - Flag indicating whether Sperical or Non-Spherical Earth is assumed [True, False]
-        reg_method  - Regularization method selection [Tikhonov, MAP]
-        regu_order  - Regularization Order [int] (0,1,2 Possible Values)
-        contribution- contributions to the 135.6nm emission, RR: Radiative Recombination, RRMN: Radiative Recombination and Mutual Neutralization
+        regu_order  - Regularization Order for Tikhonov Regularization [int] (0,1,2 Possible Values)
     OUTPUT:
         Creates a NetCDF file on the desired file_outpu
         Returns 0 on success
@@ -1504,7 +1470,14 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
     TODO:
         1) Variable names in L1 and ancillary data files may change
     '''
-
+    
+    # specify the lower bound that defines the limb [km]
+    limb = 250.
+    # specify the contributions to the 135.6 nm emission as Radiative Recombination and Mutual Neutralization
+    contribution ='RRMN'
+    # specify the regularization method as the Tikhonov regularization
+    reg_method = 'Tikhonov'
+    
     try:
         # Open input Level 1 and ancillary NetCDF files
         data = netCDF4.Dataset(file_input,mode='r')
@@ -1564,20 +1537,23 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
         FUV_1356_ERROR = np.zeros(np.shape(FUV_AZ))
         for ind, d in enumerate(mirror_dir):
             FUV_1356_IMAGE[:,:,ind] = data.variables['ICON_L1_FUVA_SWP_PROF_%s' % d][:]
-            FUV_1356_ERROR[:,:,ind] = data.variables['ICON_L1_FUVA_SWP_PROF_%s_ERROR' % d][:]
+            FUV_1356_ERROR[:,:,ind] = data.variables['ICON_L1_FUVA_SWP_PROF_%s_Error' % d][:]
 
         # Get observation times from file and store in a datetime variable
-        temp = data.variables['ICON_L1_FUVA_SWP_CENTER_TIMES']
+        temp = data.variables['ICON_L1_FUVA_SWP_Center_Times']
         FUV_dn = []
         for d in temp:
             FUV_dn.append(parser.parse(d))
         FUV_dn = np.array(FUV_dn)
 
         # The FUV epoch
-        FUV_EPOCH = data.variables['EPOCH'][:]
+        FUV_EPOCH = data.variables['Epoch'][:]
 
         # Get science mode
-        FUV_mode = data.variables['ICON_L1_FUVA_SWP_MODE'][:]
+        FUV_mode = data.variables['ICON_L1_FUV_Mode'][:]
+        if FUV_mode[FUV_mode==2].shape[0] == 0:
+            print 'No nighttime data to process. Output file will not be produced.'
+            return 0
 
         # Pre-allocate arrays for output variables
         FUV_ver = np.zeros(np.shape(FUV_1356_IMAGE))*np.nan
@@ -1608,56 +1584,59 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
         data.close()
         gpi.close()
         return 1
-
+    
+    exception_counter = 0
+    inversion_counter = 0
     # Work on each individual stripe
     for stripe, d in enumerate(mirror_dir):
-#        print stripe
+#        print('stripe: %d' % stripe)
         night_ind = []
         for ind, mode in enumerate(FUV_mode):
             # Check if we are in night mode
             if mode == 2:
-                # We are in nighttime science mode, process the data
-                # Save the index of this measurement
-                night_ind.append(ind)
-
-                # Vector with the space craft lat, lon, alt at the measurement time
-                satlatlonalt = [ICON_WGS84_LATITUDE[ind],ICON_WGS84_LONGITUDE[ind],ICON_WGS84_ALTITUDE[ind]]
-
-                # Only consider values above the limb
-                limb_i = np.where(np.squeeze(FUV_TANGENT_ALTITUDES[ind,:,stripe])>=limb)
-                bright = np.squeeze(FUV_1356_IMAGE[ind,limb_i,stripe]) # TODO: THIS IS A MASKED ARRAY. HOW TO HANDLE?
-                bright = bright[::-1]
-                FUV_b[ind,limb_i,stripe] = bright
-                err = np.squeeze(FUV_1356_ERROR[ind,limb_i,stripe])
-                err = err[::-1]
-                h = np.squeeze(FUV_TANGENT_ALTITUDES[ind,limb_i,stripe])
-                h = h[::-1]
-                az = np.squeeze(FUV_AZ[ind,limb_i,stripe])
-                az = az[::-1]
-                ze = np.squeeze(FUV_ZE[ind,limb_i,stripe])
-                ze = ze[::-1]
-
-                # Check if we have a larger range of valid limb indices
-                if max(limb_i[0]) > max_li:
-                    max_li = max(limb_i[0])
-                if min(limb_i[0]) < min_li:
-                    min_li = min(limb_i[0])
-
-                tan_la = np.squeeze(FUV_TANGENT_LATITUDES[ind,limb_i,stripe])
-                tan_lo = np.squeeze(FUV_TANGENT_LONGITUDES[ind,limb_i,stripe])
-                tan_al = np.squeeze(FUV_TANGENT_ALTITUDES[ind,limb_i,stripe])
-                tanlatlonalt = [tan_la[::-1],tan_lo[::-1],tan_al[::-1]]
-
-                # Time of observation
-                # TODO: CHECK THAT ANC AND FUV DATES ARE THE SAME
-                dn = FUV_dn[ind]
-
                 try:
+                    inversion_counter += 1
+                    # We are in nighttime science mode, process the data
+                    # Save the index of this measurement
+                    night_ind.append(ind)
+
+                    # Vector with the space craft lat, lon, alt at the measurement time
+                    satlatlonalt = [ICON_WGS84_LATITUDE[ind],ICON_WGS84_LONGITUDE[ind],ICON_WGS84_ALTITUDE[ind]]
+
+                    # Only consider values above the limb
+                    limb_i = np.where(np.squeeze(FUV_TANGENT_ALTITUDES[ind,:,stripe])>=limb)
+                    bright = np.squeeze(FUV_1356_IMAGE[ind,limb_i,stripe]) # TODO: THIS IS A MASKED ARRAY. HOW TO HANDLE?
+                    bright = bright[::-1]
+                    FUV_b[ind,limb_i,stripe] = bright
+                    err = np.squeeze(FUV_1356_ERROR[ind,limb_i,stripe])
+                    err = err[::-1]
+                    h = np.squeeze(FUV_TANGENT_ALTITUDES[ind,limb_i,stripe])
+                    h = h[::-1]
+                    az = np.squeeze(FUV_AZ[ind,limb_i,stripe])
+                    az = az[::-1]
+                    ze = np.squeeze(FUV_ZE[ind,limb_i,stripe])
+                    ze = ze[::-1]
+
+                    # Check if we have a larger range of valid limb indices
+                    if max(limb_i[0]) > max_li:
+                        max_li = max(limb_i[0])
+                    if min(limb_i[0]) < min_li:
+                        min_li = min(limb_i[0])
+
+                    tan_la = np.squeeze(FUV_TANGENT_LATITUDES[ind,limb_i,stripe])
+                    tan_lo = np.squeeze(FUV_TANGENT_LONGITUDES[ind,limb_i,stripe])
+                    tan_al = np.squeeze(FUV_TANGENT_ALTITUDES[ind,limb_i,stripe])
+                    tanlatlonalt = [tan_la[::-1],tan_lo[::-1],tan_al[::-1]]
+
+                    # Time of observation
+                    # TODO: CHECK THAT ANC AND FUV DATES ARE THE SAME
+                    dn = FUV_dn[ind]
+
                     # Get the GPI needed to run MSIS
                     my_f107, my_f107a, my_apmsis = get_msisGPI(dn, year_day, f107, f107a, ap, ap3)
 
                     # Run the inversion
-                    ver,Ne,h,Sig_ver,Sig_Ne = FUV_Level_2_Density_Calculation(bright,h,satlatlonalt,az,ze,
+                    ver,Ne,h_centered,Sig_ver,Sig_Ne,inv_quality = FUV_Level_2_Density_Calculation(bright,h,satlatlonalt,az,ze,
                                                        Sig_Bright = np.diag(err**2), weight_resid=False,
                                                        limb = limb,Spherical = Spherical, reg_method = reg_method,
                                                        regu_order = regu_order, contribution =contribution,dn = dn,
@@ -1671,39 +1650,42 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
                     FUV_h[ind,limb_i,stripe] = h
                     FUV_tangent_lat[ind,limb_i,stripe] = tan_la[::-1]
                     FUV_tangent_lon[ind,limb_i,stripe] = tan_lo[::-1]
-                    FUV_tangent_alt[ind,limb_i,stripe] = tan_al[::-1]
+                    FUV_tangent_alt[ind,limb_i,stripe] = h_centered
+                    
 
                     # Calculate hmF2 and NmF2
-                    hm,Nm,sig_hm,sig_Nm = find_hm_Nm_F2(Ne,h,Sig_NE=Sig_Ne)
+                    hm,Nm,sig_hm,sig_Nm = find_hm_Nm_F2(Ne,h_centered,Sig_NE=Sig_Ne)
                     FUV_hmF2[ind,stripe] = hm
                     FUV_sigma_hmF2[ind,stripe] = sig_hm
                     FUV_NmF2[ind,stripe] = Nm
                     FUV_sigma_NmF2[ind,stripe]= sig_Nm
-                    FUV_quality[ind,stripe] = 0
+                    FUV_quality[ind,stripe] = inv_quality
                 except ImportError as error:
                     print "You don't have module {0} installed".format(error.message[16:])
                     return 2
                 except ValueError as error:
                     # Just an error in the inversion
                     print 'ind: %d, stripe: %d, error: %s' %(ind,stripe,sys.exc_info()[0])
-                    FUV_quality[ind,stripe] = 1
+                    FUV_quality[ind,stripe] = 0.0
+                    exception_counter += 1
                 except Exception as e:
                     if hasattr(e, 'message'):
                         print 'Unknown inversion error: (%s)' % e.message
                     else:
                         print "Unknown inversion error"
+                    exception_counter += 1
 
     # The master index for limb scan indexes
     master_li = np.arange(min_li,max_li+1)
-
+    
     # Inversion is complete. Form the output dictionary
     L25_dict = {
         'FUV_EPOCH': FUV_EPOCH[night_ind],
-        'FUV_CENTER_TIMES': data.variables['ICON_L1_FUVA_SWP_CENTER_TIMES'][:][night_ind],
-        'FUV_START_TIMES': data.variables['ICON_L1_FUVA_SWP_START_TIMES'][:][night_ind],
-        'FUV_STOP_TIMES': data.variables['ICON_L1_FUVA_SWP_STOP_TIMES'][:][night_ind],
+        'FUV_CENTER_TIMES': data.variables['ICON_L1_FUVA_SWP_Center_Times'][:][night_ind],
+        'FUV_START_TIMES': data.variables['ICON_L1_FUVA_SWP_Start_Times'][:][night_ind],
+        'FUV_STOP_TIMES': data.variables['ICON_L1_FUVA_SWP_Stop_Times'][:][night_ind],
         'FUV_dn': FUV_dn[night_ind],
-        'FUV_integration_time': data.variables['ICON_L1_FUVA_SWP_INTEGRATION_TIME'][:][night_ind],
+        'FUV_integration_time': data.variables['ICON_L1_FUVA_SWP_Integration_Time'][:][night_ind],
         'FUV_TANGENT_LAT': FUV_tangent_lat[night_ind,min_li:max_li+1,:],
         'FUV_TANGENT_LON': FUV_tangent_lon[night_ind,min_li:max_li+1,:],
         'FUV_TANGENT_ALT': FUV_tangent_alt[night_ind,min_li:max_li+1,:],
@@ -1724,19 +1706,28 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
         'FUV_hmF2': FUV_hmF2[night_ind,:],
         'FUV_hmF2_error': FUV_sigma_hmF2[night_ind,:],
         'FUV_Quality': FUV_quality[night_ind,:],
-        'reg_method': reg_method,
-        'contribution': contribution,
-        'limb': limb,
+        'inv_method': "{}_{}".format(reg_method,regu_order),
         'Spherical': Spherical,
-        'regu_order': regu_order,
         'source_files': [file_input,file_ancillary],
         'param_fn': None,
+        'acknowledgement': data.Acknowledgement
     }
 
     # Close the input netCDF files
     ancillary.close()
     data.close()
     gpi.close()
+    
+    # Check the number of exceptions compared to that of inversion attempts and report the success rate
+    if exception_counter > 0 and exception_counter < inversion_counter:
+        print 'There were errors in the inversions, but available good data were processed. Percentage of the processed data is: %.2f%%' %(100. - 100.*exception_counter/float(inversion_counter))
+    
+    elif exception_counter > 0 and exception_counter == inversion_counter:
+        print 'There were errors in all the inversions, data could not be processed. Output file will not be produced.'
+        return 0
+    
+    else:
+        print 'All the data were succesfully processed without any errors.'
 
     # Write the output
     print 'Writing netcdf %s' % file_output
@@ -1747,9 +1738,9 @@ def Get_lvl2_5_product(file_input='/home/jmakela/ICON_L1_FUV_SWP_20090320_v01r00
             print 'Error writing netCDF output file: (%s)' % e.message
         else:
             print 'Error writing netCDF output file: %s (%s)' % (file_output, sys.exc_info()[0])
-
+        return 1
+   
     print 'Successfully wrote %s' % file_output
-
     return 0
 
 def get_GPI(dn, year_day, f107, f107a, ap, ap3):
@@ -1877,24 +1868,24 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
 
         # Get variables from netCDF file
         dn = []
-        for d in f.variables['ICON_L2_FUVA_SWP_CENTER_TIMES']:
+        for d in f.variables['ICON_L2_FUVA_SWP_Center_Times']:
             dn.append(parser.parse(d))
         dn = np.array(dn)
 
-        orbits = f.variables['ICON_L2_ORBIT_NUMBER'][:]
+        orbits = f.variables['ICON_L2_Orbit_Number'][:]
 
         for orbit in np.unique(orbits):
             stripe = 0
 
             file_png = png_stub[0:-23] + '-o%05d' % orbit + png_stub[-23:]
-            orbit_ind = np.squeeze(np.where(f.variables['ICON_L2_ORBIT_NUMBER'][:] == orbit))
+            orbit_ind = np.squeeze(np.where(f.variables['ICON_L2_Orbit_Number'][:] == orbit))
             ds = np.array([i.total_seconds() for i in dn-dn[orbit_ind][0]])
             orbit_ind = np.squeeze(np.where(abs(ds) < 2000.))
 
-            X = np.transpose([dn,]*f.dimensions['Vertical'].size)[orbit_ind]
-            Y = f.variables['ICON_L2_FUVA_TANGENT_ALT'][orbit_ind,:,stripe]
-            Z = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ALTITUDE_PROFILE'][orbit_ind,:,stripe]
-            Ze = f.variables['ICON_L2_FUVA_SWP_ELECTRON_DENSITY_ERROR_ALTITUDE_PROFILE'][orbit_ind,:,stripe]
+            X = np.transpose([dn,]*f.dimensions['Altitude'].size)[orbit_ind]
+            Y = f.variables['ICON_L2_FUVA_O+_Altitude'][orbit_ind,:,stripe]/1e3
+            Z = f.variables['ICON_L2_FUVA_SWP_O+_Density'][orbit_ind,:,stripe]/1e6
+            Ze = f.variables['ICON_L2_FUVA_SWP_O+_Density_Error'][orbit_ind,:,stripe]/1e6
 
             out = np.diff(X,axis=0)
             mask = np.vstack([out > datetime.timedelta(seconds=24),np.ones([1,np.size(out,1)],dtype=bool)])
@@ -1944,9 +1935,9 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
             out = np.diff(dn[orbit_ind],axis=0)
             mask = np.hstack([out > datetime.timedelta(seconds=24),[True]])
             for stripe in range(0,6):
-                Y = f.variables['ICON_L2_FUVA_SWP_HMF2'][orbit_ind,stripe]
+                Y = f.variables['ICON_L2_FUVA_SWP_HMF2'][orbit_ind,stripe] / 1e3
                 Ym = np.ma.MaskedArray(Y,mask)
-                Ye = f.variables['ICON_L2_FUVA_SWP_HMF2_ERROR'][orbit_ind,stripe]
+                Ye = f.variables['ICON_L2_FUVA_SWP_HMF2_Error'][orbit_ind,stripe] / 1e3
                 Yem = np.ma.MaskedArray(Ye,mask)
                 axes[2].plot(dn[orbit_ind],Ym,'-')
                 axes[2].fill_between(dn[orbit_ind],Ym-Yem,Ym+Yem,alpha=.25)
@@ -1959,9 +1950,9 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
 
             # The NmF2 estimates
             for stripe in range(0,6):
-                Y = f.variables['ICON_L2_FUVA_SWP_NMF2'][orbit_ind,stripe]
+                Y = f.variables['ICON_L2_FUVA_SWP_NMF2'][orbit_ind,stripe] / 1e6
                 Ym = np.ma.MaskedArray(Y,mask)
-                Ye = f.variables['ICON_L2_FUVA_SWP_NMF2_ERROR'][orbit_ind,stripe]
+                Ye = f.variables['ICON_L2_FUVA_SWP_NMF2_Error'][orbit_ind,stripe] / 1e6
                 Yem = np.ma.MaskedArray(Ye,mask)
                 axes[3].plot(dn[orbit_ind],Ym,'-')
                 axes[3].fill_between(dn[orbit_ind],Ym-Yem,Ym+Yem,alpha=.25)
@@ -1973,7 +1964,7 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
 
             # The quality flag
             for stripe in range(0,6):
-                quality = f.variables['ICON_L2_FUVA_QUALITY'][orbit_ind]
+                quality = f.variables['ICON_L2_FUVA_Quality'][orbit_ind]
                 axes[4].plot(dn[orbit_ind],quality[:,stripe],'.',label=stripe)
             axes[4].set_ylim([-.25,2])
             plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
@@ -1982,8 +1973,7 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
             axes[4].set_xlabel('UTC')
             lgd = plt.legend(ncol=6,numpoints=1,loc=9, bbox_to_anchor=(0.6, -0.30))
 
-            an = axes[4].annotate('(%s, %s)' % (f.variables['ICON_L2_1356_CONTRIBUTION'][:],
-                                          f.variables['ICON_L2_REGULARIZATION_METHOD'][:]),
+            an = axes[4].annotate('(%s)' % (f.variables['ICON_L2_Inversion_Method'][:]),
                              xy=(1, 0.05), xytext=(0, 10),
                              xycoords=('axes fraction', 'figure fraction'),
                              textcoords='offset points',
@@ -2015,3 +2005,4 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
         return 1
 
     return 0
+
