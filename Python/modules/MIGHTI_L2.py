@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 11 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 12 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -277,7 +277,11 @@ def bin_uncertainty(b, ye):
         else: # grab 
             ye_samps = ye[i_start:i_stop]
 
-        ye_b[i_new] = 1.0/sum(~np.isnan(ye_samps)) * np.sqrt(np.nansum(ye_samps**2))
+        n = sum(~np.isnan(ye_samps))
+        if n==0:
+            ye_b[i_new] = np.nan
+        else:
+            ye_b[i_new] = 1.0/sum(~np.isnan(ye_samps)) * np.sqrt(np.nansum(ye_samps**2))
         
     return ye_b
     
@@ -2445,8 +2449,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     ver   = np.nan*np.zeros((N_alts, N_lons))            # fringe amplitude (mean of A and B)
     ver_rel_diff = np.nan*np.zeros((N_alts, N_lons))     # relative difference in A and B VER
     error_flags = np.zeros((N_alts, N_lons, 8), dtype=bool)      # Error flags, one set per grid point. See above for definition.
-    N_used_A = np.zeros(N_times_A)                       # Number of times each L2.1 MIGHTI-A file was used
-    N_used_B = np.zeros(N_times_B)                       # Same for MIGHTI-B
+    N_used_A = np.zeros((N_alts_A, N_times_A))           # Number of times each L2.1 MIGHTI-A file was used
+    N_used_B = np.zeros((N_alts_B, N_times_B))           # Same for MIGHTI-B
     
     # Loop over the reconstruction altitudes
     for i in range(N_alts):
@@ -2539,7 +2543,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                     raise Exception('If prop_err = True, then valerr must be specified')
                 
                 if not prop_err:
-                    # Do interpolate of value to the desired altitude, for each longitude
+                    # Do interpolation of value to the desired altitude, for each longitude
                     val_0 = interpolate_linear(alt_AB[:,0], val[:,0], alt_pt)
                     val_1 = interpolate_linear(alt_AB[:,1], val[:,1], alt_pt)
                     # Interpolate the longitude coordinate to the desired altitude
@@ -2578,8 +2582,16 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             ver_A_pt      = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], amp_A     [:,kA0:kA1+1])
             ver_B_pt      = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], amp_B     [:,kB0:kB1+1])
             # Record files used
-            N_used_A[kA0:kA1+1] += 1
-            N_used_B[kB0:kB1+1] += 1
+            nA = np.tile(np.arange(N_alts_A),(2,1)).T.astype(float)
+            nB = np.tile(np.arange(N_alts_B),(2,1)).T.astype(float)
+            idx_A = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], nA)
+            idx_B = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], nB)
+            idx_A_0 = int(np.floor(idx_A))
+            idx_B_0 = int(np.floor(idx_B))
+            idx_A_1 = int(np.ceil(idx_A))
+            idx_B_1 = int(np.ceil(idx_B))
+            N_used_A[idx_A_0:idx_A_1+1, kA0:kA1+1] += 1
+            N_used_B[idx_B_0:idx_B_1+1, kB0:kB1+1] += 1
             
             # Interpolate time, which is more complicated because it's a datetime object
             t_A_0 = time_A[kA0]
