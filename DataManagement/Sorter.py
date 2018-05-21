@@ -29,7 +29,7 @@ import asiinfo
 import gpsinfo
 # Data Processing modules
 import FPI
-import Image
+from PIL import Image
 import FPIprocess
 import ASIprocess
 import GPSprocess
