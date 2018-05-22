@@ -9,7 +9,7 @@ import pytz
 import numpy as np
 import subprocess
 import matplotlib.pyplot as plt
-import Image
+from PIL import Image
 import MySQLdb as mdb
 import os
 import re
