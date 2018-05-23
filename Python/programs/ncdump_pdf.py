@@ -61,7 +61,7 @@ except:
     
 
 a = {} # all global attributes
-v = {} # keys are "data", "support_data", etc. Whatever the Var_Type can be.
+v = {} # keys are "data", "support_data", etc. Whatever the Var_Type can be (not case sensitive)
 dims = {} # all dimensions
 error_notes = [] # Notes to be printed in red at the top
 
@@ -93,7 +93,7 @@ try: # if something happens, make sure to close file
             var_dict['Var_Type'] = 'MISSING Var_Type'
             error_notes.append('ERROR: Missing variables attribute %s : Var_Type'%(var_dict['Name']))
 
-        var_type = var_dict['Var_Type']
+        var_type = var_dict['Var_Type'].lower() # not case sensitive, as per Tori's request
         if var_type not in ['ignore_data']:
             if var_type not in v.keys():
                 v[var_type] = []
@@ -255,7 +255,14 @@ are not shown.
 Story.append(Paragraph(text, styles["Justify"]))
 Story.append(Spacer(1, 6))
 
+# Make sure variable types are in order: 'data', 'support_data', 'metadata', then any other ones
+var_type_ordered = [x for x in ['data','support_data','metadata'] if x in v.keys()]
+# Add any other ones (are we expected anything other than those 3?)
 for var_type in v.keys():
+    if var_type not in var_type_ordered:
+        var_type_ordered.append(var_type)
+     
+for var_type in var_type_ordered:
     text = var_type
     Story.append(Paragraph(text, styles["Heading2"]))
     Story.append(Spacer(1, 6))
