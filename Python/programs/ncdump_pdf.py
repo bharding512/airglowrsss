@@ -68,7 +68,7 @@ error_notes = [] # Notes to be printed in red at the top
 try: # if something happens, make sure to close file
     
     for attr in d.ncattrs():
-        a[attr] = d.getncattr(attr)
+        a[attr.lower()] = d.getncattr(attr) # convert attribute names to lower case
         
     for dim in d.dimensions:
         dims[dim] = d.dimensions[dim].size
@@ -82,18 +82,18 @@ try: # if something happens, make sure to close file
         
         # Read variable attributes from netCDF file and convert to dictionary
         var_dict = {}
-        var_dict['Name'] = var_name
+        var_dict['name'] = var_name
         for attr in var.ncattrs():
-            var_dict[attr] = var.getncattr(attr)     
+            var_dict[attr.lower()] = var.getncattr(attr) # convert attribute names to lower case
         # Read dimensions
-        var_dict['Dims'] = var.dimensions
+        var_dict['dims'] = var.dimensions
         
         # Special case for error checking (most error checking is done below)
-        if 'Var_Type' not in var_dict.keys() or not isvalid(var_dict['Var_Type']):
-            var_dict['Var_Type'] = 'MISSING Var_Type'
-            error_notes.append('ERROR: Missing variables attribute %s : Var_Type'%(var_dict['Name']))
+        if 'var_type' not in var_dict.keys() or not isvalid(var_dict['var_type']):
+            var_dict['var_type'] = 'MISSING Var_Type'
+            error_notes.append('ERROR: Missing variables attribute %s : Var_Type'%(var_dict['name']))
 
-        var_type = var_dict['Var_Type'].lower() # not case sensitive, as per Tori's request
+        var_type = var_dict['var_type'].lower() # not case sensitive, as per Tori's request
         if var_type not in ['ignore_data']:
             if var_type not in v.keys():
                 v[var_type] = []
@@ -106,28 +106,28 @@ except:
     raise
     
 #### Global attributes which are required
-req_a = ['Text_Supplement','Description','Data_Type','Software_Version']
+req_a = ['text_supplement','description','data_type','software_version']
 for attr in req_a:
     if attr not in a.keys() or not isvalid(a[attr]):
         a[attr] = 'MISSING %s' % attr
         error_notes.append('ERROR: Missing global attribute "%s"'%attr)
 
 #### Populate variable attributes which are required, and fill in those that are optional with blanks
-req_v = ['Var_Type', 'Var_Notes', 'CatDesc']
-filler_v = ['Units']
+req_v = ['var_type', 'var_notes', 'catdesc']
+filler_v = ['units']
 for var_type in v:
     for var_dict in v[var_type]:
         for attr in req_v:
             if attr not in var_dict.keys() or not isvalid(var_dict[attr]):
                 var_dict[attr] = 'MISSING %s' % attr
-                error_notes.append('ERROR: Missing variables attribute %s : %s'%(var_dict['Name'],attr))
+                error_notes.append('ERROR: Missing variables attribute %s : %s'%(var_dict['name'],attr))
         for attr in filler_v:
             if attr not in var_dict.keys() or not isvalid(var_dict[attr]):
                 # No need to throw error
                 var_dict[attr] = ''
                 
 #### If Units are given as a list, convert it to a string
-str_v = ['Units']
+str_v = ['units']
 for var_type in v:
     for var_dict in v[var_type]:
         for attr in str_v:
@@ -136,12 +136,12 @@ for var_type in v:
  
             
 #### Convert Var_Notes and Text_Supplement to multi-strings, if they are not already.
-if isinstance(a['Text_Supplement'], (str, unicode)):
-    a['Text_Supplement'] = [a['Text_Supplement']]
+if isinstance(a['text_supplement'], (str, unicode)):
+    a['text_supplement'] = [a['text_supplement']]
 for var_type in v:
     for var_dict in v[var_type]:
-        if isinstance(var_dict['Var_Notes'], (str,unicode)):
-            var_dict['Var_Notes'] = [var_dict['Var_Notes']]
+        if isinstance(var_dict['var_notes'], (str,unicode)):
+            var_dict['var_notes'] = [var_dict['var_notes']]
 
 #### Convert new lines to line breaks
 #for i in range(len(a['Text_Supplement'])):
@@ -174,7 +174,7 @@ styles.add(ParagraphStyle(name='Smallish', fontSize=9))
 
 ####################### Introduction ##############################
 # Title
-text = 'ICON %s' % (a['Data_Type'].split('>')[-1][1:])
+text = 'ICON %s' % (a['data_type'].split('>')[-1][1:])
 Story.append(Paragraph(text, styles["Title"]))
 Story.append(Spacer(1, 12))
 
@@ -187,12 +187,12 @@ if error_notes:
 # Introduction
 text = """
 This document describes the data product for %s, which is in NetCDF4 format.
-""" % (a['Description'])
+""" % (a['description'])
 Story.append(Paragraph(text, styles["Justify"]))
 Story.append(Spacer(1, 12))
 
 # Text Supplement: one paragraph per string
-for text in a['Text_Supplement']:
+for text in a['text_supplement']:
     Story.append(Paragraph(text, styles["Justify"]))
     Story.append(Spacer(1, 12))
 
@@ -277,14 +277,14 @@ for var_type in var_type_ordered:
     for var in v[var_type]: # Construct this row of the table.
         # Build table entries as a Paragraph.
         # First, build the multiple paragraph entry in "Description" cell
-        desc_col = [Paragraph(var['CatDesc'], styles["Smallish"])] # Start with short description
-        for text in var['Var_Notes']: # Append paragraphs for each string in Var_Notes
+        desc_col = [Paragraph(var['catdesc'], styles["Smallish"])] # Start with short description
+        for text in var['var_notes']: # Append paragraphs for each string in Var_Notes
             desc_col.append(Spacer(1,6))
             desc_col.append(Paragraph(text, styles["Small"]))
         # Second, create other cells
-        name_p = Paragraph('<font face="Courier">%s</font>' % (var['Name']), styles["Smallish"])
-        units_p = Paragraph(var['Units'], styles["Smallish"])
-        dims_s = ', '.join(var['Dims'])
+        name_p = Paragraph('<font face="Courier">%s</font>' % (var['name']), styles["Smallish"])
+        units_p = Paragraph(var['units'], styles["Smallish"])
+        dims_s = ', '.join(var['dims'])
         dims_p = Paragraph('<font face="Courier">%s</font>'%dims_s , styles["Smallish"])
         # Put all cells together in a row and add to the table
         row = [name_p, 
@@ -308,13 +308,13 @@ for var_type in var_type_ordered:
 # Generation notes
 text1 = 'This document was automatically generated on <font face="Courier">%s</font> using the file:'%t
 text2 = '<font face="Courier">%s</font>' % (fn_in.split('/')[-1])
-text3 = 'Software version: <font face="Courier">%s</font>' % (a['Software_Version'])
+text3 = 'Software version: <font face="Courier">%s</font>' % (a['software_version'])
 Story.append(Paragraph(text1, styles["Small"]))
 Story.append(Paragraph(text2, styles["Small"]))
 Story.append(Paragraph(text3, styles["Small"]))
 Story.append(Spacer(1, 12))
 
-doc.title = a['Description']
+doc.title = a['description']
 doc.build(Story)
 
 print 'Created %s' % fn_out
