@@ -176,7 +176,7 @@ def FindCenter(img,  circle_fit_method = 'geometric', thresh=None, max_r=None):
     
     # If we are not given a threshold, estimate one
     if not thresh:
-        thresh = prctile(np.reshape(img,np.size(img)),pthresh)
+        thresh = np.percentile(np.reshape(img,np.size(img)),pthresh)
     
     # If we are not given a max_r, estimate one
     if not max_r:
@@ -802,7 +802,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
             img = np.asarray(d)
             (cx,cy) = FindCenter(img)
 
-            appx_I = matplotlib.mlab.prctile(img,95) - matplotlib.mlab.prctile(img,5)
+            appx_I = np.percentile(img,95) - np.percentile(img,5)
             if appx_I < LAS_I_THRESH:
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                                 '%s laser fringes too dim (%.1f < %.1f). Ignoring this image...\n' % (fname, appx_I, LAS_I_THRESH))
@@ -2260,8 +2260,8 @@ def DopplerReference(FPI_Results, reference='zenith', statistic='mode'):
                             rawzenith = FPI_Results['LOSwind'][ind]
                             rawsigma_zenith = FPI_Results['sigma_LOSwind'][ind]
                             # Find minimum weighted norm dopp ref.
-                            mxz = prctile(rawzenith, 90)
-                            mnz = prctile(rawzenith, 10)
+                            mxz = np.percentile(rawzenith, 90)
+                            mnz = np.percentile(rawzenith, 10)
                             if mxz < mnz: # There aren't many samples. Just use actual min/max
                                 mxz = max(rawzenith)
                                 mnz = min(rawzenith)
