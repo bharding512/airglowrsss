@@ -164,7 +164,7 @@ def RawMovie(files, movie_name=None, cmin=None, cmax=None, darks=None, flips=Non
     os.remove('divx2pass.log')
     os.remove('divx2pass.log.mbtree')
 
-def MapMovie(files, m, lat, lon, movie_name=None, cmin=None, cmax=None, darks=None, sitename=None, filt=None, kernel_size=5, displayCountries=True,displayUT=False):
+def MapMovie(files, m, lat, lon, mask, movie_name=None, cmin=None, cmax=None, darks=None, sitename=None, filt=None, kernel_size=5, displayCountries=True,displayUT=False):
     # Function to generate a movie of the requested ASI images.
     #
     # INPUTS:
@@ -261,7 +261,7 @@ def MapMovie(files, m, lat, lon, movie_name=None, cmin=None, cmax=None, darks=No
         png_name = pa + 'tmp_' + fi[0:-4] + '_' + id_str + '.png'
 
         # Plot the image and save it
-        ASIDisplay.DisplayMap(f,m,lat,lon,cmin=cmin,cmax=cmax,dark=darks,sitename=sitename,filt=filt,kernel_size=kernel_size, displayUT=displayUT)
+        ASIDisplay.DisplayMap(f,m,lat,lon,mask,cmin=cmin,cmax=cmax,dark=darks,sitename=sitename,filt=filt,kernel_size=kernel_size, displayUT=displayUT)
 
         # Display coasts, etc
         m.drawcoastlines()
@@ -277,6 +277,7 @@ def MapMovie(files, m, lat, lon, movie_name=None, cmin=None, cmax=None, darks=No
 
         # Save the file
         plt.savefig(png_name, bbox_inches='tight', pad_inches=0.1)
+        
 
         # Created this image, append the name to the list to work with
         png_names.append(png_name)

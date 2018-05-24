@@ -109,7 +109,7 @@ def DisplayRaw(f, cmin=None, cmax=None, dark=None, flips=None, info=True, sitena
 
     return f
 
-def DisplayMap(f, m, lat, lon, cmin=None, cmax=None, dark=None, sitename=None, filt=None, kernel_size = 5, displayUT=False, displayColorbar=True):
+def DisplayMap(f, m, lat, lon, mask, cmin=None, cmax=None, dark=None, sitename=None, filt=None, kernel_size = 5, displayUT=False, displayColorbar=True):
     # Function to display an image on a provide map projection.
     #
     # INPUTS:
@@ -149,7 +149,8 @@ def DisplayMap(f, m, lat, lon, cmin=None, cmax=None, dark=None, sitename=None, f
     im = ndimage.filters.median_filter(im,size=kernel_size)
 
     # Find NaN in the projection arrays and mask the image data
-    zdata = ma.masked_where(np.isnan(lat),im)
+    #zdata = ma.masked_where(np.isnan(lat),im)
+    zdata = ma.masked_where(mask,im) #since now lat and lon do not have nans
 
     # Convert to the map's coordinates
     xpt,ypt = m(lon,lat)
@@ -261,10 +262,10 @@ def Keogram(files, lat, lon, target_lat, target_lon, darks=None, sitename=None, 
         # Create the image array from the data and dark image (if requested)
         if darks is None:
 #            im = np.reshape(d.getdata(), d.size)
-	    im = np.array(d.getdata(), np.uint16).reshape(d.size)
+            im = np.array(d.getdata(), np.uint16).reshape(d.size)
         else:
 #            im = np.reshape(d.getdata(), d.size)-darks*1.0
-	    im = np.array(d.getdata(), np.uint16).reshape(d.size) - darks*1.0
+            im = np.array(d.getdata(), np.uint16).reshape(d.size) - darks*1.0
 
         # Median filter the data
         d = ndimage.filters.median_filter(im,size=kernel_size)
@@ -309,18 +310,18 @@ def Keogram(files, lat, lon, target_lat, target_lon, darks=None, sitename=None, 
     keo_lon = np.array(keo_lon)
     keo_lat = np.array(keo_lat)
     ut = np.array(ut)
-
+    print "KEOO"
     # Generate the image and plot the first keogram
     f = plt.figure(num=None)
     p = f.add_subplot(211)
     a = p.imshow(keo_lon.transpose(), aspect='auto',extent=(dates.date2num(ut[0]),dates.date2num(ut[-1]),lo[-1],lo[0]),cmap=cm.gray)
-    ax = a.get_axes()
-    ax.xaxis_date()
+    #ax = a.get_axes()
+    p.xaxis_date()
 
     # Format the axis
     hfmt = dates.DateFormatter('%H:%M')
-    ax.xaxis.set_major_locator(dates.HourLocator(interval=1))
-    ax.xaxis.set_major_formatter(hfmt)
+    p.xaxis.set_major_locator(dates.HourLocator(interval=1))
+    p.xaxis.set_major_formatter(hfmt)
     plt.ylabel('Longitude')
 
     # Format the title
@@ -343,13 +344,13 @@ def Keogram(files, lat, lon, target_lat, target_lon, darks=None, sitename=None, 
     # Generate the second keogram
     p = f.add_subplot(212)
     a = p.imshow(keo_lat.transpose(), aspect='auto',extent=(dates.date2num(ut[0]),dates.date2num(ut[-1]),la[-1],la[0]),cmap=cm.gray)
-    ax = a.get_axes()
-    ax.xaxis_date()
+    #ax = a.get_axes()
+    p.xaxis_date()
 
     # Format the axis
     hfmt = dates.DateFormatter('%H:%M')
-    ax.xaxis.set_major_locator(dates.HourLocator(interval=1))
-    ax.xaxis.set_major_formatter(hfmt)
+    p.xaxis.set_major_locator(dates.HourLocator(interval=1))
+    p.xaxis.set_major_formatter(hfmt)
     plt.xlabel('UT')
     plt.ylabel('Latitude')
     a.set_clim([cmin,cmax])

@@ -171,11 +171,17 @@ def process_instr(inst,year,doy,do_DB=True):
                             projection='merc', area_thresh=1000,
                             resolution='i')
 
+                # create mask to mask image data
+                mask = np.isnan(lat)
+                
+                # Get lat and lon without nans so we can plot
+                lat1,lon1 = ASI.ConvertAzEl2LatLon(az,el,un_ht,rx_lat,rx_lon,horizon=-10.0) #-10 so there are no nans
+                
                 # Create the movie
-                ASI.MapMovie(files,m,lat,lon,movie_name=movie_name,darks=darks,sitename=site_name,kernel_size=kernel_size, displayCountries=show_countries,filt=fil_name)
+                ASI.MapMovie(files,m,lat1,lon1,mask,movie_name=movie_name,darks=darks,sitename=site_name,kernel_size=kernel_size, displayCountries=show_countries,filt=fil_name)
 
                 # SCP the movie over to airglow (call was Popen)
-                subprocess.call(['scp',movie_name,scp_user + ':' + file_stub])
+                ####subprocess.call(['scp',movie_name,scp_user + ':' + file_stub])
 
                 files_created.append(movie_name)
 
