@@ -310,7 +310,7 @@ def Keogram(files, lat, lon, target_lat, target_lon, darks=None, sitename=None, 
     keo_lon = np.array(keo_lon)
     keo_lat = np.array(keo_lat)
     ut = np.array(ut)
-    print "KEOO"
+    
     # Generate the image and plot the first keogram
     f = plt.figure(num=None)
     p = f.add_subplot(211)

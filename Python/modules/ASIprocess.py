@@ -181,7 +181,7 @@ def process_instr(inst,year,doy,do_DB=True):
                 ASI.MapMovie(files,m,lat1,lon1,mask,movie_name=movie_name,darks=darks,sitename=site_name,kernel_size=kernel_size, displayCountries=show_countries,filt=fil_name)
 
                 # SCP the movie over to airglow (call was Popen)
-                ####subprocess.call(['scp',movie_name,scp_user + ':' + file_stub])
+                subprocess.call(['scp',movie_name,scp_user + ':' + file_stub])
 
                 files_created.append(movie_name)
 
