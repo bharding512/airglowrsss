@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 12 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 13 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -66,6 +66,7 @@ import sys
 import copy
 
 import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from matplotlib import dates
 from matplotlib.colors import LogNorm
@@ -369,7 +370,6 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_o
                                                       
     '''
     
-    
     H = 26. # km, assumed scale height of VER falloff with altitude (used if top_layer=='exp')
             # This was found by fitting many profiles for which there was significant
             # emission above 300 km. Profiles were generated from Zhang/Shepherd model and
@@ -419,6 +419,7 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_o
         
         if top_layer == 'exp': # Use exponential falloff model
             for m in range(M):
+                
                 rt = tang_alt[m] + RE
                 r0 = tang_alt[-1] + RE
                 def func(x, rt):
@@ -851,7 +852,6 @@ def attribute_measurement_location(tang_lat, tang_lon, tang_alt, integration_ord
         Use circular mean instead of arithmetic mean. This is intended for longitude
         calculations.
         """
-        vec_new = fix_longitudes(vec, vec[0])
         bottom = vec
         top = bottom.copy()
         top[:-1] = top[1:]
@@ -1051,7 +1051,7 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     L1_dict['I_phase_uncertainty']         = f['ICON_L1_MIGHTI_%s_%s_Phase_Uncertainties' % (sensor, emission_color.capitalize())][0,:]
     # For tangent locations, only use the center, not the full horizontal distribution
     ny,nx = np.shape(L1_dict['I_amp'])
-    tang_lla                               = f['ICON_L1_MIGHTI_%s_%s_Tangent_LatLonAlt' % (sensor, emission_color.capitalize())][0,:,:,:] 
+    tang_lla                               = f['ICON_L1_MIGHTI_%s_%s_Tangent_LatLonAlt' % (sensor, emission_color.capitalize())][0,:,:,:]
     L1_dict['tang_alt_start']              = tang_lla[istart,2,:]
     L1_dict['tang_alt_stop']               = tang_lla[istop ,2,:]
     L1_dict['tang_lat_start']              = tang_lla[istart,0,:]
@@ -1081,13 +1081,26 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     L1_dict['icon_lat_stop']  = icon_latlonalt[istop ,0]
     L1_dict['icon_lon_start'] = icon_latlonalt[istart,1]
     L1_dict['icon_lon_stop']  = icon_latlonalt[istop ,1]
-    col = f.getncattr('Reference_Pixel_%s' % emission_color.capitalize())
-    if not hasattr(col,'__len__'): # Only a single value was given. Expand to all rows
-        col = col*np.ones(ny)
+    # Read attitude status register and save conjugate maneuver and zero wind maneuver bits
+    att_reg = f['ICON_L1_MIGHTI_%s_SC_Attitude_Control_Register'%sensor][:][0]
+    nb = 10
+    attitude = np.zeros(nb,dtype=np.int8)
+    s = '{0:b}'.format(att_reg).zfill(16)
+    for b in range(nb):
+        attitude[b] = int(s[-b-1])
+    L1_dict['att_lvlh_normal'] = attitude[0]
+    L1_dict['att_lvlh_reverse'] = attitude[1]
+    L1_dict['att_limb_pointing'] = attitude[2]
+    L1_dict['att_conjugate'] = attitude[6]
     
     # Dummy placeholder code for reading global attributes, if that matters
     nc_attrs = f.ncattrs()
     
+    # Make compatible with both netCDF4-python v1.3.0 and v1.4.0:
+    # Convert masked arrays to np.arrays, filling with nans.
+    for v in L1_dict.keys():
+        if isinstance(L1_dict[v], np.ma.masked_array):
+            L1_dict[v] = L1_dict[v].filled(np.nan)
     
     f.close()
     
@@ -1166,7 +1179,15 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                                                       Optical path difference for each column of interferogram
                                       * acknowledgements           -- TYPE:str.
                                                                       The value in the global attribute "Acknowledgement" which will be propagated
-                                             
+                                      * att_lvlh_normal            -- TYPE:int. 0 or 1
+                                                                      Attitude register bit 0: LVLH Normal
+                                      * att_lvlh_reverse           -- TYPE:int. 0 or 1
+                                                                      Attitude register bit 1: LVLH Reverse
+                                      * att_limb_pointing          -- TYPE:int. 0 or 1
+                                                                      Attitude register bit 2: Earth Limb Pointing
+                                      * att_conjugate              -- TYPE:int. 0 or 1
+                                                                      Attitude register bit 6: Conjugate Maneuver
+                                                                                 
     OPTIONAL INPUTS - If None, defaults from MIGHTI_L2.global_params will be used 
     
       *  sigma               -- TYPE:float, UNITS:m^-1. The wavenumber of the emission (1/wavelength)
@@ -1223,6 +1244,10 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                                                                               extraction from each row of the interferogram.
                                 * quality                   -- TYPE:array(ny)    UNITS:arb.   A number from 0 (Bad) to 1 (Good) for each altitude.
                                 * acknowledgement           -- TYPE:str.                      A copy of the Acknowledgement attribute in the L1 file.
+                                * att_lvlh_normal           -- TYPE:int. 0 or 1               Attitude register bit 0: LVLH Normal
+                                * att_lvlh_reverse          -- TYPE:int. 0 or 1               Attitude register bit 1: LVLH Reverse
+                                * att_limb_pointing         -- TYPE:int. 0 or 1               Attitude register bit 2: Earth Limb Pointing
+                                * att_conjugate             -- TYPE:int. 0 or 1               Attitude register bit 6: Conjugate Maneuver
     
     '''
     
@@ -1342,8 +1367,12 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
              'chi2'                         : chi2,
              'wind_quality'                 : np.nan, # TODO
              'acknowledgement'              : L1_dict['acknowledgement'],
+             'att_lvlh_normal'              : L1_dict['att_lvlh_normal'],
+             'att_lvlh_reverse'             : L1_dict['att_lvlh_reverse'],
+             'att_limb_pointing'            : L1_dict['att_limb_pointing'],
+             'att_conjugate'                : L1_dict['att_conjugate'],
     }
-        
+    
     return L21_dict
    
    
@@ -1693,12 +1722,12 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ######### Data Location and Direction Variables #########
         
         # Altitude
-        val = L21_dict['alt']*1e3 # convert to meters
+        val = L21_dict['alt']
         var = _create_variable(ncfile, '%s_Altitude'%prefix, val, 
                               dimensions=(var_alt_name),  depend_0 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='WGS84 altitude of each wind sample', 
                               display_type='altitude_profile', field_name='Altitude', fill_value=None, label_axis='Altitude', bin_location=0.5,
-                              units='m', valid_min=50e3, valid_max=1000e3, var_type='support_data', chunk_sizes=[n], monoton='Increase',
+                              units='km', valid_min=50., valid_max=1000., var_type='support_data', chunk_sizes=[n], monoton='Increase',
                               notes="The altitudes of each point in the wind profile, evaluated using the WGS84 ellipsoid. If the variable "
                                     "Integration_Order=0 (which is the default value), then these altitudes are one half sample above "
                                     "the tangent altitudes of each pixel's line of sight (consistent with the assumption implicit "
@@ -1786,42 +1815,42 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               notes='The longitude (0-360) of ICON at the midpoint time of the observation, using the WGS84 ellipsoid.')
 
         # ICON altitude
-        val = L21_dict['icon_alt']*1e3 # convert to m
+        val = L21_dict['icon_alt']
         var = _create_variable(ncfile, '%s_Spacecraft_Altitude'%prefix, val, 
                               dimensions=(),
                               format_nc='f8', format_fortran='F', desc='The WGS84 altitude of ICON', 
                               display_type='scalar', field_name='Spacecraft Altitude', fill_value=None, label_axis='S/C Alt', bin_location=0.5,
-                              units='m', valid_min=100e3, valid_max=2000e3, var_type='metadata', chunk_sizes=1,
+                              units='km', valid_min=100., valid_max=2000., var_type='metadata', chunk_sizes=1,
                               notes='The altitude of ICON at the midpoint time of the observation, using the WGS84 ellipsoid.')
 
-        # Along-track resolution
-        val = L21_dict['resolution_along_track']*1e3 # convert to meters
-        var = _create_variable(ncfile, '%s_Resolution_Along_Track'%prefix, val, 
-                              dimensions=(),
-                              format_nc='f8', format_fortran='F', desc='The horizontal resolution in the spacecraft velocity direction', 
-                              display_type='scalar', field_name='Along-Track Resolution', fill_value=None, label_axis='Hor Res AT', bin_location=0.5,
-                              units='m', valid_min=0., valid_max=1e30, var_type='metadata', chunk_sizes=1,
-                              notes=["NOT YET IMPLEMENTED",]
-                                     )
+#         # Along-track resolution
+#         val = L21_dict['resolution_along_track']
+#         var = _create_variable(ncfile, '%s_Resolution_Along_Track'%prefix, val, 
+#                               dimensions=(),
+#                               format_nc='f8', format_fortran='F', desc='The horizontal resolution in the spacecraft velocity direction', 
+#                               display_type='scalar', field_name='Along-Track Resolution', fill_value=None, label_axis='Hor Res AT', bin_location=0.5,
+#                               units='km', valid_min=0., valid_max=1e30, var_type='metadata', chunk_sizes=1,
+#                               notes=["NOT YET IMPLEMENTED",]
+#                                      )
 
-        # Cross-track resolution
-        val = L21_dict['resolution_cross_track']*1e3 # convert to meters
-        var = _create_variable(ncfile, '%s_Resolution_Cross_Track'%prefix, val, 
-                              dimensions=(),
-                              format_nc='f8', format_fortran='F', desc='The horizontal resolution perpendicular to the spacecraft velocity direction', 
-                              display_type='scalar', field_name='Cross-Track Resolution', fill_value=None, label_axis='Hor Res CT', bin_location=0.5,
-                              units='m', valid_min=0., valid_max=1e30, var_type='metadata', chunk_sizes=1,
-                              notes=["NOT YET IMPLEMENTED",]
-                                     )
+#         # Cross-track resolution
+#         val = L21_dict['resolution_cross_track']
+#         var = _create_variable(ncfile, '%s_Resolution_Cross_Track'%prefix, val, 
+#                               dimensions=(),
+#                               format_nc='f8', format_fortran='F', desc='The horizontal resolution perpendicular to the spacecraft velocity direction', 
+#                               display_type='scalar', field_name='Cross-Track Resolution', fill_value=None, label_axis='Hor Res CT', bin_location=0.5,
+#                               units='km', valid_min=0., valid_max=1e30, var_type='metadata', chunk_sizes=1,
+#                               notes=["NOT YET IMPLEMENTED",]
+#                                      )
 
-        # Altitude resolution
-        var = _create_variable(ncfile, '%s_Resolution_Altitude'%prefix, L21_dict['resolution_alt']*1e3, # km to meters
-                              dimensions=(),
-                              format_nc='f8', format_fortran='F', desc='The vertical resolution', 
-                              display_type='scalar', field_name='Vertical Resolution', fill_value=None, label_axis='Vert Res', bin_location=0.5,
-                              units='m', valid_min=0., valid_max=1e30, var_type='metadata', chunk_sizes=1,
-                              notes=["NOT YET IMPLEMENTED",]
-                                     )
+#         # Altitude resolution
+#         var = _create_variable(ncfile, '%s_Resolution_Altitude'%prefix, L21_dict['resolution_alt']
+#                               dimensions=(),
+#                               format_nc='f8', format_fortran='F', desc='The vertical resolution', 
+#                               display_type='scalar', field_name='Vertical Resolution', fill_value=None, label_axis='Vert Res', bin_location=0.5,
+#                               units='km', valid_min=0., valid_max=1e30, var_type='metadata', chunk_sizes=1,
+#                               notes=["NOT YET IMPLEMENTED",]
+#                                      )
 
         # MIGHTI ECEF vectors
         var = _create_variable(ncfile, '%s_Line_of_Sight_Vector'%prefix, L21_dict['mighti_ecef_vectors'], 
@@ -1871,7 +1900,43 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               "from running a variety of airglow models (Top_Layer_Model=\"exp\"). Usually this choice will not affect the "
                               "inversion significantly. In cases where it does, the quality variable will be decreased."
                               )    
-            
+
+        # Attitude information bits
+        var = _create_variable(ncfile, '%s_Attitude_LVLH_Normal'%prefix, L21_dict['att_lvlh_normal'], 
+                              dimensions=(),
+                              format_nc='i1', format_fortran='I', desc='Attitude status bit 0: LVLH Normal', 
+                              display_type='scalar', field_name='LVLH Norm', fill_value=None, label_axis='LVLH Norm', bin_location=0.5,
+                              units='', valid_min=np.int8(0), valid_max=np.int8(1), var_type='metadata', chunk_sizes=1,
+                              notes="LVLH Normal pointing. This variable is taken from bit 0 of the Level 1 variable "
+                              "ICON_L1_MIGHTI_X_SC_Attitude_Control_Register."
+                              )
+ 
+        var = _create_variable(ncfile, '%s_Attitude_LVLH_Reverse'%prefix, L21_dict['att_lvlh_reverse'], 
+                              dimensions=(),
+                              format_nc='i1', format_fortran='I', desc='Attitude status bit 1: LVLH Reverse', 
+                              display_type='scalar', field_name='LVLH Norm', fill_value=None, label_axis='LVLH Norm', bin_location=0.5,
+                              units='', valid_min=np.int8(0), valid_max=np.int8(1), var_type='metadata', chunk_sizes=1,
+                              notes="LVLH Reverse pointing. This variable is taken from bit 1 of the Level 1 variable "
+                              "ICON_L1_MIGHTI_X_SC_Attitude_Control_Register."
+                              )
+ 
+        var = _create_variable(ncfile, '%s_Attitude_Limb_Pointing'%prefix, L21_dict['att_limb_pointing'], 
+                              dimensions=(),
+                              format_nc='i1', format_fortran='I', desc='Attitude status bit 2: Earth Limb Pointing', 
+                              display_type='scalar', field_name='LVLH Norm', fill_value=None, label_axis='LVLH Norm', bin_location=0.5,
+                              units='', valid_min=np.int8(0), valid_max=np.int8(1), var_type='metadata', chunk_sizes=1,
+                              notes="Earth limb pointing. This variable is taken from bit 2 of the Level 1 variable "
+                              "ICON_L1_MIGHTI_X_SC_Attitude_Control_Register."
+                              )
+ 
+        var = _create_variable(ncfile, '%s_Attitude_Conjugate_Maneuver'%prefix, L21_dict['att_conjugate'], 
+                              dimensions=(),
+                              format_nc='i1', format_fortran='I', desc='Attitude status bit 6: Conjugate Maneuver', 
+                              display_type='scalar', field_name='LVLH Norm', fill_value=None, label_axis='LVLH Norm', bin_location=0.5,
+                              units='', valid_min=np.int8(0), valid_max=np.int8(1), var_type='metadata', chunk_sizes=1,
+                              notes="Conjugate Maneuver. This variable is taken from bit 6 of the Level 1 variable "
+                              "ICON_L1_MIGHTI_X_SC_Attitude_Control_Register."
+                              )
         ncfile.close()
         
     except: # make sure the file is closed
@@ -1940,7 +2005,6 @@ def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_r
                                            integration_order = integration_order, 
                                            account_for_local_projection = account_for_local_projection, 
                                            bin_size = bin_size, chi2_thresh = chi2_thresh)
-    
     
     # Save L2.1 file
     L21_fn = save_nc_level21(L21_path, L21_dict, data_revision)
@@ -2098,14 +2162,21 @@ def level1_to_level21(info_fn):
 
     
     
-def level21_to_dict(L21_fns):
+def level21_to_dict(L21_fns, skip_att=[]):
     ''' 
     Load a series of Level 2.1 files and return relevant variables in a dictionary. It is
-    assumed that all files are from the same emission (red or green)
+    assumed that all files are from the same emission (red or green).
     
     INPUTS:
     
       *  L21_fns  -- TYPE:list of str.  The paths to the Level 2.1 files to be loaded.
+      
+    OPTIONAL INPUTS:
+      
+      *  skip_att -- TYPE: list of str.  A list of attitude status variables. If any evaluate
+                                         to True, the file will be skipped and not included 
+                                         in the output. Possible values: ['att_conjugate', 
+                                         'att_lvlh_reverse', 'att_zero_wind']
       
     OUTPUTS:
     
@@ -2129,7 +2200,7 @@ def level21_to_dict(L21_fns):
                   * exp_time        -- TYPE:array(nt),    UNITS:sec. Exposure time of each sample.
                   * emission_color  -- TYPE:str,                     'red' or 'green'.
                   * sensor          -- TYPE:list(nt).                Each element is 'A' or 'B'
-                  * source_files    -- TYPE:list of str,             A copy of the input.
+                  * source_files    -- TYPE:list of str,             Which files from the input were used.
                   * version         -- TYPE:array(nt).               Version number of each file.
                   * revision        -- TYPE:array(nt).               Revision number of each file.
                   * acknowledgement -- TYPE:str.                     The Acknowledgment attribute in the first file
@@ -2155,7 +2226,12 @@ def level21_to_dict(L21_fns):
                  'exp_time',
                  'sensor',
                  'version',
-                 'revision',]
+                 'revision',
+                 'att_lvlh_normal',
+                 'att_lvlh_reverse',
+                 'att_limb_pointing',
+                 'att_conjugate',
+                 'source_files',]
 
     z = {}
     for v in variables:
@@ -2174,11 +2250,28 @@ def level21_to_dict(L21_fns):
         vers = int(versrev[1:3])
         rev = int(versrev[4:])
         prefix = 'ICON_L2_MIGHTI_%s_%s' % (sens, color.capitalize())
-
+        
+        # Load up all attitude variables, to see if this files should be skipped
+        att = {}
+        att['att_lvlh_normal']   = d.variables['%s_Attitude_LVLH_Normal' % prefix][...].item()
+        att['att_lvlh_reverse']  = d.variables['%s_Attitude_LVLH_Reverse' % prefix][...].item()
+        att['att_limb_pointing'] = d.variables['%s_Attitude_Limb_Pointing' % prefix][...].item()
+        att['att_conjugate']     = d.variables['%s_Attitude_Conjugate_Maneuver' % prefix][...].item()
+        # Helper function to decide if file should be skipped
+        def skip():
+            for k in skip_att:
+                assert k in att.keys(), '"%s" is not a recognized attitude status name' % k
+                if att[k]:
+                    #print('Skipping file with %s: %s' % (k, fn))
+                    return True
+            return False
+        if skip():
+            continue
+        
         # Load all variables
         z['lat'].append(           d.variables['%s_Latitude' % prefix][...])
         z['lon'].append(           d.variables['%s_Longitude' % prefix][...])
-        z['alt'].append(           d.variables['%s_Altitude' % prefix][...]*1e-3) # m to km
+        z['alt'].append(           d.variables['%s_Altitude' % prefix][...])
         z['los_wind'].append(      d.variables['%s_Line_of_Sight_Wind' % prefix][...])
         z['los_wind_error'].append(d.variables['%s_Line_of_Sight_Wind_Error' % prefix][...])
         z['local_az'].append(      d.variables['%s_Line_of_Sight_Azimuth' % prefix][...])
@@ -2189,10 +2282,15 @@ def level21_to_dict(L21_fns):
         z['icon_lat'].append(      d.variables['%s_Spacecraft_Latitude' % prefix][...].item())
         z['icon_lon'].append(      d.variables['%s_Spacecraft_Longitude' % prefix][...].item())
         z['icon_alt'].append(      d.variables['%s_Spacecraft_Altitude' % prefix][...].item())
+        z['att_lvlh_normal'].append(   att['att_lvlh_normal'])
+        z['att_lvlh_reverse'].append(  att['att_lvlh_reverse'])
+        z['att_limb_pointing'].append( att['att_limb_pointing'])
+        z['att_conjugate'].append(     att['att_conjugate'])
         z['exp_time'].append(float(d.Time_Resolution.split(' ')[0]))
         z['sensor'].append(sens)
         z['version'].append(vers)
         z['revision'].append(rev)
+        z['source_files'].append(fn)
 
         ack = d.Acknowledgement    
         assert color == first_color, "Input files do not have the same emission color"
@@ -2210,7 +2308,6 @@ def level21_to_dict(L21_fns):
     # Add extra global information
     z['acknowledgement'] = ack
     z['emission_color'] = color.lower()
-    z['source_files'] = L21_fns
     
     return z
 
@@ -2230,7 +2327,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     This entails interpolating line-of-sight wind measurements from MIGHTI A and B to a 
     common grid, and rotating to a geographic coordinate system to derive vector horizontal winds. 
     The input files should span 24 hours (0 UT to 23:59:59 UT), with ~20 minutes of extra files
-    on either side.
+    on either side. Only files with the 'att_lvlh_normal' flag will be processed. In the future, 
+    we may also include the 'att_lvlh_reverse' flag as well.
     
     INPUTS:
     
@@ -3017,12 +3115,12 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         ######### Data Location Variables #########
         
         # Altitude
-        val = L22_dict['alt']*1e3 # convert to meters
+        val = L22_dict['alt']
         var = _create_variable(ncfile, var_alt_name, val, 
                               dimensions=(var_alt_name), depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='WGS84 altitude of each wind sample', 
                               display_type='image', field_name='Altitude', fill_value=None, label_axis='', bin_location=0.5,
-                              units='m', valid_min=50e3, valid_max=1000e3, var_type='support_data', chunk_sizes=[ny], monoton='Increase',
+                              units='km', valid_min=50., valid_max=1000., var_type='support_data', chunk_sizes=[ny], monoton='Increase',
                               notes="A one-dimensional array defining the altitude dimension of the data grid (the other dimension "
                               "being time). For each Level 2.2 file, the altitude grid is defined based on the minimum and maximum altitudes, "
                               "(and highest resolution) in the Level 2.1 (line-of-sight wind) files. Altitude is defined using the WGS84 ellipsoid."
@@ -3143,7 +3241,8 @@ def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph
     High-level function to apply the Level-2.1-to-Level-2.2 algorithm to a series of same-colored Level 2.1 files
     (in the L21_path directory) and create a single Level 2.2 file (in the L22_path directory). This version
     of the function requires the user to input parameters manually, instead of specifying an 
-    Information.TXT file, like is done at the Science Data Center.
+    Information.TXT file, like is done at the Science Data Center. Files taken during LVLH reverse and 
+    conjugate maneuvers will be skipped.
     
     INPUTS:
     
@@ -3194,8 +3293,9 @@ def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph
     Bfns.sort()
 
     # Read files (this is the bottleneck in terms of runtime)
-    level21_A = level21_to_dict(Afns)
-    level21_B = level21_to_dict(Bfns)
+    # Note that we're skipping files during LVLH reverse and conjugate maneuvers
+    level21_A = level21_to_dict(Afns, skip_att = ['att_lvlh_reverse','att_conjugate'])
+    level21_B = level21_to_dict(Bfns, skip_att = ['att_lvlh_reverse','att_conjugate'])
 
     ##### Run L2.2 processing to create L2.2 dictionary
     L22_dict = level21_dict_to_level22_dict(level21_A, level21_B, sph_asym_thresh=sph_asym_thresh,
@@ -3319,7 +3419,7 @@ def level22_to_dict(L22_fn):
         lonu[:,i] = fix_longitudes(lonu[:,i], lonu[0,i])
     L22_dict['lon_unwrapped'] = lonu
 
-    L22_dict['alt']    = f['ICON_L2_MIGHTI_%s_Altitude'  % emission_color][:].T/1e3
+    L22_dict['alt']    = f['ICON_L2_MIGHTI_%s_Altitude'  % emission_color][:].T
     L22_dict['u']      = f['ICON_L2_MIGHTI_%s_Zonal_Wind' % emission_color][:,:].T
     L22_dict['v']      = f['ICON_L2_MIGHTI_%s_Meridional_Wind' % emission_color][:,:].T
     L22_dict['u_error']= f['ICON_L2_MIGHTI_%s_Zonal_Wind_Error' % emission_color][:,:].T
@@ -3342,23 +3442,23 @@ def level22_to_dict(L22_fn):
                                   
     
     # Convert times to datetime
-    epoch = np.ma.empty(len(L22_dict['epoch_ms']), dtype=datetime)
+    epoch = np.empty(len(L22_dict['epoch_ms']), dtype=datetime)
     for i in range(len(epoch)):
         if isinstance(L22_dict['epoch_ms'],np.ma.MaskedArray) and L22_dict['epoch_ms'].mask[i]:
             epoch[i] = datetime(1989,4,18) # arbitrary fill value
-            epoch[i] = np.ma.masked # mask it
         else:
             epoch[i] = datetime(1970,1,1) + timedelta(seconds = L22_dict['epoch_ms'][i]/1e3)
+    epoch = np.ma.masked_where(L22_dict['epoch_ms'].mask, epoch)
             
-    epoch_full = np.ma.empty(np.shape(L22_dict['epoch_full_ms']), dtype=datetime)
+    epoch_full = np.empty(np.shape(L22_dict['epoch_full_ms']), dtype=datetime)
     for i in range(np.shape(epoch_full)[0]):
         for j in range(np.shape(epoch_full)[1]):
             if isinstance(L22_dict['epoch_full_ms'],np.ma.MaskedArray) and L22_dict['epoch_full_ms'].mask[i,j]:
-                epoch_full[i] = datetime(1989,4,18) # arbitrary fill value
-                epoch_full[i] = np.ma.masked # mask it
+                epoch_full[i,j] = datetime(1989,4,18) # arbitrary fill value
             else:
-                epoch_full[i] = datetime(1970,1,1) + timedelta(seconds = L22_dict['epoch_full_ms'][i,j]/1e3)
-                
+                epoch_full[i,j] = datetime(1970,1,1) + timedelta(seconds = L22_dict['epoch_full_ms'][i,j]/1e3)
+    epoch_full = np.ma.masked_where(L22_dict['epoch_full_ms'].mask, epoch_full)
+        
     L22_dict['epoch'] = epoch
     L22_dict['epoch_full'] = epoch_full
     
