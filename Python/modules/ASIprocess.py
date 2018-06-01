@@ -177,7 +177,7 @@ def process_instr(inst,year,doy,do_DB=True):
 
                 # create mask to mask image data
                 if maskDat is not None:
-                    mask = isnan(lat) | maskDat
+                    mask = np.isnan(lat) | maskDat
                 else:
                     mask = np.isnan(lat)
                 
