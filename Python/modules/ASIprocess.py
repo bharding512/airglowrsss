@@ -81,7 +81,7 @@ def process_instr(inst,year,doy,do_DB=True):
     az = npzfile['az']
     rx_lat = npzfile['rx_lat']
     rx_lon = npzfile['rx_lon']
-    if 'in' in inst: #get CNFI's mask that used to be on el/az to apply to data
+    if 'nf' in inst: #get CNFI's mask that used to be on el/az to apply to data
         maskDat = npzfile['mask']
     else:
         maskDat = None
