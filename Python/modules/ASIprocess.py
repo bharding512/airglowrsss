@@ -81,6 +81,10 @@ def process_instr(inst,year,doy,do_DB=True):
     az = npzfile['az']
     rx_lat = npzfile['rx_lat']
     rx_lon = npzfile['rx_lon']
+    if 'in' in inst: #get CNFI's mask that used to be on el/az to apply to data
+        maskDat = npzfile['mask']
+    else:
+        maskDat = None
     npzfile.close()
 
     # Determine the times between which files will be accepted.
@@ -172,7 +176,10 @@ def process_instr(inst,year,doy,do_DB=True):
                             resolution='i')
 
                 # create mask to mask image data
-                mask = np.isnan(lat)
+                if maskDat is not None:
+                    mask = isnan(lat) | maskDat
+                else:
+                    mask = np.isnan(lat)
                 
                 # Get lat and lon without nans so we can plot
                 lat1,lon1 = ASI.ConvertAzEl2LatLon(az,el,un_ht,rx_lat,rx_lon,horizon=-10.0) #-10 so there are no nans
