@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 13 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 14 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -37,6 +37,9 @@ global_params['red'] = {
     'chi2_thresh'       : 0.5,             # [rad^2] Minimum value of chi^2, below which the line fit to extract phase 
                                            # should not be trusted. As defined, it is normalized by the number of pixels
                                            # in a row. If this threshold is being reached too often, then consider binning.
+    't_diff_AB'         : 20*60.,          # [sec] Maximum time difference between A and B exposures used to determine
+                                           # the wind at a given location. If it's longer than this, something went wrong
+                                           # with the processing.
 }
 
 global_params['green'] = {
@@ -47,6 +50,7 @@ global_params['green'] = {
     'top_layer'         : 'exp',
     'sph_asym_thresh'   : 0.19,
     'chi2_thresh'       : 0.5,
+    't_diff_AB'         : 20*60.
 }
 
 
@@ -56,7 +60,7 @@ global_params['green'] = {
 import numpy as np
 import ICON
 import bisect
-from scipy import integrate
+from scipy import integrate, optimize
 from datetime import datetime, timedelta
 import netCDF4
 import getpass # for determining who is running the script
@@ -2240,7 +2244,7 @@ def level21_to_dict(L21_fns, skip_att=[]):
     first_color = L21_fns[0].split('/')[-1].split('_')[3].split('-')[-1] # Red or Green
     for fn in L21_fns:
         try:
-            d = netCDF4.Dataset(fn)
+            d = netCDF4.Dataset(fn,'r')
         except IOError as e:
             print 'Error reading file: %s' % fn
             raise
@@ -2321,14 +2325,14 @@ def level21_to_dict(L21_fns, skip_att=[]):
    
 
     
-def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None, time_start = None, time_stop = None):
+def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None, time_start = None, time_stop = None,
+                                 t_diff_AB = None):
     '''
     Given Level 2.1 data from MIGHTI A and MIGHTI B, process it with the Level 2.2 algorithm. 
     This entails interpolating line-of-sight wind measurements from MIGHTI A and B to a 
     common grid, and rotating to a geographic coordinate system to derive vector horizontal winds. 
     The input files should span 24 hours (0 UT to 23:59:59 UT), with ~20 minutes of extra files
-    on either side. Only files with the 'att_lvlh_normal' flag will be processed. In the future, 
-    we may also include the 'att_lvlh_reverse' flag as well.
+    on either side.
     
     INPUTS:
     
@@ -2348,15 +2352,16 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
       *  time_start      -- TYPE:datetime. A timezone-naive datetime in UT, specifying the beginning of the interval
                                            which the Level 2.2 data product should span. (Some L2.1 files from before
                                            the start time are needed to handle the crossover). If None (default), 
-                                           the start time defaults to the first 0 UT after the first input file's time.
-                                           Note that the time changes from the top to the bottom of a L2.2 profile. We
-                                           use the top of the field of view as the reference. This means that it's
-                                           possible for some time samples to occur before the start time or after the
-                                           stop time.
+                                           the start time defaults to 0 UT on the date of the midpoint between the
+                                           first and last input file.
       *  time_stop       -- TYPE:datetime. A timezone-naive datetime in UT, specifying the end of the interval
                                            which the Level 2.2 data product should span. (Some L2.1 files from after
                                            the start time are needed to handle the crossover). If None (default), 
                                            the stop time defaults to 24 hours after the start time.
+      *  t_diff_AB       -- TYPE:float.    Maximum time difference between A and B exposures used to determine
+                                           the wind at a single point in space. If it's longer than this, there
+                                           is likely a problem with the processing. If None (default), the default 
+                                           value from MIGHTI_L2.global_params will be used.
                                         
     OUTPUTS:
     
@@ -2385,7 +2390,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                                                             * 5  = B did not sample this altitude
                                                                             * 6  = spherical asymmetry: A&B VER 
                                                                                    estimates disagree
-                                                                            * 7  = unknown error
+                                                                            * 7  = sample taken <time_start or >=time_stop
+                                                                            * 8  = unknown error
                                                                             
                    * epoch_full      -- TYPE:array(ny,nx),    UNITS:none. The average between the time of the MIGHTI A 
                                                                           and B measurements that contribute to this 
@@ -2394,8 +2400,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                                                           given as a datetime object. This is useful because 
                                                                           while the time varies along a column, it doesn't vary 
                                                                           much (+/- 30 seconds or so).
-                   * time_start      -- TYPE:datetime                     The start time for defining the reconstruction grid
-                   * time_stop       -- TYPE:datetime                     The stop time for defining the reconstruction grid
+                   * time_start      -- TYPE:datetime                     The start time for defining the reconstruction grid (inclusive)
+                   * time_stop       -- TYPE:datetime                     The stop time for defining the reconstruction grid (exclusive)
                    * time_delta      -- TYPE:array(ny,nx),    UNITS:s.    The difference between the time of the MIGHTI
                                                                           A and B measurements that contribute to this 
                                                                           grid point.
@@ -2416,18 +2422,20 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                    * N_used_A        -- TYPE:array(n_files_A)             How many times each input MIGHTI-A file was used
                    * N_used_B        -- TYPE:array(n_files_B)             How many times each input MIGHTI-B file was used
     '''
+    
 
     ################################## Parse Inputs ####################################
     emission_color = L21_A_dict['emission_color']
     params = global_params[emission_color]
     if sph_asym_thresh is None:
         sph_asym_thresh = params['sph_asym_thresh']
-    
+    if t_diff_AB is None:
+        t_diff_AB = params['t_diff_AB']
+
     assert L21_A_dict['emission_color'] == L21_B_dict['emission_color'], "Files for A and B are for different emissions"
-    
-    
+
     lat_A      =       L21_A_dict['lat']
-    lon_A_raw  =       L21_A_dict['lon']
+    lon_raw_A  =       L21_A_dict['lon']
     alt_A      =       L21_A_dict['alt']
     los_wind_A =       L21_A_dict['los_wind']
     los_wind_A_err =   L21_A_dict['los_wind_error']
@@ -2436,10 +2444,11 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     time_A     =       L21_A_dict['time']
     exp_time_A =       L21_A_dict['exp_time']
     emission_color =   L21_A_dict['emission_color']
+    icon_lon_A =       L21_A_dict['icon_lon']
     N_alts_A, N_times_A = np.shape(lat_A)
 
     lat_B      =       L21_B_dict['lat']
-    lon_B_raw  =       L21_B_dict['lon']
+    lon_raw_B  =       L21_B_dict['lon']
     alt_B      =       L21_B_dict['alt']
     los_wind_B =       L21_B_dict['los_wind']
     los_wind_B_err =   L21_B_dict['los_wind_error']
@@ -2448,65 +2457,121 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     time_B     =       L21_B_dict['time']
     exp_time_B =       L21_B_dict['exp_time']
     emission_color =   L21_B_dict['emission_color']
+    icon_lon_B =       L21_B_dict['icon_lon']
     N_alts_B, N_times_B = np.shape(lat_B)
-    
+
     if time_start is None:
-        # Default to 0 UT on date of middle A image
-        t_mid = time_A[N_times_A/2]
+        # Default to 0 UT on date of midpoint of first and last file
+        t_min = min(min(time_A), min(time_B))
+        t_max = max(max(time_A), max(time_B))
+        dt = (t_max - t_min).total_seconds()
+        assert (dt > 3600.) or (t_max.day == t_min.day), "Less than 1 hour of data, spanning 2 dates. Unsure which day to process."
+        t_mid = t_min + timedelta(seconds=dt/2)
         time_start = datetime(t_mid.year, t_mid.month, t_mid.day)
-        
+
     if time_stop is None:
         # Default to 24 hours after the start time
         time_stop = time_start + timedelta(hours=24)
-    
+
     assert any(time_A < time_stop ), "No MIGHTI-A files found before time_stop=%s"%(time_stop)
     assert any(time_B < time_stop ), "No MIGHTI-B files found before time_stop=%s"%(time_stop)
-    assert any(time_A > time_start), "No MIGHTI-A files found before time_start=%s"%(time_start)
-    assert any(time_B > time_start), "No MIGHTI-B files found before time_start=%s"%(time_start)
-    
+    assert any(time_A >= time_start), "No MIGHTI-A files found after time_start=%s"%(time_start)
+    assert any(time_B >= time_start), "No MIGHTI-B files found after time_start=%s"%(time_start)
+    assert any((time_A >= time_start) & (time_A < time_stop)), "No MIGHTI-A files found between time_start=%s and time_stop=%s"%\
+                                                            (time_start,time_stop)
+    assert any((time_B >= time_start) & (time_B < time_stop)), "No MIGHTI-B files found between time_start=%s and time_stop=%s"%\
+                                                            (time_start,time_stop)
+    assert len(time_A) > 1, "Need at least 2 files from MIGHTI-A"
+    assert len(time_B) > 1, "Need at least 2 files from MIGHTI-B"
+
     ####################### Define reconstruction grid: lon/alt ########################
 
-    # Unwrap the sample longitude arrays to avoid 0/360 jumps
-    lon_A = lon_A_raw.copy()
-    lon_B = lon_B_raw.copy()
-    lon_A[:,0] = fix_longitudes(lon_A[:,0], lon_A[-1,0]) # Use top first A longitude as target
-    lon_B[:,0] = fix_longitudes(lon_B[:,0], lon_A[-1,0]) # Use top first A longitude as target
+    # Unwrap longitudes. This must be done carefully to handle cases where large 
+    # gaps due to calibration maneuvers may exist. Assume the icon longitude vs
+    # time plot is approximately linear, and use this to unwrap ICON longitude. 
+    # Then add/subtract 360 deg from tangent longitudes so that the tangent
+    # longitudes are "close" (less than 180 deg) from ICON longitude at 
+    # the same time.
+
+    # Fit for dlon/dt (basically the speed of ICON, or the frequency of the lon vs time sawtooth)
+    # Use MIGHTI-A and MIGHTI-B samples combined (since the ICON position is common)
+    time_sec_A = np.array([(t-time_start).total_seconds() for t in time_A])
+    time_sec_B = np.array([(t-time_start).total_seconds() for t in time_B])
+    time_sec = np.concatenate((time_sec_A, time_sec_B))
+    icon_lon = np.concatenate((icon_lon_A, icon_lon_B))
+    def err(dlon_dt, *params):
+        time_sec, lon = params
+        lon_fit = np.mod(lon[0] + dlon_dt*(time_sec-time_sec[0]), 360.)
+        return sum((lon_fit-lon)**2)
+    dlon_dt_min = 360./(3*3600.)   # orbit every 3 hours
+    dlon_dt_max = 360./(0.5*3600.) # orbit every 0.5 hours
+    dlon_dt = optimize.brute(err, ranges=((dlon_dt_min,dlon_dt_max),), Ns=500, 
+                             args=(time_sec, icon_lon), finish = optimize.fmin)[0]
+
+    # Approximate for ICON's unwrapped longitude as a function of time,
+    # using the dlon_dt determined above.
+    def icon_lon_linear(t):
+        '''
+        t - datetime, or array of datetimes
+        '''
+        # Use A as to define the start time. This shouldn't matter, since
+        # the icon_lon should trace the same path for A and B, and we're only
+        # using it for 0/360 adjustments anyway.
+        t0 = time_A[0]
+        lon0 = icon_lon_A[0]
+        # Helper function to vectorize timedelta.total_seconds()
+        total_seconds = np.vectorize(lambda x: x.total_seconds())
+        # Li
+        lon = lon0 + dlon_dt * total_seconds(t-t0)
+        return lon
+
+    icon_lon_linear_A = icon_lon_linear(time_A)
+    icon_lon_linear_B = icon_lon_linear(time_B)
+    jumpA = (icon_lon_linear_A - icon_lon_A)/360.
+    jumpB = (icon_lon_linear_B - icon_lon_B)/360.
+    njumpA = np.around(jumpA)
+    njumpB = np.around(jumpB)
+    djumpA = jumpA - njumpA
+    djumpB = jumpB - njumpB
+    assert all(abs(djumpA) < 0.2), "Contact MIGHTI Team - something went wrong in ICON longitude unwrapping."
+    assert all(abs(djumpB) < 0.2), "Contact MIGHTI Team - something went wrong in ICON longitude unwrapping."
+    # Apply jumps to ICON longitude to unwrap it
+    icon_lonu_A = icon_lon_A + njumpA*360.
+    icon_lonu_B = icon_lon_B + njumpB*360.
+
+    # Find and apply jumps to tangent longitudes
+    lon_A = np.zeros(np.shape(lon_raw_A))
     for i in range(N_alts_A):
-        lon_A[i,:] = fix_longitudes(lon_A[i,:], lon_A[i,0])
+        jump = (icon_lon_linear_A - lon_raw_A[i,:])/360.
+        njump = np.around(jump)
+        djump = jump - njump
+        assert all(abs(djump)<0.2), "Contact MIGHTI Team - something went wrong in MIGHTI-A tang lon unwrapping."
+        lon_A[i,:] = lon_raw_A[i,:] + njump*360.
+
+    lon_B = np.zeros(np.shape(lon_raw_B))
     for i in range(N_alts_B):
-        lon_B[i,:] = fix_longitudes(lon_B[i,:], lon_B[i,0])
+        jump = (icon_lon_linear_B - lon_raw_B[i,:])/360.
+        njump = np.around(jump)
+        djump = jump - njump
+        assert all(abs(djump)<0.2), "Contact MIGHTI Team - something went wrong in MIGHTI-B tang lon unwrapping."
+        lon_B[i,:] = lon_raw_B[i,:] + njump*360.
 
-    # Determine start longitude
-    # This should be the longitude of the tangent point at the top of the profile for the first
-    # exposure after the start time, averaged between A and B.
-    iA = bisect.bisect(time_A, time_start) # First A file after start time.
-    iB = bisect.bisect(time_B, time_start) # First B file after start time.
-    start_lon_A = lon_A[-1,iA]
-    start_lon_B = lon_B[-1,iB]
-    assert abs(start_lon_A - start_lon_B) < 90.,"A and B start longitudes are off by 360 deg."
-    start_lon = np.mean([start_lon_A, start_lon_B])
+    # Do some sanity checks
+    assert (abs(np.diff(lon_A,axis=0))).max() < 5., "Large jump detected in longitude profile (MIGHTI-A)"
+    assert (abs(np.diff(lon_B,axis=0))).max() < 5., "Large jump detected in longitude profile (MIGHTI-A)"
 
-    # Determine stop longitude
-    # This should be the longitude of the tangent point at the top of the profile for the first
-    # exposure before the stop time, averaged between A and B.
-    iA = bisect.bisect(time_A, time_stop) - 1 # First A file before (or equal to) stop time
-    iB = bisect.bisect(time_B, time_stop) - 1 # First B file before (or equal to) stop time
-    stop_lon_A = lon_A[-1,iA]
-    stop_lon_B = lon_B[-1,iB]
-    assert abs(stop_lon_A - stop_lon_B) < 90.,"A and B start longitudes are off by 360 deg."
-    stop_lon = np.mean([stop_lon_A, stop_lon_B])
-    
-    time_min = min(min(time_A), min(time_B))
-    time_max = max(max(time_A), max(time_B))
-    assert stop_lon > start_lon, 'No files found between time_start="%s" and time_stop="%s". Files provided span from "%s" to "%s"'%(time_start, \
-                                                                                   time_stop, time_min, time_max)
+    # Determine start and stop longitude to define grid.
+    # Use the full range of sampled unwrapped longitudes,
+    # including previous and next days, then trim later based on time.
+    lon_start = min(lon_A.min(), lon_B.min())
+    lon_stop  = max(lon_A.max(), lon_B.max())
 
-    # Determine how finely to define longitude grid based on minimum L2.1 sampling rate
+    # Determine how finely to define longitude grid based on minimum L2.1 sampling rate.
     lon_res_A = (np.diff(lon_A,axis=1)).min()
     lon_res_B = (np.diff(lon_B,axis=1)).min()
     lon_res = min(lon_res_A, lon_res_B)
     # Define longitude grid
-    lon_vec = np.arange(start_lon, stop_lon, lon_res)
+    lon_vec = np.arange(lon_start, lon_stop, lon_res)
 
     # Define altitude grid based on the min and max in the L2.1 data (i.e., don't throw out data)
     # Define altitude resolution based upon the resolution of L2.1 data
@@ -2528,12 +2593,14 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     # longitude and altitude as desired. Bilinear interpolation is 
     # used because it is insensitive to the units used to define
     # the sample grid.
-    # This proceeds in 4 steps:
+    # This proceeds in steps:
     # 1) Setup
     # 2) Error flagging
     # 3) Interpolation
     # 4) Inverting (i.e., rotating LoS winds to cardinal)
-            
+    # 5) Final error flagging
+    # 6) Trimming data points which correspond to previous or next days.
+
     # Output variables, which will be defined on the reconstruction grid
     U = np.nan*np.zeros((N_alts, N_lons))                # zonal wind
     V = np.nan*np.zeros((N_alts, N_lons))                # meridional wind
@@ -2546,13 +2613,13 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     ver_B = np.nan*np.zeros((N_alts, N_lons))            # fringe amplitude from B (related to VER)
     ver   = np.nan*np.zeros((N_alts, N_lons))            # fringe amplitude (mean of A and B)
     ver_rel_diff = np.nan*np.zeros((N_alts, N_lons))     # relative difference in A and B VER
-    error_flags = np.zeros((N_alts, N_lons, 8), dtype=bool)      # Error flags, one set per grid point. See above for definition.
+    error_flags = np.zeros((N_alts, N_lons, 9), dtype=bool)      # Error flags, one set per grid point. See above for definition.
     N_used_A = np.zeros((N_alts_A, N_times_A))           # Number of times each L2.1 MIGHTI-A file was used
     N_used_B = np.zeros((N_alts_B, N_times_B))           # Same for MIGHTI-B
-    
+
     # Loop over the reconstruction altitudes
     for i in range(N_alts):
-            
+
         alt_pt = alt[i]
         # Create a list of longitudes, one per A and B file, which have been
         # interpolated to this altitude.
@@ -2562,20 +2629,20 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             lon_list_A[k] = interpolate_linear(alt_A[:,k], lon_A[:,k], alt_pt)
         for k in range(N_times_B):
             lon_list_B[k] = interpolate_linear(alt_B[:,k], lon_B[:,k], alt_pt)
-        
+
         # Loop over the reconstruction longitudes
         for k in range(N_lons):
-            
+
             lon_pt = lon_vec[k]
-            
+
             # Find the file to the left and right in longitude. 
             kA0 = bisect.bisect(lon_list_A, lon_pt) - 1
             kA1 = kA0 + 1
             kB0 = bisect.bisect(lon_list_B, lon_pt) - 1
             kB1 = kB0 + 1
-            
-            
-            
+
+
+
             ##################### Error Flagging ##########################
             # Never extrapolate in longitude. This error should not normally happen, and 
             # probably indicates an entire missing orbit or an extended calibration routine.
@@ -2586,7 +2653,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                 if kB0 < 0 or kB1 >= N_times_B:
                     error_flags[i,k,1] = 1
                 continue
-            
+
             # Determine if there are "missing" files by checking the time between the straddling
             # files we just found and comparing to the exposure time of the files.
             # If so, throw error flag and continue.
@@ -2599,7 +2666,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                 if missing_B:
                     error_flags[i,k,1] = 1
                 continue
-                    
+
             # If the desired altitude is outside the range of altitudes sampled by the 
             # instruments, throw error flag and continue.
             # For this, allow some wiggle room to handle case where MIGHTI A samples
@@ -2614,9 +2681,9 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                 if alt_pt > altmax_B or alt_pt < altmin_B:
                     error_flags[i,k,5] = 1
                 continue
-            
-            
-            
+
+
+
             ######################## Interpolating ############################
             # If it passed all the error checks, perform bilinear interpolation (altitude, then longitude).
             # Variables to interpolate to this point:
@@ -2625,21 +2692,21 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             #   - lat      (A and B, to be averaged)
             #   - time     (A and B, to be averaged and subtracted)
             #   - ver      (A and B, to be compared)
-            
+
             def bilinear_interp(lon_AB, alt_AB, val, prop_err = False, valerr = None):
                 '''
                 Helper function that will bilinearly interpolate the Nx2 array "val", sampled
                 at the Nx2 array of points described by lon_AB and alt_AB, to the point 
                 currently under consideration (i.e., lon_pt, alt_pt).
-                
+
                 Optional input to propagate error from original to interpolated value. If
                 prop_err = True, valerr must be specified (as the error of each value of
                 val), and the interpolated error will be provided an additional output.
                 '''
-                
+
                 if prop_err and valerr is None:
                     raise Exception('If prop_err = True, then valerr must be specified')
-                
+
                 if not prop_err:
                     # Do interpolation of value to the desired altitude, for each longitude
                     val_0 = interpolate_linear(alt_AB[:,0], val[:,0], alt_pt)
@@ -2651,7 +2718,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                     val_pt = interpolate_linear([lon_0, lon_1], [val_0, val_1], lon_pt,
                                                           extrapolation='none')
                     return val_pt
-                
+
                 else: # prop_err is True
                     # Do interpolation of value to the desired altitude, for each longitude
                     val_0, val_0_err = interpolate_linear(alt_AB[:,0], val[:,0], alt_pt, 
@@ -2665,8 +2732,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                                             extrapolation='none', 
                                                             prop_err = True, yerr = [val_0_err, val_1_err])
                     return val_pt, val_pt_err
-                    
-            
+
+
             los_wind_A_pt, los_wind_A_pt_err = \
                             bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], los_wind_A[:,kA0:kA1+1],
                                             prop_err = True, valerr = los_wind_A_err[:,kA0:kA1+1])
@@ -2690,7 +2757,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             idx_B_1 = int(np.ceil(idx_B))
             N_used_A[idx_A_0:idx_A_1+1, kA0:kA1+1] += 1
             N_used_B[idx_B_0:idx_B_1+1, kB0:kB1+1] += 1
-            
+
             # Interpolate time, which is more complicated because it's a datetime object
             t_A_0 = time_A[kA0]
             t_A_1 = time_A[kA1]
@@ -2708,8 +2775,16 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             toff_B = interpolate_linear([lon_B_0, lon_B_1], [0, tgap_B], lon_pt, extrapolation='none')
             t_A = t_A_0 + timedelta(seconds=(toff_A))
             t_B = t_B_0 + timedelta(seconds=(toff_B))
-            
-            
+
+            # Calculate time difference and verify it is small. If it's large,
+            # this implies something went wrong with the A/B matchup (i.e., 
+            # longitude unwrapping).
+            time_delta_pt = (t_B - t_A).total_seconds()
+            time_pt = t_A + timedelta(seconds=time_delta_pt/2.)
+            assert abs(time_delta_pt) < t_diff_AB, \
+                   "A/B match-up using files %.0f sec apart. Max allowed is %.0f sec" % (time_delta_pt, t_diff_AB)
+
+
             ############################ Inversion #############################
             # Coordinate transformation of winds from lines of sight to cardinal directions
             # Construct LoS winds in vector y
@@ -2730,76 +2805,126 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             u_err = np.sqrt(Sig_x[0,0])
             v_err = np.sqrt(Sig_x[1,1])
 
-            
+
             ###################### Final error flagging #######################            
-            
+
             # Check if the interpolated L2.1 data were np.nan, which would have to 
             # indicate weak signal (or is there another reason they might be masked?)
             if np.isnan(los_wind_A_pt):
                 error_flags[i,k,2] = 1
             if np.isnan(los_wind_B_pt):
                 error_flags[i,k,3] = 1
-                
+
             # Check spherical symmetry
             ver_rel_diff_pt = abs(ver_A_pt - ver_B_pt)/np.mean([ver_A_pt,ver_B_pt])
             if ver_rel_diff_pt > sph_asym_thresh:
                 error_flags[i,k,6] = 1
                 # Should we nan the data too?
-            
+
             # Unknown error - this should never happen
             if (np.isnan(u) or np.isnan(v)) and all(error_flags[i,k,:] == 0): # Unknown error
-                error_flags[i,k,7] = 1
-                
-                
+                error_flags[i,k,-1] = 1
+
             # Fill in all the relevant variables at this grid point
             U[i,k] = u
             V[i,k] = v
             U_err[i,k] = u_err
             V_err[i,k] = v_err
             lat[i,k] = (lat_A_pt + lat_B_pt)/2
-            time[i,k] = t_A + timedelta(seconds=(t_B-t_A).total_seconds()/2)
-            time_delta[i,k] = (t_B-t_A).total_seconds()
+            time[i,k] = time_pt
+            time_delta[i,k] = time_delta_pt
             ver_A[i,k] = ver_A_pt
             ver_B[i,k] = ver_B_pt
             ver[i,k]   = (ver_A_pt + ver_B_pt)/2.
             ver_rel_diff[i,k] = ver_rel_diff_pt
-                
-    # Create average time per column (i.e., per longitude)
-    epoch = np.empty(N_lons, dtype=object)
+
+
+    ########### Final trimming based on time. Don't keep grid points outside requested times. ##########
+    # Create min, max time per column (i.e., per longitude)
+    epoch_min = np.empty(N_lons, dtype=object) # This will be used to trim data based on time
+    epoch_max = np.empty(N_lons, dtype=object) # ditto
+    for k in range(N_lons):
+        t_k = [ti for ti in time[:,k] if ti is not None]
+        if len(t_k) > 0:
+            # Take mean of that array
+            dt_k = np.array([(ti - t_k[0]).total_seconds() for ti in t_k])
+            epoch_min[k] = t_k[0] + timedelta(seconds=min(dt_k))
+            epoch_max[k] = t_k[0] + timedelta(seconds=max(dt_k))
+
+    # Columns (i.e., longitudes) corresponding to times fully before time_start or 
+    # fully after time_stop are pruned before saving. This code sets k0 and k1
+    for i in range(N_lons):
+        if epoch_min[i] is None:
+            epoch_min[i] = datetime(1970,1,1)
+        if epoch_max[i] is None:
+            epoch_max[i] = datetime(2170,1,1)
+    k0 = 0
+    if any(epoch_max < time_start): # prune the beginning
+        k0 = np.where(epoch_max < time_start)[0][-1] + 1 # Last image entirely before time_start, + 1
+    k1 = N_lons
+    if any(epoch_min >= time_stop): # prune the end
+        k1 = np.where(epoch_min >= time_stop)[0][0] # First image entirely after time_stop
+
+    # For grid points with times outside the requested range, set data AND coordinates to masked.
+    for i in range(N_alts):
+        for k in range(N_lons):
+            if time[i,k] is not None and ((time[i,k] < time_start) or (time[i,k] >= time_stop)):
+                error_flags[i,k,7] = 1
+                U[i,k] = np.nan
+                V[i,k] = np.nan
+                U_err[i,k] = np.nan
+                V_err[i,k] = np.nan
+                lat[i,k] = np.nan
+                time[i,k] = None
+                time_delta[i,k] = np.nan
+                ver_A[i,k] = np.nan
+                ver_B[i,k] = np.nan
+                ver[i,k]   = np.nan
+                ver_rel_diff[i,k] = np.nan
+
+    # Determine the "average" time per column to be reported in file. Note that this must be done
+    # after the step above, or else some of these times might end up being outside the times 
+    # requested (e.g., in previous or next day), and that would confuse users, and might lead
+    # to odd situations where the a file would contain times after the next file.
+    # Create average, min, max time per column (i.e., per longitude)
+    epoch     = np.empty(N_lons, dtype=object) # This will be reported in file
     for k in range(N_lons):
         t_k = [ti for ti in time[:,k] if ti is not None]
         if len(t_k) > 0:
             # Take mean of that array
             dt_k = np.array([(ti - t_k[0]).total_seconds() for ti in t_k])
             epoch[k] = t_k[0] + timedelta(seconds=np.mean(dt_k))
-    
-    
-    # Create dictionary to be returned
+
+    assert all(np.diff([x for x in epoch if x is not None]) > timedelta(seconds=0.0)), \
+           "Epoch is not monotonically increasing."
+
+    ############## Output section ##################
+    # Note that the before/after trimming is done here.
     L22_dict = {}
-    L22_dict['lat'] = lat
-    L22_dict['lon'] = np.mod(lon, 360.)
-    L22_dict['lon_unwrapped'] = lon
-    L22_dict['alt'] = alt
-    L22_dict['u'] = U
-    L22_dict['v'] = V
-    L22_dict['u_error'] = U_err
-    L22_dict['v_error'] = V_err
-    L22_dict['error_flags'] = error_flags
-    L22_dict['epoch_full'] = time # 2D
-    L22_dict['epoch'] = epoch # 1D
-    L22_dict['time_delta'] = time_delta
-    L22_dict['time_start'] = time_start
-    L22_dict['time_stop'] = time_stop
-    L22_dict['fringe_amp_A'] = ver_A
-    L22_dict['fringe_amp_B'] = ver_B
-    L22_dict['fringe_amp'] = ver
-    L22_dict['fringe_amp_rel_diff'] = ver_rel_diff
-    L22_dict['emission_color'] = emission_color
-    L22_dict['source_files'] = np.concatenate((L21_A_dict['source_files'], L21_B_dict['source_files']))
-    L22_dict['acknowledgement'] = L21_A_dict['acknowledgement']
-    L22_dict['wind_quality'] = np.nan*np.ones((N_alts,N_lons)) # TODO
-    L22_dict['N_used_A'] = N_used_A
-    L22_dict['N_used_B'] = N_used_B
+    L22_dict['lat']                 = lat  [:,k0:k1]
+    L22_dict['lon']                 = np.mod(lon[:,k0:k1], 360.)
+    L22_dict['lon_unwrapped']       = lon  [:,k0:k1]
+    L22_dict['alt']                 = alt
+    L22_dict['u']                   = U    [:,k0:k1]
+    L22_dict['v']                   = V    [:,k0:k1]
+    L22_dict['u_error']             = U_err[:,k0:k1]
+    L22_dict['v_error']             = V_err[:,k0:k1]
+    L22_dict['error_flags']         = error_flags[:,k0:k1,:]
+    L22_dict['epoch_full']          = time [:,k0:k1] # 2D
+    L22_dict['epoch']               = epoch[k0:k1] # 1D
+    L22_dict['time_delta']          = time_delta[:,k0:k1]
+    L22_dict['time_start']          = time_start
+    L22_dict['time_stop']           = time_stop
+    L22_dict['fringe_amp_A']        = ver_A[:,k0:k1]
+    L22_dict['fringe_amp_B']        = ver_B[:,k0:k1]
+    L22_dict['fringe_amp']          = ver  [:,k0:k1]
+    L22_dict['fringe_amp_rel_diff'] = ver_rel_diff[:,k0:k1]
+    L22_dict['emission_color']      = emission_color
+    L22_dict['source_files']        = np.concatenate((L21_A_dict['source_files'], L21_B_dict['source_files']))
+    L22_dict['acknowledgement']     = L21_A_dict['acknowledgement']
+    L22_dict['wind_quality']        = np.ones((N_alts,k1-k0)) # TODO
+    L22_dict['N_used_A']            = N_used_A
+    L22_dict['N_used_B']            = N_used_B
     
     return L22_dict
 
@@ -3212,7 +3337,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               format_nc='i8', format_fortran='I', desc='Error flags', 
                               display_type='image', field_name='Error Flags', fill_value=-1, label_axis='', bin_location=0.5,
                               units='', valid_min=0, valid_max=1, var_type='metadata', chunk_sizes=[nx,ny,8],
-                              notes=["This variable provides information on why the Quality variable is reduced from 1.0. Eight error flags can "
+                              notes=["This variable provides information on why the Quality variable is reduced from 1.0. Many error flags can "
                               "exist for each grid point, each either 0 or 1. More than one flag can be raised per point. This variable "
                               "is a three-dimensional array with dimensions time, altitude, and number of flags.",
                                     "    0 = missing MIGHTI A file",
@@ -3222,7 +3347,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                     "    4 = A did not sample this altitude",
                                     "    5 = B did not sample this altitude",
                                     "    6 = Spherical asymmetry: A and B VER estimates disagree",
-                                    "    7 = Unknown Error",
+                                    "    7 = Sample time during previous or next day",
+                                    "    8 = Unknown Error",
                                     ])
         
         ncfile.close()
@@ -3242,7 +3368,7 @@ def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph
     (in the L21_path directory) and create a single Level 2.2 file (in the L22_path directory). This version
     of the function requires the user to input parameters manually, instead of specifying an 
     Information.TXT file, like is done at the Science Data Center. Files taken during LVLH reverse and 
-    conjugate maneuvers will be skipped.
+    conjugate maneuvers are skipped.
     
     INPUTS:
     
@@ -3692,14 +3818,15 @@ def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 1
 
     # Error flag meanings:
     error_str = {
-        0: 'Error: missing MIGHTI-A file',
-        1: 'Error: missing MIGHTI-B file',
-        2: 'Error: MIGHTI-A weak signal',
-        3: 'Error: MIGHTI-B weak signal',
-        4: 'Error: MIGHTI-A missing this altitude',
-        5: 'Error: MIGHTI-B missing this altitude',
-        6: 'Error: Spherical asymmetry detected',
-        7: 'Error: Unknown' 
+        0: 'MIGHTI-A file missing',
+        1: 'MIGHTI-B file missing',
+        2: 'MIGHTI-A weak signal',
+        3: 'MIGHTI-B weak signal',
+        4: 'MIGHTI-A missing this altitude',
+        5: 'MIGHTI-B missing this altitude',
+        6: 'Spherical asymmetry detected',
+        7: 'Sample time prev or next day',
+        8: 'Error: Unknown' 
     }
 
     Nalt, Nlon, Nflags = np.shape(L22_dict['error_flags'])
@@ -3707,6 +3834,7 @@ def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 1
     alt = L22_dict['alt']
     alt_mat = np.tile(alt, (Nlon,1)).T
     L22_pngs = []
+    nrows = int(np.ceil(Nflags/2. + 2))
     
     for n in range(nfigs):
 
@@ -3714,11 +3842,11 @@ def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 1
         i1 = int(np.floor(1.0*Nlon/nfigs*n))
         i2 = int(np.floor(1.0*Nlon/nfigs*(n+1)))
 
-        fig = plt.figure(figsize=(16,(Nflags/2+2)*3))
+        fig = plt.figure(figsize=(16,nrows*3))
         
         #### WINDS
         for i,W in enumerate([L22_dict['u'],L22_dict['v']]):
-            plt.subplot(Nflags/2 + 2, 2, i+1)
+            plt.subplot(nrows, 2, i+1)
             plt.pcolormesh(lonu   [:,i1:i2], 
                            alt_mat[:,i1:i2],
                            W      [:,i1:i2],
@@ -3733,7 +3861,7 @@ def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 1
 
         #### WIND ERROR
         for i,W in enumerate([L22_dict['u_error'],L22_dict['v_error']]):
-            plt.subplot(Nflags/2 + 2, 2, i+3)
+            plt.subplot(nrows, 2, i+3)
             plt.pcolormesh(lonu   [:,i1:i2], 
                            alt_mat[:,i1:i2],
                            W      [:,i1:i2],
@@ -3747,7 +3875,7 @@ def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 1
     
         #### ERROR FLAGS
         for i in range(Nflags):
-            plt.subplot(Nflags/2 + 2,2,i+5)
+            plt.subplot(nrows, 2, i+5)
             # define the bins and normalize
             cmap=cmap_custom
             bounds = [-0.5,0.5,1.5]
@@ -3768,7 +3896,7 @@ def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 1
 
         #### Make plots look nice
         for sp in range(Nflags+4):
-            plt.subplot(Nflags/2 + 2,2, sp+1)
+            plt.subplot(nrows, 2, sp+1)
             plt.gca().patch.set_facecolor('gray')
             plt.ylabel('Altitude [km]')
             plt.xlabel('Longitude [deg]')
