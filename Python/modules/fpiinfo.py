@@ -967,7 +967,7 @@ _instruments['minime03'] = {
                                'b0': -1.197e-01,
                                'b1': -2.140e-01,
                                'b2': 9.668e-01, 
-                           'center':  (259.64, 263.79),
+                           'center':  (283.71, 276.92),
                           },
         'sql_winds_id'          : 99,           # ID for SQL database
         'sql_temperatures_id'   : 100,           # ID for SQL database
