@@ -390,7 +390,7 @@ _sites['sao'] = {
         'scpPort':      19997,
         'Network':      'nation',
         'sql_id':       30, # ID on the airglow SQL database
-        'share':        False, # whether or not to save a copy of the npz file in a separate folder
+        'share':        True, # whether or not to save a copy of the npz file in a separate folder
         'borders':      True,
         'Directions':   {
                 'Laser': {'ze': -180, 'az': 88.5, 'exptime': 30, 
