@@ -1074,7 +1074,7 @@ _instruments['minime06'] = {
         'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
-        'skyI_quality_thresh'   : [0.0141,-np.inf] # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
+        'skyI_quality_thresh'   : [0.0708,0.0224] # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
     }
             
 _instruments['minime07'] = {
