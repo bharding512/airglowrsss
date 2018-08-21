@@ -54,7 +54,7 @@ def activeinstruments():
     # 2. for remote2 server for emailing person of interest.
 
     # Email list
-    UIemail = ['bharding512@gmail.com','ktchu2@illinois.edu','jmakela@illinois.edu']
+    UIemail = ['ktchu2@illinois.edu','jmakela@illinois.edu']
     BZemail = ['rburiti.ufcg@gmail.com']
     AKemail = []
     MOemail = ['zouhair@uca.ac.ma']
