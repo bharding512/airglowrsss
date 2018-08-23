@@ -9,6 +9,7 @@ import fpiinfo
 import numpy as np
 from numpy import array, zeros, ones, arange, sqrt, mean, median, nan, pi, sum, random
 import pandas as pd
+import glob
 
 
 def get_max_kp(t, prevhrs = 24.):
@@ -21,7 +22,7 @@ def get_max_kp(t, prevhrs = 24.):
 
 
     
-def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLOUD_THRESH = -15., DROP_NO_CLOUD = True,
+def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLOUD_THRESH = np.inf, DROP_NO_CLOUD = True,
                 SKYI_THRESH = None, SKYB_THRESH = np.inf, T_THRESH = 150., verbose = True):
     '''
     Load raw line-of-sight FPI data and perform quality control.
@@ -38,7 +39,8 @@ def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLO
     doy_start       - UT day-of-year. This is UT, not the FPI "night of" convention.
     doy_stop        - ". Inclusive.
     SIGMA_THRESH    - [m/s, K] threshold for filtering LOS samples based on their uncertainty
-    CLOUD_THRESH    - [C]   threshold for filtering LOS samples based on cloud indicator
+    CLOUD_THRESH    - [C] threshold for filtering LOS samples based on cloud indicator. Can be
+                      filtered in this step or during the cardinalization step.
     DROP_NO_CLOUD   - If False, keep data with no cloud sensor reading. If True, drop it.
     SKYI_THRESH     - [cnt/s] threshold for filtering LOS samples based on brightness (if None, 
                       use default value from fpiinfo [the lower of the two])
@@ -77,10 +79,11 @@ def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLO
         d['t'] = pd.to_datetime(r['sky_times']).tz_convert(pytz.utc)
         # Variables to pass through directly
         v = ['skyI', 'sigma_skyI', 'LOSwind', 'sigma_LOSwind', 'sky_intT', 'T', 'sigma_T',\
-                        'sigma_fit_LOSwind', 'sigma_cal_LOSwind','az','ze','skyB','direction']
+             'sigma_fit_LOSwind', 'sigma_cal_LOSwind','az','ze','skyB','direction','sky_ccd_temperature']
         for key in v:
             d[key] = r[key]
-        d['Clouds'] = r['Clouds']['mean']
+        # Note using max instead of mean. If it's cloudy at all during the exposure, it's bad.
+        d['Clouds'] = r['Clouds']['max'] 
 
         df = pd.DataFrame(d)
         dfs.append(df)
@@ -91,6 +94,7 @@ def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLO
         
     # Make one big DataFrame for all the FPI data
     dfraw = pd.concat(dfs)
+    dfraw.index = arange(len(dfraw)) # make sure indices are unique
     
 
     #################### Quality control on samples #######################
@@ -123,7 +127,7 @@ def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLO
     dfraw = dfraw.dropna()
     
     ################### Append metadata #######################
-    dfraw.instr_name = instr_name
+    #dfraw.instr_name = instr_name
     
     return dfraw
     
@@ -132,7 +136,7 @@ def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLO
 
 
 def cardinal_fpi(dfraw, year, doy_start, doy_stop, dtb=1.0, KP_THRESH = 3., DISAGREE_THRESH = 25., 
-                 NBIN_THRESH = 3, COND_THRESH = 1e2, SIGMA_W_THRESH=100., verbose = True):
+                 NBIN_THRESH = 3, COND_THRESH = 1e2, SIGMA_W_THRESH=100., CLOUD_THRESH = np.inf, verbose = True):
     '''
     Take line-of-sight winds, and transform them to cardinal winds on 
     a constant time cadence. Time binning is performed simultaneously
@@ -158,6 +162,9 @@ def cardinal_fpi(dfraw, year, doy_start, doy_stop, dtb=1.0, KP_THRESH = 3., DISA
                       matrix used to convert LOS to cardinal winds. This ensures that enough 
                       varied lines of sight are included.
     SIGMA_THRESH    - [m/s, K] maximum uncertainty of u, w, and T in each bin, others will be filtered.
+    CLOUD_THRESH    - [K] maximum cloud indicator. If any samples in bin are larger, this bin will be filtered.
+                      Cloud filtering can be done at the raw data level or at this level. This input can either
+                      be a scalar, or a function which takes doy and returns a scalar.
     verbose         - whether to print quality control information
                       
     OUTPUTS:
@@ -219,7 +226,20 @@ def cardinal_fpi(dfraw, year, doy_start, doy_stop, dtb=1.0, KP_THRESH = 3., DISA
             
             Ap = np.diag(1/g['sigma_cal_LOSwind']).dot(A)
             M = np.linalg.inv(Ap.T.dot(Ap)).dot(Ap.T) # least squares matrix, explicitly
-            sigma_cal_uvd = sqrt(np.diag(M.dot(M.T)))            
+            sigma_cal_uvd = sqrt(np.diag(M.dot(M.T)))      
+            
+            # Compute airglow gradient (variability within bin, normalized by mean)
+            Ivert = g['skyI']/np.cos(g['ze']*np.pi/180.) # converted from slant to vertical
+            Ivariab = Ivert.std()/Ivert.mean()
+            
+            # Compute cloud threshold for this day
+            if callable(CLOUD_THRESH): # It's a function of doy
+                doy = interval.left.dayofyear
+                cthresh = CLOUD_THRESH(doy)
+            else: # It's a scalar
+                cthresh = CLOUD_THRESH
+            
+            
 
             # Create a row for this interval of time
             dfrows.append([uvd[0], # zonal wind
@@ -239,11 +259,14 @@ def cardinal_fpi(dfraw, year, doy_start, doy_stop, dtb=1.0, KP_THRESH = 3., DISA
                            rms_resid,    # disagreement in each 
                            len(g),       # number of samples
                            np.linalg.cond(A), # condition number of cardinalization matrix
-                           g['Clouds'].mean()
+                           g['Clouds'].max(), # max cloud indicator
+                           cthresh, # cloud threshold for this day
+                           g['sky_ccd_temperature'].mean(), # mean CCD temperature
+                           Ivariab, # Fractional variability with each bin (proxy for airglow gradient)
                           ]
                          )
         else:
-            dfrows.append([np.nan]*18)
+            dfrows.append([np.nan]*21)
 
     # Create DataFrame object to store the binned data
     df = pd.DataFrame(data = dfrows, 
@@ -251,7 +274,7 @@ def cardinal_fpi(dfraw, year, doy_start, doy_stop, dtb=1.0, KP_THRESH = 3., DISA
                       columns = ['u','v','doppref','T','variab_T', 'sigma_u','sigma_v','sigma_doppref',\
                                  'sigma_fit_u', 'sigma_fit_v', 'sigma_fit_doppref',
                                  'sigma_cal_u', 'sigma_cal_v', 'sigma_cal_doppref',
-                                 'residrms','Nsamp','cond','cloud'])
+                                 'residrms','Nsamp','cond','cloud','cloud_thresh', 'ccdtemp','variab_I'])
 
     # Fill in "previous 24 hour's max kp"
     kp = []
@@ -267,10 +290,11 @@ def cardinal_fpi(dfraw, year, doy_start, doy_stop, dtb=1.0, KP_THRESH = 3., DISA
     bresid = df['residrms'] > DISAGREE_THRESH
     bcond  = df['cond'] > COND_THRESH
     bsigma = (df['sigma_u'] > SIGMA_W_THRESH) | (df['sigma_v'] > SIGMA_W_THRESH)
+    bcloud = df['cloud'] > df['cloud_thresh']
     vars_to_nan = ['u','v','T','sigma_u','sigma_v','variab_T','doppref','sigma_doppref',
                                  'sigma_fit_u', 'sigma_fit_v', 'sigma_fit_doppref',
                                  'sigma_cal_u', 'sigma_cal_v', 'sigma_cal_doppref',]
-    df.loc[ bkp | bresid | bcond | bsigma  , vars_to_nan ] = np.nan
+    df.loc[ bkp | bresid | bcond | bsigma | bcloud , vars_to_nan ] = np.nan
 
     if verbose:
         # print how many bins are being removed for too few samples
@@ -284,9 +308,10 @@ def cardinal_fpi(dfraw, year, doy_start, doy_stop, dtb=1.0, KP_THRESH = 3., DISA
             print '%.2f%% of wind bins filtered (condition number > %.1f)' % (100.*sum(bcond)/Ndata, COND_THRESH)
             print '%.2f%% of wind bins filtered (cardinal residual > %.2f m/s)' % (100.*sum(bresid)/Ndata, DISAGREE_THRESH)
             print '%.2f%% of wind bins filtered (propagated uncertainty > %.2f m/s)' % (100.*sum(bsigma)/Ndata, SIGMA_W_THRESH)
+            print '%.2f%% of wind bins filtered (cloud indicator > threshold)' % (100.*sum(bcloud)/Ndata)
 
     # Metadata
-    df.instr_name = dfraw.instr_name
+    #df.instr_name = dfraw.instr_name
 
     return df
     
@@ -306,7 +331,7 @@ def reindex_date_slt(df, lon):
             date[i] += timedelta(days=1)
     df['slt_hr'] = slt_hr
     df['slt_date'] = date
-    return df.set_index(['slt_date','slt_hr'])    
+    return df.set_index(['slt_date','slt_hr'])
     
     
     
@@ -599,16 +624,148 @@ class TaylorDiagram(object):
     
     
     
+class TaylorDiagram2(object):
+    """
+    Taylor diagram, modified to include 2nd quadrant
+    Plot model standard deviation and correlation to reference (data)
+    sample in a single-quadrant polar plot, with r=stddev and
+    theta=arccos(correlation).
+    """
+
+    def __init__(self, refstd, fig=None, rect=111, label='_', srange=(0, 1.5)):
+        """
+        Set up Taylor diagram axes, i.e. single quadrant polar
+        plot, using `mpl_toolkits.axisartist.floating_axes`.
+        Parameters:
+        * refstd: reference standard deviation to be compared to
+        * fig: input Figure or None
+        * rect: subplot definition
+        * label: reference label
+        * srange: stddev axis extension, in units of *refstd*
+        """
+
+        from matplotlib.projections import PolarAxes
+        import mpl_toolkits.axisartist.floating_axes as FA
+        import mpl_toolkits.axisartist.grid_finder as GF
+
+        self.refstd = refstd            # Reference standard deviation
+
+        tr = PolarAxes.PolarTransform()
+
+        # Correlation labels
+        rlocs = NP.concatenate((NP.arange(10)/10., [0.95, 0.99]))
+        tlocs = NP.arccos(rlocs)        # Conversion to polar angles
+        gl1 = GF.FixedLocator(tlocs)    # Positions
+        tf1 = GF.DictFormatter(dict(zip(tlocs, map(str, rlocs))))
+
+        # Standard deviation axis extent (in units of reference stddev)
+        self.smin = srange[0]*self.refstd
+        self.smax = srange[1]*self.refstd
+
+        ghelper = FA.GridHelperCurveLinear(tr,
+                                           extremes=(0, NP.pi,  # 1st quadrant
+                                                     self.smin, self.smax),
+                                           grid_locator1=gl1,
+                                           tick_formatter1=tf1)
+
+        if fig is None:
+            fig = PLT.figure()
+
+        ax = FA.FloatingSubplot(fig, rect, grid_helper=ghelper)
+        fig.add_subplot(ax)
+
+        # Adjust axes
+        ax.axis["top"].set_axis_direction("bottom")  # "Angle axis"
+        ax.axis["top"].toggle(ticklabels=True, label=True)
+        ax.axis["top"].major_ticklabels.set_axis_direction("top")
+        ax.axis["top"].label.set_axis_direction("top")
+        ax.axis["top"].label.set_text("Correlation")
+
+        ax.axis["left"].set_axis_direction("bottom")  # "X axis"
+        ax.axis["left"].label.set_text("Standard deviation")
+
+        ax.axis["right"].set_axis_direction("top")   # "Y axis"
+        ax.axis["right"].toggle(ticklabels=True)
+        ax.axis["right"].major_ticklabels.set_axis_direction("left")
+        #ax.axis["right"].label.set_text("Standard deviation")
+
+        ax.axis["bottom"].set_visible(False)         # Useless
+
+        self._ax = ax                   # Graphical axes
+        self.ax = ax.get_aux_axes(tr)   # Polar coordinates
+
+        # Add reference point and stddev contour
+        l, = self.ax.plot([0], self.refstd, 'k*',
+                          ls='', ms=10, label=label)
+        t = NP.linspace(0, NP.pi/2)
+        r = NP.zeros_like(t) + self.refstd
+        self.ax.plot(t, r, 'k--', label='_')
+
+        # Collect sample points for latter use (e.g. legend)
+        self.samplePoints = [l]
+
+    def add_sample(self, stddev, corrcoef, *args, **kwargs):
+        """
+        Add sample (*stddev*, *corrcoeff*) to the Taylor
+        diagram. *args* and *kwargs* are directly propagated to the
+        `Figure.plot` command.
+        """
+        sc = self.ax.scatter(NP.arccos(corrcoef), stddev,
+                          *args, **kwargs) # (theta,radius)
+        self.samplePoints.append(sc)
+        return sc
+
+        #l, = self.ax.plot(NP.arccos(corrcoef), stddev,
+        #                  *args, **kwargs)  # (theta,radius)
+        #self.samplePoints.append(l)#
+        #return l
+
+    def add_grid(self, *args, **kwargs):
+        """Add a grid."""
+
+        self.ax.grid(*args, **kwargs)
+
+    def add_contours(self, levels=5, **kwargs):
+        """
+        Add constant centered RMS difference contours, defined by *levels*.
+        """
+
+        rs, ts = NP.meshgrid(NP.linspace(self.smin, self.smax),
+                             NP.linspace(0, NP.pi/2))
+        # Compute centered RMS difference
+        rms = NP.sqrt(self.refstd**2 + rs**2 - 2*self.refstd*rs*NP.cos(ts))
+
+        contours = self.ax.contour(ts, rs, rms, levels, **kwargs)
+
+        return contours
     
     
     
-def load_gitm(instr_name, month=None):
+    
+    
+    
+def load_gitm(instr_name, month=None, new=False, hires=False):
     '''
     Load a year (2013) of GITM data from Aaron's files, and return it as a pandas 
     DataFrame.
     
     If month (int) is provided, only load the file from that month.
+    
+    new: boolean, whether to load new files (07/2018) or old files (2017ish?)
+    hires: boolean, only used if new=True. If True, use partial files sent by
+        Aaron Aug 20, 2018, which are the same as new=True except with higher
+        resolution.
     '''
+    
+    direc = '/home/bhardin2/GITM_2013/'
+    names = ['tdelta','T','v','u','w'] # note swap u,v
+    if new:
+        direc = '/home/bhardin2/GITM_2013_new/'
+        names = ['tdelta','T','u','v','w'] # Aaron seems to have fixed u,v
+        if hires:
+            direc = '/home/bhardin2/GITM_2013_new2/'
+
+    
     site_gitm = {'minime01':'Cariri',
                  'minime02':'Cajazeiras',
                  'minime03':'Morocco',
@@ -625,10 +782,23 @@ def load_gitm(instr_name, month=None):
         months = [month]
     dfs = []
     for month in months:
-        fn = '/home/bhardin2/GITM_2013/%s_%i%02i.txt' % (site_gitm[instr_name], year, month)
-        t0 = datetime(year, month, 1)
-        df = pd.read_table(fn, skiprows=123, names=['tdelta','T','v','u','w'],sep='\s+') # Note swap u,v
-        df['t'] = t0 + pd.to_timedelta(df.tdelta, unit='h')
+        globstr = '%s%s_%i%02i*.*' % (direc, site_gitm[instr_name], year, month)
+        fns = glob.glob(globstr)
+        if len(fns)==0:
+            print('No file found: %s' % (globstr))
+            continue
+        if len(fns)>1:
+            raise Exception('Multiple files found: %s' % (globstr))
+        fn = fns[0]
+        with open(fn,'r') as f:
+            f.readline() #  dummy 
+            s = f.readline() # t0
+            tv = [int(x) for x in s.split()]
+        t0 = datetime(tv[0],tv[1],tv[2],tv[3],tv[4])
+        
+        df = pd.read_table(fn, skiprows=123, names=names,sep='\s+') # Note swap u,v
+        tdelt = np.around(2*df.tdelta.values, 1)/2.0 # round to nearest half-hour (Why is this necessary?)
+        df['t'] = t0 + pd.to_timedelta(tdelt, unit='h')
         df.set_index('t', inplace=True)
         df.drop('tdelta',axis=1, inplace=True)
         dfs.append(df)
