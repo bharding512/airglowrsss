@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 14 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 15 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -34,7 +34,7 @@ global_params['red'] = {
     'sph_asym_thresh'   : 0.19,            # The relative difference in VER estimates from A&B,
                                            # beyond which the spherical asymmetry flag will be
                                            # raised in L2.2.
-    'chi2_thresh'       : 0.5,             # [rad^2] Minimum value of chi^2, below which the line fit to extract phase 
+    'chi2_thresh'       : 1e20,           # [rad^2] Minimum value of chi^2, below which the line fit to extract phase 
                                            # should not be trusted. As defined, it is normalized by the number of pixels
                                            # in a row. If this threshold is being reached too often, then consider binning.
     't_diff_AB'         : 20*60.,          # [sec] Maximum time difference between A and B exposures used to determine
@@ -49,7 +49,7 @@ global_params['green'] = {
     'integration_order' : 0,
     'top_layer'         : 'exp',
     'sph_asym_thresh'   : 0.19,
-    'chi2_thresh'       : 0.5,
+    'chi2_thresh'       : 1e20,
     't_diff_AB'         : 20*60.
 }
 
@@ -60,7 +60,7 @@ global_params['green'] = {
 import numpy as np
 import ICON
 import bisect
-from scipy import integrate, optimize
+from scipy import integrate, optimize, interpolate
 from datetime import datetime, timedelta
 import netCDF4
 import getpass # for determining who is running the script
@@ -2297,8 +2297,8 @@ def level21_to_dict(L21_fns, skip_att=[]):
         z['source_files'].append(fn)
 
         ack = d.Acknowledgement    
-        assert color == first_color, "Input files do not have the same emission color"
         d.close()
+        assert color == first_color, "Input files do not have the same emission color"
 
     # Replace masked arrays with nan and other minor things
     for v in variables:
@@ -2566,12 +2566,34 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     lon_start = min(lon_A.min(), lon_B.min())
     lon_stop  = max(lon_A.max(), lon_B.max())
 
-    # Determine how finely to define longitude grid based on minimum L2.1 sampling rate.
-    lon_res_A = (np.diff(lon_A,axis=1)).min()
-    lon_res_B = (np.diff(lon_B,axis=1)).min()
-    lon_res = min(lon_res_A, lon_res_B)
-    # Define longitude grid
-    lon_vec = np.arange(lon_start, lon_stop, lon_res)
+    # Define longitude grid in such a way that it respects the L2.1 cadence.
+    dlon_A = np.diff(lon_A[0,:])
+    dlon_A = np.concatenate((dlon_A,[dlon_A[-1]])) # Add last sample again to make same length
+    dlon_B = np.diff(lon_B[0,:])
+    dlon_B = np.concatenate((dlon_B,[dlon_B[-1]]))
+
+    dlon_A_interp = interpolate.interp1d(lon_A[0,:], dlon_A, kind='zero', bounds_error=False, fill_value=np.inf)
+    dlon_B_interp = interpolate.interp1d(lon_B[0,:], dlon_B, kind='zero', bounds_error=False, fill_value=np.inf)
+
+    loni = lon_start
+    dlon_last = 4.0 # default value to start with
+    dlon_max = 6.0 # the maximum permittable gap 
+    lon_vec = []
+    # Build longitude grid iteratively, using the L2.1 cadence to define the L2.2 cadence
+    while loni <= lon_stop:
+        # Evaluate delta lon for A and B at this longitude, and take min
+        dA = dlon_A_interp(loni).item()
+        dB = dlon_B_interp(loni).item()
+        dlon = min(dA,dB)
+        if np.isinf(dlon): # This should not happen
+            print 'WARNING: np.inf in longitude delta definition'
+            raise Exception('WARNING: np.inf in longitude delta definition') # Should this crash, or should we let it fly?
+            dlon = dlon_last # Use default value so the processing can continue
+        if dlon > dlon_max: # if there are really large gaps (e.g., EUV calibration), then use a reasonable cadence
+            dlon = dlon_last
+        loni += dlon
+        lon_vec.append(loni)
+    lon_vec = np.array(lon_vec)
 
     # Define altitude grid based on the min and max in the L2.1 data (i.e., don't throw out data)
     # Define altitude resolution based upon the resolution of L2.1 data
