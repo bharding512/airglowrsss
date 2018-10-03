@@ -103,8 +103,8 @@ _dates['noto02']['ao'] = { 'start': datetime.datetime(1900,1,1), # TODO, if it m
                             'stop' : None, }
 
 #new site in Argentina (9/17/2018)
-_dates['minime10'] = {}
-_dates['minime10']['leo'] = {'start': datetime.datetime(2018,9,19),
+_dates['minime80'] = {}
+_dates['minime80']['leo'] = {'start': datetime.datetime(2018,9,19),
                              'stop': None, }
 
 # Define network information
