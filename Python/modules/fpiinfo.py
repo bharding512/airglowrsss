@@ -102,7 +102,10 @@ _dates['noto02'] = {}
 _dates['noto02']['ao'] = { 'start': datetime.datetime(1900,1,1), # TODO, if it matters
                             'stop' : None, }
 
-
+#new site in Argentina (9/17/2018)
+_dates['minime10'] = {}
+_dates['minime10']['leo'] = {'start': datetime.datetime(2018,9,19),
+                             'stop': None, }
 
 # Define network information
 _networks = {}
@@ -409,6 +412,34 @@ _sites['sao'] = {
     }
 
 
+_sites['leo'] = {
+        'Location':     (-31.7986, -69.2956, 2600), 
+        'Name':         'Leoncito, Argentina',
+        'Abbreviation': 'leo',
+        'Timezone':     'America/Buenos_Aires',
+        'BufferTime':   45,
+        'CloudThresh':  -25.0,
+        'scpUser':      'meriwej',
+        'scpPort':      199992, 
+        'Network':      None,
+        'sql_id':       31, # ID on the airglow SQL database 
+        'share':        False, # whether or not to save a copy of the npz file in a separate folder
+        'borders':      True,
+        'Directions':   { #FIX THESE
+                'Laser': {'ze': 180, 'az': 85, 'exptime': 30, 
+	                'n_exp': 0, 'last_exp': None, 'delay':600,}, 
+                'Zenith': {'ze': 0, 'az': 0, 'exptime': 180, 
+	                'n_exp': 0, 'last_exp': None, 'delay':1500,}, 
+                'North': {'ze': 45, 'az': 0, 'exptime': 180, 
+	                'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+                'South': {'ze': -45, 'az': 0, 'exptime': 180, 
+	                'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+                'East': {'ze': 45, 'az': 90, 'exptime': 180, 
+	                'n_exp': 0, 'last_exp': None, 'delay':0,}, 
+                'West': {'ze': -45, 'az': 90, 'exptime': 180, 
+	                'n_exp': 0, 'last_exp': None, 'delay':0,},
+                },
+    }
 
 _sites['kaf'] = { 
         'Location':     (35.05, -106.58, 1641),
@@ -1172,6 +1203,38 @@ _instruments['minime09'] = {
         'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
         'skyI_quality_thresh'   : [0.0708,-np.inf], # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
+    }
+
+_instruments['minime80'] = { #Update this from a laser image or two!
+        'name'          : 'minime80',
+        'N'             : 500,          # Number of annuli
+        'N0'            : 0,            # First annulus to use
+        'N1'            : 500,          # Last annulus to use
+        'focal_length'  : 300e-3,       # focal length of lens in m
+        'pix_size'      : 13e-6,        # pixel size on CCD in m
+        'lam_laser'     : 632.8e-9,     # laser wavelength in m
+        'lam0'          : 630.0e-9,     # nominal line center wavelength in m
+        'nominal_t'     : 1.5e-2,       # approximate etalon gap in m
+        'default_params': {# instrument params to be used if the laser fails (i.e., zenith reference)
+                                'R': 0.77,
+                            'alpha': 7.7e-5,
+                                'I': 1.0,
+                                'B': 0.0,
+                               'a1': -8.6e-1,
+                               'a2': -4.0e-1,
+                               'b0': 1.3,
+                               'b1': 2.7e-1,
+                               'b2': -3.8e-1, 
+                           'center':  (262.4, 259.5),
+                          },
+        'sql_winds_id'          : 114,           # ID for SQL database
+        'sql_temperatures_id'   : 115,           # ID for SQL database
+        'sql_diagnostics_id'    : 116,           # ID for SQL database
+        'many_fringes'          : True,         # indicates whether radial falloff terms should be used
+        'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
+        'skyI_quality_thresh'   : [0.0708,0.0224] # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
     }
 
 # TODO: Default instrument params for minime90
