@@ -41,9 +41,9 @@ def DisplayRaw(f, cmin=None, cmax=None, dark=None, flips=None, info=True, sitena
 
     # Should we plot out header info?
     if info:
-        print 'Filename: %s' % f
-        print 'Exposure time: %.1f s' % d.info['ExposureTime']
-        print 'CCD Temperature: %.1f C' % d.info['CCDTemperature']
+        print('Filename: %s' % f)
+        print('Exposure time: %.1f s' % d.info['ExposureTime'])
+        print('CCD Temperature: %.1f C' % d.info['CCDTemperature'])
 
     # Define the figure and plot
     f = plt.figure(num=None,figsize=(6,6),dpi=80)
@@ -52,14 +52,14 @@ def DisplayRaw(f, cmin=None, cmax=None, dark=None, flips=None, info=True, sitena
     # Create the image array from the data and dark image (if requested)
     if dark is None:
 #        im = np.reshape(d.getdata(), d.size)
-	im = np.array(d.getdata(), np.uint16).reshape(d.size)
+        im = np.array(d.getdata(), np.uint16).reshape(d.size)
 
         # No Dark image used.  Run a small median filter to remove any
         # noise spikes from the CCD
         im = ndimage.filters.median_filter(im,size=kernel_size)
     else:
 #        im = np.reshape(d.getdata(), d.size)-dark
-	im = np.array(d.getdata(), np.uint16).reshape(d.size) - dark
+        im = np.array(d.getdata(), np.uint16).reshape(d.size) - dark
 
     # Do we need to flip the image?
     if flips is not None:
@@ -74,9 +74,9 @@ def DisplayRaw(f, cmin=None, cmax=None, dark=None, flips=None, info=True, sitena
 
     # Set color limits
     if cmin is not None and cmax is not None:
-	a.set_clim([cmin,cmax])
+        a.set_clim([cmin,cmax])
     else:
-	a.set_clim(np.percentile(im,(5,95)))
+        a.set_clim(np.percentile(im,(5,95)))
 
 
 #    if dark is None:
@@ -90,7 +90,7 @@ def DisplayRaw(f, cmin=None, cmax=None, dark=None, flips=None, info=True, sitena
 #            a.set_clim([cmin-np.median(dark),cmax-np.median(dark)])
 #        else:
 #            a.set_clim([d.info['pmin']-np.median(dark),d.info['pmax']-np.median(dark)])
-#	    a.set_clim(np.percentile(im,5)-np.median(dark),np.percentile(im,95)-np.median(dark))
+#            a.set_clim(np.percentile(im,5)-np.median(dark),np.percentile(im,95)-np.median(dark))
 
     # Create the title and colorbar
     if sitename is None:
@@ -137,14 +137,14 @@ def DisplayMap(f, m, lat, lon, mask, cmin=None, cmax=None, dark=None, sitename=N
     # Create the image array from the data and dark image (if requested)
     if dark is None:
 #        im = np.reshape(d.getdata(), d.size)
-	im = np.array(d.getdata(), np.uint16).reshape(d.size)
+        im = np.array(d.getdata(), np.uint16).reshape(d.size)
 
         # No Dark image used.  Run a small median filter to remove any
         # noise spikes from the CCD
     #    im = ndimage.filters.median_filter(im,size=kernel_size)
     else:
 #        im = np.reshape(d.getdata(), d.size)-dark
-	im = np.array(d.getdata(), np.uint16).reshape(d.size) - dark
+        im = np.array(d.getdata(), np.uint16).reshape(d.size) - dark
 
     im = ndimage.filters.median_filter(im,size=kernel_size)
 
@@ -160,9 +160,9 @@ def DisplayMap(f, m, lat, lon, mask, cmin=None, cmax=None, dark=None, sitename=N
 
     # Set the colorlimits
     if cmin is not None and cmax is not None:
-	a.set_clim([cmin,cmax])
+        a.set_clim([cmin,cmax])
     else:
-	a.set_clim(np.percentile(im,(5,95)))
+        a.set_clim(np.percentile(im,(5,95)))
 
 #    if dark is None:
 #        if cmin is not None:
@@ -184,12 +184,12 @@ def DisplayMap(f, m, lat, lon, mask, cmin=None, cmax=None, dark=None, sitename=N
         filt = d.info['Filter']
 
     if displayUT:
-       plt.title('%s (%s): %s' % (sitename, filt, d.info['UniversalTime'].strftime('%d %b %Y %H:%M:%S UT')))
+        plt.title('%s (%s): %s' % (sitename, filt, d.info['UniversalTime'].strftime('%d %b %Y %H:%M:%S UT')))
     else:
-       plt.title('%s (%s): %s' % (sitename, filt, d.info['LocalTime'].strftime('%d %b %Y %H:%M:%S LT')))
+        plt.title('%s (%s): %s' % (sitename, filt, d.info['LocalTime'].strftime('%d %b %Y %H:%M:%S LT')))
 
     if displayColorbar:
-       plt.colorbar(a,orientation='vertical',shrink=0.9)
+        plt.colorbar(a,orientation='vertical',shrink=0.9)
 
 def Keogram(files, lat, lon, target_lat, target_lon, darks=None, sitename=None, filt=None, cmin=None, cmax=None, kernel_size = 5):
     # Function to generate keograms through the requested images at the requested lat/lon.
@@ -224,7 +224,7 @@ def Keogram(files, lat, lon, target_lat, target_lon, darks=None, sitename=None, 
         for dark in darks:
             d = Image.open(dark)
 #            all_dark = all_dark + np.reshape(d.getdata(), d.size)
-	    all_dark = all_dark + np.array(d.getdata(), np.uint16).reshape(d.size)
+            all_dark = all_dark + np.array(d.getdata(), np.uint16).reshape(d.size)
 
         # Divide by the number of dark images to create a mean image
         darks = all_dark/len(darks)

@@ -52,7 +52,7 @@ def RawMovie(files, movie_name=None, cmin=None, cmax=None, darks=None, flips=Non
         for dark in darks:
             d = Image.open(dark)
 #            all_dark = all_dark + np.reshape(d.getdata(), d.size)
-	    all_dark = all_dark + np.array(d.getdata(),np.uint16).reshape(d.size)
+            all_dark = all_dark + np.array(d.getdata(),np.uint16).reshape(d.size)
 
         # Divide by the number of dark images to create a mean image
         darks = all_dark/len(darks)
@@ -66,12 +66,12 @@ def RawMovie(files, movie_name=None, cmin=None, cmax=None, darks=None, flips=Non
 
         for f in files:
             d = Image.open(f)
-	    im = np.array(d.getdata(),np.uint16).reshape(d.size)
+            im = np.array(d.getdata(),np.uint16).reshape(d.size)
 
 #            all_min.append(d.info['pmin'])
 #            all_max.append(d.info['pmax'])
-	    all_min.append(np.percentile(im,5))
-	    all_max.append(np.percentile(im,95))
+            all_min.append(np.percentile(im,5))
+            all_max.append(np.percentile(im,95))
 
         # Cast to an array for easy statistics
         all_min = np.array(all_min)
@@ -207,7 +207,7 @@ def MapMovie(files, m, lat, lon, mask, movie_name=None, cmin=None, cmax=None, da
         for dark in darks:
             d = Image.open(dark)
 #            all_dark = all_dark + np.reshape(d.getdata(), d.size)
-	    all_dark = all_dark + np.array(d.getdata(),np.uint16).reshape(d.size)
+            all_dark = all_dark + np.array(d.getdata(),np.uint16).reshape(d.size)
 
         # Divide by the number of dark images to create a mean image
         darks = all_dark/len(darks)
@@ -221,18 +221,18 @@ def MapMovie(files, m, lat, lon, mask, movie_name=None, cmin=None, cmax=None, da
 
         for f in files:
             d = Image.open(f)
-	    im = np.array(d.getdata(),np.uint16).reshape(d.size)
+            im = np.array(d.getdata(),np.uint16).reshape(d.size)
 
             if darks is None:
-                print 'No Dark Subtraction'
+                print('No Dark Subtraction')
             else:
-		im = im - darks
+                im = im - darks
 
 #            if d.info['pmax'] > 0:
 #                all_min.append(d.info['pmin'])
 #                all_max.append(d.info['pmax'])
-	    all_min.append(np.percentile(im,5))
-	    all_max.append(np.percentile(im,95))
+            all_min.append(np.percentile(im,5))
+            all_max.append(np.percentile(im,95))
 
         # Cast to an array for easy statistics
         all_min = np.array(all_min)
@@ -255,7 +255,7 @@ def MapMovie(files, m, lat, lon, mask, movie_name=None, cmin=None, cmax=None, da
 
         # Grab the path and filename
         pa,fi = os.path.split(f)
-        print pa
+        print(pa)
 
         # Create a temporary file name
         png_name = pa + 'tmp_' + fi[0:-4] + '_' + id_str + '.png'
@@ -267,7 +267,7 @@ def MapMovie(files, m, lat, lon, mask, movie_name=None, cmin=None, cmax=None, da
         m.drawcoastlines()
         #m.drawstates()
         if displayCountries:
-           m.drawcountries()
+            m.drawcountries()
 
         # Draw parallels and meridians
         parallels = np.arange(-85.,85.,5.);

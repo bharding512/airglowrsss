@@ -19,9 +19,9 @@ class TifImageFile(ImageFile.ImageFile):
         self.fp.seek(200)
 
         # check header
-	FileIdentifier = self.fp.read(3)
+        FileIdentifier = self.fp.read(3)
         if FileIdentifier != "CDF":
-            raise SyntaxError, "not a CDF TIF file"
+            raise SyntaxError("not a CDF TIF file")
 
         # Read in the number of rows and columns
         rows = struct.unpack('h', self.fp.read(2))
@@ -102,8 +102,8 @@ class TifImageFile(ImageFile.ImageFile):
         # size in pixels (width, height)
         self.size = rows[0], cols[0]
 
-	# mode setting
-	self.mode = "I;16L"
+        # mode setting
+        self.mode = "I;16L"
 
         # data descriptor
         self.tile = [
