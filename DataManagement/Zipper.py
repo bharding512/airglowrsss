@@ -120,7 +120,7 @@ def activeinstruments():
     #code['cto']['scn']['0L'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps/cascade/', 'split':'/usr/bin/split','email':UIemail}
     #code['cto']['scn']['0M'] = {'send_dir':'/home/gps/Sending/', 'local_dir':'/home/gps2/cascade/', 'split':'/usr/bin/split','email':UIemail}
 
-    # CASI went down 2/08/2019???
+    # CASI stopped sending data 2/10/2019
 #     code['hka']['asi']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
     code['hka']['nfi']['01'] = {'send_dir':'/home/airglow/Sending/', 'local_dir':'/data/', 'split':'/usr/bin/split','email':UIemail}
     #code['hka']['scn']['0K'] = {'send_dir':'/home/gps/Sending', 'local_dir':'/home/gps/cascade', 'split':'/usr/bin/split','email':UIemail}
