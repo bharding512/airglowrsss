@@ -11,16 +11,17 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 15 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 16 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
 
 ############################## GLOBAL PROCESSING PARAMETERS ########################################
-# Unless overridden by the user, the following parameters will be used:
+# Unless overridden by the user, the following parameters will be used. Note that there are different
+# parameters for red and green. Sometimes there are different parameters for the two MIGHTI sensors: A and B.
 global_params = {}
-
 global_params['red'] = {
+    ###################### Inversion parameters #######################
     'sigma'             : 1.0/630.0304e-9, # reciprocal of center wavelength of emission [m^-1] 
                                            # (from John Harlander)  
     'bin_size'          : 1,               # The number of rows of the interferogram to bin together to 
@@ -30,26 +31,44 @@ global_params['red'] = {
     'integration_order' : 0,               # 0: Use Riemann-sum rule for discretizing line-of-sight integral
                                            # 1: Use trapezoidal rule for discretizing line-of-sight integral
     'top_layer'         : 'exp',           # 'thin': assume VER goes to zero above top layer
-                                           # 'exp':  assume VER falls off exponentially in altitude with H=26km
-    'sph_asym_thresh'   : 0.19,            # The relative difference in VER estimates from A&B,
-                                           # beyond which the spherical asymmetry flag will be
-                                           # raised in L2.2.
-    'chi2_thresh'       : 1e20,           # [rad^2] Minimum value of chi^2, below which the line fit to extract phase 
-                                           # should not be trusted. As defined, it is normalized by the number of pixels
-                                           # in a row. If this threshold is being reached too often, then consider binning.
+                                           # 'exp':  assume VER falls off exponentially in altitude
+    'H'                 : 26.,              # km. The VER scale height used when top_layer='exp'.
+                                           # This was found by fitting many profiles for which there was significant
+                                           # emission above 300 km. Profiles were generated from the Zhang/Shepherd model and
+                                           # from photochemical models fed by IRI/MSIS. (See Harding et al. [2017] SSR paper 
+                                           # for details on airglow models).
+    
+    ###################### Quality control parameters #################
+    # Some of these depend on sensor: A or B
+    'top_layer_thresh'  : 0.17,            # Fraction of airglow above the top observed altitude. Consider the total column 
+                                           # brightness (i.e, the integral of the VER profile). When a large fraction
+                                           # comes from above the top observed altitude, the quality flag is raised.
+                                           # This threshold is specified as a fraction of the total column brightness.
+    'terminator_thresh' : 2000.,           # [km]. Consider two points along the line of sight, both X km from the tangent 
+                                           # point (where X is this parameter). One is nearer to the spacecraft than the 
+                                           # tangent point, and one is farther. If these two points are on opposite sides of the 
+                                           # terminator, raise a quality flag. Note that this quality flag will also be raised if
+                                           # any observations at higher tangent altitudes for the same observation are flagged, because
+                                           # the inversion mixes information from those observations.
+    'sph_asym_thresh'   : 0.19,            # The relative difference in VER estimates from A&B, beyond which the spherical asymmetry 
+                                           # flag will be raised in L2.2.
     't_diff_AB'         : 20*60.,          # [sec] Maximum time difference between A and B exposures used to determine
                                            # the wind at a given location. If it's longer than this, something went wrong
-                                           # with the processing.
+                                           # with the processing, most likely.
+    
+    
 }
 
-global_params['green'] = {
+global_params['green'] = { # See above for descriptions
     'sigma'             : 1.0/557.7339e-9,
     'bin_size'          : 1,
     'account_for_local_projection': True,
     'integration_order' : 0,
     'top_layer'         : 'exp',
+    'H'                 : 26.,
+    'top_layer_thresh'  : 0.17,
+    'terminator_thresh' : 2000.,
     'sph_asym_thresh'   : 0.19,
-    'chi2_thresh'       : 1e20,
     't_diff_AB'         : 20*60.
 }
 
@@ -70,20 +89,12 @@ import sys
 import copy
 
 import matplotlib
-matplotlib.use('agg')
+#matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from matplotlib import dates
 from matplotlib.colors import LogNorm
 
-# Custom colormap for plots, and other aesthetics
-from matplotlib.colors import LinearSegmentedColormap
-cdict = {'red':   ((0.0, 0.7, 0.7),
-                   (1.0, 0.7, 0.7)),
-         'green': ((0.0, 0.7, 0.7),
-                   (1.0, 0.0, 0.0)),
-         'blue':  ((0.0, 1.0, 1.0),
-                   (1.0, 0.0, 0.0))}
-cmap_custom = LinearSegmentedColormap('Custom', cdict)
+# Some aesthetics for plots
 matplotlib.rcParams['xtick.labelsize'] = 'small'
 matplotlib.rcParams['ytick.labelsize'] = 'small'
 
@@ -184,7 +195,7 @@ def remove_satellite_velocity(I, sat_latlonalt, sat_velocity_vector, mighti_vect
 
 
 
-def bin_array(b, y, lon = False):
+def bin_array(b, y, lon = False, method='mean'):
     '''
     Downsample y by binning it, improving statistics. Every b
     elements of y will be averaged together to create a new array, y_b, 
@@ -193,14 +204,17 @@ def bin_array(b, y, lon = False):
     
     INPUTS:
     
-      *  b    -- TYPE:int,          The number of rows to bin together
-      *  y    -- TYPE:array(ny),    The array to be binned
+      *  b       -- TYPE:int,       The number of rows to bin together
+      *  y       -- TYPE:array(ny), The array to be binned
       
     OPTIONAL INPUTS:
     
-      *  lon  -- TYPE:bool,         If True, 360-deg discontinuities will
+      *  lon     -- TYPE:bool,      If True, 360-deg discontinuities will
                                     be removed before averaging (e.g., for
-                                    longitude binning).
+                                    longitude binning). (Default False)
+      *  method  -- TYPE:str,       'mean': average over elements in a bin (default)
+                                    'max': take maximum over elements (e.g., for quality flags)
+                                    'min': take minimum over elements (e.g., for quality factor)
                                     
     OUTPUTS:
     
@@ -233,8 +247,15 @@ def bin_array(b, y, lon = False):
                 y_b[i_new] = np.nan + 1j*np.nan
             else:
                 y_b[i_new] = np.nan
-        else: # if there are non-nan values, take the nanmean
-            y_b[i_new] = np.nanmean(y_samps)
+        else:
+            if method == 'mean':
+                y_b[i_new] = np.nanmean(y_samps)
+            elif method == 'max':
+                y_b[i_new] = np.nanmax(y_samps)
+            elif method == 'min':
+                y_b[i_new] = np.nanmin(y_samps)
+            else:
+                raise Exception('Input method="%s" not recognized. Try "mean", "max", or "min"' % method)
         
     return y_b
     
@@ -293,7 +314,7 @@ def bin_uncertainty(b, ye):
     
     
     
-def bin_image(b, I):
+def bin_image(b, I, method='mean'):
     '''
     Downsample the interferogram in altitude to improve statistics while
     degrading vertical resolution. Every b rows will be averaged together. 
@@ -305,6 +326,12 @@ def bin_image(b, I):
       *  b           -- TYPE:int,                        The number of rows to bin together
       *  I           -- TYPE:array(ny,nx),   UNITS:arb.  The MIGHTI interferogram
       
+    OPTIONAL INPUTS:
+    
+      *  method  -- TYPE:str,       'mean': average over elements in a bin (default)
+                                    'max': take maximum over elements (e.g., for quality flags)
+                                    'min': take minimum over elements (e.g., for quality factor)
+
     OUTPUTS:
     
       *  I_b         -- TYPE:array(ny_b,nx), UNITS:arb.  The binned MIGHTI interferogram
@@ -323,14 +350,14 @@ def bin_image(b, I):
     # Bin the interfogram column by column
     I_b = np.zeros((ny_b,nx),dtype=I.dtype)
     for i in range(nx):
-        I_b[:,i] = bin_array(b,I[:,i])
+        I_b[:,i] = bin_array(b,I[:,i], method=method)
     return I_b
 
 
 
 
 
-def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_order=0):
+def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', H=26., integration_order=0,):
     '''
     Define the matrix D whose inversion is known as "onion-peeling." 
     
@@ -359,13 +386,12 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_o
       
     OPTIONAL INPUTS:
     
-      *  top_layer  -- TYPE:str,          'thin': assume VER goes to zero above top layer
+      *  top_layer         -- TYPE:str,   'thin': assume VER goes to zero above top layer
                                           'exp':  assume VER falls off exponentially in altitude (default)
+      *  H                 -- TYPE:float, UNITS:km. The VER scale height to use if top_layer='exp' (default 26)
       *  integration_order -- TYPE:int,
-      
-                      * 0: Use Riemann-sum rule for discretizing line-of-sight integral (default).
-                      * 1: Use trapezoidal rule for discretizing line-of-sight integral.
-                      
+                                       * 0: Use Riemann-sum rule for discretizing line-of-sight integral (default).
+                                       * 1: Use trapezoidal rule for discretizing line-of-sight integral.
                                           
     OUTPUTS:
     
@@ -373,12 +399,6 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', integration_o
                                                       or "distance matrix"
                                                       
     '''
-    
-    H = 26. # km, assumed scale height of VER falloff with altitude (used if top_layer=='exp')
-            # This was found by fitting many profiles for which there was significant
-            # emission above 300 km. Profiles were generated from Zhang/Shepherd model and
-            # from photochemical model fed by IRI/MSIS. (See MIGHTI SSR paper for details on
-            # airglow models).
     
     def q(x,rm,r): 
         # antiderivative of (sqrt(x**2 + rm**2) - r)   w.r.t. x
@@ -530,7 +550,6 @@ def analyze_row(row):
     Given a 1-D interference pattern (i.e., a row of the complex intererogram), 
     analyze it to get a scalar phase value, which represents the wind, and a
     single amplitude value, which is roughly proportional to the emission rate.
-    Also return normalized chi^2 for the fit used to determine the phase.
     
     INPUTS:
     
@@ -540,8 +559,7 @@ def analyze_row(row):
     
       *  phase             -- TYPE:float,     UNITS:rad.   A scalar phase which represents the observed wind.
       *  amp               -- TYPE:float,     UNITS:arb.   A scalar amplitude which represents the brightness.
-      *  chi2              -- TYPE:float,     UNITS:rad^2. Normalized chi^2 for the line fit to unwrapped phase.
-                                                           (normalized chi^2 = average value of (data - fit)**2)
+      *  chi2              -- TYPE:float,     UNITS:rad^2. Variance of the row of phase.
        
     '''
     if all(np.isnan(row)):
@@ -566,7 +584,7 @@ def analyze_row(row):
     
     
 def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertainty,
-                      top_layer='exp', integration_order=0, account_for_local_projection=True, chi2_thresh=np.inf,
+                      top_layer='exp', H=26., integration_order=0, account_for_local_projection=True,
                       linear_amp = True):
     '''
     Perform the onion-peeling inversion on the interferogram to return
@@ -587,6 +605,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     
       *  top_layer   -- TYPE:str,          'thin': assume VER goes to zero above top layer
                                            'exp':  assume VER falls off exponentially in altitude (default)
+      *  H                 -- TYPE:float, UNITS:km. The VER scale height to use if top_layer='exp' (default 26)
       *  integration_order -- TYPE:int,
       
                       * 0: Use Riemann-sum rule for discretizing line-of-sight integral (default).
@@ -596,13 +615,11 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
                                            If True, the inversion accounts for the fact that the ray is not 
                                            perfectly tangent to each shell at each point along the ray. 
                                            (default True)
-      *  chi2_thresh       -- TYPE:float. UNITS:rad^2. The chi^2 value for the line fit, below which the 
-                                                       data will be ignored, since it is mostly noise.
-                                                       Normalized by the number of samples. (default np.inf)
       *  linear_amp        -- TYPE:bool.   If True, a linear inversion is used on fringe amplitude. If False, the 
                                            fringe amplitude is estimated during the onion-peeling. These are the
                                            same in the absence of noise, but may make a difference at low SNR,
                                            especially for computing uncertainties. (default True)
+      *  H                 -- TYPE:float, UNITS:km. The VER scale height to use if top_layer='exp' (default 26)
                                            
                                                            
     OUTPUTS:
@@ -619,12 +636,11 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
         raise ValueError('Argument top_layer=\'%s\' not recognized. Use \'exp\' or \'thin\'.' % top_layer)
     if integration_order not in [0,1]:
         raise ValueError('Argument integration_order=\'%s\' not recognized. Use 0 or 1')
-          
     
     ny,nx = np.shape(I)
     
     # Create the path matrix
-    D = create_observation_matrix(tang_alt, icon_alt, top_layer=top_layer, integration_order=integration_order)
+    D = create_observation_matrix(tang_alt, icon_alt, top_layer=top_layer, integration_order=integration_order, H=H)
     
     # Create local horizontal projection matrix (and set it to unity if we are to ignore this effect)
     B = np.ones((ny,ny))
@@ -635,7 +651,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     ######### Onion-peeling inversion and phase extraction #########
     phase = np.zeros(ny) # phases at each altitude
     amp   = np.zeros(ny) # fringe amplitude at each altitude
-    chi2  = np.zeros(ny) # chi^2 for line fit at each altitude
+    chi2  = np.zeros(ny) # variance of each row's phase
     Ip = np.zeros((ny,nx), dtype=complex) # onion-peeled interferogram
 
     # This code implements Eq (9) in the MIGHTI L2 Space Science Reviews
@@ -663,15 +679,6 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
         phase[i] = p
         amp[i] = a
         chi2[i] = c
-            
-        # Initial quality control
-        # (Note: comprehensive quality control is done in a different function)
-        if c > chi2_thresh:
-            Ip[i,:] = 0.0 # Zeroed out to not contaminate other rows
-            amp[i] = 0.0 # This is overly conservative. We probably trust
-                         # amplitudes more than phase. Note that this will
-                         # be overwritten if linear_amp=True
-            
             
     if linear_amp: # Replace the onion-peeled amplitude with the linear inversion
         amp_L1 = np.zeros(ny) # fringe amplitude at each row of L1 interferogram
@@ -1024,7 +1031,7 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     
       *  L1_dict -- TYPE:dict. A dictionary containing information needed for
                                the level 2.1 processing. See documentation for 
-                               level1_dict_to_level21(...) for required keys.
+                               level1_dict_to_level21_dict(...) for required keys.
                                
 
     '''
@@ -1085,7 +1092,7 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     L1_dict['icon_lat_stop']  = icon_latlonalt[istop ,0]
     L1_dict['icon_lon_start'] = icon_latlonalt[istart,1]
     L1_dict['icon_lon_stop']  = icon_latlonalt[istop ,1]
-    # Read attitude status register and save conjugate maneuver and zero wind maneuver bits
+    # Read attitude status register and save relevant bits
     att_reg = f['ICON_L1_MIGHTI_%s_SC_Attitude_Control_Register'%sensor][:][0]
     nb = 10
     attitude = np.zeros(nb,dtype=np.int8)
@@ -1096,6 +1103,19 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     L1_dict['att_lvlh_reverse'] = attitude[1]
     L1_dict['att_limb_pointing'] = attitude[2]
     L1_dict['att_conjugate'] = attitude[6]
+    
+    # Quality factors and flags
+    L1_dict['quality'] =  f['ICON_L1_MIGHTI_%s_%s_Quality_Factor' % (sensor, emission_color.capitalize())][0]
+    L1_dict['quality_flags'] = np.zeros((ny,6)) # Create 6 spaces but only use some for now
+    # Code that will let me know when Ken changes the format of the error flags    
+    assert f['ICON_L1_MIGHTI_%s_Quality_Flag_Low_Signal_To_Noise_%s'%(sensor, emission_color.capitalize())].shape == (1,ny)
+    assert f['ICON_L1_MIGHTI_%s_Quality_Flag_SAA'%sensor].shape == (1,)
+    assert f['ICON_L1_MIGHTI_%s_Quality_Flag_Bad_Calibration'%sensor].shape == (1,)
+    assert f['ICON_L1_MIGHTI_%s_%s_Quality_Factor' % (sensor, emission_color.capitalize())].shape == (1,ny)
+    # Read quality flags into my array
+    L1_dict['quality_flags'][:,0] = f['ICON_L1_MIGHTI_%s_Quality_Flag_Low_Signal_To_Noise_%s'%(sensor, emission_color.capitalize())][0,:]
+    L1_dict['quality_flags'][:,1] = f['ICON_L1_MIGHTI_%s_Quality_Flag_SAA'%sensor][0]
+    L1_dict['quality_flags'][:,2] = f['ICON_L1_MIGHTI_%s_Quality_Flag_Bad_Calibration'%sensor][0]
     
     # Dummy placeholder code for reading global attributes, if that matters
     nc_attrs = f.ncattrs()
@@ -1112,12 +1132,113 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
 
 
 
+
+
+def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0, terminator_thresh = 0.0):
+    '''
+    Assess the quality of the L2.1 data product. This function generates quality flags and overall 
+    quality factor (0-1) for wind and VER.
+    
+    INPUTS:
+    
+      * L1_quality_flags  -- TYPE:array(ny,ne). The quality flags from the L1 file, but binned in altitude to match the L2.1 data.
+                                                This should have the same format as described in the documentation for
+                                                level1_dict_to_level21_dict(...).
+      * L21_dict          -- TYPE:dict.         A dictionary containing output variables of the level 2.1 processing.
+                                                See documentation for level1_dict_to_level21_dict(...) for required keys.
+      * L1_quality        -- TYPE:array(ny).    The quality factosr from the L1 processing. The L2.1 wind quality flag should
+                                                be <= this.
+                                                
+    OPTIONAL INPUTS:
+    
+      * top_layer_thresh.   -- TYPE:float.      Fraction of airglow above the top observed altitude. Consider the total column 
+                                                brightness (i.e, the integral of the VER profile). When a large fraction
+                                                comes from above the top observed altitude, the quality flag is raised. (default 1.0)
+      * terminator_thresh   -- TYPE:float, UNITS:km. Consider two points along the line of sight, both X km from the tangent 
+                                                point (where X is this parameter). One is nearer to the spacecraft than the 
+                                                tangent point, and one is farther. If these two points are on opposite sides of the 
+                                                terminator, raise a quality flag. Note that this quality flag will also be raised if
+                                                any observations at higher tangent altitudes for the same observation are flagged, because
+                                                the inversion mixes information from those observations. (default 0.0)
+                                   
+    OUTPUTS:
+    
+      * wind_quality      --TYPE:array(ny).     A number from 0 (Bad) to 1 (Good) for each altitude, quantifying 
+                                                the quality of the wind data.
+      * ver_quality       --TYPE:array(ny).     A number from 0 (Bad) to 1 (Good) for each altitude, quantifying
+                                                the quality of the volume emission rate data.
+      * quality_flags     --TYPE:array(ny,ne).  For each altitude, multiple flags exist, each of which is either 0 (False) or 1 (True). 
+                                                Some flags are propaged directly from the L1 file. See documentation for 
+                                                level1_dict_to_level21_dict(...) for flag definitions.
+    '''
+    
+    ny = len(L21_dict['los_wind'])
+    
+    ############################# Create error flags (including those copied from L1) #########################
+    quality_flags = np.zeros((ny, 12))
+    quality_flags[:,:6] = L1_quality_flags[:,:] # copied from L1
+    
+    #### Significant airglow above top altitude
+    a = L21_dict['fringe_amplitude'] # VER profile
+    H = L21_dict['H'] #  scale height above the top altitude that was assumed in the inversion
+    dz = np.diff(L21_dict['alt'])
+    f = a[-1]*H / (a[-1]*H + np.sum(a[:-1]*dz)) # fraction of column brightness above top altitude
+    if f > top_layer_thresh:
+        quality_flags[:,7] = 1
+    
+    #### Line of sight crosses the terminator
+    RE = 6371. # km, earth radius
+    h_sc = 80. # km, EUV screening height
+    for i in range(ny):
+        look_xyz = L21_dict['mighti_ecef_vectors'][i,:]
+        tang_xyz = ICON.wgs84_to_ecef([ L21_dict['lat'][i], L21_dict['lon'][i], L21_dict['alt'][i] ])
+        xyz0 = tang_xyz - terminator_thresh*look_xyz # ECEF coords test point 0
+        xyz1 = tang_xyz + terminator_thresh*look_xyz # ECEF coords test point 1
+        sza0 = ICON.get_solar_zenith_angle(L21_dict['time'], *ICON.ecef_to_wgs84(xyz0)) # solar zenith angle 0
+        sza1 = ICON.get_solar_zenith_angle(L21_dict['time'], *ICON.ecef_to_wgs84(xyz1)) # solar zenith angle 1
+        sza_term = 180./np.pi * (np.pi - np.arcsin((RE + h_sc)/(RE + L21_dict['alt'][i]))) # sza of termiantor
+        if np.sign(sza0-sza_term) != np.sign(sza1-sza_term): # then the points straddle the terminator
+            quality_flags[i,8] = 1
+    # If any points above this point are flagged, flag this point too.
+    if any(quality_flags[:,8]):
+        i = np.where(quality_flags[:,8] > 0)[0].max()
+        quality_flags[:i,8] = 1
+    
+    ########################### Calculate overall quality (floor set by L1 quality) ############################
+    # There are a lot of opinions built in to this section of the code.
+    wind_quality = np.ones(ny)
+    ver_quality = np.ones(ny)
+    for i in range(ny):
+        # For each possible contributing factor, collect a set of ratings or "dings" against this point.
+        # The final quality factor should be the minimum of all the ratings. 
+        wind_ratings = [1.0] # start with 1.0 -- if there are no dings, the quality factor is 1.0
+        ver_ratings = [1.0]
+        if quality_flags[i,6]: #SNR too low
+            wind_ratings.append(0.0) # phase is definitely bad
+            ver_ratings.append(0.5) # but VER might be ok
+        if quality_flags[i,7]: # airglow above 300 km
+            wind_ratings.append(0.5)
+            ver_ratings.append(0.5)
+        if quality_flags[i,8]: # proximity to terminator
+            wind_ratings.append(0.5) 
+            ver_ratings.append(0.5)
+        # Lastly, append the L1 quality factor because that should be the maximum allowed rating
+        wind_ratings.append(L1_quality[i])
+        ver_ratings.append(L1_quality[i]) # Should I do this?
+        # Compile final quality factor
+        wind_quality[i] = min(wind_ratings)
+        ver_quality[i]  = min(ver_ratings)
+    
+    return wind_quality, ver_quality, quality_flags
+
+
     
 
 
-def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None, 
+def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_layer = None, H = None,
                                 integration_order = None, account_for_local_projection = None, 
-                                bin_size = None, chi2_thresh = None, linear_amp = True):
+                                bin_size = None,
+                                top_layer_thresh = None, terminator_thresh = None):
     '''
     High-level function to run the Level 2.1 processing. It takes a dictionary (containing
     input variables extracted from a Level 1 file) and outputs a dictionary (containing 
@@ -1166,7 +1287,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                       * icon_lon_start             -- TYPE:float,        UNITS:deg.  
                                                                       Spacecraft longitude at beginning of exposure
                                       * icon_lon_stop              -- TYPE:float,        UNITS:deg.  
-                                                                       Spacecraft longitude at end of exposure
+                                                                      Spacecraft longitude at end of exposure
                                       * mighti_ecef_vectors        -- TYPE:array(ny,nx,3).           
                                                                       Unit ECEF vector of line of sight of each pixel at middle of exposure
                                       * icon_velocity_vector       -- TYPE:array(3),     UNITS:m/s.
@@ -1181,7 +1302,7 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                                                       Length of exposure
                                       * optical_path_difference    -- TYPE:array(nx).    UNITS:m.    
                                                                       Optical path difference for each column of interferogram
-                                      * acknowledgements           -- TYPE:str.
+                                      * acknowledgement            -- TYPE:str.
                                                                       The value in the global attribute "Acknowledgement" which will be propagated
                                       * att_lvlh_normal            -- TYPE:int. 0 or 1
                                                                       Attitude register bit 0: LVLH Normal
@@ -1191,77 +1312,114 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
                                                                       Attitude register bit 2: Earth Limb Pointing
                                       * att_conjugate              -- TYPE:int. 0 or 1
                                                                       Attitude register bit 6: Conjugate Maneuver
-                                                                                 
+                                      * quality                    -- TYPE:array(ny).
+                                                                      The overall quality, between 0 (bad) and 1 (good) for each altitude
+                                      * quality_flags              -- TYPE:array(ny,ne).
+                                                                      A register of flags (0=False, 1=True) that indicate various
+                                                                      causes for concern in the L1 file. These flags are taken directly
+                                                                      from the L1 file. The definitions for each position are:
+                                                                       * 0: High if SNR is low enough to cause possible systematic errors
+                                                                       * 1: Proximity to South Atlantic Anomaly
+                                                                       * 2: Bad calibration detected
+                                                                       * 3: Unused
+                                                                       * 4: Unused
+                                                                       * 5: Unused
+                                                                                  
     OPTIONAL INPUTS - If None, defaults from MIGHTI_L2.global_params will be used 
     
+      *  linear_amp          -- TYPE:bool.  If True, a linear inversion is used on fringe amplitude. If False, the 
+                                            fringe amplitude is estimated during the onion-peeling. These are the
+                                            same in the absence of noise, but different with noise, especially
+                                            for computing uncertainties. (default True)
       *  sigma               -- TYPE:float, UNITS:m^-1. The wavenumber of the emission (1/wavelength)
-      *  top_layer           -- TYPE:str, 'thin': assume VER goes to zero above top layer
-                                          'exp':  assume VER falls off exponentially in altitude
-      *  integration_order   -- TYPE:int, 0: Use Riemann-sum rule for discretizing line-of-sight integral
-                                          1: Use trapezoidal rule for discretizing line-of-sight integral
+      *  top_layer           -- TYPE:str,   'thin': assume VER goes to zero above top layer
+                                            'exp':  assume VER falls off exponentially in altitude
+      *  H                   -- TYPE:float, UNITS:km. The VER scale height to use if top_layer='exp'
+      *  integration_order   -- TYPE:int,   0: Use Riemann-sum rule for discretizing line-of-sight integral
+                                            1: Use trapezoidal rule for discretizing line-of-sight integral
       *  account_for_local_projection -- TYPE:bool. If False, a simple inversion is used.
-                                         If True, the inversion accounts for the fact that the ray is not 
-                                         perfectly tangent to each shell at each point along the ray.
-      *  bin_size            -- TYPE:int, The number of rows of the interferogram to bin together to 
-                                          improve statistics at the cost of altitude resolution.
-      *  chi2_thresh         -- TYPE:float, UNITS:rad^2. The chi^2 value for the line fit (used to analyze
-                                                         the inteferogram), below which the data will be 
-                                                         ignored, since it is probably just noise.
-      *  linear_amp          -- TYPE:bool. If True, a linear inversion is used on fringe amplitude. If False, the 
-                                           fringe amplitude is estimated during the onion-peeling. These are the
-                                           same in the absence of noise, but different with noise, especially
-                                           for computing uncertainties. (default True)
-                                                                          
+                                            If True, the inversion accounts for the fact that the ray is not 
+                                            perfectly tangent to each shell at each point along the ray.
+      *  bin_size            -- TYPE:int,   The number of rows of the interferogram to bin together to 
+                                            improve statistics at the cost of altitude resolution.
+      *  top_layer_thresh.   -- TYPE:float. Fraction of airglow above the top observed altitude. Consider the total column 
+                                            brightness (i.e, the integral of the VER profile). When a large fraction
+                                            comes from above the top observed altitude, the quality flag is raised.
+      *  terminator_thresh   -- TYPE:float, UNITS:km. Consider two points along the line of sight, both X km from the tangent 
+                                            point (where X is this parameter). One is nearer to the spacecraft than the 
+                                            tangent point, and one is farther. If these two points are on opposite sides of the 
+                                            terminator, raise a quality flag. Note that this quality flag will also be raised if
+                                            any observations at lower zenith angles for the same observation are flagged, because
+                                            the inversion mixes information from those observations.
     OUTPUTS:
     
       *  L21_dict            -- TYPE:dict. A dictionary containing output variables of the Level 2.1 processing:
 
-                                * los_wind                  -- TYPE:array(ny),   UNITS:m/s.   Line-of-sight wind profile 
-                                * los_wind_error            -- TYPE:array(ny),   UNITS:m/s.   Uncertainty of los_wind (1-sigma)
-                                * lat                       -- TYPE:array(ny),   UNITS:deg.   Latitude of each point in profile
-                                * lon                       -- TYPE:array(ny),   UNITS:deg.   Longitude of each point in profile
-                                * alt                       -- TYPE:array(ny),   UNITS:alt.   Altitude of each point in profile
-                                * time_start                -- TYPE:datetime (timezone naive) Time at start of exposure in UTC
-                                * time_stop                 -- TYPE:datetime (timezone naive) Time at end of exposure in UTC
-                                * exp_time                  -- TYPE:float,       UNITS:s.     Exposure time
-                                * az                        -- TYPE:array(ny),   UNITS:deg.   The azimuth angle of the line of sight
-                                                                                              at the tangent point (deg East of North)
-                                * emission_color            -- TYPE:str.                      'red' or 'green'
-                                * sensor                    -- TYPE:str.                      'A' or 'B'
-                                * resolution_along_track    -- TYPE:array(ny),   UNITS:km.    Horizontal resolution along the line of sight
-                                * resolution_cross_track    -- TYPE:array(ny),   UNITS:km.    Horizontal resolution perpendicular to line of sight
-                                * resolution_alt            -- TYPE:array(ny),   UNITS:km.    Vertical resolution
-                                * icon_alt                  -- TYPE:float,       UNITS:km.    Spacecraft altitude
-                                * icon_lat                  -- TYPE:float,       UNITS:deg.   Spacecraft latitude
-                                * icon_lon                  -- TYPE:float,       UNITS:deg.   Spacecraft longitude [0,360]
-                                * fringe_amplitude          -- TYPE:array(ny),   UNITS:arb.   The fringe contrast, a proxy for volume emission rate
-                                * fringe_amplitude_error    -- TYPE:array(ny),   UNITS:arb.   Uncertainty in fringe_amplitude (1-sigma)
-                                * mighti_ecef_vectors       -- TYPE:array(ny,3).              ECEF unit vector for each line of sight
-                                * icon_velocity_ecef_vector -- TYPE:array(3).    UNITS:m/s.   ECEF vector of spacecraft velocity
-                                * file_creation_time        -- TYPE:datetime (timezone naive) Time this processing was run in UTC
-                                * source_files              -- TYPE:list of str.              All science files that went into creating this file
-                                * bin_size                  -- TYPE:int.                      Bin size used in the processing
-                                * top_layer                 -- TYPE:str.                      How the top layer was handled: 'thin' or 'exp'
-                                * integration_order         -- TYPE:int.                      Order of integration used in inversion: 0 or 1
-                                * I                         -- TYPE:array(ny,nx) UNITS:arb.   The complex-valued, onion-peeled interferogram
-                                * chi2                      -- TYPE:array(ny)    UNITS:rad^2. The normalized chi^2 from the phase
-                                                                                              extraction from each row of the interferogram.
-                                * quality                   -- TYPE:array(ny)    UNITS:arb.   A number from 0 (Bad) to 1 (Good) for each altitude.
-                                * acknowledgement           -- TYPE:str.                      A copy of the Acknowledgement attribute in the L1 file.
-                                * att_lvlh_normal           -- TYPE:int. 0 or 1               Attitude register bit 0: LVLH Normal
-                                * att_lvlh_reverse          -- TYPE:int. 0 or 1               Attitude register bit 1: LVLH Reverse
-                                * att_limb_pointing         -- TYPE:int. 0 or 1               Attitude register bit 2: Earth Limb Pointing
-                                * att_conjugate             -- TYPE:int. 0 or 1               Attitude register bit 6: Conjugate Maneuver
+                    * los_wind                  -- TYPE:array(ny),   UNITS:m/s.   Line-of-sight wind profile (+ towards MIGHTI)
+                    * los_wind_error            -- TYPE:array(ny),   UNITS:m/s.   Uncertainty of los_wind (1-sigma)
+                    * lat                       -- TYPE:array(ny),   UNITS:deg.   Latitude of each point in profile
+                    * lon                       -- TYPE:array(ny),   UNITS:deg.   Longitude of each point in profile
+                    * alt                       -- TYPE:array(ny),   UNITS:alt.   Altitude of each point in profile
+                    * time_start                -- TYPE:datetime (timezone naive) Time at start of exposure in UTC
+                    * time_stop                 -- TYPE:datetime (timezone naive) Time at end of exposure in UTC
+                    * time                      -- TYPE:datetime (timezone naive) Time at midpoint of exposure in UTC
+                    * exp_time                  -- TYPE:float,       UNITS:s.     Exposure time
+                    * az                        -- TYPE:array(ny),   UNITS:deg.   The azimuth angle of the line of sight
+                                                                                  at the tangent point (deg East of North)
+                    * emission_color            -- TYPE:str.                      'red' or 'green'
+                    * sensor                    -- TYPE:str.                      'A' or 'B'
+                    * icon_alt                  -- TYPE:float,       UNITS:km.    Spacecraft altitude
+                    * icon_lat                  -- TYPE:float,       UNITS:deg.   Spacecraft latitude
+                    * icon_lon                  -- TYPE:float,       UNITS:deg.   Spacecraft longitude [0,360]
+                    * fringe_amplitude          -- TYPE:array(ny),   UNITS:arb.   The fringe contrast, a proxy for volume emission rate
+                    * fringe_amplitude_error    -- TYPE:array(ny),   UNITS:arb.   Uncertainty in fringe_amplitude (1-sigma)
+                    * mighti_ecef_vectors       -- TYPE:array(ny,3).              ECEF unit vector for each line of sight
+                    * icon_velocity_ecef_vector -- TYPE:array(3).    UNITS:m/s.   ECEF vector of spacecraft velocity
+                    * file_creation_time        -- TYPE:datetime (timezone naive) Time this processing was run in UTC
+                    * source_files              -- TYPE:list of str.              All science files that went into creating this file
+                    * bin_size                  -- TYPE:int.                      Bin size used in the processing
+                    * top_layer                 -- TYPE:str.                      How the top layer was handled: 'thin' or 'exp'
+                    * H                         -- TYPE:float.       UNITS:km.    The VER scale height used if top_layer='exp' 
+                    * integration_order         -- TYPE:int.                      Order of integration used in inversion: 0 or 1
+                    * I                         -- TYPE:array(ny,nx) UNITS:arb.   The complex-valued, onion-peeled interferogram
+                    * chi2                      -- TYPE:array(ny)    UNITS:rad^2. The normalized chi^2 from the phase
+                                                                                  extraction from each row of the interferogram.
+                    * wind_quality              -- TYPE:array(ny)    UNITS:arb.   A number from 0 (Bad) to 1 (Good) for each altitude.
+                    * ver_quality               -- TYPE:array(ny)    UNITS:arb.   A number from 0 (Bad) to 1 (Good) for each altitude.
+                    * quality_flags             -- TYPE:array(ny,ne).             For each altitude, multiple flags exist, 
+                                                                                  each of which is either 0 (False) or 1 (True). 
+                                                                                  Some flags are propaged directly from the L1 file.
+                                                                                  The definition for each bit is:
+                                                                                   * 0 : (From L1) SNR too low to reliably perform L1 processing
+                                                                                   * 1 : (From L1) Proximity to South Atlantic Anomaly
+                                                                                   * 2 : (From L1) Bad calibration 
+                                                                                   * 3 : (From L1) Unused
+                                                                                   * 4 : (From L1) Unused
+                                                                                   * 5 : (From L1) Unused
+                                                                                   * 6 : SNR too low after inversion
+                                                                                   * 7 : Significant airglow above 300 km
+                                                                                   * 8 : Line of sight crosses the terminator
+                                                                                   * 9 : Unused
+                                                                                   * 10: Unused
+                                                                                   * 11: Unused
+                    * acknowledgement           -- TYPE:str.                      A copy of the Acknowledgement attribute in the L1 file.
+                    * att_lvlh_normal           -- TYPE:int. 0 or 1               Attitude register bit 0: LVLH Normal
+                    * att_lvlh_reverse          -- TYPE:int. 0 or 1               Attitude register bit 1: LVLH Reverse
+                    * att_limb_pointing         -- TYPE:int. 0 or 1               Attitude register bit 2: Earth Limb Pointing
+                    * att_conjugate             -- TYPE:int. 0 or 1               Attitude register bit 6: Conjugate Maneuver
     
     '''
     
     #### Parse input parameters and load defaults
     emission_color = L1_dict['emission_color']
+    sensor = L1_dict['sensor']
     params = global_params[emission_color]
     if sigma is None:
         sigma = params['sigma']
     if top_layer is None:
         top_layer = params['top_layer']
+    if H is None:
+        H = params['H']
     if integration_order is None:
         integration_order = params['integration_order']
     if account_for_local_projection is None:
@@ -1269,8 +1427,11 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     if bin_size is None:
         bin_size = params['bin_size']
     bin_size = int(bin_size)
-    if chi2_thresh is None:
-        chi2_thresh = params['chi2_thresh']
+    if top_layer_thresh is None:
+        top_layer_thresh = params['top_layer_thresh']
+    if terminator_thresh is None:
+        terminator_thresh = params['terminator_thresh']
+        
 
     ####  Load parameters from input dictionary
     Iraw = L1_dict['I_amp']*np.exp(1j*L1_dict['I_phase'])
@@ -1281,9 +1442,10 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     L1_fn = L1_dict['L1_fn']
     opd = L1_dict['optical_path_difference']
     sigma_opd = sigma * opd # Optical path difference, in units of wavelengths
-    sensor = L1_dict['sensor']
     mighti_ecef_vectors = L1_dict['mighti_ecef_vectors']
     icon_velocity_vector = L1_dict['icon_velocity_vector']
+    L1_quality_flags = L1_dict['quality_flags']
+    L1_quality       = L1_dict['quality']
     
     # Load parameters which are averaged from start to stop of exposure.
     icon_alt = (L1_dict['icon_alt_start'] + L1_dict['icon_alt_stop'])/2
@@ -1305,8 +1467,11 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     ny, nx = np.shape(I)
     mighti_ecef_vectors_center = mighti_ecef_vectors[:,nx/2,:] # For reporting in output file, determine ecef vector at center of row
     mighti_ecef_vectors_center = bin_image(bin_size, mighti_ecef_vectors_center) # bin each component separately
+    L1_quality_flags = bin_image(bin_size, L1_quality_flags, method='max') # bin each flag separately, taking *max* over the bin
+    L1_quality       = bin_array(bin_size, L1_quality,       method='min') # bin quality factor, taking *min* over the bin
     I_amp_uncertainty   = bin_uncertainty(bin_size, I_amp_uncertainty)
     I_phase_uncertainty = bin_uncertainty(bin_size, I_phase_uncertainty)
+    
     
     #### Determine geographical locations of inverted wind
     lat, lon, alt = attribute_measurement_location(tang_lat, tang_lon, tang_alt,
@@ -1316,26 +1481,13 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
     Ip, phase, amp, phase_uncertainty, amp_uncertainty, chi2 = perform_inversion(I, tang_alt, icon_alt, 
                            I_phase_uncertainty, I_amp_uncertainty,
                            top_layer=top_layer, integration_order=integration_order,
-                           account_for_local_projection=account_for_local_projection,
-                           chi2_thresh=chi2_thresh, linear_amp=linear_amp)
-    
+                           account_for_local_projection=account_for_local_projection, linear_amp=linear_amp, H=H)
+
     #### Transform from phase to wind
     f = phase_to_wind_factor(np.mean(sigma_opd)) # Use average OPD to analyze entire row
     v             = f * phase
     v_uncertainty = f * phase_uncertainty
     
-    #### Quality control (TODO: this ought to be its own function)
-    ## Chi^2 filtering: mask phase, but not amplitude
-    idx_chi2 = chi2 > chi2_thresh
-#    if sum(idx_chi2) > 0.0:
-#        print 'Removing %i wind samples (chi^2 > %.3f) with the following characteristics:' % (sum(idx_chi2), chi2_thresh)
-#        print '\t chi^2   wind [m/s]   wind_error [m/s]'
-#        for i in np.where(idx_chi2)[0]:
-#            print'\t %6.3f    %7.1f       %7.1f' % (chi2[i], v[i], v_uncertainty[i])
-#        print '\n'
-    v[idx_chi2] = np.nan
-    v_uncertainty[idx_chi2] = np.nan
-  
     #### Calculate azimuth angles at measurement locations
     az = los_az_angle(icon_latlonalt, lat, lon, alt)
     
@@ -1348,13 +1500,11 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
              'alt'                          : alt,
              'time_start'                   : L1_dict['time_start'],
              'time_stop'                    : L1_dict['time_stop'],
+             'time'                         : L1_dict['time_start'] + (L1_dict['time_stop'] - L1_dict['time_start'])/2,
              'exp_time'                     : exp_time,
              'az'                           : az,
              'emission_color'               : emission_color,
              'sensor'                       : sensor,
-             'resolution_along_track'       : np.nan, # TODO
-             'resolution_cross_track'       : np.nan, # TODO
-             'resolution_alt'               : np.nan, # TODO
              'icon_alt'                     : icon_alt,
              'icon_lat'                     : icon_lat,
              'icon_lon'                     : icon_lon,
@@ -1366,10 +1516,13 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
              'source_files'                 : [L1_fn],
              'bin_size'                     : bin_size,
              'top_layer'                    : top_layer,
+             'H'                            : H,
              'integration_order'            : integration_order,
              'I'                            : Ip,
              'chi2'                         : chi2,
-             'wind_quality'                 : np.nan, # TODO
+             'wind_quality'                 : np.nan, # A placeholder; this will be filled in below
+             'ver_quality'                  : np.nan, # A placeholder; this will be filled in below
+             'quality_flags'                : None,   # A placeholder; this will be filled in below
              'acknowledgement'              : L1_dict['acknowledgement'],
              'att_lvlh_normal'              : L1_dict['att_lvlh_normal'],
              'att_lvlh_reverse'             : L1_dict['att_lvlh_reverse'],
@@ -1377,9 +1530,27 @@ def level1_dict_to_level21_dict(L1_dict, sigma = None, top_layer = None,
              'att_conjugate'                : L1_dict['att_conjugate'],
     }
     
+    #### Quality control and flagging
+    wind_quality, ver_quality, quality_flags = level21_quality(L1_quality_flags, L21_dict, L1_quality=L1_quality,
+                                                               top_layer_thresh=top_layer_thresh, 
+                                                               terminator_thresh = terminator_thresh)
+    L21_dict['wind_quality'] = wind_quality
+    L21_dict['ver_quality'] = ver_quality
+    L21_dict['quality_flags'] = quality_flags
+    
+    ### Mask out points with very bad quality
+    idx = L21_dict['wind_quality'] == 0.0
+    L21_dict['los_wind'][idx] = np.nan
+    L21_dict['los_wind_error'][idx] = np.nan
+    
+    idx = L21_dict['ver_quality'] == 0.0
+    L21_dict['fringe_amplitude'][idx] = np.nan
+    L21_dict['fringe_amplitude_error'][idx] = np.nan
+    
     return L21_dict
-   
-   
+
+
+
 
 
 
@@ -1422,7 +1593,7 @@ def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', di
     
     # If fill value was not specified, use the default value, if it exists.
     # It will not exist for strings, for example, for which fill values
-    # cannot be set. (TODO: is this right?)
+    # cannot be set.
     if fill_value is None and format_nc in netCDF4.default_fillvals.keys():
         fill_value = netCDF4.default_fillvals[format_nc]
     
@@ -1470,7 +1641,7 @@ def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', di
     if fill_value is not None:
         # For sequences that are not strings:
         if hasattr(value,'__len__') and not isinstance(value,(str,unicode)):
-            value[np.isnan(value)] = var._FillValue
+            value[np.isnan(value)]  = var._FillValue
         # For non-sequences and strings:
         elif np.isnan(value):
             value = var._FillValue
@@ -1481,7 +1652,7 @@ def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', di
     return var
 
    
-   
+    
     
     
 def save_nc_level21(path, L21_dict, data_revision=0):
@@ -1594,9 +1765,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         "60 seconds). The profile "
         "spans from ~90 km (for green) or ~150 km (for red) to ~300 km, though altitudes with low signal levels are masked out. This data product is "
         "generated from the Level 1 MIGHTI product, which comprises calibrated amplitudes and phases. The spacecraft velocity is removed from the "
-        "interferogram phase, , then (optionally) the data are binned from their native altitude resolution (~2.5 km) to improve statistics. "
-        "An onion-peeling inversion"
-        "then an onion-peeling inversion is performed to remove the effect of the line-of-sight integration. After the inversion, each row (i.e., altitude) "
+        "interferogram phase, then (optionally) the data are binned from their native altitude resolution (~2.5 km) to improve statistics. "
+        "An onion-peeling inversion is performed to remove the effect of the line-of-sight integration. After the inversion, each row (i.e., altitude) "
         "is analyzed to extract the phase, and thus the line-of-sight wind. Level 2.1 files from MIGHTI-A and MIGHTI-B are combined during the Level 2.2 "
         "processing (not discussed here). See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for more details of the inversion algorithm. One update "
         "to this paper is relevant: Zero wind removal is now performed prior to the creation of the Level 1 file, instead of during the L2.1 processing. "
@@ -1614,11 +1784,12 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ncfile.createDimension(var_alt_name, n)
         ncfile.createDimension('Vector',3)
         ncfile.createDimension('Start_Mid_Stop',3)
-
-
+        ncfile.createDimension('N_Flags', np.shape(L21_dict['quality_flags'])[1])
+        
+        
         ################################## Variables #########################################
-
-   
+        
+        
         ######### Timing Variables #########
 
         # Time midpoint (the official required "Epoch" variable)
@@ -1627,8 +1798,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               format_nc='i8', format_fortran='I', desc='Sample time, midpoint of exposure. Number of msec since Jan 1, 1970.', 
                               display_type='scalar', field_name='Time', fill_value=None, label_axis='Time', bin_location=0.5,
                               units='ms', valid_min=0, valid_max=1000*365*86400*1000, var_type='support_data', chunk_sizes=1,
-                              notes="This variable contains the time corresponding to the wind profile reported in this file. It is evaluated "
-                                    "at the midpoint of the exposure time. It is in UTC and has units of milliseconds since "
+                              notes="This variable contains the time corresponding to the wind profile reported in this file, taken at the "
+                                    "midpoint of the exposure time. It is in UTC and has units of milliseconds since "
                                     "Jan 1, 1970. A human-readable version of the time can be found in the global attributes "
                                     "Date_Start and Date_Stop."
                               )
@@ -1670,7 +1841,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               "an average over many hundreds of kilometers horizontally, and 2.5-30 kilometers vertically (depending on the binning). "
                               "See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."
                               )
-
+        
         # Line-of-sight wind error profile
         var = _create_variable(ncfile, '%s_Line_of_Sight_Wind_Error'%prefix, L21_dict['los_wind_error'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
@@ -1687,18 +1858,19 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         # Quality code
         var = _create_variable(ncfile, '%s_Wind_Quality'%prefix, L21_dict['wind_quality'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
-                              format_nc='f8', format_fortran='F', desc='A quantification of the quality, from 0 (Bad) to 1 (Good)', 
+                              format_nc='f8', format_fortran='F', desc='A quantification of the wind quality, from 0 (Bad) to 1 (Good)', 
                               display_type='altitude_profile', field_name='Wind Quality', fill_value=None, label_axis='Quality', bin_location=0.5,
-                              units='arb', valid_min=0.0, valid_max=1.0, var_type='data', chunk_sizes=[n],
-                              notes=["NOT YET IMPLEMENTED",
+                              units='', valid_min=0.0, valid_max=1.0, var_type='data', chunk_sizes=[n],
+                              notes=["A quantification of the overall quality of the wind data. "
                                      "While the intent is that the variable Line_of_Sight_Wind_Error accurately characterizes the statistical "
                                      "error in the wind data, it is possible that systematic errors are present, or that the statistical error "
                                      "estimation is not accurate. If it is suspected that this is the case, the quality will be less than 1.0. If "
                                      "the data are definitely unusable, the the quality will be 0.0 and the sample will be masked. Users should "
-                                     "exercise caution when the quality is less than 1.0."
+                                     "exercise caution when the quality is less than 1.0.",
+                                     "This parameter can currently take 3 values: 0.0 (Bad), 0.5 (Caution), 1.0 (Good)"
                                      ])
-
-        # Fringe amplitude profile (TODO: will this be replaced by a VER data product?)
+        
+        # Fringe amplitude profile 
         var = _create_variable(ncfile, '%s_Fringe_Amplitude'%prefix, L21_dict['fringe_amplitude'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Fringe amplitude profile', 
@@ -1713,15 +1885,58 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               "per altitude."
                               )
 
-        # Fringe amplitude error profile (TODO: will this be replaced by a VER data product?)
+        # Fringe amplitude error profile
         var = _create_variable(ncfile, '%s_Fringe_Amplitude_Error'%prefix, L21_dict['fringe_amplitude_error'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Fringe amplitude error profile', 
                               display_type='altitude_profile', field_name='Fringe Amplitude Error', fill_value=None, label_axis='Amp Err', bin_location=0.5,
                               units='arb', valid_min=0.0, valid_max=1e30, var_type='data', chunk_sizes=[n],
                               notes="The statistical (1-sigma) error in the fringe amplitude. As with the wind, systematic errors are not "
-                              "included, but can arise from sources such as horizontal gradients and inaccurate calibration.")
+                              "included, but can arise from sources such as horizontal gradients and inaccurate calibration."
+                              )
         
+        # Relative VER (TODO: right now this just replicates fringe amplitude. Replace it with VER)
+        var = _create_variable(ncfile, '%s_Relative_VER'%prefix, L21_dict['fringe_amplitude'], 
+                              dimensions=(var_alt_name), depend_0 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='Relative volume emission rate profile', 
+                              display_type='altitude_profile', field_name='Relative VER', fill_value=None, label_axis='VER', bin_location=0.5,
+                              units='ph/cm^3/s', valid_min=0, valid_max=1e30, var_type='data', chunk_sizes=[n],
+                              notes= "The volume emission rate (VER) obtained by scaling the fringe amplitude by a calibration factor. "
+                               "Pre-flight calibrations and on-orbit comparisons with ground-based instruments are used to determine the "
+                               "best possible calibration. However, because this calibration is uncertain, and because the fringe "
+                               "amplitude has a small dependence on atmospheric temperature, caution should be exercised when absolute "
+                               "calibration is required, or when comparisons are being made between samples at different temperatures. "
+                               "Please contact the MIGHTI team before performing any studies that require absolute calibration. "
+                               "The statistical (1-sigma) error for this variable is provided in "
+                               "the variable XXX_Relative_VER_Error, though it is expected that systematic calibration errors dominate "
+                               "the total error."
+                              )
+        
+        # Relative VER Error (TODO: right now this just replicates fringe amplitude. Replace it with VER)
+        var = _create_variable(ncfile, '%s_Relative_VER_Error'%prefix, L21_dict['fringe_amplitude_error'], 
+                              dimensions=(var_alt_name), depend_0 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='Relative volume emission rate error profile', 
+                              display_type='altitude_profile', field_name='Relative VER', fill_value=None, label_axis='VER', bin_location=0.5,
+                              units='ph/cm^3/s', valid_min=0, valid_max=1e30, var_type='data', chunk_sizes=[n],
+                              notes= "The statistical (1-sigma) error in the relative VER estimate. This error arises mostly from shot "
+                              "noise. Importantly, it is expected that systematic errors (e.g., calibration errors) dominate the total "
+                              "error, but they are not included in this variable."
+                              )
+        
+        # Quality code
+        var = _create_variable(ncfile, '%s_VER_Quality'%prefix, L21_dict['ver_quality'], 
+                              dimensions=(var_alt_name), depend_0 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='A quantification of the VER quality, from 0 (Bad) to 1 (Good)', 
+                              display_type='altitude_profile', field_name='VER Quality', fill_value=None, label_axis='Quality', bin_location=0.5,
+                              units='', valid_min=0.0, valid_max=1.0, var_type='data', chunk_sizes=[n],
+                              notes=["A quantification of the overall quality of the VER data. While the intent is that the variable VER_Error "
+                                     "accurately characterizes the statistical "
+                                     "error in the wind data, it is possible that systematic errors are present, or that the statistical error "
+                                     "estimation is not accurate. If it is suspected that this is the case, the quality will be less than 1.0. If "
+                                     "the data are definitely unusable, the the quality will be 0.0 and the sample will be masked. Users should "
+                                     "exercise caution when the quality is less than 1.0.",
+                                     "This parameter can currently take 3 values: 0.0 (Bad), 0.5 (Caution), 1.0 (Good)"
+                                     ])
 
         ######### Data Location and Direction Variables #########
         
@@ -1780,16 +1995,15 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
         ######### Other Metadata Variables #########
 
-        # Chi^2 of line fit to phase
+#         # Chi^2 variability of phase in each row
         var = _create_variable(ncfile, '%s_Chi2'%prefix, L21_dict['chi2'], 
                               dimensions=(var_alt_name), depend_0 = var_alt_name,
-                              format_nc='f8', format_fortran='F', desc='Chi^2 of the line fit to unwrapped phase used to determine wind', 
-                              display_type='altitude_profile', field_name='Chi^2 of line fit to phase', fill_value=None, label_axis='Chi^2', bin_location=0.5,
+                              format_nc='f8', format_fortran='F', desc='Variance of the phase in each (unwrapped) row: (std of phase)^2', 
+                              display_type='altitude_profile', field_name='Variance of each phase row', fill_value=None, label_axis='Chi^2', bin_location=0.5,
                               units='rad^2', valid_min=0., valid_max=1e30, var_type='metadata', chunk_sizes=[n],
-                              notes="To convert a complex interferogram to a wind value, a line is fit to the unwrapped phase vs optical path "
-                              "difference. The chi^2 value of that fit (here defined as the square of the residual, averaged over optical path "
-                              "difference) can be used as a quality-of-fit metric. It is used to find and mask values which have a unusably low "
-                              "SNR."
+                              notes="In consolidating each row of the unwrapped interferogram into a single phase value, the variance of the "
+                              "phase is saved in this variable. Ideally this should provide no new information above that which is provided "
+                              "by the wind uncertainty."
                               )
         
         # ICON velocity vector
@@ -1904,7 +2118,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               "from running a variety of airglow models (Top_Layer_Model=\"exp\"). Usually this choice will not affect the "
                               "inversion significantly. In cases where it does, the quality variable will be decreased."
                               )    
-
+        
         # Attitude information bits
         var = _create_variable(ncfile, '%s_Attitude_LVLH_Normal'%prefix, L21_dict['att_lvlh_normal'], 
                               dimensions=(),
@@ -1914,35 +2128,61 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               notes="LVLH Normal pointing. This variable is taken from bit 0 of the Level 1 variable "
                               "ICON_L1_MIGHTI_X_SC_Attitude_Control_Register."
                               )
- 
+
         var = _create_variable(ncfile, '%s_Attitude_LVLH_Reverse'%prefix, L21_dict['att_lvlh_reverse'], 
                               dimensions=(),
                               format_nc='i1', format_fortran='I', desc='Attitude status bit 1: LVLH Reverse', 
-                              display_type='scalar', field_name='LVLH Norm', fill_value=None, label_axis='LVLH Norm', bin_location=0.5,
+                              display_type='scalar', field_name='LVLH Rev', fill_value=None, label_axis='LVLH Rev', bin_location=0.5,
                               units='', valid_min=np.int8(0), valid_max=np.int8(1), var_type='metadata', chunk_sizes=1,
                               notes="LVLH Reverse pointing. This variable is taken from bit 1 of the Level 1 variable "
                               "ICON_L1_MIGHTI_X_SC_Attitude_Control_Register."
                               )
- 
+
         var = _create_variable(ncfile, '%s_Attitude_Limb_Pointing'%prefix, L21_dict['att_limb_pointing'], 
                               dimensions=(),
                               format_nc='i1', format_fortran='I', desc='Attitude status bit 2: Earth Limb Pointing', 
-                              display_type='scalar', field_name='LVLH Norm', fill_value=None, label_axis='LVLH Norm', bin_location=0.5,
+                              display_type='scalar', field_name='Att Limb', fill_value=None, label_axis='Att Limb', bin_location=0.5,
                               units='', valid_min=np.int8(0), valid_max=np.int8(1), var_type='metadata', chunk_sizes=1,
                               notes="Earth limb pointing. This variable is taken from bit 2 of the Level 1 variable "
                               "ICON_L1_MIGHTI_X_SC_Attitude_Control_Register."
                               )
- 
+
         var = _create_variable(ncfile, '%s_Attitude_Conjugate_Maneuver'%prefix, L21_dict['att_conjugate'], 
                               dimensions=(),
                               format_nc='i1', format_fortran='I', desc='Attitude status bit 6: Conjugate Maneuver', 
-                              display_type='scalar', field_name='LVLH Norm', fill_value=None, label_axis='LVLH Norm', bin_location=0.5,
+                              display_type='scalar', field_name='Conj. Man.', fill_value=None, label_axis='Conj. Man.', bin_location=0.5,
                               units='', valid_min=np.int8(0), valid_max=np.int8(1), var_type='metadata', chunk_sizes=1,
                               notes="Conjugate Maneuver. This variable is taken from bit 6 of the Level 1 variable "
                               "ICON_L1_MIGHTI_X_SC_Attitude_Control_Register."
                               )
-        ncfile.close()
         
+        # Quality flags      
+        var = _create_variable(ncfile, '%s_Quality_Flags'%prefix, L21_dict['quality_flags'], 
+                              dimensions=(var_alt_name, 'N_Flags'), depend_1 = var_alt_name, depend_2 = 'N_Flags',
+                              format_nc='i8', format_fortran='I', desc='Quality flags', 
+                              display_type='image', field_name='Quality Flags', fill_value=-1, label_axis='Qual Flags', bin_location=0.5,
+                              units='', valid_min=0, valid_max=1, var_type='metadata', chunk_sizes=[n,12],
+                              notes=["This variable provides information on why the Wind_Quality and VER_Quality variables are reduced "
+                              "from 1.0. Many quality flags can "
+                              "exist for each grid point, each either 0 or 1. More than one flag can be raised per point. This variable "
+                              "is a two-dimensional array with dimensions of altitude and number of flags.",
+                                       "0 : (From L1) SNR too low to reliably perform L1 processing",
+                                       "1 : (From L1) Proximity to South Atlantic Anomaly",
+                                       "2 : (From L1) Bad calibration",
+                                       "3 : (From L1) Unused",
+                                       "4 : (From L1) Unused",
+                                       "5 : (From L1) Unused",
+                                       "6 : SNR too low after inversion",
+                                       "7 : Significant airglow above 300 km",
+                                       "8 : Line of sight crosses the terminator",
+                                       "9 : Unused",
+                                       "10: Unused",
+                                       "11: Unused",
+                                    ])
+        
+        ncfile.close()
+
+
     except: # make sure the file is closed
         ncfile.close()
         raise
@@ -1954,8 +2194,10 @@ def save_nc_level21(path, L21_dict, data_revision=0):
     
     
     
-def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_revision=0, sigma=None, top_layer=None, integration_order=None, 
-                                        account_for_local_projection=None, bin_size=None, chi2_thresh=None):
+def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_revision=0, sigma=None, top_layer=None, 
+                                        H = None, integration_order=None, account_for_local_projection=None, 
+                                        bin_size=None,
+                                        top_layer_thresh=None, terminator_thresh=None,):
     '''
     High-level function to apply the Level-1-to-Level-2.1 algorithm to a Level 1 file. This version
     of the function requires the user to input the arguments instead of specifying them with an 
@@ -1979,6 +2221,7 @@ def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_r
       *  sigma               -- TYPE:float, UNITS:m^-1. The wavenumber of the emission (1/wavelength)
       *  top_layer           -- TYPE:str, 'thin': assume VER goes to zero above top layer
                                           'exp':  assume VER falls off exponentially in altitude
+      *  H                   -- TYPE:float, UNITS:km. The VER scale height to use if top_layer='exp'
       *  integration_order   -- TYPE:int, 0: Use Riemann-sum rule for discretizing line-of-sight integral
                                           1: Use trapezoidal rule for discretizing line-of-sight integral
       *  account_for_local_projection -- TYPE:bool. If False, a simple inversion is used.
@@ -1986,9 +2229,15 @@ def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_r
                                          perfectly tangent to each shell at each point along the ray.
       *  bin_size            -- TYPE:int, The number of rows of the interferogram to bin together to 
                                           improve statistics at the cost of altitude resolution.
-      *  chi2_thresh         -- TYPE:float, UNITS:rad^2. The chi^2 value for the line fit (used to analyze
-                                                         the inteferogram), below which the data will be 
-                                                         ignored, since it is probably just noise.
+      *  top_layer_thresh.   -- TYPE:float. Fraction of airglow above the top observed altitude. Consider the total column 
+                                            brightness (i.e, the integral of the VER profile). When a large fraction
+                                            comes from above the top observed altitude, the quality flag is raised.
+      *  terminator_thresh   -- TYPE:float, UNITS:km. Consider two points along the line of sight, both X km from the tangent 
+                                            point (where X is this parameter). One is nearer to the spacecraft than the 
+                                            tangent point, and one is farther. If these two points are on opposite sides of the 
+                                            terminator, raise a quality flag. Note that this quality flag will also be raised if
+                                            any observations at higher tangent altitudes for the same observation are flagged, because
+                                            the inversion mixes information from those observations.
                                            
     OUTPUTS:      
     
@@ -2005,10 +2254,11 @@ def level1_to_level21_without_info_file(L1_fn, emission_color, L21_path , data_r
     L1_dict = level1_to_dict(L1_fn, emission_color)
     
     # Perform L1 to L2.1 processing
-    L21_dict = level1_dict_to_level21_dict(L1_dict, sigma, top_layer = top_layer, 
+    L21_dict = level1_dict_to_level21_dict(L1_dict, sigma, top_layer = top_layer, H = H,
                                            integration_order = integration_order, 
                                            account_for_local_projection = account_for_local_projection, 
-                                           bin_size = bin_size, chi2_thresh = chi2_thresh)
+                                           bin_size = bin_size,
+                                           top_layer_thresh = top_layer_thresh, terminator_thresh = terminator_thresh)
     
     # Save L2.1 file
     L21_fn = save_nc_level21(L21_path, L21_dict, data_revision)
@@ -2076,8 +2326,8 @@ def read_info_file(info_fn):
     return info, files
                     
     
-  
-
+    
+    
 def level1_to_level21(info_fn):
     '''
     Highest-level function to apply the Level-1-to-Level-2.1 algorithm to a Level 1 file, with 
@@ -2180,7 +2430,7 @@ def level21_to_dict(L21_fns, skip_att=[]):
       *  skip_att -- TYPE: list of str.  A list of attitude status variables. If any evaluate
                                          to True, the file will be skipped and not included 
                                          in the output. Possible values: ['att_conjugate', 
-                                         'att_lvlh_reverse', 'att_zero_wind']
+                                         'att_lvlh_reverse']
       
     OUTPUTS:
     
@@ -2197,6 +2447,8 @@ def level21_to_dict(L21_fns, skip_att=[]):
                                        MIGHTI towards the sample location, at the sample location (deg E of N).
                   * amp             -- TYPE:array(ny,nt), UNITS:arb. Fringe amplitude at sample locations.
                   * amp_error       -- TYPE:array(ny,nt), UNITS:arb. Error in amp variable.
+                  * ver             -- TYPE:array(ny,nt), UNITS:ph/cm^3/s. Volume emission rate at sample locations.
+                  * ver_error       -- TYPE:array(ny,nt), UNITS:ph/cm^3/s. Error in ver variable. 
                   * time            -- TYPE:array(nt).               Array of datetime objects, one per file.
                   * icon_lat        -- TYPE:array(nt),    UNITS:deg. Spacecraft latitude.
                   * icon_lon        -- TYPE:array(nt),    UNITS:deg. Spacecraft longitude.
@@ -2208,7 +2460,11 @@ def level21_to_dict(L21_fns, skip_att=[]):
                   * version         -- TYPE:array(nt).               Version number of each file.
                   * revision        -- TYPE:array(nt).               Revision number of each file.
                   * acknowledgement -- TYPE:str.                     The Acknowledgment attribute in the first file
-                  
+                  * wind_quality    -- TYPE:array(ny,nt),            Value between 0 and 1 for each sample
+                  * ver_quality     -- TYPE:array(ny,nt),            Value between 0 and 1 for each sample
+                  * quality_flags   -- TYPE:array(ny,nt,ne).         Quality flags for each point. See 
+                                                                     documentation for level1_dict_to_level21_dict(...)
+                                                                     for meaning of each flag.
     '''
     
     if len(L21_fns)==0:
@@ -2223,6 +2479,8 @@ def level21_to_dict(L21_fns, skip_att=[]):
                  'local_az',
                  'amp',
                  'amp_error',
+                 'ver',
+                 'ver_error',
                  'time',
                  'icon_lat',
                  'icon_lon',
@@ -2235,9 +2493,12 @@ def level21_to_dict(L21_fns, skip_att=[]):
                  'att_lvlh_reverse',
                  'att_limb_pointing',
                  'att_conjugate',
-                 'source_files',]
+                 'source_files',
+                 'wind_quality',
+                 'ver_quality',
+                 'quality_flags',]
 
-    z = {}
+    z = {} # This is what will be returned
     for v in variables:
         z[v] = []
 
@@ -2281,6 +2542,10 @@ def level21_to_dict(L21_fns, skip_att=[]):
         z['local_az'].append(      d.variables['%s_Line_of_Sight_Azimuth' % prefix][...])
         z['amp'].append(           d.variables['%s_Fringe_Amplitude' % prefix][...])
         z['amp_error'].append(     d.variables['%s_Fringe_Amplitude_Error' % prefix][...])
+        z['ver'].append(           d.variables['%s_Relative_VER' % prefix][...])
+        z['ver_error'].append(     d.variables['%s_Relative_VER_Error' % prefix][...])
+        z['wind_quality'].append(  d.variables['%s_Wind_Quality' % prefix][...])
+        z['ver_quality'].append(   d.variables['%s_VER_Quality' % prefix][...])
         time_msec =                d.variables['Epoch'][...].item()
         z['time'].append(datetime(1970,1,1) + timedelta(seconds = 1e-3*time_msec))
         z['icon_lat'].append(      d.variables['%s_Spacecraft_Latitude' % prefix][...].item())
@@ -2295,19 +2560,25 @@ def level21_to_dict(L21_fns, skip_att=[]):
         z['version'].append(vers)
         z['revision'].append(rev)
         z['source_files'].append(fn)
+        z['quality_flags'].append(d.variables['%s_Quality_Flags' % prefix][...])
 
         ack = d.Acknowledgement    
         d.close()
         assert color == first_color, "Input files do not have the same emission color"
-
-    # Replace masked arrays with nan and other minor things
+    
+    if len(z['time'])==0:
+        raise ValueError('All files have attitude status bits in the disallowed list: %s' % skip_att)
+    
+    # Replace masked arrays with nan, and do some other minor rearranging
     for v in variables:
-        tmp = [np.ma.filled(x, np.nan) for x in z[v]]
-        z[v] = np.vstack(tmp).T
-        # If the shape is 1 by something (i.e., only one value per time),
-        # then just make it a 1D array instead of 2D
-        if np.shape(z[v])[0] == 1:
-            z[v] = z[v][0,:]
+        # If the variable is a scalar at each time, make a 1D array. 
+        # Else, make an array with dims: (altitude, time, [flags])
+        if np.ndim(z[v])==1:
+            # It is assumed that nothing is masked here (Why would a scalar be masked?)
+            z[v] = np.array(z[v])
+        else:
+            tmp = np.array([np.ma.filled(x, np.nan) for x in z[v]])
+            z[v] = np.swapaxes(tmp, 0, 1) # This is the same as np.array(tmp).T for 2D arrays
 
     # Add extra global information
     z['acknowledgement'] = ack
@@ -2377,21 +2648,46 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                     * v               -- TYPE:array(ny,nx),    UNITS:m/s.  Estimated meridional wind (positive northward).
                     * u_error         -- TYPE:array(ny,nx),    UNITS:m/s.  Uncertainty in u.
                     * v_error         -- TYPE:array(ny,nx),    UNITS:m/s.  Uncertainty in v.
-                    * error_flags     -- TYPE:array(ny,nx,ne), UNITS:none. The error flags (either 0 or 1) for each point
-                                                                           in the grid. Each point has a number of error flags, 
+                    * quality_flags   -- TYPE:array(ny,nx,ne), UNITS:none. The quality flags (either 0 or 1) for each point
+                                                                           in the grid. Each point has a number of flags, 
                                                                            which are set to 1 under the following 
-                                                                           circumstances:
-                                                                          
-                                                                            * 0  = missing A file
-                                                                            * 1  = missing B file
-                                                                            * 2  = A signal too weak
-                                                                            * 3  = B signal too weak
-                                                                            * 4  = A did not sample this altitude
-                                                                            * 5  = B did not sample this altitude
-                                                                            * 6  = spherical asymmetry: A&B VER 
-                                                                                   estimates disagree
-                                                                            * 7  = sample taken <time_start or >=time_stop
-                                                                            * 8  = unknown error
+                                                                           circumstances
+                                                                           
+                                                                           * 0 : (From L1 A) SNR too low to reliably perform L1 processing
+                                                                           * 1 : (From L1 A) Proximity to South Atlantic Anomaly
+                                                                           * 2 : (From L1 A) Bad calibration 
+                                                                           * 3 : (From L1 A) Unused
+                                                                           * 4 : (From L1 A) Unused
+                                                                           * 5 : (From L1 A) Unused
+                                                                           * 6 : (From L2.1 A) SNR too low after inversion
+                                                                           * 7 : (From L2.1 A) Significant airglow above 300 km
+                                                                           * 8 : (From L2.1 A) Line of sight crosses the terminator
+                                                                           * 9 : (From L2.1 A) Unused
+                                                                           * 10: (From L2.1 A) Unused
+                                                                           * 11: (From L2.1 A) Unused
+                                                                           * 12: (From L1 B) SNR too low to reliably perform L1 processing
+                                                                           * 13: (From L1 B) Proximity to South Atlantic Anomaly
+                                                                           * 14: (From L1 B) Bad calibration 
+                                                                           * 15: (From L1 B) Unused
+                                                                           * 16: (From L1 B) Unused
+                                                                           * 17: (From L1 B) Unused
+                                                                           * 18: (From L2.1 B) SNR too low after inversion
+                                                                           * 19: (From L2.1 B) Significant airglow above 300 km
+                                                                           * 20: (From L2.1 B) Line of sight crosses the terminator
+                                                                           * 21: (From L2.1 B) Unused
+                                                                           * 22: (From L2.1 B) Unused
+                                                                           * 23: (From L2.1 B) Unused
+                                                                           * 24: Missing MIGHTI-A file
+                                                                           * 25: Missing MIGHTI-B file
+                                                                           * 26: MIGHTI-A did not sample this altitude
+                                                                           * 27: MIGHTI-B did not sample this altitude
+                                                                           * 28: Spherical asymmetry: A&B VER estimates disagree
+                                                                           * 29: Sample taken before/after time_start/time_stop
+                                                                           * 30: Unused
+                                                                           * 31: Unused
+                                                                           * 32: Unused
+                                                                           * 33: Unknown error (notify MIGHTI team)
+                                                                           
                                                                             
                    * epoch_full      -- TYPE:array(ny,nx),    UNITS:none. The average between the time of the MIGHTI A 
                                                                           and B measurements that contribute to this 
@@ -2404,25 +2700,39 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                    * time_stop       -- TYPE:datetime                     The stop time for defining the reconstruction grid (exclusive)
                    * time_delta      -- TYPE:array(ny,nx),    UNITS:s.    The difference between the time of the MIGHTI
                                                                           A and B measurements that contribute to this 
-                                                                          grid point.
-                   * fringe_amp_A    -- TYPE:array(ny,nc),    UNITS:none. The fringe amplitude measured by MIGHTI A (roughly
-                                                                          proportional to VER)
-                   * fringe_amp_B    -- TYPE:array(ny,nc),    UNITS:none. The fringe amplitude measured by MIGHTI B (roughly
-                                                                          proportional to VER)
-                   * fringe_amp      -- TYPE:array(ny,nc),    UNITS:none. Mean of the above two quantitiies.
+                                                                          grid point. (MIGHTI-B time minus MIGHTI-A time)
+                   * fringe_amp      -- TYPE:array(ny,nx),    UNITS:none. The fringe amplitude, estimated by combining (averaging)
+                                                                          estimates from A and B.
+                   * fringe_amp_error -- TYPE:array(ny,nx),   UNITS:none. Statistical (1-sigma) error in fringe_amp
+                   * fringe_amp_A    -- TYPE:array(ny,nx),    UNITS:none. The fringe amplitude measured by MIGHTI A (roughly
+                                                                          proportional to VER) interpolated to the L2.2 grid
+                   * fringe_amp_B    -- TYPE:array(ny,nx),    UNITS:none. The fringe amplitude measured by MIGHTI B (roughly
+                                                                          proportional to VER) interpolated to the L2.2 grid
                    * fringe_amp_rel_diff -- TYPE:array(ny,nx),UNITS:none. The difference between the fringe amplitude 
                                                                           of the MIGHTI A and B measurements that 
                                                                           contribute to this grid point, divided by the
                                                                           mean. When this is high, it indicates that 
                                                                           spherical asymmetry may be a problem.
-                   * emission_color  -- TYPE:str,                         'red' or 'green'.        
+                   * ver           -- TYPE:array(ny,nx), UNITS:ph/cm^3/s. Volume emission rate, estimated by combining (averaging) 
+                                                                          VER estimates from MIGHTI A and B.
+                   * ver_error     -- TYPE:array(ny,nx), UNITS:ph/cm^3/s. Statistical (1-sigma) error in ver
+                   * ver_A         -- TYPE:array(ny,nx), UNITS:ph/cm^3/s. VER measured by MIGHTI-A, interpolated to the L2.2 grid
+                   * ver_B         -- TYPE:array(ny,nx), UNITS:ph/cm^3/s. VER measured by MIGHTI-B, interpolated to the L2.2 grid
+                   * ver_rel_diff  -- TYPE:array(ny,nx),UNITS:none.       The difference between the VER estimates 
+                                                                          from MIGHTI A and B, divided by the
+                                                                          mean. When this is high, it indicates that 
+                                                                          spherical asymmetry may be a problem.
+                   * wind_quality  -- TYPE:array(ny,nx),                  A number between 0 (bad) and 1 (good) for each grid point
+                   * ver_quality   -- TYPE:array(ny,nx),                  A number between 0 (bad) and 1 (good) for each grid point.
+                   * emission_color  -- TYPE:str,                         'red' or 'green'        
                    * source_files    -- TYPE:list of str,                 All the files used to create the data product,
-                                                                          including the full paths.
-                   * acknowledgement -- TYPE:str,                         The Acknowlegment copied from the L2.1 files
-                   * N_used_A        -- TYPE:array(n_files_A)             How many times each input MIGHTI-A file was used
-                   * N_used_B        -- TYPE:array(n_files_B)             How many times each input MIGHTI-B file was used
+                                                                          including the full paths
+                   * acknowledgement -- TYPE:str,                         The Acknowledgement copied from the L2.1 files
+                   * N_used_A        -- TYPE:array(nyA, n_files_A)        How many times each input MIGHTI-A file was used
+                   * N_used_B        -- TYPE:array(nyB, n_files_B)        How many times each input MIGHTI-B file was used
     '''
-    
+        
+    N_flags = 34 # Update this if the number of quality flags changes.
 
     ################################## Parse Inputs ####################################
     emission_color = L21_A_dict['emission_color']
@@ -2441,10 +2751,16 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     los_wind_A_err =   L21_A_dict['los_wind_error']
     local_az_A =       L21_A_dict['local_az']
     amp_A      =       L21_A_dict['amp']
+    amp_A_err  =       L21_A_dict['amp_error']
+    ver_A      =       L21_A_dict['ver']
+    ver_A_err  =       L21_A_dict['ver_error']
     time_A     =       L21_A_dict['time']
     exp_time_A =       L21_A_dict['exp_time']
     emission_color =   L21_A_dict['emission_color']
     icon_lon_A =       L21_A_dict['icon_lon']
+    wind_quality_A =   L21_A_dict['wind_quality']
+    ver_quality_A =    L21_A_dict['ver_quality']
+    qflags_A   =       L21_A_dict['quality_flags']
     N_alts_A, N_times_A = np.shape(lat_A)
 
     lat_B      =       L21_B_dict['lat']
@@ -2454,10 +2770,16 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     los_wind_B_err =   L21_B_dict['los_wind_error']
     local_az_B =       L21_B_dict['local_az']
     amp_B      =       L21_B_dict['amp']
+    amp_B_err  =       L21_B_dict['amp_error']
+    ver_B      =       L21_B_dict['ver']
+    ver_B_err  =       L21_B_dict['ver_error']
     time_B     =       L21_B_dict['time']
     exp_time_B =       L21_B_dict['exp_time']
     emission_color =   L21_B_dict['emission_color']
     icon_lon_B =       L21_B_dict['icon_lon']
+    wind_quality_B =   L21_B_dict['wind_quality']
+    ver_quality_B =    L21_B_dict['ver_quality']
+    qflags_B   =       L21_B_dict['quality_flags']
     N_alts_B, N_times_B = np.shape(lat_B)
 
     if time_start is None:
@@ -2587,21 +2909,38 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
         dlon = min(dA,dB)
         if np.isinf(dlon): # This should not happen
             print 'WARNING: np.inf in longitude delta definition'
-            raise Exception('WARNING: np.inf in longitude delta definition') # Should this crash, or should we let it fly?
             dlon = dlon_last # Use default value so the processing can continue
+            raise Exception('WARNING: np.inf in longitude delta definition') # Should this crash, or should we let it fly?
         if dlon > dlon_max: # if there are really large gaps (e.g., EUV calibration), then use a reasonable cadence
             dlon = dlon_last
         loni += dlon
         lon_vec.append(loni)
     lon_vec = np.array(lon_vec)
 
+#     # Define altitude grid based on the min and max in the L2.1 data (i.e., don't throw out data)
+#     # Define altitude resolution based upon the resolution of L2.1 data
+#     alt_min = min(alt_A.min(), alt_B.min())
+#     alt_max = max(alt_A.max(), alt_B.max())
+#     nalts = max(np.shape(alt_A)[0], np.shape(alt_B)[0])
+#     alt = np.linspace(alt_min, alt_max, nalts)
+#     alt_res = alt[1] - alt[0]
+
     # Define altitude grid based on the min and max in the L2.1 data (i.e., don't throw out data)
-    # Define altitude resolution based upon the resolution of L2.1 data
+    # Define altitude resolution based upon the resolution of L2.1 data, accounting for the fact
+    # that resolution changes with altitude (from ~2.9 to ~2.2 km). But base this all off of the data,
+    # so that automatic account is taken for binning, spacecraft pointing, etc. If we want to pre-define
+    # an altitude grid so that the grid is the same from day to day, that's fine, but that seems more
+    # like a level 3 activity. Level 2 should respect the natural measured grid as much as possible.
     alt_min = min(alt_A.min(), alt_B.min())
     alt_max = max(alt_A.max(), alt_B.max())
-    nalts = max(np.shape(alt_A)[0], np.shape(alt_B)[0])
-    alt = np.linspace(alt_min, alt_max, nalts)
-    alt_res = alt[1] - alt[0]
+    dalt_A = np.diff(alt_A, axis=0)
+    dalt_B = np.diff(alt_B, axis=0)
+    dalt0 = min(dalt_A[0,:].min(),  dalt_B[0,:].min()) # highest resolution at bottom (~2.9 km)
+    dalt1 = min(dalt_A[-1,:].min(), dalt_B[-1,:].min()) # highest resolution at top (~2.2 km)
+    daltm = np.mean([dalt0, dalt1]) # mean resolution (to compute number of altitude bins needed)
+    nalts = int(np.ceil((alt_max-alt_min)/daltm))
+    dalt = np.linspace(dalt0, dalt1, nalts)
+    alt = np.concatenate(([alt_min], alt_min + np.cumsum(dalt)))
 
     # Create grid for longitude (since we might change how this is done in the future)
     lon,_ = np.meshgrid(lon_vec, alt)
@@ -2617,12 +2956,13 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     # the sample grid.
     # This proceeds in steps:
     # 1) Setup
-    # 2) Error flagging
+    # 2) Quality flagging
     # 3) Interpolation
     # 4) Inverting (i.e., rotating LoS winds to cardinal)
-    # 5) Final error flagging
-    # 6) Trimming data points which correspond to previous or next days.
-
+    # 5) More quality flagging
+    # 6) Quality factor calculation
+    # 7) Trimming data points which correspond to previous or next days
+    
     # Output variables, which will be defined on the reconstruction grid
     U = np.nan*np.zeros((N_alts, N_lons))                # zonal wind
     V = np.nan*np.zeros((N_alts, N_lons))                # meridional wind
@@ -2631,17 +2971,25 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     lat = np.nan*np.zeros((N_alts, N_lons))              # latitude
     time = np.empty((N_alts, N_lons), dtype=object)      # time ascribed to L2.2 data point (as datetime objects)
     time_delta = np.nan*np.zeros((N_alts, N_lons))       # difference between A and B times used (seconds)
-    ver_A = np.nan*np.zeros((N_alts, N_lons))            # fringe amplitude from A (related to VER)
-    ver_B = np.nan*np.zeros((N_alts, N_lons))            # fringe amplitude from B (related to VER)
-    ver   = np.nan*np.zeros((N_alts, N_lons))            # fringe amplitude (mean of A and B)
+    ver_intp_A = np.nan*np.zeros((N_alts, N_lons))       # VER from MIGHTI-A interpolated to grid
+    ver_intp_B = np.nan*np.zeros((N_alts, N_lons))       # VER from MIGHTI-B interpolated to grid
+    ver   = np.nan*np.zeros((N_alts, N_lons))            # combined VER (mean of A and B)
+    ver_err = np.nan*np.zeros((N_alts, N_lons))          # VER uncertainty
     ver_rel_diff = np.nan*np.zeros((N_alts, N_lons))     # relative difference in A and B VER
-    error_flags = np.zeros((N_alts, N_lons, 9), dtype=bool)      # Error flags, one set per grid point. See above for definition.
+    amp_intp_A = np.nan*np.zeros((N_alts, N_lons))       # fringe amplitude from A (related to VER) interpolated to grid
+    amp_intp_B = np.nan*np.zeros((N_alts, N_lons))       # fringe amplitude from B (related to VER) interpolated to grid
+    amp   = np.nan*np.zeros((N_alts, N_lons))            # combined fringe amplitude (mean of A and B)
+    amp_err = np.nan*np.zeros((N_alts, N_lons))          # fringe amplitude uncertainty
+    amp_rel_diff = np.nan*np.zeros((N_alts, N_lons))     # relative difference in A and B fringe amplitudes
+    wind_quality = np.zeros((N_alts, N_lons))            # Wind quality factor, in (0, 1.0)
+    ver_quality  = np.zeros((N_alts, N_lons))            # VER quality factor, in (0, 1.0)
+    qflags = np.zeros((N_alts, N_lons, N_flags), dtype=bool) # Quality flags, one set per grid point. See above for definition.
     N_used_A = np.zeros((N_alts_A, N_times_A))           # Number of times each L2.1 MIGHTI-A file was used
     N_used_B = np.zeros((N_alts_B, N_times_B))           # Same for MIGHTI-B
-
+    
     # Loop over the reconstruction altitudes
     for i in range(N_alts):
-
+    
         alt_pt = alt[i]
         # Create a list of longitudes, one per A and B file, which have been
         # interpolated to this altitude.
@@ -2664,44 +3012,46 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             kB1 = kB0 + 1
 
 
-
-            ##################### Error Flagging ##########################
-            # Never extrapolate in longitude. This error should not normally happen, and 
-            # probably indicates an entire missing orbit or an extended calibration routine.
+            ##################### Initial Quality Flagging ##########################
+            # Never extrapolate in longitude. If this flag is raised, it probably indicates an 
+            # extended calibration routine like the EUV lunar cal that crossed a day boundary.
             # Mark as missing, and continue.
             if kA0 < 0 or kA1 >= N_times_A or kB0 < 0 or kB1 >= N_times_B:
                 if kA0 < 0 or kA1 >= N_times_A:
-                    error_flags[i,k,0] = 1
+                    qflags[i,k,24] = 1
                 if kB0 < 0 or kB1 >= N_times_B:
-                    error_flags[i,k,1] = 1
+                    qflags[i,k,25] = 1
                 continue
 
             # Determine if there are "missing" files by checking the time between the straddling
             # files we just found and comparing to the exposure time of the files.
-            # If so, throw error flag and continue.
-            # Note that it's the exposure time of the first file that matters here.
-            missing_A = (time_A[kA1] - time_A[kA0]).total_seconds() > 1.5*exp_time_A[kA0]
-            missing_B = (time_B[kB1] - time_B[kB0]).total_seconds() > 1.5*exp_time_B[kB0]
+            # If so, throw quality flag and continue.
+            # Note that it's the greater of the previous and next exposure times that matter
+            exp_time_A_thresh = 1.1 * max(exp_time_A[kA0], exp_time_A[kA1]) # Extra 10% included for buffer
+            exp_time_B_thresh = 1.1 * max(exp_time_B[kB0], exp_time_B[kB1])
+            missing_A = (time_A[kA1] - time_A[kA0]).total_seconds() > exp_time_A_thresh
+            missing_B = (time_B[kB1] - time_B[kB0]).total_seconds() > exp_time_B_thresh
             if missing_A or missing_B:
                 if missing_A:
-                    error_flags[i,k,0] = 1
+                    qflags[i,k,24] = 1
                 if missing_B:
-                    error_flags[i,k,1] = 1
+                    qflags[i,k,25] = 1
                 continue
 
             # If the desired altitude is outside the range of altitudes sampled by the 
-            # instruments, throw error flag and continue.
+            # instruments, throw quality flag and continue. For example, this flag is 
+            # raised at 90 km if MIGHTI-B's lowest tangent point is 95 km.
             # For this, allow some wiggle room to handle case where MIGHTI A samples
             # at 90.01 km but we wanted 90.00 km.
-            altmin_A = max(min(alt_A[:,kA0]), min(alt_A[:,kA1])) - alt_res
-            altmin_B = max(min(alt_B[:,kB0]), min(alt_B[:,kB1])) - alt_res
-            altmax_A = min(max(alt_A[:,kA0]), max(alt_A[:,kA1])) + alt_res
-            altmax_B = min(max(alt_B[:,kB0]), max(alt_B[:,kB1])) + alt_res
+            altmin_A = max(min(alt_A[:,kA0]), min(alt_A[:,kA1])) - (alt[1]  - alt[0])
+            altmin_B = max(min(alt_B[:,kB0]), min(alt_B[:,kB1])) - (alt[1]  - alt[0])
+            altmax_A = min(max(alt_A[:,kA0]), max(alt_A[:,kA1])) + (alt[-1] - alt[-2])
+            altmax_B = min(max(alt_B[:,kB0]), max(alt_B[:,kB1])) + (alt[-1] - alt[-2])
             if alt_pt > min(altmax_A, altmax_B) or alt_pt < max(altmin_A, altmin_B):
                 if alt_pt > altmax_A or alt_pt < altmin_A:
-                    error_flags[i,k,4] = 1
+                    qflags[i,k,26] = 1
                 if alt_pt > altmax_B or alt_pt < altmin_B:
-                    error_flags[i,k,5] = 1
+                    qflags[i,k,27] = 1
                 continue
 
 
@@ -2714,6 +3064,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             #   - lat      (A and B, to be averaged)
             #   - time     (A and B, to be averaged and subtracted)
             #   - ver      (A and B, to be compared)
+            #   - quality factors (A and B, to be used to compute L2.2 quality factors)
+            #   - qflags   (A and B, to be passed through)
 
             def bilinear_interp(lon_AB, alt_AB, val, prop_err = False, valerr = None):
                 '''
@@ -2755,20 +3107,30 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                                             prop_err = True, yerr = [val_0_err, val_1_err])
                     return val_pt, val_pt_err
 
-
+            # Interpolate A&B los_wind, temperature, lat, az, VER, etc. to this grid point
             los_wind_A_pt, los_wind_A_pt_err = \
                             bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], los_wind_A[:,kA0:kA1+1],
                                             prop_err = True, valerr = los_wind_A_err[:,kA0:kA1+1])
             los_wind_B_pt, los_wind_B_pt_err = \
                             bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], los_wind_B[:,kB0:kB1+1],
                                             prop_err = True, valerr = los_wind_B_err[:,kB0:kB1+1])
+            ver_A_pt, ver_A_pt_err = \
+                            bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], ver_A[:,kA0:kA1+1],
+                                            prop_err = True, valerr = ver_A_err[:,kA0:kA1+1])
+            ver_B_pt, ver_B_pt_err = \
+                            bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], ver_B[:,kB0:kB1+1],
+                                            prop_err = True, valerr = ver_B_err[:,kB0:kB1+1])
+            amp_A_pt, amp_A_pt_err = \
+                            bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], amp_A[:,kA0:kA1+1],
+                                            prop_err = True, valerr = amp_A_err[:,kA0:kA1+1])
+            amp_B_pt, amp_B_pt_err = \
+                            bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], amp_B[:,kB0:kB1+1],
+                                            prop_err = True, valerr = amp_B_err[:,kB0:kB1+1])
             local_az_A_pt = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], local_az_A[:,kA0:kA1+1])
             local_az_B_pt = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], local_az_B[:,kB0:kB1+1])
             lat_A_pt      = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], lat_A     [:,kA0:kA1+1])
             lat_B_pt      = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], lat_B     [:,kB0:kB1+1])
-            ver_A_pt      = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], amp_A     [:,kA0:kA1+1])
-            ver_B_pt      = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], amp_B     [:,kB0:kB1+1])
-            # Record files used
+            # Record which files were used
             nA = np.tile(np.arange(N_alts_A),(2,1)).T.astype(float)
             nB = np.tile(np.arange(N_alts_B),(2,1)).T.astype(float)
             idx_A = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], nA)
@@ -2779,7 +3141,18 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             idx_B_1 = int(np.ceil(idx_B))
             N_used_A[idx_A_0:idx_A_1+1, kA0:kA1+1] += 1
             N_used_B[idx_B_0:idx_B_1+1, kB0:kB1+1] += 1
-
+            # "Interpolate" quality factor and flags from A&B to this point.
+            wind_quality_A_pt = wind_quality_A[idx_A_0:idx_A_1+1, kA0:kA1+1].max() # quality dominated by worst point
+            wind_quality_B_pt = wind_quality_B[idx_B_0:idx_B_1+1, kB0:kB1+1].max()
+            ver_quality_A_pt = ver_quality_A[idx_A_0:idx_A_1+1, kA0:kA1+1].max()
+            ver_quality_B_pt = ver_quality_B[idx_B_0:idx_B_1+1, kB0:kB1+1].max()
+            N_flags_L21 = np.shape(qflags_A)[2] # Number of flags at L2.1 (assume same for A and B)
+            qflags_A_pt = np.zeros(N_flags_L21) # A 1D array of flags from A, "interpolated" to this grid point
+            qflags_B_pt = np.zeros(N_flags_L21) # A 1D array of flags from B, "interpolated" to this grid point
+            for nflag in range(N_flags_L21):
+                qflags_A_pt[nflag] = qflags_A[idx_A_0:idx_A_1+1, kA0:kA1+1, nflag].max() # quality dominated by worst point
+                qflags_B_pt[nflag] = qflags_B[idx_B_0:idx_B_1+1, kB0:kB1+1, nflag].max()
+            
             # Interpolate time, which is more complicated because it's a datetime object
             t_A_0 = time_A[kA0]
             t_A_1 = time_A[kA1]
@@ -2797,16 +3170,15 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             toff_B = interpolate_linear([lon_B_0, lon_B_1], [0, tgap_B], lon_pt, extrapolation='none')
             t_A = t_A_0 + timedelta(seconds=(toff_A))
             t_B = t_B_0 + timedelta(seconds=(toff_B))
-
+            
             # Calculate time difference and verify it is small. If it's large,
-            # this implies something went wrong with the A/B matchup (i.e., 
-            # longitude unwrapping).
+            # this implies something went wrong with the A/B matchup (i.e., longitude unwrapping).
             time_delta_pt = (t_B - t_A).total_seconds()
             time_pt = t_A + timedelta(seconds=time_delta_pt/2.)
             assert abs(time_delta_pt) < t_diff_AB, \
                    "A/B match-up using files %.0f sec apart. Max allowed is %.0f sec" % (time_delta_pt, t_diff_AB)
-
-
+            
+            
             ############################ Inversion #############################
             # Coordinate transformation of winds from lines of sight to cardinal directions
             # Construct LoS winds in vector y
@@ -2826,26 +3198,14 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             Sig_x = invA.dot(Sig_y.dot(invA.T)) # standard linear error propagation
             u_err = np.sqrt(Sig_x[0,0])
             v_err = np.sqrt(Sig_x[1,1])
-
-
-            ###################### Final error flagging #######################            
-
-            # Check if the interpolated L2.1 data were np.nan, which would have to 
-            # indicate weak signal (or is there another reason they might be masked?)
-            if np.isnan(los_wind_A_pt):
-                error_flags[i,k,2] = 1
-            if np.isnan(los_wind_B_pt):
-                error_flags[i,k,3] = 1
-
-            # Check spherical symmetry
-            ver_rel_diff_pt = abs(ver_A_pt - ver_B_pt)/np.mean([ver_A_pt,ver_B_pt])
-            if ver_rel_diff_pt > sph_asym_thresh:
-                error_flags[i,k,6] = 1
-                # Should we nan the data too?
-
-            # Unknown error - this should never happen
-            if (np.isnan(u) or np.isnan(v)) and all(error_flags[i,k,:] == 0): # Unknown error
-                error_flags[i,k,-1] = 1
+            # Now "invert" VER (simply average the two, and propagate uncertainty)
+            ver_pt = (ver_A_pt + ver_B_pt)/2.
+            ver_err_pt = np.sqrt(ver_A_pt_err**2 + ver_B_pt_err**2)/2.
+            ver_rel_diff_pt = abs(ver_A_pt - ver_B_pt)/ver_pt # this is used for quality flagging
+            # And same for fringe amplitude
+            amp_pt = (amp_A_pt + amp_B_pt)/2.
+            amp_err_pt = np.sqrt(amp_A_pt_err**2 + amp_B_pt_err**2)/2.
+            amp_rel_diff_pt = abs(amp_A_pt - amp_B_pt)/amp_pt # this is used for quality flagging
 
             # Fill in all the relevant variables at this grid point
             U[i,k] = u
@@ -2855,10 +3215,57 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             lat[i,k] = (lat_A_pt + lat_B_pt)/2
             time[i,k] = time_pt
             time_delta[i,k] = time_delta_pt
-            ver_A[i,k] = ver_A_pt
-            ver_B[i,k] = ver_B_pt
-            ver[i,k]   = (ver_A_pt + ver_B_pt)/2.
-            ver_rel_diff[i,k] = ver_rel_diff_pt
+            ver_intp_A[i,k] = ver_A_pt
+            ver_intp_B[i,k] = ver_B_pt
+            ver[i,k]   = ver_pt
+            ver_err[i,k] = ver_err_pt
+            ver_rel_diff[i,k] = ver_rel_diff_pt    
+            amp_intp_A[i,k] = amp_A_pt
+            amp_intp_B[i,k] = amp_B_pt
+            amp[i,k]   = amp_pt
+            amp_err[i,k] = amp_err_pt
+            amp_rel_diff[i,k] = amp_rel_diff_pt            
+            
+            ###################### More quality flagging #######################            
+            # Pass through all L2.1 flags
+            qflags[i,k,:N_flags_L21] = qflags_A_pt
+            qflags[i,k,N_flags_L21:2*N_flags_L21] = qflags_B_pt
+
+            # Check spherical symmetry
+            if ver_rel_diff_pt > sph_asym_thresh: # Note this is comparing VER not fringe amplitude
+                qflags[i,k,28] = 1
+
+            # Unknown error - this should never happen
+            if (np.isnan(u) or np.isnan(v)) and all(qflags[i,k,:] == 0): # Unknown error
+                qflags[i,k,-1] = 1
+                
+            #################### Quality factor calculation ###################
+            # Construct a list of ratings, and take the min
+            wind_ratings = [1.0] # start with 1.0. If there are no dings, the quality factor is 1.0
+            ver_ratings = [1.0]
+            # Note that this L2.2 quality code only considers the newly-introduced L2.2 quality flags. It is up
+            # to the L1 and L2.1 code to adjust the quality factor based on its flags. Of course, this L2.2 quality 
+            # code considers the L2.1 and L1 (via the L2.1) quality factors as "ceilings" for its factor.
+            # Missing MIGHTI-A or MIGHTI-B files: automatic 0
+            if any(qflags[i,k,[24,25]]):
+                wind_ratings.append(0.0)
+                ver_ratings.append(0.0)
+            # Didn't sample this altitude: automatic 0
+            if any(qflags[i,k,[26,27]]):
+                wind_ratings.append(0.0)
+                ver_ratings.append(0.0)
+            # Spherical asymmetry: 0.5 for wind and VER
+            if qflags[i,k,28]:
+                wind_ratings.append(0.5)
+                ver_ratings.append(0.5)
+            # Quality flag for time_start/time_stop will be handled below
+            # Add L2.1 quality factors and determine final rating.
+            wind_ratings.append(wind_quality_A_pt)
+            wind_ratings.append(wind_quality_B_pt)
+            ver_ratings.append(ver_quality_A_pt)
+            ver_ratings.append(ver_quality_B_pt)
+            wind_quality[i,k] = min(wind_ratings)
+            ver_quality[i,k] = min(ver_ratings)
 
 
     ########### Final trimming based on time. Don't keep grid points outside requested times. ##########
@@ -2891,19 +3298,15 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     for i in range(N_alts):
         for k in range(N_lons):
             if time[i,k] is not None and ((time[i,k] < time_start) or (time[i,k] >= time_stop)):
-                error_flags[i,k,7] = 1
-                U[i,k] = np.nan
-                V[i,k] = np.nan
-                U_err[i,k] = np.nan
-                V_err[i,k] = np.nan
-                lat[i,k] = np.nan
+                qflags[i,k,29] = 1
+                wind_quality[i,k] = 0.0
+                ver_quality[i,k] = 0.0
                 time[i,k] = None
-                time_delta[i,k] = np.nan
-                ver_A[i,k] = np.nan
-                ver_B[i,k] = np.nan
-                ver[i,k]   = np.nan
-                ver_rel_diff[i,k] = np.nan
-
+                # All of the variables which should get nan:
+                for v in [U, V, U_err, V_err, lat, time_delta, ver_intp_A, ver_intp_B, ver, ver_err, ver_rel_diff,
+                          amp_intp_A, amp_intp_B, amp, amp_rel_diff]:
+                    v[i,k] = np.nan
+    
     # Determine the "average" time per column to be reported in file. Note that this must be done
     # after the step above, or else some of these times might end up being outside the times 
     # requested (e.g., in previous or next day), and that would confuse users, and might lead
@@ -2919,6 +3322,15 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
 
     assert all(np.diff([x for x in epoch if x is not None]) > timedelta(seconds=0.0)), \
            "Epoch is not monotonically increasing."
+    
+    # Make sure that all data with quality 0 are masked.
+    # I think this code is redundant, but just to be conservative:
+    i = wind_quality == 0.0
+    for v in [U, V, U_err, V_err]:
+        v[i] = np.nan
+    i = ver_quality == 0.0
+    for v in [ver, amp]:
+        v[i] = np.nan    
 
     ############## Output section ##################
     # Note that the before/after trimming is done here.
@@ -2931,20 +3343,27 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     L22_dict['v']                   = V    [:,k0:k1]
     L22_dict['u_error']             = U_err[:,k0:k1]
     L22_dict['v_error']             = V_err[:,k0:k1]
-    L22_dict['error_flags']         = error_flags[:,k0:k1,:]
+    L22_dict['quality_flags']       = qflags[:,k0:k1,:]
     L22_dict['epoch_full']          = time [:,k0:k1] # 2D
     L22_dict['epoch']               = epoch[k0:k1] # 1D
     L22_dict['time_delta']          = time_delta[:,k0:k1]
     L22_dict['time_start']          = time_start
     L22_dict['time_stop']           = time_stop
-    L22_dict['fringe_amp_A']        = ver_A[:,k0:k1]
-    L22_dict['fringe_amp_B']        = ver_B[:,k0:k1]
-    L22_dict['fringe_amp']          = ver  [:,k0:k1]
-    L22_dict['fringe_amp_rel_diff'] = ver_rel_diff[:,k0:k1]
+    L22_dict['fringe_amp']          = amp[:,k0:k1]
+    L22_dict['fringe_amp_error']    = amp_err[:,k0:k1]
+    L22_dict['fringe_amp_A']        = amp_intp_A[:,k0:k1]
+    L22_dict['fringe_amp_B']        = amp_intp_B[:,k0:k1]
+    L22_dict['fringe_amp_rel_diff'] = amp_rel_diff[:,k0:k1]
+    L22_dict['ver']                 = ver[:,k0:k1]
+    L22_dict['ver_error']           = ver_err[:,k0:k1]
+    L22_dict['ver_A']               = ver_intp_A[:,k0:k1]
+    L22_dict['ver_B']               = ver_intp_B[:,k0:k1]
+    L22_dict['ver_rel_diff']        = ver_rel_diff[:,k0:k1]
     L22_dict['emission_color']      = emission_color
     L22_dict['source_files']        = np.concatenate((L21_A_dict['source_files'], L21_B_dict['source_files']))
     L22_dict['acknowledgement']     = L21_A_dict['acknowledgement']
-    L22_dict['wind_quality']        = np.ones((N_alts,k1-k0)) # TODO
+    L22_dict['wind_quality']        = wind_quality[:,k0:k1]
+    L22_dict['ver_quality']         = ver_quality [:,k0:k1]
     L22_dict['N_used_A']            = N_used_A
     L22_dict['N_used_B']            = N_used_B
     
@@ -2978,7 +3397,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
     '''
     
     L22_dict = copy.deepcopy(L22_dict) # because netCDF4 actually modifies its input
-   
+    
     data_version_major = software_version_major # enforced as per Data Product Conventions Document
     
     #################### Compile variables to write in file ######################
@@ -3075,16 +3494,15 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         prefix = 'ICON_L2_MIGHTI_%s' % (L22_dict['emission_color'].capitalize()) # variable prefix
         var_alt_name = '%s_Altitude'%prefix
         
-        ny,nx = np.shape(L22_dict['u'])
+        ny,nx,nflags = np.shape(L22_dict['quality_flags'])
         ncfile.createDimension('Epoch',nx)
         ncfile.createDimension(var_alt_name, ny)
-        ncfile.createDimension('N_Flags', np.shape(L22_dict['error_flags'])[2])
+        ncfile.createDimension('N_Flags', nflags)
         
-
 
         ################################## Variables #########################################
         # Some variables are transposed to satisfy the ICON requirement that EPOCH is the first dimension
-        
+
         ######### Timing Variables #########
         # Two timing variables are used: The simple one which is 1 dimensional, and the 
         # more correct 2 dimensional one, since the time can vary slightly along altitude,
@@ -3128,8 +3546,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               notes="See the notes for the variable Epoch. This variable is the same as Epoch but contains a second dimension, "
                               "which captures the small (30-60 second) variation of time with altitude. For most applications this is expected to "
                               "be negligible, and Epoch can be used instead of this variable. Also see the variable Time_Delta, which contains "
-                              "the difference between the MIGHTI-A and MIGHTI-B times that contributed to each point. (This variable "
-                              "contains the average)."
+                              "the difference between the MIGHTI-A and MIGHTI-B times that contributed to each point. Epoch_Full "
+                              "contains the average time."
                               )
         
         # Human readable versions of those two variables
@@ -3148,30 +3566,30 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               notes="This variable is the same as Epoch but is formatted as a human-readable string. Missing "
                               "grid points are labeled with empty strings.")       
         
-        utctime_full = np.empty((ny,nx), dtype='S23')
-        for i in range(ny):
-            for j in range(nx):
-                t = L22_dict['epoch_full'][i,j]
-                if t is None:
-                    utctime_full[i,j] = ''
-                else:
-                    utctime_full[i,j] = t.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]
-        #utctime_full = np.array(utctime_full)
-        var = _create_variable(ncfile, '%s_UTC_Time_Full'%prefix, utctime_full.T, 
-                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
-                              format_nc=str, format_fortran='A', desc='Sample time, average of A and B measurements.', 
-                              display_type='image', field_name='Time', fill_value=None, label_axis='Time', bin_location=0.5,
-                              units='', valid_min=None, valid_max=None, var_type='support_data', chunk_sizes=[nx,ny],
-                              notes="This variable is the same as Epoch_Full but is formatted as a human-readable string. Missing "
-                              "grid points are labeled with empty strings.")       
-        
+#         utctime_full = np.empty((ny,nx), dtype='S23')
+#         for i in range(ny):
+#             for j in range(nx):
+#                 t = L22_dict['epoch_full'][i,j]
+#                 if t is None:
+#                     utctime_full[i,j] = ''
+#                 else:
+#                     utctime_full[i,j] = t.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3]
+#         #utctime_full = np.array(utctime_full)
+#         var = _create_variable(ncfile, '%s_UTC_Time_Full'%prefix, utctime_full.T, 
+#                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+#                               format_nc=str, format_fortran='A', desc='Sample time, average of A and B measurements.', 
+#                               display_type='image', field_name='Time', fill_value=None, label_axis='Time', bin_location=0.5,
+#                               units='', valid_min=None, valid_max=None, var_type='support_data', chunk_sizes=[nx,ny],
+#                               notes="This variable is the same as Epoch_Full but is formatted as a human-readable string. Missing "
+#                               "grid points are labeled with empty strings.")       
+
         ######### Data Variables #########
-        
+
         # Zonal Wind
         var = _create_variable(ncfile, '%s_Zonal_Wind'%prefix, L22_dict['u'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Zonal component of the horizontal wind. Positive Eastward.', 
-                              display_type='image', field_name='Zonal Wind', fill_value=None, label_axis='', bin_location=0.5,
+                              display_type='image', field_name='Zonal Wind', fill_value=None, label_axis='Zonal Wind', bin_location=0.5,
                               units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
                               notes="The zonal (positive eastward) and meridional (positive northward) winds are the primary "
                               "data product in this file. They are defined on a grid with dimensions of time and altitude, "
@@ -3183,12 +3601,12 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               "over the 5-8 minutes between the MIGHTI-A and B measurements used for each point. See Harding et "
                               "al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."
                               )
-        
+
         # Meridional Wind
         var = _create_variable(ncfile, '%s_Meridional_Wind'%prefix, L22_dict['v'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Meridional component of the horizontal wind. Positive Northward.', 
-                              display_type='image', field_name='Meridional Wind', fill_value=None, label_axis='', bin_location=0.5,
+                              display_type='image', field_name='Meridional Wind', fill_value=None, label_axis='Merid Wind', bin_location=0.5,
                               units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
                               notes="The zonal (positive eastward) and meridional (positive northward) winds are the primary "
                               "data product in this file. They are defined on a grid with dimensions of time and altitude, "
@@ -3200,12 +3618,12 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               "over the 5-8 minutes between the MIGHTI-A and B measurements used for each point. See Harding et "
                               "al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."
                               )    
-                                      
+
         # Zonal Wind Error
         var = _create_variable(ncfile, '%s_Zonal_Wind_Error'%prefix, L22_dict['u_error'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Error in the zonal wind estimate.', 
-                              display_type='image', field_name='Zonal Wind Error', fill_value=None, label_axis='', bin_location=0.5,
+                              display_type='image', field_name='Zonal Wind Error', fill_value=None, label_axis='Z Wind Err', bin_location=0.5,
                               units='m/s', valid_min=0.0, valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
                               notes="The statistical (1-sigma) error in the zonal wind, propagated from the error in the "
                               "L2.1 (line-of-sight wind) files. This is usually dominated by shot noise in the detectors, but "
@@ -3214,12 +3632,12 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               "the spacecraft velocity from the observed velocity). Other systematic errors or biases may exist "
                               "(e.g., the effect of gradients along the line of sight) which are not included in this variable."
                               )
-        
+
         # Meridional Wind Error
         var = _create_variable(ncfile, '%s_Meridional_Wind_Error'%prefix, L22_dict['v_error'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Error in the meridional wind estimate.', 
-                              display_type='image', field_name='Meridional Wind Error', fill_value=None, label_axis='', bin_location=0.5,
+                              display_type='image', field_name='Meridional Wind Error', fill_value=None, label_axis='M Wind Err', bin_location=0.5,
                               units='m/s', valid_min=0.0, valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
                               notes="The statistical (1-sigma) error in the meridional wind, propagated from the error in the "
                               "L2.1 (line-of-sight wind) files. This is usually dominated by shot noise in the detectors, but "
@@ -3228,27 +3646,28 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               "the spacecraft velocity from the observed velocity). Other systematic errors or biases may exist "
                               "(e.g., the effect of gradients along the line of sight) which are not included in this variable."
                               ) 
-        
-        # Quality code
+
+        # Quality factor
         var = _create_variable(ncfile, '%s_Wind_Quality'%prefix, L22_dict['wind_quality'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='A quantification of the quality, from 0 (Bad) to 1 (Good)', 
-                              display_type='image', field_name='Wind Quality', fill_value=None, label_axis='Quality', bin_location=0.5,
-                              units='arb', valid_min=0.0, valid_max=1.0, var_type='data', chunk_sizes=[nx,ny],
-                              notes=["NOT YET IMPLEMENTED",
-                                     "While the intent is that the Wind_Error variable accurately characterizes the statistical "
-                                     "error in the wind data, it is possible that systematic errors are present, or that the statistical error "
-                                     "estimation is not accurate. If it is suspected that this is the case, the quality will be less than 1.0. If "
-                                     "the data are definitely unusable, the the quality will be 0.0 and the sample will be masked. Users should "
-                                     "exercise caution when the quality is less than 1.0."
+                              display_type='image', field_name='Wind Quality', fill_value=None, label_axis='Wind Qual', bin_location=0.5,
+                              units='', valid_min=0.0, valid_max=1.0, var_type='data', chunk_sizes=[nx,ny],
+                              notes=["A quantification of the overall quality of the wind data. "
+                              "While the intent is that the XXX_Wind_Error variable accurately characterizes the statistical "
+                              "error in the wind data, it is possible that systematic errors are present, or that the statistical error "
+                              "estimation is not accurate. If this is suspected to be the case, the quality will be less than 1.0. If "
+                              "the data are definitely unusable, the the quality will be 0.0 and the sample will be masked. Users should "
+                              "exercise caution when the quality is less than 1.0.",
+                              "Currently, the quality can take values of 0 (Bad), 0.5 (Caution), or 1 (Good)."
                                      ])
-        
-         # Fringe amplitude (combining MIGHTI-A and MIGHTI-B)
+
+        # Fringe amplitude (combining MIGHTI-A and MIGHTI-B)
         var = _create_variable(ncfile, '%s_Fringe_Amplitude'%prefix, L22_dict['fringe_amp'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Fringe Amplitude', 
-                              display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='', bin_location=0.5,
-                              units='arb', valid_min=-1e30, valid_max=1e30, var_type='data', chunk_sizes=[nx,ny],
+                              display_type='image', field_name='Fringe Amplitude', fill_value=None, label_axis='Fringe Amp', bin_location=0.5,
+                              units='arb', valid_min=0, valid_max=1e30, var_type='data', chunk_sizes=[nx,ny],
                               notes="An approximate volume emission rate (VER) profile in arbitrary units, estimated by combining "
                               "MIGHTI-A and MIGHTI-B data. Technically this is not the VER, but rather the amplitude of the fringes, "
                               "which has a dependence on thermospheric temperature and background emission. Thus, it does not truly "
@@ -3257,28 +3676,82 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               "Fringe_Amplitude_A, and Fringe_Amplitude_B."
                               )
         
+        # Fringe amplitude error
+        var = _create_variable(ncfile, '%s_Fringe_Amplitude_Error'%prefix, L22_dict['fringe_amp_error'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='Error in the fringe amplitude estimate', 
+                              display_type='image', field_name='Fringe Amplitude Error', fill_value=None, label_axis='Amp Error', bin_location=0.5,
+                              units='arb', valid_min=0, valid_max=1e30, var_type='data', chunk_sizes=[nx,ny],
+                              notes="The statistical (1-sigma) error in the fringe amplitude estimate, propagated from error in the "
+                              "MIGHTI-A and MIGHTI-B inversions. The units are arbitrary, as the fringe amplitudes are not absolutely "
+                              "calibrated. Systematic errors, such as those arising from airglow gradients or cross-calibration, are not "
+                              "included in this variable, but are probably the dominant source of total error."
+                              )
         
+        # VER (combining MIGHTI-A and MIGHTI-B)
+        var = _create_variable(ncfile, '%s_Relative_VER'%prefix, L22_dict['ver'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='Relative volume emission rate', 
+                              display_type='image', field_name='Relative VER', fill_value=None, label_axis='Rel VER', bin_location=0.5,
+                              units='ph/cm^3/s', valid_min=0, valid_max=1e30, var_type='data', chunk_sizes=[nx,ny],
+                              notes= "The volume emission rate (VER) obtained by scaling the fringe amplitude by a calibration factor. "
+                               "Pre-flight calibrations and on-orbit comparisons with ground-based instruments are used to determine the "
+                               "best possible calibration. However, because this calibration is uncertain, and because the fringe "
+                               "amplitude has a small dependence on atmospheric temperature, caution should be exercised when absolute "
+                               "calibration is required, or when comparisons are being made between samples at different temperatures. "
+                               "Please contact the MIGHTI team before performing any studies that require absolute calibration. "
+                               "The statistical (1-sigma) error for this variable is provided in "
+                               "the variable XXX_Relative_VER_Error, though it is expected that systematic calibration errors dominate "
+                               "the total error."
+                              )
         
+        # VER Error
+        var = _create_variable(ncfile, '%s_Relative_VER_Error'%prefix, L22_dict['ver_error'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='Error in VER estimate (statistical)', 
+                              display_type='image', field_name='Relative VER Error', fill_value=None, label_axis='VER Err', bin_location=0.5,
+                              units='ph/cm^3/s', valid_min=0, valid_max=1e30, var_type='data', chunk_sizes=[nx,ny],
+                              notes= "The statistical (1-sigma) error in the relative VER estimate, propagated from error in the "
+                              "MIGHTI-A and MIGHTI-B inversions. This error arises mostly from shot noise. Importantly, it is "
+                              "expected that systematic errors (e.g., calibration errors) dominate the total error, but they are "
+                              "not included in this variable."
+                              )
+        
+        # Quality factor for VER/Fringe amplitude
+        var = _create_variable(ncfile, '%s_VER_Quality'%prefix, L22_dict['ver_quality'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='A quantification of the quality, from 0 (Bad) to 1 (Good)', 
+                              display_type='image', field_name='VER Quality', fill_value=None, label_axis='VER Qual', bin_location=0.5,
+                              units='', valid_min=0.0, valid_max=1.0, var_type='data', chunk_sizes=[nx,ny],
+                              notes=["A quantification of the overall quality of the VER data. "
+                              "While the intent is that the XXX_VER_Error variable accurately characterizes the statistical "
+                              "error in the VER data, it is possible that systematic errors are present, or that the statistical error "
+                              "estimation is not accurate. If it is suspected that this is the case, the quality will be less than 1.0. If "
+                              "the data are definitely unusable, the the quality will be 0.0 and the sample will be masked. Users should "
+                              "exercise caution when the quality is less than 1.0.",
+                              "Currently, the quality can take values of 0 (Bad), 0.5 (Caution), or 1 (Good)."
+                               ])        
+
         ######### Data Location Variables #########
-        
+
         # Altitude
         val = L22_dict['alt']
         var = _create_variable(ncfile, var_alt_name, val, 
                               dimensions=(var_alt_name), depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='WGS84 altitude of each wind sample', 
-                              display_type='image', field_name='Altitude', fill_value=None, label_axis='', bin_location=0.5,
+                              display_type='image', field_name='Altitude', fill_value=None, label_axis='Altitude', bin_location=0.5,
                               units='km', valid_min=50., valid_max=1000., var_type='support_data', chunk_sizes=[ny], monoton='Increase',
                               notes="A one-dimensional array defining the altitude dimension of the data grid (the other dimension "
                               "being time). For each Level 2.2 file, the altitude grid is defined based on the minimum and maximum altitudes, "
                               "(and highest resolution) in the Level 2.1 (line-of-sight wind) files. Altitude is defined using the WGS84 ellipsoid."
                               )
 
-        
+
         # Longitude
         var = _create_variable(ncfile, '%s_Longitude'%prefix, L22_dict['lon'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='WGS84 longitude of each wind sample', 
-                              display_type='image', field_name='Longitude', fill_value=None, label_axis='', bin_location=0.5,
+                              display_type='image', field_name='Longitude', fill_value=None, label_axis='Longitude', bin_location=0.5,
                               units='deg', valid_min=0., valid_max=360., var_type='support_data', chunk_sizes=[nx,ny],
                               notes="A two-dimensional array defining the longitude (0-360 deg) of the two-dimensional data grid. In the "
                               "initial implementation, the longitude is constant with altitude, but this may change in the future to capture "
@@ -3286,24 +3759,24 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               "that while a single longitude value is given for each point, the observation is "
                               "inherently a horizontal average over many hundreds of kilometers."
                               )
-                              
+
         # Latitude
         var = _create_variable(ncfile, '%s_Latitude'%prefix, L22_dict['lat'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='WGS84 latitude of each wind sample', 
-                              display_type='image', field_name='Latitude', fill_value=None, label_axis='', bin_location=0.5,
+                              display_type='image', field_name='Latitude', fill_value=None, label_axis='Latitude', bin_location=0.5,
                               units='deg', valid_min=-90., valid_max=90., var_type='support_data', chunk_sizes=[nx,ny],
                               notes="A two-dimensional array defining the latitude of the two-dimensional data grid. The latitude varies "
                               "only slightly (a few deg) with altitude, but this variation is included. Latitude is defined using the WGS84 "
-                              "ellipsoid. It should be noted that while a single longitude value is given for each point, the observation is "
+                              "ellipsoid. It should be noted that while a single latitude value is given for each point, the observation is "
                               "inherently a horizontal average over many hundreds of kilometers."
                               )
-                              
-            
-
+        
+        
+        
         ######### Other Metadata Variables #########
-        
-        
+
+
         # Difference between the MIGHTI-A and MIGHTI-B times contributing to each point
         var = _create_variable(ncfile, '%s_Time_Delta'%prefix, L22_dict['time_delta'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
@@ -3312,67 +3785,117 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               units='s', valid_min=-30.*60, valid_max=30.*60, var_type='support_data', chunk_sizes=[nx,ny],
                               notes="To determine the cardinal wind at each point, a MIGHTI-A line-of-sight wind is combined "
                               "with a MIGHTI-B line-of-sight wind from several minutes later. This variable contains this time "
-                              "difference for every point. During standard operations, this variable should be positive, but can "
-                              "potentially become negative during conjugate operations or when ICON is observing to the south."
+                              "difference for every point. During standard operations (LVLH Normal), this variable should be positive, but can "
+                              "potentially become negative during conjugate operations or when ICON is observing to the south (LVLH Reverse)."
                               )
-        
+
         # Fringe amplitude profile from MIGHTI-A
         var = _create_variable(ncfile, '%s_Fringe_Amplitude_A'%prefix, L22_dict['fringe_amp_A'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Fringe Amplitude from MIGHTI-A', 
-                              display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='', bin_location=0.5,
-                              units='', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=[nx,ny],
+                              display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='Amp A', bin_location=0.5,
+                              units='arb', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=[nx,ny],
                               notes="See Fringe_Amplitude. This variable contains the fringe amplitude measured "
                               "by MIGHTI-A, interpolated to the reconstruction grid. This is one of two variables "
-                              "used to create Fringe_Amplitude. When A and B are significantly different, large "
-                              "gradients are suspected, and the quality is reduced."
+                              "used to create Fringe_Amplitude."
                               )
-        
+
         # Fringe amplitude profile from MIGHTI-B
         var = _create_variable(ncfile, '%s_Fringe_Amplitude_B'%prefix, L22_dict['fringe_amp_B'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Fringe Amplitude from MIGHTI-B', 
-                              display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='', bin_location=0.5,
-                              units='', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=[nx,ny],
+                              display_type='image', field_name='Fringe Amplitude B', fill_value=None, label_axis='Amp B', bin_location=0.5,
+                              units='arb', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=[nx,ny],
                               notes="See Fringe_Amplitude. This variable contains the fringe amplitude measured "
                               "by MIGHTI-B, interpolated to the reconstruction grid. This is one of two variables "
-                              "used to create Fringe_Amplitude. When A and B are significantly different, large "
+                              "used to create Fringe_Amplitude."
+                              )
+
+        # VER profile from MIGHTI-A
+        var = _create_variable(ncfile, '%s_Relative_VER_A'%prefix, L22_dict['ver_A'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='Fringe Amplitude from MIGHTI-A', 
+                              display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='VER A', bin_location=0.5,
+                              units='ph/cm^3/s', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=[nx,ny],
+                              notes="See Relative_VER. This variable contains the VER measured "
+                              "by MIGHTI-A, interpolated to the reconstruction grid. This is one of two variables "
+                              "used to create Relative_VER. When A and B are significantly different, large horizontal "
                               "gradients are suspected, and the quality is reduced."
                               )
-       
 
-        # Fringe amplitude relative difference
-        var = _create_variable(ncfile, '%s_Fringe_Amplitude_Relative_Difference'%prefix, L22_dict['fringe_amp_rel_diff'].T, 
+        # VER profile from MIGHTI-B
+        var = _create_variable(ncfile, '%s_Relative_VER_B'%prefix, L22_dict['ver_B'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
-                              format_nc='f8', format_fortran='F', desc="Difference in MIGHTI A and B's amplitude estimates, divided by the mean", 
-                              display_type='image', field_name='Fringe Amplitude Difference', fill_value=None, label_axis='', bin_location=0.5,
-                              units='', valid_min=0.0, valid_max=1e10, var_type='metadata', chunk_sizes=[nx,ny],
-                              notes="The absolute value of the difference between Fringe_Amplitude_A and Fringe_Amplitude_B, divided "
-                              "by the average. Ideally, MIGHTI A and B should measure the same amplitude. When they do not, this is an "
-                              "indication of potential violations of the spherical symmetry assumption inherent to the inversion. This "
-                              "is the quantity used to determine if spherical asymmetry flag is raised."
+                              format_nc='f8', format_fortran='F', desc='Fringe Amplitude from MIGHTI-B', 
+                              display_type='image', field_name='Fringe Amplitude B', fill_value=None, label_axis='VER B', bin_location=0.5,
+                              units='ph/cm^3/s', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=[nx,ny],
+                              notes="See Relative_VER. This variable contains the VER measured "
+                              "by MIGHTI-B, interpolated to the reconstruction grid. This is one of two variables "
+                              "used to create Relative_VER. When A and B are significantly different, large horizontal "
+                              "gradients are suspected, and the quality is reduced."
                               )
-        
-        # Error flags      
-        var = _create_variable(ncfile, '%s_Error_Flag'%prefix, np.transpose(L22_dict['error_flags'], (1,0,2)), 
+
+        # VER relative difference (fringe amp rel diff is not saved because it is not used, and also it can be calculated from
+        # Fringe_Amplitude_A and Fringe_Amplitude_B)
+        var = _create_variable(ncfile, '%s_VER_Relative_Difference'%prefix, L22_dict['ver_rel_diff'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc="Difference in MIGHTI A and B's VER estimates, divided by the mean", 
+                              display_type='image', field_name='VER Difference', fill_value=None, label_axis='VER Diff', bin_location=0.5,
+                              units='', valid_min=0.0, valid_max=1e10, var_type='metadata', chunk_sizes=[nx,ny],
+                              notes="The absolute value of the difference between Relative_VER_A and Relative_VER_B, divided "
+                              "by the average. Ideally, MIGHTI A and B should measure the same VER. When they do not, this is an "
+                              "indication of potential violations of the spherical symmetry assumption inherent to the inversion. This "
+                              "is the parameter used to determine if the spherical asymmetry flag is raised."
+                              )
+
+        # Quality flags      
+        var = _create_variable(ncfile, '%s_Quality_Flags'%prefix, np.transpose(L22_dict['quality_flags'], (1,0,2)), # Transpose so time is first dim
                               dimensions=('Epoch', var_alt_name, 'N_Flags'), depend_0 = 'Epoch', depend_1 = var_alt_name, depend_2 = 'N_Flags',
-                              format_nc='i8', format_fortran='I', desc='Error flags', 
-                              display_type='image', field_name='Error Flags', fill_value=-1, label_axis='', bin_location=0.5,
-                              units='', valid_min=0, valid_max=1, var_type='metadata', chunk_sizes=[nx,ny,8],
-                              notes=["This variable provides information on why the Quality variable is reduced from 1.0. Many error flags can "
-                              "exist for each grid point, each either 0 or 1. More than one flag can be raised per point. This variable "
-                              "is a three-dimensional array with dimensions time, altitude, and number of flags.",
-                                    "    0 = missing MIGHTI A file",
-                                    "    1 = missing MIGHTI B file",
-                                    "    2 = A signal too weak",
-                                    "    3 = B signal too weak",
-                                    "    4 = A did not sample this altitude",
-                                    "    5 = B did not sample this altitude",
-                                    "    6 = Spherical asymmetry: A and B VER estimates disagree",
-                                    "    7 = Sample time during previous or next day",
-                                    "    8 = Unknown Error",
+                              format_nc='i8', format_fortran='I', desc='Quality flags', 
+                              display_type='image', field_name='Quality Flags', fill_value=-1, label_axis='Qual Flags', bin_location=0.5,
+                              units='', valid_min=0, valid_max=1, var_type='metadata', chunk_sizes=[nx,ny,nflags],
+                              notes=["This variable provides information on why the Quality variable is reduced from 1.0. Many quality flags can "
+                              "be raised for each grid point, and each flag takes values 0 or 1. More than one flag can be raised per point. "
+                              "This variable is a three-dimensional array with dimensions time, altitude, and number of flags. Each entry is 0 or 1. "
+                              "Most quality flags are passed through from the L1 and L2.1 algorithms (after interpolation to the L2.2 grid). "
+                              "Some additional quality flags are created in L2.2. The N_Flags dimension is defined below: ",
+
+                                       "* 0 : (From L1 A) SNR too low to reliably perform L1 processing",
+                                       "* 1 : (From L1 A) Proximity to South Atlantic Anomaly",
+                                       "* 2 : (From L1 A) Bad calibration",
+                                       "* 3 : (From L1 A) Unused",
+                                       "* 4 : (From L1 A) Unused",
+                                       "* 5 : (From L1 A) Unused",
+                                       "* 6 : (From L2.1 A) SNR too low after inversion",
+                                       "* 7 : (From L2.1 A) Significant airglow above 300 km",
+                                       "* 8 : (From L2.1 A) Line of sight crosses the terminator",
+                                       "* 9 : (From L2.1 A) Unused",
+                                       "* 10: (From L2.1 A) Unused",
+                                       "* 11: (From L2.1 A) Unused",
+                                       "* 12: (From L1 B) SNR too low to reliably perform L1 processing",
+                                       "* 13: (From L1 B) Proximity to South Atlantic Anomaly",
+                                       "* 14: (From L1 B) Bad calibration",
+                                       "* 15: (From L1 B) Unused",
+                                       "* 16: (From L1 B) Unused",
+                                       "* 17: (From L1 B) Unused",
+                                       "* 18: (From L2.1 B) SNR too low after inversion",
+                                       "* 19: (From L2.1 B) Significant airglow above 300 km",
+                                       "* 20: (From L2.1 B) Line of sight crosses the terminator",
+                                       "* 21: (From L2.1 B) Unused",
+                                       "* 22: (From L2.1 B) Unused",
+                                       "* 23: (From L2.1 B) Unused",
+                                       "* 24: Missing MIGHTI-A file",
+                                       "* 25: Missing MIGHTI-B file",
+                                       "* 26: MIGHTI-A did not sample this altitude",
+                                       "* 27: MIGHTI-B did not sample this altitude",
+                                       "* 28: Spherical asymmetry: A&B VER estimates disagree",
+                                       "* 29: Interpolated sample time during previous/next day",
+                                       "* 30: Unused",
+                                       "* 31: Unused",
+                                       "* 32: Unused",
+                                       "* 33: Unknown error (notify MIGHTI team)",
                                     ])
-        
+
         ncfile.close()
         
     except: # Make sure the file is closed
@@ -3384,7 +3907,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
 
 
 
-def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph_asym_thresh=None, time_start=None, time_stop=None):
+def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph_asym_thresh=None, time_start=None, time_stop=None,
+                                         skip_att = ['att_conjugate']):
     '''
     High-level function to apply the Level-2.1-to-Level-2.2 algorithm to a series of same-colored Level 2.1 files
     (in the L21_path directory) and create a single Level 2.2 file (in the L22_path directory). This version
@@ -3416,7 +3940,11 @@ def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph
                                            which the Level 2.2 data product should span. (Some L2.1 files from after
                                            the stop time are needed to handle the crossover). If None (default), 
                                            the stop time defaults to 24 hours after the start time. 
-                                       
+      *  skip_att        -- TYPE: list of str.  A list of attitude status variables. If any evaluate are active, 
+                                           the associated L2.1 file(s) will be skipped and not included 
+                                           in L2.2 analysis. Default value: ['att_conjugate']. A possible 
+                                           alternate default value: ['att_conjugate', 'att_lvlh_reverse']. See
+                                           documentation for level1_dict_to_level21_dict(...) for complete list.
     OUTPUTS:
     
       *  L22_fn          -- TYPE:str.      The full path to the saved L2.2 file.
@@ -3442,8 +3970,8 @@ def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph
 
     # Read files (this is the bottleneck in terms of runtime)
     # Note that we're skipping files during LVLH reverse and conjugate maneuvers
-    level21_A = level21_to_dict(Afns, skip_att = ['att_lvlh_reverse','att_conjugate'])
-    level21_B = level21_to_dict(Bfns, skip_att = ['att_lvlh_reverse','att_conjugate'])
+    level21_A = level21_to_dict(Afns, skip_att = skip_att)
+    level21_B = level21_to_dict(Bfns, skip_att = skip_att)
 
     ##### Run L2.2 processing to create L2.2 dictionary
     L22_dict = level21_dict_to_level22_dict(level21_A, level21_B, sph_asym_thresh=sph_asym_thresh,
@@ -3549,8 +4077,17 @@ def level22_to_dict(L22_fn):
     OUTPUTS:
     
       *  L22_dict        -- TYPE:dict.  A dictionary containing the outputs of the Level 2.2 processing.
-                                        See documentation for level21_dict_to_level22_dict(...) for details
-                                        of the contents.
+                                        The variables are:
+                                        
+                                        * All of the variables described in documentation for level21_dict_to_level22_dict(...):
+                                        * epoch_ms         -- TYPE:array(nx),   UNITS:ms.  Same as epoch, except in units of 
+                                                                                           "ms since Jan 1, 1970"
+                                        * epoch_full_ms    -- TYPE:array(ny,nx) UNITS:ms.  Same as epoch_full, except in units of 
+                                                                                           "ms since Jan 1, 1970"                    
+                                        * EXCEPT the following variables (which are not saved in the L2.2 NC file):
+                                        * fringe_amp_rel_diff
+                                        * N_used_A
+                                        * N_used_B
     '''
     
     L22_dict = {}
@@ -3572,36 +4109,45 @@ def level22_to_dict(L22_fn):
     L22_dict['v']      = f['ICON_L2_MIGHTI_%s_Meridional_Wind' % emission_color][:,:].T
     L22_dict['u_error']= f['ICON_L2_MIGHTI_%s_Zonal_Wind_Error' % emission_color][:,:].T
     L22_dict['v_error']= f['ICON_L2_MIGHTI_%s_Meridional_Wind_Error' % emission_color][:,:].T
-    e                  = f['ICON_L2_MIGHTI_%s_Error_Flag' % emission_color][:,:,:]
-    L22_dict['error_flags'] = np.transpose(e, (1,0,2))
+    e                  = f['ICON_L2_MIGHTI_%s_Quality_Flags' % emission_color][:,:,:]
+    L22_dict['quality_flags'] = np.transpose(e, (1,0,2))
     L22_dict['epoch_ms']      = f['Epoch'][:]
     L22_dict['epoch_full_ms'] = f['Epoch_Full'][:,:].T
+    L22_dict['epoch']      = None # To be filled in below
+    L22_dict['epoch_full'] = None # To be filled in below
+    L22_dict['time_start'] = datetime.strptime(f.Date_Start[-27:-4], '%Y-%m-%dT%H:%M:%S.%f')
+    L22_dict['time_stop']  = datetime.strptime(f.Date_Stop [-27:-4], '%Y-%m-%dT%H:%M:%S.%f')
     L22_dict['time_delta']    = f['ICON_L2_MIGHTI_%s_Time_Delta' % emission_color][:,:].T
     L22_dict['fringe_amp']    = f['ICON_L2_MIGHTI_%s_Fringe_Amplitude' % emission_color][:,:].T
+    L22_dict['fringe_amp_error'] = f['ICON_L2_MIGHTI_%s_Fringe_Amplitude_Error' % emission_color][:,:].T
     L22_dict['fringe_amp_A']  = f['ICON_L2_MIGHTI_%s_Fringe_Amplitude_A' % emission_color][:,:].T 
     L22_dict['fringe_amp_B']  = f['ICON_L2_MIGHTI_%s_Fringe_Amplitude_B' % emission_color][:,:].T
-    L22_dict['fringe_amp_rel_diff'] = f['ICON_L2_MIGHTI_%s_Fringe_Amplitude_Relative_Difference' % emission_color][:,:].T
+    L22_dict['ver'] = f['ICON_L2_MIGHTI_%s_Relative_VER' % emission_color][:,:].T
+    L22_dict['ver_error'] = f['ICON_L2_MIGHTI_%s_Relative_VER_Error' % emission_color][:,:].T
+    L22_dict['ver_A'] = f['ICON_L2_MIGHTI_%s_Relative_VER_A' % emission_color][:,:].T
+    L22_dict['ver_B'] = f['ICON_L2_MIGHTI_%s_Relative_VER_B' % emission_color][:,:].T
+    L22_dict['ver_rel_diff'] = f['ICON_L2_MIGHTI_%s_VER_Relative_Difference' % emission_color][:,:].T
     L22_dict['wind_quality']  = f['ICON_L2_MIGHTI_%s_Wind_Quality' % emission_color][:,:].T
+    L22_dict['ver_quality']  = f['ICON_L2_MIGHTI_%s_VER_Quality' % emission_color][:,:].T
     L22_dict['emission_color'] = emission_color
     L22_dict['source_files'] = f.Parents
     L22_dict['acknowledgement'] = f.Acknowledgement
-    L22_dict['time_start'] = datetime.strptime(f.Date_Start[-27:-4], '%Y-%m-%dT%H:%M:%S.%f')
-    L22_dict['time_stop']  = datetime.strptime(f.Date_Stop [-27:-4], '%Y-%m-%dT%H:%M:%S.%f')
                                   
     
     # Convert times to datetime
     epoch = np.empty(len(L22_dict['epoch_ms']), dtype=datetime)
     for i in range(len(epoch)):
-        if isinstance(L22_dict['epoch_ms'],np.ma.MaskedArray) and L22_dict['epoch_ms'].mask[i]:
+        if np.ma.is_masked(L22_dict['epoch_full_ms']) and L22_dict['epoch_ms'].mask[i]:
             epoch[i] = datetime(1989,4,18) # arbitrary fill value
         else:
             epoch[i] = datetime(1970,1,1) + timedelta(seconds = L22_dict['epoch_ms'][i]/1e3)
     epoch = np.ma.masked_where(L22_dict['epoch_ms'].mask, epoch)
+    np.ma.set_fill_value(epoch, datetime(1989,4,18))
             
     epoch_full = np.empty(np.shape(L22_dict['epoch_full_ms']), dtype=datetime)
     for i in range(np.shape(epoch_full)[0]):
         for j in range(np.shape(epoch_full)[1]):
-            if isinstance(L22_dict['epoch_full_ms'],np.ma.MaskedArray) and L22_dict['epoch_full_ms'].mask[i,j]:
+            if np.ma.is_masked(L22_dict['epoch_full_ms']) and L22_dict['epoch_full_ms'].mask[i,j]:
                 epoch_full[i,j] = datetime(1989,4,18) # arbitrary fill value
             else:
                 epoch_full[i,j] = datetime(1970,1,1) + timedelta(seconds = L22_dict['epoch_full_ms'][i,j]/1e3)
@@ -3654,7 +4200,6 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
       *  L21_pngs     --TYPE:list of str,  Full path to the saved png files
     '''
     
-
     assert len(L21_fns)>0, "No files specified"
 
     if pngpath[-1] != '/':
@@ -3667,12 +4212,13 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
         fns_short = [fn for fn in L21_fns if color in fn.lower()]
         if len(fns_short)>0:
             d[color] = level21_to_dict(fns_short)
-
+    
     # Make nans into masked arrays so pcolormesh looks nicer.
     # (Not necessary if we upgrade to matplotlib 2.1.0)
     for color in ['red','green']:
         for v in ['los_wind','los_wind_error','amp']:
-            d[color][v] = np.ma.masked_array(d[color][v], np.isnan(d[color][v]))
+            if color in d.keys():
+                d[color][v] = np.ma.masked_array(d[color][v], np.isnan(d[color][v]))
 
     # For each, add a variable giving the time as a matrix (to be used for plotting)
     for color in ['red','green']:
@@ -3793,11 +4339,11 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
             fig.tight_layout(rect=[0,0.03,1,0.95]) # leave room for suptitle
 
             #### Save
-            vers = max(d['red']['maxvers'], d['green']['maxvers'])
-            rev  = max(d['red']['maxrev'],  d['green']['maxrev'])
+            vers = max([d[c]['maxvers'] for c in d.keys()])
+            rev  = max([d[c]['maxrev'] for c in d.keys()])
             pngfn = pngpath + 'ICON_L2_%s_Plot-Line-of-Sight-Wind_%s-to-%s_v%02ir%03i.png' % (sensor, tmin_title.strftime('%Y-%m-%d_%H%M%S'),
                                                                                               tmax_title.strftime('%Y-%m-%d_%H%M%S'),vers,rev)
-            plt.savefig(pngfn, dpi=70)
+            plt.savefig(pngfn, dpi=120)
             plt.close()
             L21_pngs.append(pngfn)
         except:
@@ -3810,138 +4356,320 @@ def plot_level21(L21_fns, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_m
 
 
 
-def plot_level22(L22_fn, pngpath, nfigs=6, v_max = 200., ve_min = 1., ve_max = 100.):
+def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., 
+                 a_min = 1., a_max = 1000., ae_min = 0.1, ae_max = 100., close=True):
     '''
-    Create Tohban plots for Level 2.2 data.
+    Create Tohban plots for Level 2.2 data. The nominal L2.2 file contains 24 hours of data. The 
+    Tohban plots are split up by solar local time. There is one plot per noon-to-noon LT period.
     
     INPUTS:
     
       *  L22_fn       --TYPE:str,   Full path to a L2.2 file
-      *  pngpath      --TYPE:str,   Directory to save the resulting png to
+      *  pngpath      --TYPE:str,   Directory to save the resulting png(s) to
    
    OPTIONAL INPUTS:
    
-      *  nfigs        --TYPE:int,   How many figures to break the data into
-                                    (TODO: eventually this should be based on SLT).
       *  v_max        --TYPE:float, Maximum wind velocity for colorbar [m/s]
       *  ve_min       --TYPE:float, Minimum wind error for colorbar [m/s]
       *  ve_max       --TYPE:float, Maximum wind error for colorbar [m/s]
+      *  a_min        --TYPE:float, Minimum VER for colorbar [ph/cm^3/s]
+      *  a_max        --TYPE:float, Maximum VER for colorbar [ph/cm^3/s]
+      *  ae_min       --TYPE:float, Minimum VER error for colorbar [ph/cm^3/s]
+      *  ae_max       --TYPE:float, Maximum VER error for colorbar [ph/cm^3/s]
+      *  close        --TYPE:bool,  If True, close the figure after saving it.
                                    
     OUTPUT:
     
       *  L22_pngs     --TYPE:list of str,  Full path to the saved png files
       
     '''
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    from matplotlib.colors import LinearSegmentedColormap
     
+    # Custom colormap for quality factor/flags
+    low_rgb = [0.7, 0.7, 1.0]
+    #mid_rgb = np.array([252,238,170])/256.
+    mid_rgb = np.array([253,185,40])/256.
+    hi_rgb  = [0.7, 0.0, 0.0]
+    cdict = {'red':   ((0.0, low_rgb[0], low_rgb[0]),
+                       (0.5, mid_rgb[0], mid_rgb[0]),
+                       (1.0, hi_rgb [0], hi_rgb [0])),
+             'green': ((0.0, low_rgb[1], low_rgb[1]),
+                       (0.5, mid_rgb[1], mid_rgb[1]),
+                       (1.0, hi_rgb [1], hi_rgb [1])),
+             'blue':  ((0.0, low_rgb[2], low_rgb[2]),
+                       (0.5, mid_rgb[2], mid_rgb[2]),
+                       (1.0, hi_rgb [2], hi_rgb [2]))}
+    cmap_byr = LinearSegmentedColormap('Custom', cdict)
+
     if pngpath[-1] != '/':
         pngpath += '/'
     
     L22_dict = level22_to_dict(L22_fn)
 
-    # Error flag meanings:
-    error_str = {
-        0: 'MIGHTI-A file missing',
-        1: 'MIGHTI-B file missing',
-        2: 'MIGHTI-A weak signal',
-        3: 'MIGHTI-B weak signal',
-        4: 'MIGHTI-A missing this altitude',
-        5: 'MIGHTI-B missing this altitude',
-        6: 'Spherical asymmetry detected',
-        7: 'Sample time prev or next day',
-        8: 'Error: Unknown' 
-    }
-
-    Nalt, Nlon, Nflags = np.shape(L22_dict['error_flags'])
+    Nalt, Nlon = np.shape(L22_dict['u'])
     lonu = L22_dict['lon_unwrapped']
     alt = L22_dict['alt']
-    alt_mat = np.tile(alt, (Nlon,1)).T
+    t = L22_dict['epoch']
     L22_pngs = []
-    nrows = int(np.ceil(Nflags/2. + 2))
+    nrows, ncols = 5, 4
+    csize = '3%' # For adding colorbar
+    cpad = 0.08  # For adding colorbar
+    clabelpad = 15 # For colorbar label
     
-    for n in range(nfigs):
-
-        # Define grid range for this plot
-        i1 = int(np.floor(1.0*Nlon/nfigs*n))
-        i2 = int(np.floor(1.0*Nlon/nfigs*(n+1)))
-
-        fig = plt.figure(figsize=(16,nrows*3))
+    assert any(t), "All data in the L2.2 are masked. No plot can be created."
+    
+    # Organize figures by SLT. Create one plot for each (SLT) noon-to-noon period.
+    # Anytime there is a negative jump in the SLT, start a new plot.
+    # The following code is awkward because it has to handle missing data, including 
+    # missing data across noon. Missing data in the middle of orbits must be filled in with a 
+    # reasonable interpolation, since pcolormesh can't (and shouldn't) take masked arrays for X or Y.
+    # Note that no *data* is being interpolated, just *coordinates*.
+    mask = t.mask
+    t_hr = np.array([(ti - datetime(ti.year, ti.month, ti.day, 0, 0, 0)).total_seconds()/3600. for ti in t.filled()])
+    t_hr[mask] = np.nan
+    # Compute solar local time in hours using middle altitude for longitude reference
+    j = int(Nalt/2)
+    slt_hr_u = t_hr + 24./360.*lonu[j,:] # unwrapped SLT
+    # Interpolate missing times, for ability to plot quality flags and such.
+    valid = np.where(np.isfinite(slt_hr_u))[0]
+    i0 = valid[0]
+    i1 = valid[-1]+1
+    x = slt_hr_u[i0:i1]
+    i = np.arange(i0,i1)
+    good = np.isfinite(x)
+    x[~good] = np.interp(i[~good], i[good], x[good]) # linear interpolation across gaps
+    slt_hr_u[i0:i1] = x
+    # Extrapolate times before and after i0 and i1, again just for plotting
+    dx0 = slt_hr_u[i0+1] - slt_hr_u[i0]
+    slt_hr_u[:i0] = (np.arange(i0) - i0)*dx0 + slt_hr_u[i0]
+    dx1 = slt_hr_u[i1-1] - slt_hr_u[i1-2]
+    slt_hr_u[i1:] = (np.arange(i1,Nlon) - (i1-1))*dx1 + slt_hr_u[i1-1]
+    # Wrap SLT to [-12,12)
+    slt_hr = np.mod(slt_hr_u + 12., 24.) - 12.
+    ijump = np.where(np.diff(slt_hr) < 0.0)[0] # all negative jumps
+    # stop index (exclusive) is one past each negative jump, plus the end
+    istop = np.concatenate((ijump+1, [Nlon]))
+    # start index (inclusive) is the same as above, including 0 but not the end
+    istart = np.concatenate(([0], ijump+1))
+    nfigs = len(istart)
+    
+    # Loop and create figures
+    for n, (i1, i2) in enumerate(zip(istart, istop)):
         
-        #### WINDS
-        for i,W in enumerate([L22_dict['u'],L22_dict['v']]):
-            plt.subplot(nrows, 2, i+1)
-            plt.pcolormesh(lonu   [:,i1:i2], 
-                           alt_mat[:,i1:i2],
-                           W      [:,i1:i2],
-                           cmap='bwr')
-            plt.clim((-v_max,v_max))
-            if i==0:
-                plt.title('Zonal Wind')
-            else:
-                plt.title('Meridional Wind')
-            cb = plt.colorbar()
-            cb.set_label('Wind [m/s]',rotation=-90,labelpad=15)
+        # pcolormesh wants the coordinates of the corners (not the middle) of each pixel
+        x = slt_hr[i1:i2]
+        y = alt
+        nx = len(x)
+        ny = len(y)
+        dx = np.diff(x)
+        dy = np.diff(y)
+        xo = np.concatenate([[x[0]-dx[0]/2], x[:-1] + dx/2, [x[-1]+dx[-1]/2]])
+        yo = np.concatenate([[y[0]-dy[0]/2], y[:-1] + dy/2, [y[-1]+dy[-1]/2]])
+        X,Y = np.meshgrid(x,y)
+        
+        fig, axarr = plt.subplots(nrows, ncols, figsize=(8*ncols,3*nrows))
+        ax_format = [] # Will hold axes containing the normal Altitude vs. Longitude vs. Color plots, for later common formatting
+        
+        ########### Wind and wind error ###########
+        ax = axarr[0,0]
+        h = ax.pcolormesh(X, Y, L22_dict['u'][:,i1:i2], cmap='bwr', vmin=-v_max, vmax=v_max)
+        ax.set_title('Zonal Wind')        
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        fig.colorbar(h, cax=cax).set_label('m/s',rotation=-90,labelpad=clabelpad)
+        ax_format.append(ax)
+        
+        ax = axarr[1,0]
+        h = ax.pcolormesh(X, Y, L22_dict['v'][:,i1:i2], cmap='bwr', vmin=-v_max, vmax=v_max)
+        ax.set_title('Meridional Wind')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        fig.colorbar(h, cax=cax).set_label('m/s',rotation=-90,labelpad=clabelpad)
+        ax_format.append(ax)
+        
+        ax = axarr[0,1]
+        h = ax.pcolormesh(X, Y, L22_dict['u_error'][:,i1:i2], cmap='viridis_r', norm=LogNorm(vmin=ve_min, vmax=ve_max))
+        ax.set_title('Zonal Wind Error')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        fig.colorbar(h, cax=cax).set_label('m/s',rotation=-90,labelpad=clabelpad)
+        ax_format.append(ax)
+        
+        ax = axarr[1,1]
+        h = ax.pcolormesh(X, Y, L22_dict['v_error'][:,i1:i2], cmap='viridis_r', norm=LogNorm(vmin=ve_min, vmax=ve_max))
+        ax.set_title('Meridional Wind Error')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        fig.colorbar(h, cax=cax).set_label('m/s',rotation=-90,labelpad=clabelpad)
+        ax_format.append(ax)
+        
+        ############ VER/Amplitude and error ############
+        ax = axarr[2,0]
+        h = ax.pcolormesh(X, Y, L22_dict['ver'][:,i1:i2], cmap='viridis', norm=LogNorm(vmin=a_min, vmax=a_max))
+        ax.set_title('Relative VER')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        fig.colorbar(h, cax=cax).set_label('ph/cm$^3$/s',rotation=-90,labelpad=clabelpad)
+        ax_format.append(ax)
+        
+        ax = axarr[2,1]
+        h = ax.pcolormesh(X, Y, L22_dict['ver_error'][:,i1:i2], cmap='viridis', norm=LogNorm(vmin=ae_min, vmax=ae_max))
+        ax.set_title('Relative VER Error')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        fig.colorbar(h, cax=cax).set_label('ph/cm$^3$/s',rotation=-90,labelpad=clabelpad)
+        ax_format.append(ax)
+        
+        
+        ############ Quality Factors #############
+        cmap = cmap_byr
+        bounds = [-0.33,0.33,0.67,1.33]
+        norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)  
+        
+        ax = axarr[3,0]
+        h = ax.pcolormesh(X, Y, 1 - L22_dict['wind_quality'][:,i1:i2], cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('Wind Quality')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.5,1])
+        cb.ax.set_yticklabels(['Good','Caution','Bad'], rotation=-90, va='center')
+        ax_format.append(ax)
+        
+        ax = axarr[3,1]
+        h = ax.pcolormesh(X, Y, 1 - L22_dict['ver_quality'][:,i1:i2], cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('VER Quality')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.5,1])
+        cb.ax.set_yticklabels(['Good','Caution','Bad'], rotation=-90, va='center')
+        ax_format.append(ax)
+        
+        ############ Location #############
+        ax = axarr[4,0]
+        j = int(Nalt/2) # Use middle altitude for reference latitude
+        ax.plot(slt_hr[i1:i2], L22_dict['lat'][j,i1:i2], 'k-')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad) # Make dummy axis for alignment
+        cax.axis('off') # and make it invisible
+        ax.set_title('Tangent Latitude')
+        ax.set_ylabel('Latitude [deg]')
+        ax.set_xlabel('Solar LT [hr]')
+        ax.set_ylim((-45,45))
+        ax.set_xlim((-12,12))
+        ax.set_xticks(np.arange(-12,13,3))
+        ax.set_xticklabels(['%.0f' % np.mod(x,24.) for x in ax.get_xticks()])
 
-        #### WIND ERROR
-        for i,W in enumerate([L22_dict['u_error'],L22_dict['v_error']]):
-            plt.subplot(nrows, 2, i+3)
-            plt.pcolormesh(lonu   [:,i1:i2], 
-                           alt_mat[:,i1:i2],
-                           W      [:,i1:i2],
-                           cmap='viridis_r', norm=LogNorm(vmin=ve_min, vmax=ve_max))
-            if i==0:
-                plt.title('Zonal Wind Error')
-            else:
-                plt.title('Meridional Wind Error')
-            cb = plt.colorbar()
-            cb.set_label('Wind Error [m/s]',rotation=-90,labelpad=15)
-    
-        #### ERROR FLAGS
-        for i in range(Nflags):
-            plt.subplot(nrows, 2, i+5)
-            # define the bins and normalize
-            cmap=cmap_custom
-            bounds = [-0.5,0.5,1.5]
-            norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)            
-            e = L22_dict['error_flags'][:,i1:i2,i].astype(float)
-            # For spherical symmetry flag, mask it to look like data so we can see where
-            # this flag actually matters
-            if i==6 and isinstance(L22_dict['u'],np.ma.MaskedArray):
-                e = np.ma.masked_array(e, L22_dict['u'].mask[:,i1:i2])
-                
-            plt.pcolormesh(lonu   [:,i1:i2],
-                           alt_mat[:,i1:i2],
-                           e,
-                           cmap=cmap, norm=norm)
-            plt.title(error_str[i])
-            plt.axis('tight')
-            cb = plt.colorbar(ticks=[0,1])
+        ############ Quality flags derived at L2.2 ############
+        # There isn't enough room to plot all the flags, so we'll plot the most important ones (subject to change)
+        cmap = cmap_byr
+        bounds = [-0.5,0.5,1.5]
+        norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)  
+        
+        ax = axarr[0,2]
+        h = ax.pcolormesh(X, Y, L22_dict['quality_flags'][:,i1:i2,28], cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('Spherical asymmetry detected')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,1])
+        ax_format.append(ax)
+        
+        ax = axarr[3,3]
+        h = ax.pcolormesh(X, Y, L22_dict['quality_flags'][:,i1:i2,33], cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('Unknown Error: Notify MIGHTI team')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,1])
+        ax_format.append(ax)
+        
+        ############ Quality Flags derived at L1 and L2.1 (separate MIGHTI A and B) #############
+        cmap = cmap_byr
+        bounds = [-0.167, 0.167, 0.5, 0.833, 1.167]
+        norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N) 
+        
+        ax = axarr[1,2]
+        z = 0.333*L22_dict['quality_flags'][:,i1:i2,24] + 0.667*L22_dict['quality_flags'][:,i1:i2,25]
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('MIGHTI A or B: Missing file')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
+        cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
+        ax_format.append(ax)
+        
+        ax = axarr[2,2]
+        z = 0.333*L22_dict['quality_flags'][:,i1:i2,0] + 0.667*L22_dict['quality_flags'][:,i1:i2,12]
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('MIGHTI A or B: Low SNR')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
+        cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
+        ax_format.append(ax)
+        
+        ax = axarr[3,2]
+        z = 0.333*L22_dict['quality_flags'][:,i1:i2,7] + 0.667*L22_dict['quality_flags'][:,i1:i2,19]
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('MIGHTI A or B: Airglow above 300 km')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
+        cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
+        ax_format.append(ax)
+        
+        ax = axarr[0,3]
+        z = 0.333*L22_dict['quality_flags'][:,i1:i2,8] + 0.667*L22_dict['quality_flags'][:,i1:i2,20]
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('MIGHTI A or B: LoS crosses terminator')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
+        cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
+        ax_format.append(ax)
+        
+        ax = axarr[1,3]
+        z = 0.333*L22_dict['quality_flags'][:,i1:i2,2] + 0.667*L22_dict['quality_flags'][:,i1:i2,14]
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('MIGHTI A or B: Bad calibration')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
+        cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
+        ax_format.append(ax)
+        
+        ax = axarr[2,3]
+        z = 0.333*L22_dict['quality_flags'][:,i1:i2,26] + 0.667*L22_dict['quality_flags'][:,i1:i2,27]
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('MIGHTI A or B: Unobserved altitudes')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
+        cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
+        ax_format.append(ax)
+        
+        ax = axarr[4,2]
+        z = 0.333*L22_dict['quality_flags'][:,i1:i2,1] + 0.667*L22_dict['quality_flags'][:,i1:i2,13]
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('MIGHTI A or B: South Atlantic Anomaly')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
+        cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
+        ax_format.append(ax)
+        
+        #### Turn off unused axes
+        axarr[4,1].axis('off')
+        axarr[4,3].axis('off')
+        
+        #### Make the 2D plots look nice
+        for ax in ax_format:
+            plt.sca(ax)
+            ax.patch.set_facecolor('gray')
+            ax.set_ylabel('Altitude [km]')
+            ax.yaxis.set_ticks([100,200,300])
+            ax.set_ylim((85,320))
+            ax.set_yscale('log')
+            ax.yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
+            ax.yaxis.set_minor_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
+            ax.set_xlim((-12,12))
+            ax.set_xticks(np.arange(-12,13,3))
+            ax.set_xticklabels(['%.0f' % np.mod(x,24.) for x in ax.get_xticks()])
+            ax.set_xlabel('Solar LT [hr]')
 
-        #### Make plots look nice
-        for sp in range(Nflags+4):
-            plt.subplot(nrows, 2, sp+1)
-            plt.gca().patch.set_facecolor('gray')
-            plt.ylabel('Altitude [km]')
-            plt.xlabel('Longitude [deg]')
-            plt.gca().yaxis.set_ticks([100,200,300])
-            plt.ylim((85,320))
-            plt.yscale('log')
-            plt.gca().yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
-            plt.gca().yaxis.set_minor_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
-            # Replace unwrapped longitude with mod 360
-            xt = plt.gca().get_xticks()
-            plt.gca().set_xticklabels(['%.0f' % np.mod(x,360) for x in xt])
-
-        plt.tight_layout(rect=[0,0.02,1,0.97]) # leave room for suptitle
+        plt.tight_layout(rect=[0,0.02,1,0.96]) # leave room for suptitle
         datestr = L22_fn.split('/')[-1].split('_')[-2]
         fig.suptitle('%s %s Plot %i/%i' % (datestr, L22_dict['emission_color'], n+1,nfigs), fontsize=28)
         
         #### Save
-        versrev = L22_fn.split('/')[-1].split('_')[-1].split('.')[0]
+        versrev = L22_fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
         desc = L22_fn.split('/')[-1].split('_')[-3] #e.g., Vector-Wind-Green
-        pngfn = pngpath + 'ICON_L2_MIGHTI_Plot-%s-%02i-%02i_%s.png'%(desc, n+1,nfigs, versrev)
-        plt.savefig(pngfn, dpi=70)
-        plt.close()
+        pngfn = pngpath + 'ICON_L2_MIGHTI_Plot-%s-%02i-%02i_%s_%s.png'%(desc, n+1,nfigs,datestr,versrev)
+        plt.savefig(pngfn, dpi=120)
         L22_pngs.append(pngfn)
+        if close:
+            plt.close()
         
     return L22_pngs
     
