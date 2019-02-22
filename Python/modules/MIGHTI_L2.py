@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 16 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 17 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -2907,26 +2907,17 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
         dA = dlon_A_interp(loni).item()
         dB = dlon_B_interp(loni).item()
         dlon = min(dA,dB)
-        if np.isinf(dlon): # This should not happen
-            print 'WARNING: np.inf in longitude delta definition'
-            dlon = dlon_last # Use default value so the processing can continue
-            raise Exception('WARNING: np.inf in longitude delta definition') # Should this crash, or should we let it fly?
+        if np.isinf(dlon) or dlon<=0.0: # This should not happen
+            print 'WARNING: invalid value longitude delta definition (dlon=%s)'%dlon
+            raise Exception('WARNING: invalid value longitude delta definition (dlon=%s)'%dlon) # Should this crash, or should we let it fly?
         if dlon > dlon_max: # if there are really large gaps (e.g., EUV calibration), then use a reasonable cadence
             dlon = dlon_last
         loni += dlon
         lon_vec.append(loni)
     lon_vec = np.array(lon_vec)
 
-#     # Define altitude grid based on the min and max in the L2.1 data (i.e., don't throw out data)
-#     # Define altitude resolution based upon the resolution of L2.1 data
-#     alt_min = min(alt_A.min(), alt_B.min())
-#     alt_max = max(alt_A.max(), alt_B.max())
-#     nalts = max(np.shape(alt_A)[0], np.shape(alt_B)[0])
-#     alt = np.linspace(alt_min, alt_max, nalts)
-#     alt_res = alt[1] - alt[0]
-
     # Define altitude grid based on the min and max in the L2.1 data (i.e., don't throw out data)
-    # Define altitude resolution based upon the resolution of L2.1 data, accounting for the fact
+    # Define altitude resolution based upon the resolution o L2.1 data, accounting for the fact
     # that resolution changes with altitude (from ~2.9 to ~2.2 km). But base this all off of the data,
     # so that automatic account is taken for binning, spacecraft pointing, etc. If we want to pre-define
     # an altitude grid so that the grid is the same from day to day, that's fine, but that seems more
@@ -2945,6 +2936,10 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     # Create grid for longitude (since we might change how this is done in the future)
     lon,_ = np.meshgrid(lon_vec, alt)
     N_alts, N_lons = np.shape(lon)
+    
+    # Sanity check before possibly running for hours and hours
+    assert N_alts < 100, 'ERROR? Unreasonable number of altitudes in grid (N_alts = %i)' % N_alts
+    assert N_lons < 86400./30., 'ERROR? Unreasonable number of longitudes in grid (N_lons = %i)' % N_lons
 
     ############### Interpolate values to reconstruction grid ##################
     # Use bilinear interpolation. This is somewhat complicated because
@@ -3013,7 +3008,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
 
 
             ##################### Initial Quality Flagging ##########################
-            # Never extrapolate in longitude. If this flag is raised, it probably indicates an 
+            # Never extrapolate in longitude. If this flag is raised here, it probably indicates an 
             # extended calibration routine like the EUV lunar cal that crossed a day boundary.
             # Mark as missing, and continue.
             if kA0 < 0 or kA1 >= N_times_A or kB0 < 0 or kB1 >= N_times_B:
@@ -3025,12 +3020,14 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
 
             # Determine if there are "missing" files by checking the time between the straddling
             # files we just found and comparing to the exposure time of the files.
-            # If so, throw quality flag and continue.
-            # Note that it's the greater of the previous and next exposure times that matter
+            # If so, throw quality flag and continue. This means that we never interpolate over gaps, 
+            # and that one missing A file will likely create 2 missing grid points. This is, however, the
+            # right thing to do when bilinear interpolation is being used (as opposed to NN).
+            # Note that it's the greater of the previous and next exposure times that matter.
             exp_time_A_thresh = 1.1 * max(exp_time_A[kA0], exp_time_A[kA1]) # Extra 10% included for buffer
             exp_time_B_thresh = 1.1 * max(exp_time_B[kB0], exp_time_B[kB1])
-            missing_A = (time_A[kA1] - time_A[kA0]).total_seconds() > exp_time_A_thresh
-            missing_B = (time_B[kB1] - time_B[kB0]).total_seconds() > exp_time_B_thresh
+            missing_A = abs((time_A[kA1] - time_A[kA0]).total_seconds()) > exp_time_A_thresh
+            missing_B = abs((time_B[kB1] - time_B[kB0]).total_seconds()) > exp_time_B_thresh
             if missing_A or missing_B:
                 if missing_A:
                     qflags[i,k,24] = 1
@@ -3320,11 +3317,14 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             dt_k = np.array([(ti - t_k[0]).total_seconds() for ti in t_k])
             epoch[k] = t_k[0] + timedelta(seconds=np.mean(dt_k))
 
-    assert all(np.diff([x for x in epoch if x is not None]) > timedelta(seconds=0.0)), \
-           "Epoch is not monotonically increasing."
+    # When a single MIGHTI-A or B file is missing, it is possible that the average
+    # time at one (longitude) grid point will be slightly *less* than at the next grid point.
+    # Thus, I'm commenting this out for now, and we'll see if it causes any problems down 
+    # the road. Two days of the January 2019 synthetic data crashed at this check.
+#     assert all(np.diff([x for x in epoch if x is not None]) > timedelta(seconds=0.0)), \
+#         "Epoch is not monotonically increasing."
     
     # Make sure that all data with quality 0 are masked.
-    # I think this code is redundant, but just to be conservative:
     i = wind_quality == 0.0
     for v in [U, V, U_err, V_err]:
         v[i] = np.nan
@@ -3969,7 +3969,7 @@ def level21_to_level22_without_info_file(L21_fns, L22_path, data_revision=0, sph
     Bfns.sort()
 
     # Read files (this is the bottleneck in terms of runtime)
-    # Note that we're skipping files during LVLH reverse and conjugate maneuvers
+    # Note that we're skipping files during conjugate maneuvers
     level21_A = level21_to_dict(Afns, skip_att = skip_att)
     level21_B = level21_to_dict(Bfns, skip_att = skip_att)
 
@@ -4137,7 +4137,7 @@ def level22_to_dict(L22_fn):
     # Convert times to datetime
     epoch = np.empty(len(L22_dict['epoch_ms']), dtype=datetime)
     for i in range(len(epoch)):
-        if np.ma.is_masked(L22_dict['epoch_full_ms']) and L22_dict['epoch_ms'].mask[i]:
+        if np.ma.is_masked(L22_dict['epoch_ms']) and L22_dict['epoch_ms'].mask[i]:
             epoch[i] = datetime(1989,4,18) # arbitrary fill value
         else:
             epoch[i] = datetime(1970,1,1) + timedelta(seconds = L22_dict['epoch_ms'][i]/1e3)
