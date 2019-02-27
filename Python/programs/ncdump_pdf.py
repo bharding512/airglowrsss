@@ -20,6 +20,8 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 import sys
 
+PARAG_LIMIT = 20 # Limit the number of paragraphs in Var_Notes, otherwise reportlab will crash.
+
 ##### Define input and output filenames
 usagestr = 'usage: python ncdump_pdf.py /path/to/ICON_L2_xxxx.NC'
 if len(sys.argv)!=2:
@@ -133,8 +135,8 @@ for var_type in v:
         for attr in str_v:
             if isinstance(var_dict[attr],list):
                 var_dict[attr] = ', '.join(var_dict[attr])
- 
-            
+
+
 #### Convert Var_Notes and Text_Supplement to multi-strings, if they are not already.
 if isinstance(a['text_supplement'], (str, unicode)):
     a['text_supplement'] = [a['text_supplement']]
@@ -151,8 +153,14 @@ for var_type in v:
 #        for i in range(len(var_dict['Var_Notes'])):
 #            var_dict['Var_Notes'][i] = var_dict['Var_Notes'][i].replace('\n','<br />\n')
             
-
-            
+#### If Var_Notes are too long, truncate it so the pdf can be created.
+for var_type in v:
+    for var in v[var_type]:
+        nparag = len(var['var_notes'])
+        if nparag > PARAG_LIMIT:
+            print 'WARNING: Truncating Var_Notes for %s' % (var['name'])
+            var['var_notes'] = var['var_notes'][:PARAG_LIMIT]
+            var['var_notes'].append('NOTE: Var_Notes truncated. See NC file for full description.')
             
             
 ###################################################################################
@@ -261,7 +269,7 @@ var_type_ordered = [x for x in ['data','support_data','metadata'] if x in v.keys
 for var_type in v.keys():
     if var_type not in var_type_ordered:
         var_type_ordered.append(var_type)
-     
+        
 for var_type in var_type_ordered:
     text = var_type
     Story.append(Paragraph(text, styles["Heading2"]))
@@ -278,9 +286,11 @@ for var_type in var_type_ordered:
         # Build table entries as a Paragraph.
         # First, build the multiple paragraph entry in "Description" cell
         desc_col = [Paragraph(var['catdesc'], styles["Smallish"])] # Start with short description
+        ## HACK
+        desc_col.append(Spacer(1,6))
         for text in var['var_notes']: # Append paragraphs for each string in Var_Notes
-            desc_col.append(Spacer(1,6))
-            desc_col.append(Paragraph(text, styles["Small"]))
+           desc_col.append(Spacer(1,6))
+           desc_col.append(Paragraph(text, styles["Small"]))
         # Second, create other cells
         name_p = Paragraph('<font face="Courier">%s</font>' % (var['name']), styles["Smallish"])
         units_p = Paragraph(var['units'], styles["Smallish"])
