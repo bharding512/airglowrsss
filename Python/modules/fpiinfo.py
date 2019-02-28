@@ -1637,7 +1637,7 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
             instrument['default_params']['center'] = (266.106, 267.347)
         
         # After getting laser data we see that center pixel shifted
-        if dn >= datetime.datetime(2019,1,1):
+        if dn >= datetime.datetime(2018,12,1):
             instrument['default_params']['center'] = (266.106, 263.65)
         
         
