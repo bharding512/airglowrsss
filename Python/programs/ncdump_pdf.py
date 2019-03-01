@@ -20,7 +20,7 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 import sys
 
-PARAG_LIMIT = 20 # Limit the number of paragraphs in Var_Notes, otherwise reportlab will crash.
+PARAG_LIMIT = 17 # Limit the number of paragraphs in Var_Notes, otherwise reportlab will crash.
 
 ##### Define input and output filenames
 usagestr = 'usage: python ncdump_pdf.py /path/to/ICON_L2_xxxx.NC'
