@@ -866,7 +866,7 @@ def process_site(site_name, year, doy, reference='laser'):
 
 def process_directory(data_direc, results_direc, instrument, site, reference='laser',
                       wind_err_thresh=100., temp_err_thresh=100., make_plots=True, Tmin=300., Tmax=1500., 
-                      bw_cloud_file_1 = '', bw_cloud_file_2 = '', cloud_thresh = [-22.,-10.],):
+                      bw_cloud_file_1 = '', bw_cloud_file_2 = '', cloud_thresh = [-22.,-10.], horizon_cutoff=-6):
     '''
     Process all the data from the specified folder. This function analyzes 
     the laser and sky images to obtain line of sight winds, 
@@ -894,6 +894,8 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
                           (if '', ignore the second file)        
         cloud_thresh    - [float,float], K. The two cloud sensor readings that indicate 
                           partially- and fully-cloudy. This affects the quality flag.
+        horizon_cutoff  - int, deg. For solar elevation angles above this, the sun is considered "up" and 
+                          data are discarded.
                     
     OUTPUTS:
         warnings - str - If this script believes a manual check of the data
@@ -945,7 +947,7 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
         # Run the analysis
         (FPI_Results, notify_the_humans) = FPI.ParameterFit(instrument, site, laser_fns, sky_fns, \
                 direc_tol=direc_tol, N=instrument['N'], N0=instrument['N0'], N1=instrument['N1'], \
-                            logfile=logfile, diagnostic_fig=Diagnostic_Fig, reference=reference)
+                            logfile=logfile, diagnostic_fig=Diagnostic_Fig, reference=reference, horizon_cutoff=horizon_cutoff)
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
             'Laser and sky image analysis complete.\n')
     except: 

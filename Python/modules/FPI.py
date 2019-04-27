@@ -638,7 +638,7 @@ def get_conv_matrix_1D(instr_params, r, L, lam0, nFSRs = 4.):
     return A, lamvec
  
 
-def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, N0=0, N1=500, logfile=None, diagnostic_fig=None, horizon_cutoff = '-6:0', reference='laser'):
+def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, N0=0, N1=500, logfile=None, diagnostic_fig=None, horizon_cutoff = -6, reference='laser'):
     '''
      Function that solves for temperatures and Doppler velocities for all data
      in the present directory.  Uses a parameter fit algorithm to first estimate
@@ -662,7 +662,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
            logfile - the txt file to write logs to.  If None, it will be created.
            diagnostic_fig - the figure that diagnostic plots will be drawn to. If None, no plots
                             will be produced.
-           horizon_cutoff - str - the angle above which the sun is considered "up". (format 'deg:min')
+           horizon_cutoff - int - the angle above which the sun is considered "up". (e.g., -6)
            reference - str, 'laser' or 'zenith'. Whether or not to use the laser images. For example,
                        if the laser images are not usable, then specify 'Zenith', and default instrument
                        parameters (specified in the instruments dictionary) will be used in the
@@ -761,7 +761,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, direc_tol = 10.0, N=500, 
     obs.lon =       str(site['Location'][1])
     obs.elevation = site['Location'][2]
     obs.pressure =  0.
-    obs.horizon =   horizon_cutoff # for astro twilight
+    obs.horizon =  '%i:0' % horizon_cutoff # for astro twilight
     # Read the first file, subtract 12 hours, then ask for next sunset time
     # Read the first file, and ask for next sunrise time.
     d = ReadIMG(sky_all[0])
