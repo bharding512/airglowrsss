@@ -54,7 +54,7 @@ def activeinstruments():
     # 2. for remote2 server for emailing person of interest.
 
     # Email list
-    UIemail = ['ktchu2@illinois.edu','jmakela@illinois.edu']
+    UIemail = ['grawe2@illinois.edu','jmakela@illinois.edu']
     BZemail = ['rburiti.ufcg@gmail.com']
     AKemail = []
     MOemail = ['zouhair@uca.ac.ma']
@@ -158,7 +158,7 @@ def activeinstruments():
     #code['kwj']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.0.2/log.txt','email':UIemail}
     
     # Last index is for remote2 admin related issues (not site based)
-    code['ADMIN']={'email':['ktchu2@illinois.edu']}
+    code['ADMIN']={'email':['jmakela@illinois.edu']}
 
     return(code)
 
