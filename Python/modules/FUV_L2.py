@@ -13,8 +13,8 @@ Todo:
 # These need to be manually changed, when necessary.
 # NOTE: When the major version is updated, you should change the History global attribute
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 4 # [0-99], increment on ALL published changes, resetting when the major version changes
-software_version = float(software_version_major)+software_version_minor/100.
+software_version_minor = 5 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version = float(software_version_major)+software_version_minor/1000.
 ####################################################################################################
 
 # Basic numerical python and math modules
@@ -1389,7 +1389,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
                           dimensions=('Epoch','Stripe'),
                           format_nc='f4', format_fortran='F', desc='Estimated latitudes of the peak O+ densities',
                           display_type='Time_Series', field_name='NmF2 latitude', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='km', valid_min=np.float32(-90.), valid_max=np.float32(90.), var_type='data', chunk_sizes=[1,1],
+                          units='degrees North', valid_min=np.float32(-90.), valid_max=np.float32(90.), var_type='data', chunk_sizes=[1,1],
                           depend_0 = 'Epoch',depend_1='Stripe',
                           notes="The geodetic latitudes of the peak O+ densities that are obtained by performing nearest neighbor interpolation "
 "on each profile.")
@@ -1398,7 +1398,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
                           dimensions=('Epoch','Stripe'),
                           format_nc='f4', format_fortran='F', desc='Estimated longitudes of the peak O+ densities',
                           display_type='Time_Series', field_name='NmF2 longitude', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='km', valid_min=np.float32(0.), valid_max=np.float32(360.), var_type='data', chunk_sizes=[1,1],
+                          units='degrees East', valid_min=np.float32(0.), valid_max=np.float32(360.), var_type='data', chunk_sizes=[1,1],
                           depend_0 = 'Epoch',depend_1='Stripe',
                           notes="The geodetic longitudes of the peak O+ densities that are obtained by performing nearest neighbor interpolation "
 "on each profile.")
@@ -1407,7 +1407,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
                           dimensions=('Epoch','Stripe'),
                           format_nc='f4', format_fortran='F', desc='Estimated latitudes of the peak O+ densities',
                           display_type='Time_Series', field_name='NmF2 magnetic latitude', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='km', valid_min=np.float32(-90.), valid_max=np.float32(90.), var_type='data', chunk_sizes=[1,1],
+                          units='degrees North', valid_min=np.float32(-90.), valid_max=np.float32(90.), var_type='data', chunk_sizes=[1,1],
                           depend_0 = 'Epoch',depend_1='Stripe',
                           notes="The magnetic latitudes of the peak O+ densities that are obtained by performing nearest neighbor interpolation "
 "on each profile.")
@@ -1416,7 +1416,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
                           dimensions=('Epoch','Stripe'),
                           format_nc='f4', format_fortran='F', desc='Estimated longitudes of the peak O+ densities',
                           display_type='Time_Series', field_name='NmF2 magnetic longitude', fill_value=-999, label_axis='Time', bin_location=0.5,
-                          units='km', valid_min=np.float32(0.), valid_max=np.float32(360.), var_type='data', chunk_sizes=[1,1],
+                          units='degrees East', valid_min=np.float32(0.), valid_max=np.float32(360.), var_type='data', chunk_sizes=[1,1],
                           depend_0 = 'Epoch',depend_1='Stripe',
                           notes="The magnetic longitudes of the peak O+ densities that are obtained by performing nearest neighbor interpolation "
 "on each profile.")
