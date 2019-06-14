@@ -2,8 +2,7 @@
 # Level 1 files - Calibrated MIGHTI interferograms
 # Level 2.1 files - Line-of-sight wind profiles (this is where the onion-peeling inversion happens)
 # Level 2.2 files - Vector wind profiles (this is where the A/B matchup happens)
-# Altitudes and distances are expressed in km everywhere in the code, except when it's about to be
-# saved in a netCDF file in meters.
+# Altitudes and distances are expressed in km everywhere in the code
 
 
 ####################################### VERSION CONTROL ############################################
@@ -11,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 18 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 19 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -44,7 +43,7 @@ global_params['red'] = {
                                            # brightness (i.e, the integral of the VER profile). When a large fraction
                                            # comes from above the top observed altitude, the quality flag is raised.
                                            # This threshold is specified as a fraction of the total column brightness.
-    'terminator_thresh' : 2000.,           # [km]. Consider two points along the line of sight, both X km from the tangent 
+    'terminator_thresh' : 1000.,           # [km]. Consider two points along the line of sight, both X km from the tangent 
                                            # point (where X is this parameter). One is nearer to the spacecraft than the 
                                            # tangent point, and one is farther. If these two points are on opposite sides of the 
                                            # terminator, raise a quality flag. Note that this quality flag will also be raised if
@@ -65,7 +64,7 @@ global_params['green'] = { # See above for descriptions
     'top_layer'         : 'exp',
     'H'                 : 26.,
     'top_layer_thresh'  : 0.17,
-    'terminator_thresh' : 2000.,
+    'terminator_thresh' : 1000.,
     'sph_asym_thresh'   : 0.19,
     't_diff_AB'         : 20*60.
 }
@@ -86,11 +85,18 @@ import traceback # for printing detailed error traces
 import sys
 import copy
 
+
 import matplotlib
 #matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from matplotlib import dates
 from matplotlib.colors import LogNorm
+
+# Added in v1.19
+from mpl_toolkits.basemap import Basemap # For putting map on Tohban plots
+#import pyglow # for correcting VER for temperature visibility reduction
+import pysatMagVect # for reporting winds in magnetic coordinates
+
 
 # Some aesthetics for plots
 matplotlib.rcParams['xtick.labelsize'] = 'small'
@@ -126,6 +132,69 @@ def phase_to_wind_factor(sigma_opd):
     c      = 299792458.0 # m/s, speed of light
     return c / (2.*np.pi*sigma_opd)
 
+
+
+def visibility_temperature(t, lat, lon, alt):
+    '''
+    Return the temperature to be used to compute the fringe visibility reduction. 
+    Currently implemented with MSIS.
+    
+    INPUTS:
+      *  t    -- TYPE:datetime.          Time of requested point.
+      *  lat  -- TYPE:float,  UNITS:deg. Latitude of requested point.
+      *  lon  -- TYPE:float,  UNITS:deg. Longitude (0-360) of requested point.
+      *  alt  -- TYPE:float,  UNITS:km.  Altitude of requested point.
+      
+    OUTPUTS:
+      *  T    -- TYPE:float,  UNITS:K.   Temperature at requested point.
+    '''
+    # For now, MSIS is disabled since we would need the GPI file in practice. 
+    # TBD how we're going to handle this.
+#     pt = pyglow.Point(t, lat, lon, alt)
+#     pt.run_msis()
+    return 500.
+    
+    
+
+def amp_to_R_factor(sigma_opd,  T):
+    '''
+    Return the value g which satisfies I = g*A, where A is the fringe amplitude and I is the 
+    brightness in Rayleigh. The fringe amplitude should be considered on a per-pixel basis, or
+    equivalently, be considered as a mean over a row of the CCD. This was derived from first 
+    principles and guided by the equations in Englert et al. (2007) doi:10.1364/AO.46.007297.
+    The first principles calculation is adjusted by the multiplicative CAL_FACTOR to adjust for
+    information gained after on-orbit calibration efforts.
+    
+    UPDATE: As of May 2019, many of these corrections have been moved to the L1 process. The
+    only one that remains at L2 is the temperature correction (which must be done after the
+    inversion).
+    
+    INPUTS:
+    
+      *  sigma_opd       -- TYPE:float.                  sigma times opd: Optical path difference measured 
+                                                         in wavelengths. If analyzing an entire row at once, 
+                                                         the mean OPD of that row should be used.
+      *  T               -- TYPE:float, UNITS:K.         The temperature for visibility correction.
+      
+      
+    OUTPUTS:
+      *  g               -- TYPE:float, UNITS:R/counts.  Amplitude-to-Rayleigh factor, described above.
+    '''
+    
+    CAL_FACTOR = 1.00 # this will be informed by on-orbit calibrations
+
+    #### Temperature visibility correction term
+    # Physical constants
+    c = 299792458.            # The speed of light [m/s]
+    k = 1.3806503e-23         # Boltzmann's constant [J/K]
+    mO = 16 * 1.66053886e-27  # mass of oxygen [kg]
+    T_factor = np.exp(-2*np.pi**2 * sigma_opd**2 * k*T/c**2/mO)
+
+    #### Put it all together
+    # The 1e10 factor is from the definition of Rayleigh (1e10 photons) and so is the 1/(4pi) factor (per column, 
+    # while etendue is given in units of steradians)
+    R_to_counts = CAL_FACTOR * T_factor 
+    return 1.0/R_to_counts
 
 
 
@@ -493,6 +562,9 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', H=26., integr
     else:
         raise Exception('"integration_order == %i" not supported. Use 0 or 1.' % integration_order)
     
+    # Scale factor, so that when you invert a vector in Rayleigh you get a result in ph/cm^3/s
+    D = D * 1e-1 # convert from km to cm (*1e5) then *1e-6 accounts for "10^10 ph/m^2" in R definition.
+    
     return D
 
 
@@ -571,9 +643,8 @@ def analyze_row(row):
     chi2 = np.nanmean(resid**2)
     
     # Evaluate total amplitude
-    # Note: even though some rows are longer than others (near the bottom of the CCD),
-    # they are apodized and thus the missing pixels wouldn't contribute much anyway.
-    amp = np.nansum(abs(row))
+    # "Mean" is used to be resistant to rows with missing columns.
+    amp = np.nanmean(abs(row))
         
     return tot_phase, amp, chi2
 
@@ -772,7 +843,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
 
 
 
-def fix_longitudes(lons, lon_target):
+def fix_longitudes(lons, lon_target=None):
     '''
     Unwrap the list of longitudes to avoid 360-deg jumps. The list will
     be fixed so that it contains a value within 180 deg of lon_target and
@@ -781,13 +852,16 @@ def fix_longitudes(lons, lon_target):
     INPUTS:
     
       *  lons       -- TYPE:array, UNITS:deg. An ordered list of longitudes to be unwrapped.
-      *  lon_target -- TYPE:float, UNITS:deg. See above.
+      *  lon_target -- TYPE:float, UNITS:deg. See above. (defaults to 0th element)
       
     OUTPUTS:
     
       *  lons_new   -- TYPE:array, UNITS:deg. An ordered list of longitudes with jumps removed.
       
     '''
+    if lon_target is None:
+        lon_target = lons[0]
+    
     lons_new = np.array(lons).copy()
     
     # Find the index with value closest to lon_target (mod 360)
@@ -815,6 +889,33 @@ def fix_longitudes(lons, lon_target):
 
 
 
+def fix_longitudes_mat(lons, lon_target=None):
+    '''
+    Unwrap the matrix of longitudes to avoid 360-deg jumps along rows or columns. This is a
+    matrix version of the function "fix_longitudes(...)" which is for arrays. The matrix will
+    be fixed so that it contains a value within 180 deg of lon_target and
+    is otherwise as continuous as possible.
+    
+    INPUTS:
+    
+      *  lons       -- TYPE:array(m,n), UNITS:deg. An ordered matrix of longitudes to be unwrapped.
+      *  lon_target -- TYPE:float,      UNITS:deg. See above. (defaults to [0,0] element)
+      
+    OUTPUTS:
+    
+      *  lons_new   -- TYPE:array(m,n), UNITS:deg. An ordered matrix of longitudes with jumps removed.
+    '''
+    if lon_target is None:
+        lon_target = lons[0,0]
+    
+    x = lons.copy()
+    x[0,:] = fix_longitudes(x[0,:], lon_target)
+    for i in range(np.shape(x)[1]):
+        x[:,i] = fix_longitudes(x[:,i], x[0,i])
+    return x
+    
+
+    
 
 def attribute_measurement_location(tang_lat, tang_lon, tang_alt, integration_order=0):
     '''
@@ -1103,6 +1204,21 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     L1_dict['att_lvlh_reverse'] = attitude[1]
     L1_dict['att_limb_pointing'] = attitude[2]
     L1_dict['att_conjugate'] = attitude[6]
+    # Read aperture position
+    ap = f['ICON_L0_MIGHTI_%s_MT%s_Aperture1_Position' % (sensor, sensor)][0]
+    assert ap in [0,2], "Aperture position not understood (%s but expected 0 or 2)"%ap
+    if ap == 0:
+        L1_dict['aperture'] = 'night'
+    else: # ap == 2
+        L1_dict['aperture'] = 'day'
+    # New variables in v1.19: mag lat, mag lon, sza, slt.
+    # For these new variables take middle of exposure
+    L1_dict['mag_lat'] = f['ICON_L1_MIGHTI_%s_%s_Tangent_Magnetic_Latitude' % (sensor, emission_color.capitalize())][0,1,:]
+    L1_dict['mag_lon'] = f['ICON_L1_MIGHTI_%s_%s_Tangent_Magnetic_Longitude' % (sensor, emission_color.capitalize())][0,1,:]
+    L1_dict['slt'] = f['ICON_L1_MIGHTI_%s_%s_Tangent_Local_Solar_Time' % (sensor, emission_color.capitalize())][0,1,:]
+    L1_dict['sza'] = f['ICON_L1_MIGHTI_%s_%s_Tangent_Solar_Zenith_Angle' % (sensor, emission_color.capitalize())][0,1,:]
+    L1_dict['I_dc'] = f['ICON_L1_MIGHTI_%s_%s_Relative_Brightness' % (sensor, emission_color.capitalize())][0,:]
+
     
     # Quality factors and flags
     L1_dict['quality'] =  f['ICON_L1_MIGHTI_%s_%s_Quality_Factor' % (sensor, emission_color.capitalize())][0]
@@ -1127,6 +1243,11 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
             L1_dict[v] = L1_dict[v].filled(np.nan)
     
     f.close()
+    
+    
+    ### TEMP HACK: zero out s/c velocity for testing
+#     print 'WARNING: zeroing velocity vector'
+#     L1_dict['icon_velocity_vector'][:] = 0.0
     
     return L1_dict
 
@@ -1312,6 +1433,18 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                                                       Attitude register bit 2: Earth Limb Pointing
                                       * att_conjugate              -- TYPE:int. 0 or 1
                                                                       Attitude register bit 6: Conjugate Maneuver
+                                      * aperture                   -- TYPE:str. 'day' or 'night'. Day has a smaller aperture than night.
+                                      * mag_lat                    -- TYPE:array(ny)     UNITS:deg.
+                                                                      Magnetic quasi-dipole latitude
+                                      * mag_lon                    -- TYPE:array(ny)     UNITS:deg.
+                                                                      Magnetic quasi-dipole longitude
+                                      * sza                        -- TYPE:array(ny)     UNITS:deg.
+                                                                      Solar zenith angle
+                                      * slt                        -- TYPE:array(ny)     UNITS:hour.
+                                                                      Solar local time
+                                      * I_dc                       -- TYPE:array(ny)     UNITS:R.
+                                                                      Brightness observed at each row. Like I_amp, but generated from the 
+                                                                      DC value of the measured interferogram, not the fringe amplitude.
                                       * quality                    -- TYPE:array(ny).
                                                                       The overall quality, between 0 (bad) and 1 (good) for each altitude
                                       * quality_flags              -- TYPE:array(ny,ne).
@@ -1351,6 +1484,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                             terminator, raise a quality flag. Note that this quality flag will also be raised if
                                             any observations at lower zenith angles for the same observation are flagged, because
                                             the inversion mixes information from those observations.
+                                            
     OUTPUTS:
     
       *  L21_dict            -- TYPE:dict. A dictionary containing output variables of the Level 2.1 processing:
@@ -1371,6 +1505,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                     * icon_alt                  -- TYPE:float,       UNITS:km.    Spacecraft altitude
                     * icon_lat                  -- TYPE:float,       UNITS:deg.   Spacecraft latitude
                     * icon_lon                  -- TYPE:float,       UNITS:deg.   Spacecraft longitude [0,360]
+                    * ver                       -- TYPE:array(ny),   UNITS:ph/cm^3/s. Volume emission rate.
+                    * ver_error                 -- TYPE:array(ny),   UNITS:ph/cm^3/s. Statistical uncertainty in ver.
                     * fringe_amplitude          -- TYPE:array(ny),   UNITS:arb.   The fringe contrast, a proxy for volume emission rate
                     * fringe_amplitude_error    -- TYPE:array(ny),   UNITS:arb.   Uncertainty in fringe_amplitude (1-sigma)
                     * mighti_ecef_vectors       -- TYPE:array(ny,3).              ECEF unit vector for each line of sight
@@ -1407,7 +1543,12 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                     * att_lvlh_reverse          -- TYPE:int. 0 or 1               Attitude register bit 1: LVLH Reverse
                     * att_limb_pointing         -- TYPE:int. 0 or 1               Attitude register bit 2: Earth Limb Pointing
                     * att_conjugate             -- TYPE:int. 0 or 1               Attitude register bit 6: Conjugate Maneuver
-    
+                    * mag_lat                   -- TYPE:array(ny),    UNITS:deg.  Magnetic quasi-dipole latitude
+                    * mag_lon                   -- TYPE:array(ny),    UNITS:deg.  Magnetic quasi-dipole longitude
+                    * sza                       -- TYPE:array(ny),    UNITS:deg.  Solar zenith angle
+                    * slt                       -- TYPE:array(ny),    UNITS:hour. Solar local time
+                    * ver_dc                    -- TYPE:array(ny),    UNITS:ph/cm^3/s. Like ver, but generated from the DC value of the
+                                                                                  interferogram, not the fringe amplitude.
     '''
     
     #### Parse input parameters and load defaults
@@ -1444,8 +1585,10 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     sigma_opd = sigma * opd # Optical path difference, in units of wavelengths
     mighti_ecef_vectors = L1_dict['mighti_ecef_vectors']
     icon_velocity_vector = L1_dict['icon_velocity_vector']
+    aperture = L1_dict['aperture']
     L1_quality_flags = L1_dict['quality_flags']
     L1_quality       = L1_dict['quality']
+    I_dc = L1_dict['I_dc']
     
     # Load parameters which are averaged from start to stop of exposure.
     icon_alt = (L1_dict['icon_alt_start'] + L1_dict['icon_alt_stop'])/2
@@ -1454,6 +1597,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     tang_alt = (L1_dict['tang_alt_start'] + L1_dict['tang_alt_stop'])/2
     tang_lat = (L1_dict['tang_lat_start'] + L1_dict['tang_lat_stop'])/2
     tang_lon = circular_mean(L1_dict['tang_lon_start'], L1_dict['tang_lon_stop'])
+    tmid     = L1_dict['time_start'] + (L1_dict['time_stop'] - L1_dict['time_start'])/2
     
     #### Remove Satellite Velocity
     icon_latlonalt = np.array([icon_lat, icon_lon, icon_alt])
@@ -1488,6 +1632,20 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     v             = f * phase
     v_uncertainty = f * phase_uncertainty
     
+    
+    #### Transform from fringe amplitude to VER
+    r = np.zeros(ny) # amp-to-R factor, altitude dependent
+    for i in range(ny):
+        T = visibility_temperature(tmid, lat[i], lon[i], alt[i])
+#         T = 600. # TODO: delete me
+        r[i] = amp_to_R_factor(np.mean(sigma_opd), T)
+    ver = r * amp
+    ver_uncertainty = r * amp_uncertainty    
+    
+    #### Invert DC value of interferogram to get alternative VER product
+    D = create_observation_matrix(tang_alt, icon_alt, top_layer=top_layer, integration_order=integration_order, H=H)
+    ver_dc = np.linalg.solve(D, I_dc)
+    
     #### Calculate azimuth angles at measurement locations
     az = los_az_angle(icon_latlonalt, lat, lon, alt)
     
@@ -1500,7 +1658,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
              'alt'                          : alt,
              'time_start'                   : L1_dict['time_start'],
              'time_stop'                    : L1_dict['time_stop'],
-             'time'                         : L1_dict['time_start'] + (L1_dict['time_stop'] - L1_dict['time_start'])/2,
+             'time'                         : tmid,
              'exp_time'                     : exp_time,
              'az'                           : az,
              'emission_color'               : emission_color,
@@ -1508,6 +1666,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
              'icon_alt'                     : icon_alt,
              'icon_lat'                     : icon_lat,
              'icon_lon'                     : icon_lon,
+             'ver'                          : ver,
+             'ver_error'                    : ver_uncertainty,
              'fringe_amplitude'             : amp,
              'fringe_amplitude_error'       : amp_uncertainty,
              'mighti_ecef_vectors'          : mighti_ecef_vectors_center,
@@ -1528,6 +1688,11 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
              'att_lvlh_reverse'             : L1_dict['att_lvlh_reverse'],
              'att_limb_pointing'            : L1_dict['att_limb_pointing'],
              'att_conjugate'                : L1_dict['att_conjugate'],
+             'mag_lat'                      : L1_dict['mag_lat'],
+             'mag_lon'                      : L1_dict['mag_lon'],
+             'sza'                          : L1_dict['sza'],
+             'slt'                          : L1_dict['slt'],
+             'ver_dc'                       : ver_dc,
     }
     
     #### Quality control and flagging
@@ -1546,6 +1711,9 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     idx = L21_dict['ver_quality'] == 0.0
     L21_dict['fringe_amplitude'][idx] = np.nan
     L21_dict['fringe_amplitude_error'][idx] = np.nan
+    L21_dict['ver'][idx] = np.nan
+    L21_dict['ver_error'][idx] = np.nan
+    L21_dict['ver_dc'][idx] = np.nan
     
     return L21_dict
 
@@ -1685,6 +1853,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
       
     '''
     
+    assert np.ndim(L21_dict['los_wind']) > 1, "Are you accidentally saving one inversion instead of many?"
+    
     L21_dict = copy.deepcopy(L21_dict) # because netCDF4 seems to change the input when nans are involved
     data_version_major = software_version_major # enforced as per Data Product Conventions Document
     
@@ -1713,7 +1883,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         parents.append('%s > %s' % (post, pre))
 
 
-    L21_fn = 'ICON_L2_MIGHTI-%s_Line-of-Sight-Wind-%s_%s_v%02ir%03i.NC' % (sensor,L21_dict['emission_color'].capitalize(),
+    L21_fn = 'ICON_L2-1_MIGHTI-%s_LOS-Wind-%s_%s_v%02ir%02i.NC' % (sensor,L21_dict['emission_color'].capitalize(),
                                                            date0.strftime('%Y-%m-%d'),
                                                            data_version_major, data_revision)
     L21_full_fn = '%s%s'%(path, L21_fn)
@@ -1778,11 +1948,9 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
 
         ################################## Dimensions ########################################
-        prefix = 'ICON_L2_MIGHTI_%s_%s' % (sensor, L21_dict['emission_color'].capitalize()) # prefix of each variable,
-                                                                                            # e.g., ICON_L2_MIGHTI_A_Red
-        var_alt_name = '%s_Altitude'%prefix
+        prefix = 'ICON_L21' # prefix of each variable
         ncfile.createDimension('Epoch',nt)
-        ncfile.createDimension(var_alt_name, ny)
+        ncfile.createDimension('Altitude', ny)
         ncfile.createDimension('Vector',3)
         ncfile.createDimension('Start_Mid_Stop',3)
         ncfile.createDimension('N_Flags', ne)
@@ -1827,7 +1995,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
         # Line-of-sight wind profile
         var = _create_variable(ncfile, '%s_Line_of_Sight_Wind'%prefix, L21_dict['los_wind'], 
-                              dimensions=('Epoch',var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Line-of-sight horizontal wind profile. A positive wind is towards MIGHTI.', 
                               display_type='altitude_profile', field_name='Line-of-sight Wind', fill_value=None, label_axis='LoS Wind', bin_location=0.5,
                               units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nt,ny],
@@ -1844,7 +2012,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         
         # Line-of-sight wind error profile
         var = _create_variable(ncfile, '%s_Line_of_Sight_Wind_Error'%prefix, L21_dict['los_wind_error'], 
-                              dimensions=('Epoch',var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Line-of-sight horizontal wind error profile', 
                               display_type='altitude_profile', field_name='Line-of-sight Wind Error', fill_value=None, label_axis='Wind Error', bin_location=0.5,
                               units='m/s', valid_min=0.0, valid_max=4000., var_type='data', chunk_sizes=[nt,ny],
@@ -1857,7 +2025,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         
         # Quality code
         var = _create_variable(ncfile, '%s_Wind_Quality'%prefix, L21_dict['wind_quality'], 
-                              dimensions=('Epoch',var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='A quantification of the wind quality, from 0 (Bad) to 1 (Good)', 
                               display_type='altitude_profile', field_name='Wind Quality', fill_value=None, label_axis='Quality', bin_location=0.5,
                               units='', valid_min=0.0, valid_max=1.0, var_type='data', chunk_sizes=[nt,ny],
@@ -1872,7 +2040,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         
         # Fringe amplitude profile 
         var = _create_variable(ncfile, '%s_Fringe_Amplitude'%prefix, L21_dict['fringe_amplitude'], 
-                              dimensions=('Epoch',var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Fringe amplitude profile', 
                               display_type='altitude_profile', field_name='Fringe Amplitude', fill_value=None, label_axis='Fringe Amp', bin_location=0.5,
                               units='arb', valid_min=-1e30, valid_max=1e30, var_type='data', chunk_sizes=[nt,ny],
@@ -1887,7 +2055,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
         # Fringe amplitude error profile
         var = _create_variable(ncfile, '%s_Fringe_Amplitude_Error'%prefix, L21_dict['fringe_amplitude_error'], 
-                              dimensions=('Epoch',var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Fringe amplitude error profile', 
                               display_type='altitude_profile', field_name='Fringe Amplitude Error', fill_value=None, label_axis='Amp Err', bin_location=0.5,
                               units='arb', valid_min=0.0, valid_max=1e30, var_type='data', chunk_sizes=[nt,ny],
@@ -1895,16 +2063,17 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               "included, but can arise from sources such as horizontal gradients and inaccurate calibration."
                               )
         
-        # Relative VER (TODO: right now this just replicates fringe amplitude. Replace it with VER)
-        var = _create_variable(ncfile, '%s_Relative_VER'%prefix, L21_dict['fringe_amplitude'], 
-                              dimensions=('Epoch',var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+        # Relative VER 
+        var = _create_variable(ncfile, '%s_Relative_VER'%prefix, L21_dict['ver'], 
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Relative volume emission rate profile', 
                               display_type='altitude_profile', field_name='Relative VER', fill_value=None, label_axis='VER', bin_location=0.5,
                               units='ph/cm^3/s', valid_min=0, valid_max=1e30, var_type='data', chunk_sizes=[nt,ny],
                               notes= "The volume emission rate (VER) obtained by scaling the fringe amplitude by a calibration factor. "
                                "Pre-flight calibrations and on-orbit comparisons with ground-based instruments are used to determine the "
-                               "best possible calibration. However, because this calibration is uncertain, and because the fringe "
-                               "amplitude has a small dependence on atmospheric temperature, caution should be exercised when absolute "
+                               "best possible calibration. The fringe amplitude has a dependence on temperature, which is corrected using "
+                               "the MSIS model. Because the on-orbit calibration is uncertain, and because the MSIS "
+                               "temperature correction is not perfect, caution should be exercised when absolute "
                                "calibration is required, or when comparisons are being made between samples at different temperatures. "
                                "Please contact the MIGHTI team before performing any studies that require absolute calibration. "
                                "The statistical (1-sigma) error for this variable is provided in "
@@ -1912,9 +2081,9 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                                "the total error."
                               )
         
-        # Relative VER Error (TODO: right now this just replicates fringe amplitude. Replace it with VER)
-        var = _create_variable(ncfile, '%s_Relative_VER_Error'%prefix, L21_dict['fringe_amplitude_error'], 
-                              dimensions=('Epoch',var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+        # Relative VER Error 
+        var = _create_variable(ncfile, '%s_Relative_VER_Error'%prefix, L21_dict['ver_error'], 
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Relative volume emission rate error profile', 
                               display_type='altitude_profile', field_name='Relative VER', fill_value=None, label_axis='VER', bin_location=0.5,
                               units='ph/cm^3/s', valid_min=0, valid_max=1e30, var_type='data', chunk_sizes=[nt,ny],
@@ -1925,7 +2094,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         
         # Quality code
         var = _create_variable(ncfile, '%s_VER_Quality'%prefix, L21_dict['ver_quality'], 
-                              dimensions=('Epoch',var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='A quantification of the VER quality, from 0 (Bad) to 1 (Good)', 
                               display_type='altitude_profile', field_name='VER Quality', fill_value=None, label_axis='Quality', bin_location=0.5,
                               units='', valid_min=0.0, valid_max=1.0, var_type='data', chunk_sizes=[nt,ny],
@@ -1941,9 +2110,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ######### Data Location and Direction Variables #########
         
         # Altitude
-        val = L21_dict['alt']
-        var = _create_variable(ncfile, '%s_Altitude'%prefix, val, 
-                              dimensions=('Epoch',var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+        var = _create_variable(ncfile, '%s_Altitude'%prefix, L21_dict['alt'], 
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='WGS84 altitude of each wind sample', 
                               display_type='altitude_profile', field_name='Altitude', fill_value=None, label_axis='Altitude', bin_location=0.5,
                               units='km', valid_min=50., valid_max=1000., var_type='support_data', chunk_sizes=[nt,ny],
@@ -1956,7 +2124,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
         # Latitude
         var = _create_variable(ncfile, '%s_Latitude'%prefix, L21_dict['lat'], 
-                              dimensions=('Epoch',var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='WGS84 latitude of each wind sample', 
                               display_type='altitude_profile', field_name='Latitude', fill_value=None, label_axis='Latitude', bin_location=0.5,
                               units='deg', valid_min=-90., valid_max=90., var_type='support_data', chunk_sizes=[nt,ny],
@@ -1968,7 +2136,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
         # Longitude
         var = _create_variable(ncfile, '%s_Longitude'%prefix, L21_dict['lon'], 
-                              dimensions=('Epoch',var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='WGS84 longitude of each wind sample', 
                               display_type='altitude_profile', field_name='Longitude', fill_value=None, label_axis='Longitude', bin_location=0.5,
                               units='deg', valid_min=0., valid_max=360., var_type='support_data', chunk_sizes=[nt,ny],
@@ -1977,10 +2145,41 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               "value (the tangent longitude) is given for each point, the observation is inherently a horizontal average "
                               "over many hundreds of kilometers."
                               )
+        
+        # Magnetic Latitude
+        var = _create_variable(ncfile, '%s_Magnetic_Latitude'%prefix, L21_dict['mag_lat'], 
+                              dimensions=('Epoch', 'Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
+                              format_nc='f8', format_fortran='F', desc='Magnetic quasi-dipole latitude of each wind sample', 
+                              display_type='image', field_name='Mag Lat', fill_value=None, label_axis='Mag Lat', bin_location=0.5,
+                              units='deg', valid_min=-90., valid_max=90., var_type='support_data', chunk_sizes=[nt,ny],
+                              notes="A two-dimensional array defining the magnetic quasi-dipole latitude of the two-dimensional data grid. "
+                              "The latitude varies only slightly (a few deg) with altitude, but this variation is included. "
+                              "It should be noted that while a single latitude value is given for each point, the observation is "
+                              "inherently a horizontal average over many hundreds of kilometers. "
+                              "Quasi-dipole latitude and longitude are calculated using the fast implementation developed by "
+                              "Emmert et al. (2010, doi:10.1029/2010JA015326) and the Python wrapper apexpy "
+                              "(https://github.com/aburrell/apexpy/). "
+                              )
+        
+        # Magnetic Longitude
+        var = _create_variable(ncfile, '%s_Magnetic_Longitude'%prefix, L21_dict['mag_lon'], 
+                              dimensions=('Epoch', 'Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
+                              format_nc='f8', format_fortran='F', desc='Magnetic quasi-dipole longitude of each wind sample', 
+                              display_type='image', field_name='Mag Lon', fill_value=None, label_axis='Mag Lon', bin_location=0.5,
+                              units='deg', valid_min=0., valid_max=360., var_type='support_data', chunk_sizes=[nt,ny],
+                              notes="A two-dimensional array defining the magnetic quasi-dipole longitude of the two-dimensional data grid. "
+                              "The longitude varies only slightly (a few deg) with altitude, but this variation is included. "
+                              "It should be noted that while a single longitude value is given for each point, the observation is "
+                              "inherently a horizontal average over many hundreds of kilometers. "
+                              "Quasi-dipole latitude and longitude are calculated using the fast implementation developed by "
+                              "Emmert et al. (2010, doi:10.1029/2010JA015326) and the Python wrapper apexpy "
+                              "(https://github.com/aburrell/apexpy/). "
+                              )
+        
 
         # Azimuth angle of line of sight
         var = _create_variable(ncfile, '%s_Line_of_Sight_Azimuth'%prefix, L21_dict['az'], 
-                              dimensions=('Epoch',var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Azimuth angle of the line of sight at the tangent point. Deg East of North.', 
                               display_type='altitude_profile', field_name='Line-of-sight Azimuth', fill_value=None, label_axis='Azimuth', bin_location=0.5,
                               units='deg', valid_min=0., valid_max=360., var_type='support_data', chunk_sizes=[nt,ny],
@@ -1995,6 +2194,24 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
         ######### Other Metadata Variables #########
         
+        # Solar zenith angle
+        var = _create_variable(ncfile, '%s_Solar_Zenith_Angle'%prefix, L21_dict['sza'],
+                              dimensions=('Epoch', 'Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
+                              format_nc='f8', format_fortran='F', desc='Solar zenith angle of each wind sample', 
+                              display_type='image', field_name='SZA', fill_value=None, label_axis='SZA', bin_location=0.5,
+                              units='deg', valid_min=0., valid_max=180., var_type='support_data', chunk_sizes=[nt,ny],
+                              notes="Angle between the ray towards the sun and towards zenith, at the location of each wind sample."
+                              )
+                               
+        # Solar local time                      
+        var = _create_variable(ncfile, '%s_Solar_Local_Time'%prefix, L21_dict['slt'], 
+                              dimensions=('Epoch', 'Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
+                              format_nc='f8', format_fortran='F', desc='Solar local time of each wind sample', 
+                              display_type='image', field_name='SLT', fill_value=None, label_axis='SLT', bin_location=0.5,
+                              units='hour', valid_min=0., valid_max=24., var_type='support_data', chunk_sizes=[nt,ny],
+                              notes="Solar local time at the location and time of each wind sample, calculated using the equation of time."
+                              )
+
         # Exposure Time
         var = _create_variable(ncfile, '%s_Exposure_Time'%prefix, L21_dict['exp_time'],
                               dimensions=('Epoch'), depend_0 = 'Epoch',
@@ -2007,7 +2224,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
         # Chi^2 variability of phase in each row
         var = _create_variable(ncfile, '%s_Chi2'%prefix, L21_dict['chi2'], 
-                              dimensions=('Epoch',var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Variance of the phase in each (unwrapped) row: (std of phase)^2', 
                               display_type='altitude_profile', field_name='Variance of each phase row', fill_value=None, label_axis='Chi^2', bin_location=0.5,
                               units='rad^2', valid_min=0., valid_max=1e30, var_type='metadata', chunk_sizes=[nt, ny],
@@ -2017,7 +2234,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               )
         
         # ICON velocity vector
-        var = _create_variable(ncfile, '%s_Spacecraft_Velocity_Vector'%prefix, L21_dict['icon_velocity_ecef_vector'], 
+        var = _create_variable(ncfile, '%s_Observatory_Velocity_Vector'%prefix, L21_dict['icon_velocity_ecef_vector'], 
                               dimensions=('Epoch','Vector'), depend_0 = 'Epoch',
                               format_nc='f8', format_fortran='F', desc="ICON's velocity vector in Earth-centered, Earth-fixed coordinates", 
                               display_type='time_series', field_name='ICON Velocity Vector', fill_value=None, label_axis='S/C Vel', bin_location=0.5,
@@ -2028,7 +2245,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               "ICON_..._Line_of_Sight_Wind variable.")
 
         # ICON latitude
-        var = _create_variable(ncfile, '%s_Spacecraft_Latitude'%prefix, L21_dict['icon_lat'], 
+        var = _create_variable(ncfile, '%s_Observatory_Latitude'%prefix, L21_dict['icon_lat'], 
                               dimensions=('Epoch'), depend_0 = 'Epoch',
                               format_nc='f8', format_fortran='F', desc='The WGS84 latitude of ICON', 
                               display_type='time_series', field_name='Spacecraft Latitude', fill_value=None, label_axis='S/C Lat', bin_location=0.5,
@@ -2036,7 +2253,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               notes='The latitude of ICON at the midpoint time of the observation, using the WGS84 ellipsoid.')
 
         # ICON longitude
-        var = _create_variable(ncfile, '%s_Spacecraft_Longitude'%prefix, L21_dict['icon_lon'], 
+        var = _create_variable(ncfile, '%s_Observatory_Longitude'%prefix, L21_dict['icon_lon'], 
                               dimensions=('Epoch'), depend_0 = 'Epoch',
                               format_nc='f8', format_fortran='F', desc='The WGS84 longitude of ICON', 
                               display_type='time_series', field_name='Spacecraft Longitude', fill_value=None, label_axis='S/C Lon', bin_location=0.5,
@@ -2044,7 +2261,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               notes='The longitude (0-360) of ICON at the midpoint time of the observation, using the WGS84 ellipsoid.')
 
         # ICON altitude
-        var = _create_variable(ncfile, '%s_Spacecraft_Altitude'%prefix, L21_dict['icon_alt'], 
+        var = _create_variable(ncfile, '%s_Observatory_Altitude'%prefix, L21_dict['icon_alt'], 
                               dimensions=('Epoch'), depend_0 = 'Epoch',
                               format_nc='f8', format_fortran='F', desc='The WGS84 altitude of ICON', 
                               display_type='time_series', field_name='Spacecraft Altitude', fill_value=None, label_axis='S/C Alt', bin_location=0.5,
@@ -2082,7 +2299,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
         # MIGHTI ECEF vectors
         var = _create_variable(ncfile, '%s_Line_of_Sight_Vector'%prefix, L21_dict['mighti_ecef_vectors'], 
-                              dimensions=('Epoch',var_alt_name,'Vector'), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              dimensions=('Epoch','Altitude','Vector'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='The look direction of each MIGHTI line of sight, as a vector in ECEF', 
                               display_type='altitude_profile', field_name='Line-of-sight Vector', fill_value=None, label_axis='LoS Vec', bin_location=0.5,
                               units='', valid_min=-1., valid_max=1., var_type='metadata', chunk_sizes=[nt,ny,3],
@@ -2168,7 +2385,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         
         # Quality flags      
         var = _create_variable(ncfile, '%s_Quality_Flags'%prefix, L21_dict['quality_flags'], 
-                              dimensions=('Epoch',var_alt_name, 'N_Flags'), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              dimensions=('Epoch','Altitude', 'N_Flags'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='i8', format_fortran='I', desc='Quality flags', 
                               display_type='image', field_name='Quality Flags', fill_value=-1, label_axis='Qual Flags', bin_location=0.5,
                               units='', valid_min=0, valid_max=1, var_type='metadata', chunk_sizes=[nt,ny,12],
@@ -2190,6 +2407,17 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                                        "11: Unused",
                                     ])
         
+        # Alternative VER product derived from DC value of interferogram
+        var = _create_variable(ncfile, '%s_Relative_VER_DC'%prefix, L21_dict['ver_dc'], 
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
+                              format_nc='f8', format_fortran='F', desc='Relative volume emission rate profile derived from DC value', 
+                              display_type='altitude_profile', field_name='Relative VER', fill_value=None, label_axis='VER', bin_location=0.5,
+                              units='ph/cm^3/s', valid_min=0, valid_max=1e30, var_type='ignore_data', chunk_sizes=[nt,ny],
+                              notes= "The MIGHTI team recommends that users utilize the Relative_VER variable instead of this variable. This "
+                               "is the same as Relative_VER, except it is derived from the DC value of the interferogram rather than the fringe "
+                               "amplitude. The DC value is susceptible to contamination by stray light and background emission, but is "
+                               "not sensitive to atmospheric temperature like the fringe amplitude."
+                              )
         ncfile.close()
 
 
@@ -2203,6 +2431,56 @@ def save_nc_level21(path, L21_dict, data_revision=0):
     
     
     
+def combine_level21(L21_dicts):
+    '''
+    Combine many L2.1 dictionaries (from the output of the L1-to-L2.1 processing) into a single dictionary with the 
+    same keys, but with the variables that change with time having an extra dimension (dimension 0) for time. This
+    new dictionary is the proper input for the save_nc_level21 function.
+    
+    INPUTS:
+    
+      * L21_dicts  --TYPE:list of dict.   Each dictionary should have form described by level1_dict_to_level21_dict(...)
+      
+    OUTPUTS:
+    
+      * L21_dict   --TYPE:dict.           The variables in this dictionary match those described in the documentation for 
+                                          level1_dict_to_level21_dict(...) but have an extra dimension (on axis 0) for time.
+                                          Variables which do not change in time (e.g., emission color) do not have this extra 
+                                          dimension. The variable "I" is also omitted, for speed, because it is not saved
+                                          in the L2.1 file.
+    '''
+    N = len(L21_dicts)
+
+    # The parameters to be saved fall into two categories: those that change with time and those that don't.
+    # Define keys which should *not* change in time. All the rest will have an extra dimension 0.
+    common_keys = ['acknowledgement',
+                   'sensor',
+                   'emission_color',
+                   'bin_size', # if this varies within a day, we can't save all profiles in one file
+                  ]
+    changing_keys = L21_dicts[0].keys()
+    for k in common_keys:
+        changing_keys.remove(k)
+    if 'I' in changing_keys:
+        changing_keys.remove('I') # because it is large and not saved in the 2.1 file anywa.
+
+    # Check if all of the common keys are in fact common
+    for key in common_keys:
+        for n in range(N):
+            assert L21_dicts[n][key] == L21_dicts[0][key], 'The variable "%s" is changing with time (%s vs %s)' % (key, L21_dicts[n][key], L21_dicts[0][key])
+
+    # Create one large dictionary
+    L21_dict = {}
+    for key in common_keys:
+        L21_dict[key] = L21_dicts[0][key]
+    for key in changing_keys:
+        z = [L21_dicts[n][key] for n in range(N)]
+        v = np.stack(z, axis=0) # Make time the first dimension
+        L21_dict[key] = v    
+    return L21_dict
+
+
+
     
 def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_revision=0, sigma=None, top_layer=None, 
                                         H = None, integration_order=None, account_for_local_projection=None, 
@@ -2291,61 +2569,7 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
     
     
     ########## Concatenate all of the L2.1 inversions into one dictionary and save ##############
-
-    N = len(L21_dicts)
-
-    # The parameters to be saved fall into two categories: those that change with time and those that don't:
-    changing_keys = ['los_wind',
-                     'los_wind_error',
-                     'lat',
-                     'lon',
-                     'alt',
-                     'time_start',
-                     'time_stop',
-                     'time',
-                     'exp_time',
-                     'az',
-                     'icon_alt',
-                     'icon_lat',
-                     'icon_lon',
-                     'fringe_amplitude',
-                     'fringe_amplitude_error',
-                     'mighti_ecef_vectors',
-                     'icon_velocity_ecef_vector',
-                     'file_creation_time',
-                     'source_files',
-                     'top_layer',
-                     'H',
-                     'integration_order',
-                     # The variable "I" is skipped here, since it is large and is not saved in the file
-                     'chi2',
-                     'wind_quality',
-                     'ver_quality',
-                     'quality_flags',
-                     'att_lvlh_normal',
-                     'att_lvlh_reverse',
-                     'att_limb_pointing',
-                     'att_conjugate',
-                    ]
-    common_keys = ['acknowledgement',
-                   'sensor',
-                   'emission_color',
-                   'bin_size', # if this varies within a day, we can't save all profiles in one file
-                  ]
-
-    # Check if all of the common keys are in fact common
-    for key in common_keys:
-        for n in range(N):
-            assert L21_dicts[n][key] == L21_dicts[0][key], 'The variable "%s" is changing with time (%s vs %s)' % (key, L21_dicts[n][key], L21_dicts[0][key])
-
-    # Create one large dictionary
-    L21_dict = {}
-    for key in common_keys:
-        L21_dict[key] = L21_dicts[0][key]
-    for key in changing_keys:
-        z = [L21_dicts[n][key] for n in range(N)]
-        v = np.stack(z, axis=0) # Make time the first dimension
-        L21_dict[key] = v
+    L21_dict = combine_level21(L21_dicts)
     
     # Save L2.1 file
     L21_fn = save_nc_level21(L21_path, L21_dict, data_revision)
@@ -2475,24 +2699,12 @@ def level1_to_level21(info_fn):
             except Exception as e:
                 failure_messages.append('Failed processing:\n\tsensor  = %s\n\tcolor   = %s\n%s\n'%(sensor, emission_color, traceback.format_exc()))
     
-    # Summary plots: One plot for each sensor
-    Afns = [fn for fn in L21_fns if 'MIGHTI-A' in fn]
-    for sensor in ['A','B']:
-        # Plot the red file and the green file together, but it should still make a plot if
-        # one color is missing.
-        red_fns   = [fn for fn in L21_fns if 'MIGHTI-%s'%sensor in fn and 'Red' in fn]
-        green_fns = [fn for fn in L21_fns if 'MIGHTI-%s'%sensor in fn and 'Green' in fn]
-        assert len(red_fns)<2 and len(green_fns)<2, "Too many files found. There's a bug in the code."
-        if len(red_fns)==0:
-            red_fns.append('')
-        if len(green_fns)==0:
-            green_fns.append('')
-        red_fn = red_fns[0]
-        green_fn = green_fns[0]
+    # Summary plots: One plot for each file
+    for fn in L21_fns:
         try:
-            plot_level21(red_fn, green_fn, direc + 'Output/')
+            plot_level21(fn, direc + 'Output/')
         except Exception as e:
-            failure_messages.append('Failed creating summary plot:\n\tsensor = %s\n%s\n'%(sensor, traceback.format_exc()))
+            failure_messages.append('Failed creating summary plot for file:\n\tTs\n%s\n'%(fn, traceback.format_exc()))
 
     if not failure_messages: # Everything worked
         return ''
@@ -2506,14 +2718,15 @@ def level1_to_level21(info_fn):
 
     
     
-def level21_to_dict(L21_fn, skip_att=[]):
+def level21_to_dict(L21_fn, skip_att=[], keep_att=[], tstartstop = None):
     ''' 
     Load a Level 2.1 file, which contains wind profiles:
         * from a single sensor (A or B)
         * from a single channel (red or green)
         * all on the same date
     Return relevant variables in a dictionary that resembles the dictionary created by the L2.1 processing, but
-    with an extra dimension for time.
+    with an extra dimension for time. The entire file will be read, unless one of the optional inputs is specified.
+    At most one of these can be specified.
     
     INPUTS:
     
@@ -2523,8 +2736,20 @@ def level21_to_dict(L21_fn, skip_att=[]):
       
       *  skip_att -- TYPE: list of str.  A list of attitude status variables. If any evaluate
                                          to True for a given exposure, this exposure will be 
-                                         skipped and not included in the output. 
+                                         skipped and not included in the output. Specify zero or one of
+                                         the inputs: skip_att, keep_att, or tstartstop.
                                          Possible values: ['att_conjugate', 'att_lvlh_reverse']
+                                         Default: []
+      *  keep_att -- TYPE: list of str.  A list of attitude status variables. Only keep data points for
+                                         which these evaluate to True.  Specify zero or one of
+                                         the inputs: skip_att, keep_att, or tstartstop.
+                                         Possible values: ['att_conjugate', 'att_lvlh_reverse']
+                                         Default: []
+      *  tstartstop -- TYPE:2-tuple of datetimes: (tstart, tstop). Only keep data points for which the midpoint
+                                         of the exposure time is between tstart and tstop, inclusive.
+                                         Specify zero or one of the inputs: skip_att, keep_att, or tstartstop.
+                                         Default: None
+                                         
       
     OUTPUTS:
     
@@ -2559,7 +2784,19 @@ def level21_to_dict(L21_fn, skip_att=[]):
                                                                      for meaning of each flag.
                   * emission_color  -- TYPE:str,                     'red' or 'green'.
                   * acknowledgement -- TYPE:str.                     The Acknowledgment attribute in the first file
+                  * att_lvlh_normal   -- TYPE:array(nt)              Attitude register bit 0: LVLH Normal
+                  * att_lvlh_reverse  -- TYPE:array(nt)              Attitude register bit 1: LVLH Reverse
+                  * att_limb_pointing -- TYPE:array(nt)              Attitude register bit 2: Earth Limb Pointing
+                  * att_conjugate     -- TYPE:array(nt)              Attitude register bit 6: Conjugate Maneuver
+                  * mag_lat           -- TYPE:array(ny,nt), UNITS:deg.     Magnetic quasi-dipole latitude
+                  * mag_lon           -- TYPE:array(ny,nt), UNITS:deg.     Magnetic quasi-dipole longitude
+                  * sza               -- TYPE:array(ny,nt), UNITS:deg.     Solar zenith angle
+                  * slt               -- TYPE:array(ny,nt), UNITS:hour.    Solar local time
+                  * ver_dc            -- TYPE:array(ny,nt), UNITS:ph/cm^3/s. Volume emission rate derived from 
+                                                                           interferogram DC value.
     '''
+    
+    assert bool(keep_att) + bool(skip_att) + bool(tstartstop) <= 1, "More than one optional input specified"
     
     d = netCDF4.Dataset(L21_fn,'r')
 
@@ -2568,7 +2805,7 @@ def level21_to_dict(L21_fn, skip_att=[]):
     versrev = L21_fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
     vers = int(versrev[1:3])
     rev = int(versrev[4:])
-    prefix = 'ICON_L2_MIGHTI_%s_%s' % (sens, color.capitalize())
+    prefix = 'ICON_L21'
     N = len(d.variables['Epoch'])
     assert N>0, "Epoch has length 0: No samples in file %s"%L21_fn
 
@@ -2577,18 +2814,35 @@ def level21_to_dict(L21_fn, skip_att=[]):
         ''' Read the variable "v" from the netCDF file and return it in a friendly format '''
         return np.array(np.ma.filled(d.variables[v][...], np.nan))
 
-    # Load up all attitude variables and find which indices should be skipped
+    # Load up a few variables and find which time indices should be loaded
     att = {}
     att['att_lvlh_normal']   = read('%s_Attitude_LVLH_Normal' % prefix)
     att['att_lvlh_reverse']  = read('%s_Attitude_LVLH_Reverse' % prefix)
     att['att_limb_pointing'] = read('%s_Attitude_Limb_Pointing' % prefix)
     att['att_conjugate']     = read('%s_Attitude_Conjugate_Maneuver' % prefix)
+    time_msec                = read('Epoch')
+    time                     = np.array([datetime(1970,1,1) + timedelta(seconds = 1e-3*s) for s in time_msec])
     idx_good = np.ones(N, dtype=bool) # boolean index
-    for k in skip_att:
-        assert k in att.keys(), '"%s" is not a recognized attitude status name' % k
+    if skip_att:
+        for k in skip_att:
+            assert k in att.keys(), '"%s" is not a recognized attitude status name' % k
+            for i in range(N):
+                if att[k][i]:
+                    idx_good[i] = False
+    if keep_att:
+        idx_good = np.zeros(N, dtype=bool) # boolean index
+        for k in keep_att:
+            assert k in att.keys(), '"%s" is not a recognized attitude status name' % k
+            for i in range(N):
+                if att[k][i]:
+                    idx_good[i] = True
+    if tstartstop:
+        idx_good = np.zeros(N, dtype=bool) # boolean index
+        tstart, tstop = tstartstop
         for i in range(N):
-            if att[k][i]:
-                idx_good[i] = False
+            if (tstart <= time[i]) and (time[i] <= tstop):
+                idx_good[i] = True
+        
 
     assert idx_good.any(), "All samples have attitude status bits in the disallowed list: %s" % skip_att   
 
@@ -2606,11 +2860,10 @@ def level21_to_dict(L21_fn, skip_att=[]):
     z['ver_error']        = read('%s_Relative_VER_Error' % prefix)[idx_good,:]
     z['wind_quality']     = read('%s_Wind_Quality' % prefix)[idx_good,:]
     z['ver_quality']      = read('%s_VER_Quality' % prefix)[idx_good,:]
-    time_msec             = read('Epoch')[idx_good]
-    z['time']             = np.array([datetime(1970,1,1) + timedelta(seconds = 1e-3*s) for s in time_msec])
-    z['icon_lat']         = read('%s_Spacecraft_Latitude' % prefix)[idx_good]
-    z['icon_lon']         = read('%s_Spacecraft_Longitude' % prefix)[idx_good]
-    z['icon_alt']         = read('%s_Spacecraft_Altitude' % prefix)[idx_good]
+    z['time']             = time[idx_good]
+    z['icon_lat']         = read('%s_Observatory_Latitude' % prefix)[idx_good]
+    z['icon_lon']         = read('%s_Observatory_Longitude' % prefix)[idx_good]
+    z['icon_alt']         = read('%s_Observatory_Altitude' % prefix)[idx_good]
     for k in att.keys():
         z[k] = att[k][idx_good]
     z['exp_time']         = read('%s_Exposure_Time' % prefix)[idx_good]
@@ -2621,6 +2874,11 @@ def level21_to_dict(L21_fn, skip_att=[]):
     z['quality_flags']    = read('%s_Quality_Flags' % prefix)[idx_good,:]
     z['acknowledgement']  = d.Acknowledgement
     z['emission_color']   = color.lower()
+    z['sza']              = read('%s_Solar_Zenith_Angle' % prefix)[idx_good]
+    z['slt']              = read('%s_Solar_Local_Time' % prefix)[idx_good]
+    z['mag_lat']          = read('%s_Magnetic_Latitude' % prefix)[idx_good]
+    z['mag_lon']          = read('%s_Magnetic_Longitude' % prefix)[idx_good]
+    z['ver_dc']           = read('%s_Relative_VER_DC' % prefix)[idx_good]
 
 
     for v in z.keys():
@@ -2640,6 +2898,96 @@ def level21_to_dict(L21_fn, skip_att=[]):
 ##########################################       Level 2.2       ###########################################
 ############################################################################################################
    
+
+def geog_to_mag_coords(u, v, w, lat, lon, alt, t, fast=False):
+    '''
+    Convert a wind (u,v,w) in geographic (east, north, up) coordinates to geomagnetic (field-aligned, meridional, 
+    zonal) coordinates, using the coordinates defined by pysatMagVect (https://github.com/rstoneback/pysatMagVect)
+    
+    INPUTS:
+    
+     *  u              -- TYPE:array(n)               Geographic zonal (eastward) component of wind
+     *  v              -- TYPE:array(n)               Geographic northward component of wind
+     *  w              -- TYPE:array(n)               Geographic upward component of wind
+     *  lat            -- TYPE:array(n) -- UNITS:deg. Geographic latitude
+     *  lon            -- TYPE:array(n) -- UNITS:deg. Geographic longitude
+     *  alt            -- TYPE:array(n) -- UNITS:km.  Altitude
+     *  t              -- TYPE:array(n) of datetimes. Time
+     
+    OPTIONAL INPUTS:
+     
+     *  fast           -- TYPE:bool                   If True (default) then compute the rotation matrix for only
+                                                      the first and last elements of the array and linearly interpolate 
+                                                      for the rest.
+     
+    OUTPUTS:
+     
+     *  wind_mag_fa    -- TYPE:array(n)               Magnetic field-aligned component of wind
+     *  wind_mag_mer   -- TYPE:array(n)               Magnetic meridional component of wind
+     *  wind_mag_zon   -- TYPE:array(n)               Magnetic zonal component of wind
+     
+    '''
+    n = len(u)
+    
+    # If only zero or one element is non-nan, then use fast=False to avoid corner cases with fast=True
+    if np.isfinite(u).sum() <= 1:
+        fast = False
+    
+    if not fast: # Compute the entire array
+        
+        # Reference height of 80 is used to ensure it is below all MIGHTI samples.
+        zx,zy,zz,bx,by,bz,mx,my,mz = pysatMagVect.calculate_mag_drift_unit_vectors_ecef(lat, lon, alt, t, ref_height=80.)
+
+        # Convert unit vectors from ECEF to ENU using pysatMagVect calculation
+        ze, zn, zu = pysatMagVect.ecef_to_enu_vector(zx, zy, zz, lat, lon)
+        be, bn, bu = pysatMagVect.ecef_to_enu_vector(bx, by, bz, lat, lon)
+        me, mn, mu = pysatMagVect.ecef_to_enu_vector(mx, my, mz, lat, lon)   
+        
+    else: # Fast: compute the first and last elements and linearly interpolate the rest
+        # Be careful not to use the first or last element if they are nan.
+        i = np.where(np.isfinite(u))[0]
+        i0 = i[0]
+        i1 = i[-1]
+        
+        # Reference height of 80 is used to ensure it is below all MIGHTI samples.
+        zx,zy,zz,bx,by,bz,mx,my,mz = pysatMagVect.calculate_mag_drift_unit_vectors_ecef([lat[i0], lat[i1]], 
+                                                                                        [lon[i0], lon[i1]],
+                                                                                        [alt[i0], alt[i1]],
+                                                                                        [t[i0], t[i1]],
+                                                                                        ref_height=80.)
+        # Convert unit vectors from ECEF to ENU using pysatMagVect calculation
+        ze0, zn0, zu0 = pysatMagVect.ecef_to_enu_vector(zx, zy, zz, [lat[i0], lat[i1]], [lon[i0], lon[i1]])
+        be0, bn0, bu0 = pysatMagVect.ecef_to_enu_vector(bx, by, bz, [lat[i0], lat[i1]], [lon[i0], lon[i1]])
+        me0, mn0, mu0 = pysatMagVect.ecef_to_enu_vector(mx, my, mz, [lat[i0], lat[i1]], [lon[i0], lon[i1]])
+        
+        ze = np.nan * np.zeros(len(alt))
+        zn = np.nan * np.zeros(len(alt))
+        zu = np.nan * np.zeros(len(alt))
+        be = np.nan * np.zeros(len(alt))
+        bn = np.nan * np.zeros(len(alt))
+        bu = np.nan * np.zeros(len(alt))
+        me = np.nan * np.zeros(len(alt))
+        mn = np.nan * np.zeros(len(alt))
+        mu = np.nan * np.zeros(len(alt))
+        
+        ze[i0:i1+1] = np.linspace(ze0[0], ze0[-1], i1-i0+1)
+        zn[i0:i1+1] = np.linspace(zn0[0], zn0[-1], i1-i0+1)
+        zu[i0:i1+1] = np.linspace(zu0[0], zu0[-1], i1-i0+1)
+        be[i0:i1+1] = np.linspace(be0[0], be0[-1], i1-i0+1)
+        bn[i0:i1+1] = np.linspace(bn0[0], bn0[-1], i1-i0+1)
+        bu[i0:i1+1] = np.linspace(bu0[0], bu0[-1], i1-i0+1)
+        me[i0:i1+1] = np.linspace(me0[0], me0[-1], i1-i0+1)
+        mn[i0:i1+1] = np.linspace(mn0[0], mn0[-1], i1-i0+1)
+        mu[i0:i1+1] = np.linspace(mu0[0], mu0[-1], i1-i0+1)
+        
+    
+    # Perform coordinate rotation
+    wind_mag_fa  = u*be + v*bn + w*bu
+    wind_mag_zon = u*ze + v*zn + w*zu
+    wind_mag_mer = u*me + v*mn + w*mu
+    
+    return wind_mag_fa, wind_mag_zon, wind_mag_mer
+
 
     
 def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None, time_start = None, time_stop = None,
@@ -2670,7 +3018,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                            which the Level 2.2 data product should span. (Some L2.1 files from before
                                            the start time are needed to handle the crossover). If None (default), 
                                            the start time defaults to 0 UT on the date of the midpoint between the
-                                           first and last input file.
+                                           first and last input times.
       *  time_stop       -- TYPE:datetime. A timezone-naive datetime in UT, specifying the end of the interval
                                            which the Level 2.2 data product should span. (Some L2.1 files from after
                                            the start time are needed to handle the crossover). If None (default), 
@@ -2728,7 +3076,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                                                            * 26: MIGHTI-A did not sample this altitude
                                                                            * 27: MIGHTI-B did not sample this altitude
                                                                            * 28: Spherical asymmetry: A&B VER estimates disagree
-                                                                           * 29: Sample taken before/after time_start/time_stop
+                                                                           * 29: Unused
                                                                            * 30: Unused
                                                                            * 31: Unused
                                                                            * 32: Unused
@@ -2764,7 +3112,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                    * ver_error     -- TYPE:array(ny,nx), UNITS:ph/cm^3/s. Statistical (1-sigma) error in ver
                    * ver_A         -- TYPE:array(ny,nx), UNITS:ph/cm^3/s. VER measured by MIGHTI-A, interpolated to the L2.2 grid
                    * ver_B         -- TYPE:array(ny,nx), UNITS:ph/cm^3/s. VER measured by MIGHTI-B, interpolated to the L2.2 grid
-                   * ver_rel_diff  -- TYPE:array(ny,nx),UNITS:none.       The difference between the VER estimates 
+                   * ver_rel_diff  -- TYPE:array(ny,nx), UNITS:none.      The difference between the VER estimates 
                                                                           from MIGHTI A and B, divided by the
                                                                           mean. When this is high, it indicates that 
                                                                           spherical asymmetry may be a problem.
@@ -2776,6 +3124,17 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                    * acknowledgement -- TYPE:str,                         The Acknowledgement copied from the L2.1 files
                    * N_used_A        -- TYPE:array(nyA, n_files_A)        How many times each input MIGHTI-A file was used
                    * N_used_B        -- TYPE:array(nyB, n_files_B)        How many times each input MIGHTI-B file was used
+                   * wind_mag_fa     -- TYPE:array(ny,nx), UNITS:m/s.     The component of the wind in the direction of the
+                                                                          magnetic field.
+                   * wind_mag_mer    -- TYPE:array(ny,nx), UNITS:m/s.     The component of the wind in the magnetic meridional 
+                                                                          direction (as defined by pysatMagVect)
+                   * wind_mag_zon    -- TYPE:array(ny,nx), UNITS:m/s.     The component of the wind in the magnetic zonal 
+                                                                          direction (as defined by pysatMagVect)
+                   * mag_lat         -- TYPE:array(ny,nx), UNITS:deg.     Magnetic quasi-dipole latitude
+                   * mag_lon         -- TYPE:array(ny,nx), UNITS:deg.     Magnetic quasi-dipole longitude
+                   * sza             -- TYPE:array(ny,nx), UNITS:deg.     Solar zenith angle
+                   * slt             -- TYPE:array(ny,nx), UNITS:hour.    Solar local time
+                                                                   
     '''
         
     N_flags = 34 # Update this if the number of quality flags changes.
@@ -2789,6 +3148,10 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
         t_diff_AB = params['t_diff_AB']
 
     assert L21_A_dict['emission_color'] == L21_B_dict['emission_color'], "Files for A and B are for different emissions"
+    # Make sure a LVLH Normal/Reverse maneuver doesn't happen in the middle of the dataset.
+    for d in [L21_A_dict, L21_B_dict]:
+        assert (all(d['att_lvlh_normal'])  and not any(d['att_lvlh_reverse'])) or \
+               (all(d['att_lvlh_reverse']) and not any(d['att_lvlh_normal']))
 
     lat_A      =       L21_A_dict['lat']
     lon_raw_A  =       L21_A_dict['lon']
@@ -2807,6 +3170,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     wind_quality_A =   L21_A_dict['wind_quality']
     ver_quality_A =    L21_A_dict['ver_quality']
     qflags_A   =       L21_A_dict['quality_flags']
+    mlat_A     =       L21_A_dict['mag_lat']
+    sza_A      =       L21_A_dict['sza']
     N_alts_A, N_times_A = np.shape(lat_A)
 
     lat_B      =       L21_B_dict['lat']
@@ -2826,10 +3191,20 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     wind_quality_B =   L21_B_dict['wind_quality']
     ver_quality_B =    L21_B_dict['ver_quality']
     qflags_B   =       L21_B_dict['quality_flags']
+    mlat_B     =       L21_B_dict['mag_lat']
+    sza_B      =       L21_B_dict['sza']
     N_alts_B, N_times_B = np.shape(lat_B)
-
+    
+    # Unwrap mag lon and SLT to avoid averaging over discontinuities. They will be "unwrapped"
+    # everywhere in the following code, but will be modded right before saving.
+    mlon_A = fix_longitudes_mat(L21_A_dict['mag_lon'])
+    mlon_B = fix_longitudes_mat(L21_B_dict['mag_lon'])
+    # SLT can be unwrapped by leveraging longitude unwrapping code (x15)
+    slt_A  = fix_longitudes_mat(L21_A_dict['slt']*15.)/15.
+    slt_B  = fix_longitudes_mat(L21_B_dict['slt']*15.)/15.
+    
     if time_start is None:
-        # Default to 0 UT on date of midpoint of first and last file
+        # Default to 0 UT on date of midpoint of first and last times in the file
         t_min = min(min(time_A), min(time_B))
         t_max = max(max(time_A), max(time_B))
         dt = (t_max - t_min).total_seconds()
@@ -2961,6 +3336,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
         loni += dlon
         lon_vec.append(loni)
     lon_vec = np.array(lon_vec)
+    
+    assert len(lon_vec) > 0, "Contact MIGHTI Team - zero length longitude grid"
 
     # Define altitude grid based on the min and max in the L2.1 data (i.e., don't throw out data)
     # Define altitude resolution based upon the resolution o L2.1 data, accounting for the fact
@@ -3002,7 +3379,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     # 4) Inverting (i.e., rotating LoS winds to cardinal)
     # 5) More quality flagging
     # 6) Quality factor calculation
-    # 7) Trimming data points which correspond to previous or next days
+    # 7) Magnetic coordinate conversion
+    # 8) Trimming data points
     
     # Output variables, which will be defined on the reconstruction grid
     U = np.nan*np.zeros((N_alts, N_lons))                # zonal wind
@@ -3027,6 +3405,10 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     qflags = np.zeros((N_alts, N_lons, N_flags), dtype=bool) # Quality flags, one set per grid point. See above for definition.
     N_used_A = np.zeros((N_alts_A, N_times_A))           # Number of times each L2.1 MIGHTI-A file was used
     N_used_B = np.zeros((N_alts_B, N_times_B))           # Same for MIGHTI-B
+    mlat = np.nan*np.zeros((N_alts, N_lons))                    # Mag lat
+    mlon = np.nan*np.zeros((N_alts, N_lons))                    # Mag lat
+    sza  = np.nan*np.zeros((N_alts, N_lons))                    # solar zenith angle
+    slt  = np.nan*np.zeros((N_alts, N_lons))                    # solar local time
     
     # Loop over the reconstruction altitudes
     for i in range(N_alts):
@@ -3086,10 +3468,10 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             # raised at 90 km if MIGHTI-B's lowest tangent point is 95 km.
             # For this, allow some wiggle room to handle case where MIGHTI A samples
             # at 90.01 km but we wanted 90.00 km.
-            altmin_A = max(min(alt_A[:,kA0]), min(alt_A[:,kA1])) - (alt[1]  - alt[0])
-            altmin_B = max(min(alt_B[:,kB0]), min(alt_B[:,kB1])) - (alt[1]  - alt[0])
-            altmax_A = min(max(alt_A[:,kA0]), max(alt_A[:,kA1])) + (alt[-1] - alt[-2])
-            altmax_B = min(max(alt_B[:,kB0]), max(alt_B[:,kB1])) + (alt[-1] - alt[-2])
+            altmin_A = max(min(alt_A[:,kA0]), min(alt_A[:,kA1])) - (alt[1]  - alt[0])/2.
+            altmin_B = max(min(alt_B[:,kB0]), min(alt_B[:,kB1])) - (alt[1]  - alt[0])/2.
+            altmax_A = min(max(alt_A[:,kA0]), max(alt_A[:,kA1])) + (alt[-1] - alt[-2])/2.
+            altmax_B = min(max(alt_B[:,kB0]), max(alt_B[:,kB1])) + (alt[-1] - alt[-2])/2.
             if alt_pt > min(altmax_A, altmax_B) or alt_pt < max(altmin_A, altmin_B):
                 if alt_pt > altmax_A or alt_pt < altmin_A:
                     qflags[i,k,26] = 1
@@ -3173,6 +3555,14 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             local_az_B_pt = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], local_az_B[:,kB0:kB1+1])
             lat_A_pt      = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], lat_A     [:,kA0:kA1+1])
             lat_B_pt      = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], lat_B     [:,kB0:kB1+1])
+            mlat_A_pt     = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], mlat_A[:,kA0:kA1+1])
+            mlat_B_pt     = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], mlat_B[:,kB0:kB1+1])
+            mlon_A_pt     = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], mlon_A[:,kA0:kA1+1])
+            mlon_B_pt     = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], mlon_B[:,kB0:kB1+1])
+            slt_A_pt      = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], slt_A[:,kA0:kA1+1])
+            slt_B_pt      = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], slt_B[:,kB0:kB1+1])
+            sza_A_pt      = bilinear_interp(lon_A[:,kA0:kA1+1], alt_A[:,kA0:kA1+1], sza_A[:,kA0:kA1+1])
+            sza_B_pt      = bilinear_interp(lon_B[:,kB0:kB1+1], alt_B[:,kB0:kB1+1], sza_B[:,kB0:kB1+1])
             # Record which files were used
             nA = np.tile(np.arange(N_alts_A),(2,1)).T.astype(float)
             nB = np.tile(np.arange(N_alts_B),(2,1)).T.astype(float)
@@ -3221,7 +3611,6 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             assert abs(time_delta_pt) < t_diff_AB, \
                    "A/B match-up using files %.0f sec apart. Max allowed is %.0f sec" % (time_delta_pt, t_diff_AB)
             
-            
             ############################ Inversion #############################
             # Coordinate transformation of winds from lines of sight to cardinal directions
             # Construct LoS winds in vector y
@@ -3255,7 +3644,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             V[i,k] = v
             U_err[i,k] = u_err
             V_err[i,k] = v_err
-            lat[i,k] = (lat_A_pt + lat_B_pt)/2
+            lat[i,k] = (lat_A_pt + lat_B_pt)/2.
             time[i,k] = time_pt
             time_delta[i,k] = time_delta_pt
             ver_intp_A[i,k] = ver_A_pt
@@ -3267,7 +3656,12 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             amp_intp_B[i,k] = amp_B_pt
             amp[i,k]   = amp_pt
             amp_err[i,k] = amp_err_pt
-            amp_rel_diff[i,k] = amp_rel_diff_pt            
+            amp_rel_diff[i,k] = amp_rel_diff_pt
+            mlat[i,k] = (mlat_A_pt + mlat_B_pt)/2.
+            mlon[i,k] = circular_mean(mlon_A_pt, mlon_B_pt) # even though A and B are individually unwrapped, circular mean is needed 
+                                                            # since A and B might be one or more cycles apart.
+            slt[i,k]  = circular_mean(15.*slt_A_pt, 15.*slt_B_pt)/15.   # same as above
+            sza[i,k]  = (sza_A_pt + sza_B_pt)/2.
             
             ###################### More quality flagging #######################            
             # Pass through all L2.1 flags
@@ -3309,73 +3703,63 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             ver_ratings.append(ver_quality_B_pt)
             wind_quality[i,k] = min(wind_ratings)
             ver_quality[i,k] = min(ver_ratings)
-
-
-    ########### Final trimming based on time. Don't keep grid points outside requested times. ##########
-    # Create min, max time per column (i.e., per longitude)
-    epoch_min = np.empty(N_lons, dtype=object) # This will be used to trim data based on time
-    epoch_max = np.empty(N_lons, dtype=object) # ditto
+            
+    ####################### Magnetic coordinates ######################
+    # This section comprises about 25% of the runtime of the L2.2 processing
+    # (which is not a problem - it's already pretty fast)
+    wind_mag_fa  = np.nan*np.zeros((N_alts, N_lons))
+    wind_mag_mer = np.nan*np.zeros((N_alts, N_lons))
+    wind_mag_zon = np.nan*np.zeros((N_alts, N_lons))
     for k in range(N_lons):
-        t_k = [ti for ti in time[:,k] if ti is not None]
-        if len(t_k) > 0:
-            # Take mean of that array
-            dt_k = np.array([(ti - t_k[0]).total_seconds() for ti in t_k])
-            epoch_min[k] = t_k[0] + timedelta(seconds=min(dt_k))
-            epoch_max[k] = t_k[0] + timedelta(seconds=max(dt_k))
+        # Assume vertical wind is zero.
+        # Use time_start as IGRF time reference.
+        # Use fast formulation to save time (accurate to within 0.08% and much faster)
+        wfa, wmer, wzon = geog_to_mag_coords(U[:,k], V[:,k], np.zeros(N_alts), lat[:,k], lon[:,k], 
+                                             alt, [time_start]*N_alts, fast=True)
+        wind_mag_fa[:,k] = wfa
+        wind_mag_mer[:,k] = wmer
+        wind_mag_zon[:,k] = wzon
 
-    # Columns (i.e., longitudes) corresponding to times fully before time_start or 
-    # fully after time_stop are pruned before saving. This code sets k0 and k1
-    for i in range(N_lons):
-        if epoch_min[i] is None:
-            epoch_min[i] = datetime(1970,1,1)
-        if epoch_max[i] is None:
-            epoch_max[i] = datetime(2170,1,1)
+    ############### Trimming data points at beginning and end ##################### 
+    # Determine the "average" time per column to be reported in file.
+    epoch_sec = np.nan * np.zeros(N_lons) # referenced to start time
+    for k in range(N_lons):
+        dt_k = [(ti - time_start).total_seconds() for ti in time[:,k] if ti is not None]
+        if len(dt_k) > 0:
+            epoch_sec[k] = np.mean(dt_k)
+
+    # Identify start and stop columns. Don't keep times outside time start/stop, and 
+    # trim empty samples at the beginning and end.
+    # Find the first index after time_start. This is done manually because other built-in
+    # options (bisect.bisect, np.searchsorted, etc.) do not play nicely with nans.
     k0 = 0
-    if any(epoch_max < time_start): # prune the beginning
-        k0 = np.where(epoch_max < time_start)[0][-1] + 1 # Last image entirely before time_start, + 1
-    k1 = N_lons
-    if any(epoch_min >= time_stop): # prune the end
-        k1 = np.where(epoch_min >= time_stop)[0][0] # First image entirely after time_stop
+    for k in range(len(epoch_sec)):
+        if np.isfinite(epoch_sec[k]) and epoch_sec[k] >= 0.0:
+            k0 = k
+            break    # Find the last index before time_stop (if it exists)
+    sec_stop = (time_stop - time_start).total_seconds()
+    for k in range(k0,len(epoch_sec)):
+        if np.isfinite(epoch_sec[k]) and epoch_sec[k] < sec_stop:
+            # The last time this test passes is the k1 we want (minus 1)
+            k_save = k
+    k1 = k_save + 1
 
-    # For grid points with times outside the requested range, set data AND coordinates to masked.
-    for i in range(N_alts):
-        for k in range(N_lons):
-            if time[i,k] is not None and ((time[i,k] < time_start) or (time[i,k] >= time_stop)):
-                qflags[i,k,29] = 1
-                wind_quality[i,k] = 0.0
-                ver_quality[i,k] = 0.0
-                time[i,k] = None
-                # All of the variables which should get nan:
-                for v in [U, V, U_err, V_err, lat, time_delta, ver_intp_A, ver_intp_B, ver, ver_err, ver_rel_diff,
-                          amp_intp_A, amp_intp_B, amp, amp_rel_diff]:
-                    v[i,k] = np.nan
-    
-    # Determine the "average" time per column to be reported in file. Note that this must be done
-    # after the step above, or else some of these times might end up being outside the times 
-    # requested (e.g., in previous or next day), and that would confuse users, and might lead
-    # to odd situations where the a file would contain times after the next file.
-    # Create average, min, max time per column (i.e., per longitude)
-    epoch     = np.empty(N_lons, dtype=object) # This will be reported in file
-    for k in range(N_lons):
-        t_k = [ti for ti in time[:,k] if ti is not None]
-        if len(t_k) > 0:
-            # Take mean of that array
-            dt_k = np.array([(ti - t_k[0]).total_seconds() for ti in t_k])
-            epoch[k] = t_k[0] + timedelta(seconds=np.mean(dt_k))
+    # Fill in gaps. This is not technically necessary but allows us to adhere to 
+    # a netCDF "best practice" of coordinate variables being non-masked.
+    x = np.arange(N_lons)
+    good = np.isfinite(epoch_sec)
+    ep_int = interpolate.InterpolatedUnivariateSpline(x[good],epoch_sec[good], ext=0, k=1)
+    epoch_sec[~good] = ep_int(x[~good])
 
-    # When a single MIGHTI-A or B file is missing, it is possible that the average
-    # time at one (longitude) grid point will be slightly *less* than at the next grid point.
-    # Thus, I'm commenting this out for now, and we'll see if it causes any problems down 
-    # the road. Two days of the January 2019 synthetic data crashed at this check.
-#     assert all(np.diff([x for x in epoch if x is not None]) > timedelta(seconds=0.0)), \
-#         "Epoch is not monotonically increasing."
+    # Convert to datetime
+    epoch = np.array([time_start + timedelta(seconds=s) for s in epoch_sec])
     
     # Make sure that all data with quality 0 are masked.
     i = wind_quality == 0.0
     for v in [U, V, U_err, V_err]:
         v[i] = np.nan
     i = ver_quality == 0.0
-    for v in [ver, amp]:
+    for v in [ver, amp, ver_err, amp_err]:
         v[i] = np.nan    
 
     ############## Output section ##################
@@ -3412,6 +3796,13 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     L22_dict['ver_quality']         = ver_quality [:,k0:k1]
     L22_dict['N_used_A']            = N_used_A
     L22_dict['N_used_B']            = N_used_B
+    L22_dict['wind_mag_fa']         = wind_mag_fa[:,k0:k1]
+    L22_dict['wind_mag_mer']        = wind_mag_mer[:,k0:k1]
+    L22_dict['wind_mag_zon']        = wind_mag_zon[:,k0:k1]
+    L22_dict['mag_lat']             = mlat[:,k0:k1]
+    L22_dict['mag_lon']             = mlon[:,k0:k1]
+    L22_dict['sza']                 = sza[:,k0:k1]
+    L22_dict['slt']                 = slt[:,k0:k1]
     
     return L22_dict
 
@@ -3471,7 +3862,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         parents.append('%s > %s' % (post, pre))
 
     ######################### Open file for writing ##############################
-    L22_fn = 'ICON_L2_MIGHTI_Vector-Wind-%s_%s_v%02ir%03i.NC' % (L22_dict['emission_color'].capitalize(),
+    L22_fn = 'ICON_L2-2_MIGHTI_VEC-Wind-%s_%s_v%02ir%02i.NC' % (L22_dict['emission_color'].capitalize(),
                                                         t_start.strftime('%Y-%m-%d'),
                                                         data_version_major, data_revision)
     L22_full_fn = '%s%s'%(path, L22_fn)
@@ -3537,7 +3928,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
 
 
         ################################## Dimensions ########################################
-        prefix = 'ICON_L2_MIGHTI_%s' % (L22_dict['emission_color'].capitalize()) # variable prefix
+        prefix = 'ICON_L22' # variable prefix
         var_alt_name = '%s_Altitude'%prefix
         
         ny,nx,nflags = np.shape(L22_dict['quality_flags'])
@@ -3571,10 +3962,13 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               units='ms', valid_min=0, valid_max=1000*365*86400*1000, var_type='support_data', chunk_sizes=[nx],
                               notes="A one-dimensional array defining the time dimension of the two-dimensional data grid (the other dimension being "
                               "altitude). This is the average of the MIGHTI-A and "
-                              "MIGHTI-B sample times, which differ by 5-8 minutes. The matchup between MIGHTI-A and B happens at slightly different "
+                              "MIGHTI-B sample times, which differ by 5-8 minutes. Where MIGHTI-A or MIGHTI-B samples are missing, data are "
+                              "reported as missing, but gaps in Epoch are interpolated over to adhere to the netCDF4 standard that coordinate "
+                              "variables should have no missing values. "
+                              "The matchup between MIGHTI-A and B happens at slightly different "
                               "times at different altitudes, a complication which is ignored by this variable. The effect is small (plus or minus 30-60 "
                               "seconds), but in cases where it is important, it is recommended to use the alternative time variable "
-                              "Epoch_Full, which is two dimensional and captures the variation with altitude."
+                              "Epoch_Full, which is two dimensional and captures the variation with altitude. "
                               )
         
         epoch_full_msec = np.zeros((ny,nx),dtype=np.int64)
@@ -3742,12 +4136,14 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               units='ph/cm^3/s', valid_min=0, valid_max=1e30, var_type='data', chunk_sizes=[nx,ny],
                               notes= "The volume emission rate (VER) obtained by scaling the fringe amplitude by a calibration factor. "
                                "Pre-flight calibrations and on-orbit comparisons with ground-based instruments are used to determine the "
-                               "best possible calibration. However, because this calibration is uncertain, and because the fringe "
-                               "amplitude has a small dependence on atmospheric temperature, caution should be exercised when absolute "
-                               "calibration is required, or when comparisons are being made between samples at different temperatures. "
+                               "best possible calibration. The fringe amplitude has a dependence on temperature, which is corrected using "
+                               "the MSIS model. Because the on-orbit calibration is uncertain, and because the MSIS "
+                               "temperature correction is not perfect, caution should be exercised when absolute "
+                               "calibration is required, or when precise comparisons are being made between samples at very "
+                               "different temperatures. "
                                "Please contact the MIGHTI team before performing any studies that require absolute calibration. "
                                "The statistical (1-sigma) error for this variable is provided in "
-                               "the variable XXX_Relative_VER_Error, though it is expected that systematic calibration errors dominate "
+                               "the variable ICON_..._Relative_VER_Error, though it is expected that systematic calibration errors dominate "
                                "the total error."
                               )
         
@@ -3776,7 +4172,60 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               "the data are definitely unusable, the the quality will be 0.0 and the sample will be masked. Users should "
                               "exercise caution when the quality is less than 1.0.",
                               "Currently, the quality can take values of 0 (Bad), 0.5 (Caution), or 1 (Good)."
-                               ])        
+                               ])       
+        
+        # Magnetic field-aligned/meridional/zonal wind
+        var = _create_variable(ncfile, '%s_Magnetic_Field_Aligned_Wind'%prefix, L22_dict['wind_mag_fa'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='Magnetic field-aligned component of the wind', 
+                              display_type='image', field_name='MgFA Wind', fill_value=None, label_axis='MgFA Wind', bin_location=0.5,
+                              units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
+                              notes="The component of the wind in the direction of the magnetic field, assuming vertical winds "
+                               "are negligible. This variable is calculated by taking the geographic zonal and meridional wind "
+                               "(the primary data products in this file) and expressing the wind vector in a local magnetic coordinate "
+                               "system defined using the Python package pysatMagVect (https://github.com/rstoneback/pysatMagVect). "
+                               "The "
+                               "coordinate system used here is orthogonal and is identical to the coordinate system used to express the ion "
+                               "drifts in the ICON IVM data product 2.7."
+                               )
+        
+        var = _create_variable(ncfile, '%s_Magnetic_Meridional_Wind'%prefix, L22_dict['wind_mag_mer'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='Magnetic meridional component of the wind', 
+                              display_type='image', field_name='MgMerWind', fill_value=None, label_axis='MgMer Wind', bin_location=0.5,
+                              units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
+                              notes="The component of the wind in the magnetic meridional direction, assuming vertical winds are negligible. "
+                               "This variable is calculated by taking the geographic zonal and meridional wind "
+                               "(the primary data products in this file) and expressing the wind vector in a local magnetic coordinate "
+                               "system defined using the Python package pysatMagVect (https://github.com/rstoneback/pysatMagVect). "
+                               "The magnetic meridional unit vector is orthogonal to the magnetic field but within the plane of "
+                               "the magnetic meridian. "
+                               "At the magnetic equator, the meridional direction points up, while away from the equator it has "
+                               "a poleward component (north in the northern hemisphere, south in the southern hemisphere). "
+                               "Note that in some ion-neutral coupling models, a definition of magnetic meridional is often used that is "
+                               "horizontal (i.e., perpendicular to gravity) and generally northward. The definition used here is "
+                               "perpendicular to B and thus has primarily a vertical component at ICON latitudes. "
+                               "Note also that "
+                               "the definition of magnetic meridional and zonal used here differs from quasi-dipole and apex coordinate bases. The "
+                               "coordinate system used here is orthonormal and is identical to the coordinate system used to express the ion "
+                               "drifts in the ICON IVM data product 2.7. "
+                              )
+        
+        var = _create_variable(ncfile, '%s_Magnetic_Zonal_Wind'%prefix, L22_dict['wind_mag_zon'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='Magnetic zonal component of the wind', 
+                              display_type='image', field_name='MgZon Wind', fill_value=None, label_axis='MgZon Wind', bin_location=0.5,
+                              units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
+                              notes="The component of the wind in the magnetic zonal direction, assuming vertical winds are negligible. "
+                               "This variable is calculated by taking the geographic zonal and meridional wind "
+                               "(the primary data products in this file) and expressing the wind vector in a local magnetic coordinate "
+                               "system defined using the Python package pysatMagVect (https://github.com/rstoneback/pysatMagVect). "
+                               "At the magnetic equator, the zonal direction points horizontally, while away from the equator "
+                               "it can have a slightly vertical component. Note that "
+                               "the definition of magnetic meridional and zonal used here differs from quasi-dipole and apex coordinate bases. The "
+                               "coordinate system used here is orthonormal and is identical to the coordinate system used to express the ion "
+                               "drifts in the ICON IVM data product 2.7. "
+                              )
 
         ######### Data Location Variables #########
 
@@ -3818,16 +4267,61 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               "inherently a horizontal average over many hundreds of kilometers."
                               )
         
+        # Magnetic Latitude
+        var = _create_variable(ncfile, '%s_Magnetic_Latitude'%prefix, L22_dict['mag_lat'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='Magnetic quasi-dipole latitude of each wind sample', 
+                              display_type='image', field_name='Mag Lat', fill_value=None, label_axis='Mag Lat', bin_location=0.5,
+                              units='deg', valid_min=-90., valid_max=90., var_type='support_data', chunk_sizes=[nx,ny],
+                              notes="A two-dimensional array defining the magnetic quasi-dipole latitude of the two-dimensional data grid. "
+                              "The latitude varies only slightly (a few deg) with altitude, but this variation is included. "
+                              "It should be noted that while a single latitude value is given for each point, the observation is "
+                              "inherently a horizontal average over many hundreds of kilometers. "
+                              "Quasi-dipole latitude and longitude are calculated using the fast implementation developed by "
+                              "Emmert et al. (2010, doi:10.1029/2010JA015326) and the Python wrapper apexpy "
+                              "(https://github.com/aburrell/apexpy/). "
+                              )
         
+        # Magnetic Longitude
+        var = _create_variable(ncfile, '%s_Magnetic_Longitude'%prefix, L22_dict['mag_lon'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='Magnetic quasi-dipole longitude of each wind sample', 
+                              display_type='image', field_name='Mag Lon', fill_value=None, label_axis='Mag Lon', bin_location=0.5,
+                              units='deg', valid_min=0., valid_max=360., var_type='support_data', chunk_sizes=[nx,ny],
+                              notes="A two-dimensional array defining the magnetic quasi-dipole longitude of the two-dimensional data grid. "
+                              "The longitude varies only slightly (a few deg) with altitude, but this variation is included. "
+                              "It should be noted that while a single longitude value is given for each point, the observation is "
+                              "inherently a horizontal average over many hundreds of kilometers. "
+                              "Quasi-dipole latitude and longitude are calculated using the fast implementation developed by "
+                              "Emmert et al. (2010, doi:10.1029/2010JA015326) and the Python wrapper apexpy "
+                              "(https://github.com/aburrell/apexpy/). "
+                              )
         
         ######### Other Metadata Variables #########
-
+        
+        # Solar zenith angle
+        var = _create_variable(ncfile, '%s_Solar_Zenith_Angle'%prefix, L22_dict['sza'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='Solar zenith angle of each wind sample', 
+                              display_type='image', field_name='SZA', fill_value=None, label_axis='SZA', bin_location=0.5,
+                              units='deg', valid_min=0., valid_max=180., var_type='support_data', chunk_sizes=[nx,ny],
+                              notes="Angle between the ray towards the sun and towards zenith, for each point in the grid."
+                              )
+                               
+        # Solar local time                      
+        var = _create_variable(ncfile, '%s_Solar_Local_Time'%prefix, L22_dict['slt'].T, 
+                              dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
+                              format_nc='f8', format_fortran='F', desc='Solar local time of each wind sample', 
+                              display_type='image', field_name='SLT', fill_value=None, label_axis='SLT', bin_location=0.5,
+                              units='hour', valid_min=0., valid_max=24., var_type='support_data', chunk_sizes=[nx,ny],
+                              notes="Solar local time at each point in the grid, calculating using the equation of time."
+                              )
 
         # Difference between the MIGHTI-A and MIGHTI-B times contributing to each point
         var = _create_variable(ncfile, '%s_Time_Delta'%prefix, L22_dict['time_delta'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Difference between MIGHTI-A and B times contributing to each point', 
-                              display_type='image', field_name='Time Delta', fill_value=t_fillval, label_axis='Time Delta', bin_location=0.5,
+                              display_type='image', field_name='Time Delta', fill_value=None, label_axis='Time Delta', bin_location=0.5,
                               units='s', valid_min=-30.*60, valid_max=30.*60, var_type='support_data', chunk_sizes=[nx,ny],
                               notes="To determine the cardinal wind at each point, a MIGHTI-A line-of-sight wind is combined "
                               "with a MIGHTI-B line-of-sight wind from several minutes later. This variable contains this time "
@@ -3860,8 +4354,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         # VER profile from MIGHTI-A
         var = _create_variable(ncfile, '%s_Relative_VER_A'%prefix, L22_dict['ver_A'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
-                              format_nc='f8', format_fortran='F', desc='Fringe Amplitude from MIGHTI-A', 
-                              display_type='image', field_name='Fringe Amplitude A', fill_value=None, label_axis='VER A', bin_location=0.5,
+                              format_nc='f8', format_fortran='F', desc='Relative VER from MIGHTI-A', 
+                              display_type='image', field_name='VER A', fill_value=None, label_axis='VER A', bin_location=0.5,
                               units='ph/cm^3/s', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=[nx,ny],
                               notes="See Relative_VER. This variable contains the VER measured "
                               "by MIGHTI-A, interpolated to the reconstruction grid. This is one of two variables "
@@ -3872,8 +4366,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         # VER profile from MIGHTI-B
         var = _create_variable(ncfile, '%s_Relative_VER_B'%prefix, L22_dict['ver_B'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
-                              format_nc='f8', format_fortran='F', desc='Fringe Amplitude from MIGHTI-B', 
-                              display_type='image', field_name='Fringe Amplitude B', fill_value=None, label_axis='VER B', bin_location=0.5,
+                              format_nc='f8', format_fortran='F', desc='Relative VER from MIGHTI-B', 
+                              display_type='image', field_name='VER B', fill_value=None, label_axis='VER B', bin_location=0.5,
                               units='ph/cm^3/s', valid_min=-1e30, valid_max=1e30, var_type='metadata', chunk_sizes=[nx,ny],
                               notes="See Relative_VER. This variable contains the VER measured "
                               "by MIGHTI-B, interpolated to the reconstruction grid. This is one of two variables "
@@ -3935,7 +4429,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                        "* 26: MIGHTI-A did not sample this altitude",
                                        "* 27: MIGHTI-B did not sample this altitude",
                                        "* 28: Spherical asymmetry: A&B VER estimates disagree",
-                                       "* 29: Interpolated sample time during previous/next day",
+                                       "* 29: Unused",
                                        "* 30: Unused",
                                        "* 31: Unused",
                                        "* 32: Unused",
@@ -4230,7 +4724,7 @@ def level22_to_dict(L22_fn):
       *  L22_dict        -- TYPE:dict.  A dictionary containing the outputs of the Level 2.2 processing.
                                         The variables are:
                                         
-                                        * All of the variables described in documentation for level21_dict_to_level22_dict(...):
+                                        * All of the variables described in documentation for level21_dict_to_level22_dict(...), plus:
                                         * epoch_ms         -- TYPE:array(nx),   UNITS:ms.  Same as epoch, except in units of 
                                                                                            "ms since Jan 1, 1970"
                                         * epoch_full_ms    -- TYPE:array(ny,nx) UNITS:ms.  Same as epoch_full, except in units of 
@@ -4244,23 +4738,20 @@ def level22_to_dict(L22_fn):
     L22_dict = {}
     f = netCDF4.Dataset(L22_fn)
     emission_color = L22_fn.split('/')[-1].split('_')[3].split('-')[-1].capitalize() # Red or Green
-
-    L22_dict['lat']    = f['ICON_L2_MIGHTI_%s_Latitude'  % emission_color][:,:].T
-    L22_dict['lon']    = f['ICON_L2_MIGHTI_%s_Longitude' % emission_color][:,:].T
+    pre = 'ICON_L22_' # prefix for all variables
+                               
+    L22_dict['lat']    = f[pre + 'Latitude'][:,:].T
+    L22_dict['lon']    = f[pre + 'Longitude'][:,:].T
 
     # Unwrap the sample longitude to avoid 0/360 jumps
-    lonu = L22_dict['lon'].copy()
-    lonu[0,:] = fix_longitudes(lonu[0,:], lonu[0,-1]) # Use top first longitude as target
-    for i in range(np.shape(lonu)[1]):
-        lonu[:,i] = fix_longitudes(lonu[:,i], lonu[0,i])
-    L22_dict['lon_unwrapped'] = lonu
+    L22_dict['lon_unwrapped'] = fix_longitudes_mat(L22_dict['lon'])
 
-    L22_dict['alt']    = f['ICON_L2_MIGHTI_%s_Altitude'  % emission_color][:].T
-    L22_dict['u']      = f['ICON_L2_MIGHTI_%s_Zonal_Wind' % emission_color][:,:].T
-    L22_dict['v']      = f['ICON_L2_MIGHTI_%s_Meridional_Wind' % emission_color][:,:].T
-    L22_dict['u_error']= f['ICON_L2_MIGHTI_%s_Zonal_Wind_Error' % emission_color][:,:].T
-    L22_dict['v_error']= f['ICON_L2_MIGHTI_%s_Meridional_Wind_Error' % emission_color][:,:].T
-    e                  = f['ICON_L2_MIGHTI_%s_Quality_Flags' % emission_color][:,:,:]
+    L22_dict['alt']    = f[pre + 'Altitude'][:].T
+    L22_dict['u']      = f[pre + 'Zonal_Wind'][:,:].T
+    L22_dict['v']      = f[pre + 'Meridional_Wind'][:,:].T
+    L22_dict['u_error']= f[pre + 'Zonal_Wind_Error'][:,:].T
+    L22_dict['v_error']= f[pre + 'Meridional_Wind_Error'][:,:].T
+    e                  = f[pre + 'Quality_Flags'][:,:,:]
     L22_dict['quality_flags'] = np.transpose(e, (1,0,2))
     L22_dict['epoch_ms']      = f['Epoch'][:]
     L22_dict['epoch_full_ms'] = f['Epoch_Full'][:,:].T
@@ -4268,22 +4759,28 @@ def level22_to_dict(L22_fn):
     L22_dict['epoch_full'] = None # To be filled in below
     L22_dict['time_start'] = datetime.strptime(f.Date_Start[-27:-4], '%Y-%m-%dT%H:%M:%S.%f')
     L22_dict['time_stop']  = datetime.strptime(f.Date_Stop [-27:-4], '%Y-%m-%dT%H:%M:%S.%f')
-    L22_dict['time_delta']    = f['ICON_L2_MIGHTI_%s_Time_Delta' % emission_color][:,:].T
-    L22_dict['fringe_amp']    = f['ICON_L2_MIGHTI_%s_Fringe_Amplitude' % emission_color][:,:].T
-    L22_dict['fringe_amp_error'] = f['ICON_L2_MIGHTI_%s_Fringe_Amplitude_Error' % emission_color][:,:].T
-    L22_dict['fringe_amp_A']  = f['ICON_L2_MIGHTI_%s_Fringe_Amplitude_A' % emission_color][:,:].T 
-    L22_dict['fringe_amp_B']  = f['ICON_L2_MIGHTI_%s_Fringe_Amplitude_B' % emission_color][:,:].T
-    L22_dict['ver'] = f['ICON_L2_MIGHTI_%s_Relative_VER' % emission_color][:,:].T
-    L22_dict['ver_error'] = f['ICON_L2_MIGHTI_%s_Relative_VER_Error' % emission_color][:,:].T
-    L22_dict['ver_A'] = f['ICON_L2_MIGHTI_%s_Relative_VER_A' % emission_color][:,:].T
-    L22_dict['ver_B'] = f['ICON_L2_MIGHTI_%s_Relative_VER_B' % emission_color][:,:].T
-    L22_dict['ver_rel_diff'] = f['ICON_L2_MIGHTI_%s_VER_Relative_Difference' % emission_color][:,:].T
-    L22_dict['wind_quality']  = f['ICON_L2_MIGHTI_%s_Wind_Quality' % emission_color][:,:].T
-    L22_dict['ver_quality']  = f['ICON_L2_MIGHTI_%s_VER_Quality' % emission_color][:,:].T
+    L22_dict['time_delta']    = f[pre + 'Time_Delta'][:,:].T
+    L22_dict['fringe_amp']    = f[pre + 'Fringe_Amplitude'][:,:].T
+    L22_dict['fringe_amp_error'] = f[pre + 'Fringe_Amplitude_Error'][:,:].T
+    L22_dict['fringe_amp_A']  = f[pre + 'Fringe_Amplitude_A'][:,:].T 
+    L22_dict['fringe_amp_B']  = f[pre + 'Fringe_Amplitude_B'][:,:].T
+    L22_dict['ver'] = f[pre + 'Relative_VER'][:,:].T
+    L22_dict['ver_error'] = f[pre + 'Relative_VER_Error'][:,:].T
+    L22_dict['ver_A'] = f[pre + 'Relative_VER_A'][:,:].T
+    L22_dict['ver_B'] = f[pre + 'Relative_VER_B'][:,:].T
+    L22_dict['ver_rel_diff']  = f[pre + 'VER_Relative_Difference'][:,:].T
+    L22_dict['wind_quality']  = f[pre + 'Wind_Quality'][:,:].T
+    L22_dict['ver_quality']   = f[pre + 'VER_Quality'][:,:].T
     L22_dict['emission_color'] = emission_color
     L22_dict['source_files'] = f.Parents
     L22_dict['acknowledgement'] = f.Acknowledgement
-                                  
+    L22_dict['wind_mag_fa']   = f[pre + 'Magnetic_Field_Aligned_Wind'][:,:].T
+    L22_dict['wind_mag_mer']  = f[pre + 'Magnetic_Meridional_Wind'][:,:].T
+    L22_dict['wind_mag_zon']  = f[pre + 'Magnetic_Zonal_Wind'][:,:].T
+    L22_dict['mag_lat']       = f[pre + 'Magnetic_Latitude'][:,:].T
+    L22_dict['mag_lon']       = f[pre + 'Magnetic_Longitude'][:,:].T
+    L22_dict['slt']           = f[pre + 'Solar_Local_Time'][:,:].T
+    L22_dict['sza']           = f[pre + 'Solar_Zenith_Angle'][:,:].T
     
     # Convert times to datetime
     epoch = np.empty(len(L22_dict['epoch_ms']), dtype=datetime)
@@ -4317,212 +4814,101 @@ def level22_to_dict(L22_fn):
 ################################################################################################################
 ##########################################   TOHBAN PLOTS    ###################################################
 ################################################################################################################
-# TODO for Tohban plots:
-# - specify corners of pixels for pcolormesh instead of middle
-# - break up by SLT instead of longitude or time
-# - add map?
-# - L2.1: identify gaps and mark as missing? Right now pcolormesh just interpolates over gaps
-# - L2.2: What's the best x-axis for L2.2? Time seems good, but there are masked data points.
-#         These could probably be interpolated over reasonably well. Perhaps this should be 
-#         done as part of the L2.2 product?
 
-def plot_level21(L21_fn_red, L21_fn_green, pngpath, timechunk=2., v_max = 200., ve_min = 1., ve_max = 100., 
-                 amp_min = 1., amp_max = 1000., close = True):
+def unwrap_slt(t, slt):
     '''
-    Create Tohban plots for Level 2.1 data. Red and green will be plotted together.
-    Files from either MIGHTI-A or MIGHTI-B should be provided, not both.
-    The files will be broken into separate plots of length "timechunk" hours.
+    Unwrap solar local time. slt can be 1D, or 2D (in which case its rows are unwrapped)
+    This code is more complicated than simply removing negative jumps, because it needs to handle
+    large data gaps.
     
     INPUTS:
     
-      *  L21_fn_red   --TYPE:str,         Full path to L2.1 red file for this day. If this is
-                                          the empty string, plot for red will be blank.
-      *  L21_fn_green --TYPE:str,         Full path to L2.1 green file for this day If this is
-                                          the empty string, plot for red will be blank.
-      *  pngpath      --TYPE:str,         Directory to save the resulting pngs to
+      *  t        --TYPE:array(nt) of datetime                 Time
+      *  slt      --TYPE:array(nt) or array(nt,nx). UNITS:hr.  Solar Local Time to be unwrapped
       
-    OPTIONAL INPUTS:
+    OUTPUTS:
+      * slt_u     --TYPE:same as slt.               UNITS:hr.  Unwrapped version of input slt.
     
-      *  timechunk    --TYPE:float,       Time period to plot in a single file. [hr]
-                                          (TODO: eventually this should be based on SLT).
-      *  v_max        --TYPE:float,       Maximum wind velocity for colorbar [m/s]
-      *  ve_min       --TYPE:float,       Minimum wind error for colorbar [m/s]
-      *  ve_max       --TYPE:float,       Maximum wind error for colorbar [m/s]
-      *  amp_min      --TYPE:float,       Minimum fringe amplitude for colorbar [m/s]
-      *  amp_max      --TYPE:float,       Maximum fringe amplitude for colorbar [m/s]
-      *  close        --TYPE:bool,        If True, close the figure after saving it
-                                   
-    OUTPUT:
-    
-      *  L21_pngs     --TYPE:list of str,  Full path to the saved png files
     '''
-
-    assert (L21_fn_red or L21_fn_green), "No files specified: Need at least one of red or green."
-
-    if pngpath[-1] != '/':
-        pngpath += '/'
-
-    # Split up red/green and read
-    d = {} # keys are 'red' or 'green
-    for color, L21_fn in zip(['red','green'], [L21_fn_red, L21_fn_green]):
-        if L21_fn:
-            L21_dict = level21_to_dict(L21_fn)
-            assert color == L21_dict['emission_color'], "%s file specified for %s input" % (L21_dict['emission_color'], color)
-            d[color] = L21_dict
     
-    # Sanity checks
-    if L21_fn_red and L21_fn_green:
-        assert d['red']['time'][0].date() == d['green']['time'][0].date(), "Files must be from the same date"
-        assert d['red']['sensor'] == d['green']['sensor'], "Files must be from the same sensor (A or B)"
+    # In case input is a masked array, fill with nans
+    slt = np.ma.filled(slt, np.nan)
     
-    # Make nans into masked arrays so pcolormesh looks nicer.
-    # (Not necessary if we upgrade to matplotlib 2.1.0)
-    for color in ['red','green']:
-        for v in ['los_wind','los_wind_error','amp']:
-            if color in d.keys():
-                d[color][v] = np.ma.masked_array(d[color][v], np.isnan(d[color][v]))
+    def unwrap_slt_1D(t, slt_1D, t0, slt0):
+        '''Helper function to solve the 1D unwrapping problem
+        t and slt_1D are as described above
+        t0 and slt0 are scalars. Array will be unwrapped such that at time t0, the unwrapped slt
+        will be within 12h of slt0'''
+        # Find the average slope of the SLT vs t line
+        
+        time_sec = np.array([(ti - t0).total_seconds() for ti in t])
+        def err(dslt_dt):
+            slt_fit = np.mod(slt0 + dslt_dt*time_sec, 24.)
+            return np.nanmean((slt_fit-slt_1D)**2)
+        dslt_dt_min = 24./(1*3600)
+        dslt_dt_max = 24./(2*3600)
+        dslt_dt = optimize.brute(err, ranges=((dslt_dt_min,dslt_dt_max),), Ns=500, finish = optimize.fmin)[0]
 
-    # For each, add a variable giving the time as a matrix (to be used for plotting)
-    for color in ['red','green']:
-        if color in d.keys():
-            dk = d[color]
-            Nz,Nx = np.shape(dk['alt'])
-            time_mat = np.empty((Nz,Nx),dtype=object)
-            for j in range(Nx):
-                time_mat[:,j] = dk['time'][j]
-            dk['time_mat'] = time_mat    
-
-    nx,ny = 2,3
-
-    # Determine how many figures need to be made
-    t_g = d['green']['time'] if 'green' in d.keys() else []
-    t_r = d['red'  ]['time'] if 'red'   in d.keys() else []
-    t = np.concatenate((t_g, t_r))
-    tallmin = t.min()
-    tallmax = t.max()
-    if tallmax==tallmin: tallmax += timedelta(seconds=0.0001) # corner case: only one file
-    nfigs = int(np.ceil((tallmax-tallmin).total_seconds()/3600./timechunk))
-
-    sensor = d[d.keys()[0]]['sensor']
-
-    L21_pngs = []
-    for n in range(nfigs):
-        try:
-
-            # Define time range for this plot
-            tmin = tallmin + timedelta(hours=n*timechunk)
-            tmax = tmin + timedelta(hours=timechunk)
-
-
-            fig = plt.figure(figsize=(16,10))
-            tmin_title = datetime(2100,1,1) # for specifying the title of each plot (updated below)
-            tmax_title = datetime(1970,1,1)
-            ################## Plot ###################
-            colors = ['red', 'green']
-            cmaps = ['inferno', 'viridis']
-            for i,color in enumerate(colors):
-                if color in d.keys():
-                    dk = d[color]
-                    i1 = bisect.bisect(dk['time'],tmin) - 1
-                    i2 = bisect.bisect(dk['time'],tmax)
-                    if dk['time'][i1] < tmin_title:
-                        tmin_title = dk['time'][i1]
-                    if dk['time'][i2-1] > tmax_title:
-                        tmax_title = dk['time'][i2-1]
-
-                    plt.subplot(ny,nx,i+1)
-                    plt.title('%s LoS Wind'% (color.capitalize()))
-                    try: # These are wrapped in try blocks so that if something unexpected happens, a plot is still created.
-                        plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2], dk['los_wind'][:,i1:i2],
-                                       vmin=-v_max, vmax=v_max, cmap='bwr')
-                        cb = plt.colorbar()
-                        cb.set_label('m/s',rotation=-90,labelpad=10)
-                    except:
-                        print 'Failed to produce wind plot:'
-                        print traceback.format_exc()
-                        pass
-
-                    plt.subplot(ny,nx,i+3)
-                    plt.title('%s LoS Wind Error'% (color.capitalize()))
-                    try:
-                        plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2],dk['los_wind_error'][:,i1:i2],
-                                       norm=LogNorm(vmin=ve_min, vmax=ve_max), cmap=cmaps[i]+'_r')
-                        cb = plt.colorbar()
-                        cb.set_label('m/s',rotation=-90,labelpad=10)
-                    except:
-                        print 'Failed to produce wind error plot:'
-                        print traceback.format_exc()
-                        pass
-
-                    plt.subplot(ny,nx,i+5)
-                    plt.title('%s Fringe Amplitude'% (color.capitalize()))
-                    try:
-                        amp = dk['amp']
-                        amp[amp<amp_min] = amp_min # so it's plotted as dark instead of missing
-                        plt.pcolormesh(dk['time_mat'][:,i1:i2], dk['alt'][:,i1:i2], amp[:,i1:i2],
-                                       norm=LogNorm(vmin=amp_min, vmax=amp_max), cmap=cmaps[i])
-                        cb = plt.colorbar()
-                        cb.set_label('arb',rotation=-90,labelpad=10)
-                    except:
-                        print 'Failed to produce amplitude plot:'
-                        print traceback.format_exc()
-                        pass
-
-                    ###### Prettify the axes, labels, etc #####
-                    for sp in [i+1,i+3,i+5]:
-                        plt.subplot(ny,nx,sp)
-                        plt.gca().patch.set_facecolor('gray')
-                        plt.gca().xaxis.set_major_formatter(dates.DateFormatter('%H:%M'))
-                        plt.ylabel('Altitude [km]')
-                        plt.gca().yaxis.set_ticks([100,200,300])
-                        plt.ylim((85,320))
-                        plt.yscale('log')
-                        plt.gca().yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
-                        plt.gca().yaxis.set_minor_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
-                        plt.xlim((tmin,tmax))
-                    
-            # Determine min and max time for the title
-            if tmin_title.date() == tmax_title.date():
-                datestr = '%s - %s' % (tmin_title.strftime('%Y-%m-%d %H:%M:%S'), tmax_title.strftime('%H:%M:%S'))
-            else:
-                datestr = '%s - %s' % (tmin_title.strftime('%Y-%m-%d %H:%M:%S'), tmax_title.strftime('%Y-%m-%d %H:%M:%S'))
-            fig.suptitle('%s  %s' % (sensor, datestr), fontsize=28)
-
-            fig.autofmt_xdate()
-            fig.tight_layout(rect=[0,0.03,1,0.95]) # leave room for suptitle
-
-            #### Save
-            vers = max([d[c]['version'] for c in d.keys()])
-            rev  = max([d[c]['revision'] for c in d.keys()])
-            pngfn = pngpath + 'ICON_L2_%s_Plot-Line-of-Sight-Wind_%s-to-%s_v%02ir%03i.png' % (sensor, tmin_title.strftime('%Y-%m-%d_%H%M%S'),
-                                                                                              tmax_title.strftime('%Y-%m-%d_%H%M%S'),vers,rev)
-            plt.savefig(pngfn, dpi=120)
-            L21_pngs.append(pngfn)
-            if close: 
-                # There seems to be a memory leak here, despite this:
-                plt.close(fig)
-                plt.close('all')
-        except:
-            # Should we catch this or let it fly? If a plot was not created, that's a failure.
-            #print 'Failed to produce plot %i (out of %i):' % (n+1,nfigs)
-            #print traceback.format_exc()
-            raise # This should never happen, so let it crash
-
-    return L21_pngs
+        # Add or subtract 24 from the input array to get close to the unwrapped line
+        slt_fit = slt0 + dslt_dt*time_sec
+        d = slt_fit - slt_1D
+        n = np.round(d/24.)
+        slt_u = slt_1D + n*24.
+        return slt_u
+    
+    # If input is already 1D, then simply call lower-level function
+    if np.ndim(slt) == 1:
+        k = np.where(np.isfinite(slt))[0][0] # find reference that's not nan
+        return unwrap_slt_1D(t, slt, t[k], slt[k])
+    
+    # If input is 2D, then unwrap each row individually
+    # Find a reference value to use 
+    ij = np.where(np.isfinite(slt))
+    i = ij[0][0]
+    j = ij[1][0]
+    t0 = t[j]
+    slt0 = slt[i,j]
+    slt_u = np.zeros_like(slt)
+    for i in range(np.shape(slt)[0]):
+        slt_u[i,:] = unwrap_slt_1D(t, slt[i,:], t0, slt0)
+    return slt_u
 
 
 
-def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., 
-                 a_min = 1., a_max = 1000., ae_min = 0.1, ae_max = 100., close=True):
+def fill(x):
+    '''
+    If there are nans in the middle of the array x, fill them in with linear interpolation.
+    
+    INPUT:
+     * x             --TYPE:array(nx).    Array with possible nans in the middle. Can also be of 
+                                          type np.ma.MaskedArray. This array must not have nans at
+                                          the beginning or end.
+    
+    OUTPUT:
+     * x_filled      --TYPE:array(nx).    Copy of x with nans replaced with interpolated values
+    '''
+    
+    y = np.ma.filled(x, np.nan).copy()
+    n = np.arange(len(y))
+    i = np.isfinite(y) # which indices are good
+    # Interpolate between missing samples
+    f = interpolate.interp1d(n[i], y[i])
+    y[~i] = f(n[~i])
+    return y
+
+
+
+def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_min = 1., a_max = 1000.,
+                 ae_min = 0.1, ae_max = 100., gap_slt = 0.4, close = True, first_only = False):
     '''
     Create Tohban plots for Level 2.2 data. The nominal L2.2 file contains 24 hours of data. The 
     Tohban plots are split up by solar local time. There is one plot per noon-to-noon LT period.
     
     INPUTS:
     
-      *  L22_fn       --TYPE:str,   Full path to a L2.2 file
+      *  L21_fn       --TYPE:str,   Full path to a L2.2 file
       *  pngpath      --TYPE:str,   Directory to save the resulting png(s) to
-   
+      
    OPTIONAL INPUTS:
    
       *  v_max        --TYPE:float, Maximum wind velocity for colorbar [m/s]
@@ -4532,16 +4918,19 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
       *  a_max        --TYPE:float, Maximum VER for colorbar [ph/cm^3/s]
       *  ae_min       --TYPE:float, Minimum VER error for colorbar [ph/cm^3/s]
       *  ae_max       --TYPE:float, Maximum VER error for colorbar [ph/cm^3/s]
+      *  gap_slt      --TYPE:float, Data gaps longer than this will be shown explicitly as gaps [hours].
+                                    A 60-second exposure for ICON covers ~0.25 hours of SLT.
       *  close        --TYPE:bool,  If True, close the figure after saving it.
+      *  first_only   --TYPE:bool,  If True, only make the first plot (useful for debugging).
                                    
     OUTPUT:
     
-      *  L22_pngs     --TYPE:list of str,  Full path to the saved png files
-      
+      *  L21_pngs     --TYPE:list of str,  Full path to the saved png files
     '''
+
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     from matplotlib.colors import LinearSegmentedColormap
-    
+
     # Custom colormap for quality factor/flags
     low_rgb = [0.7, 0.7, 1.0]
     #mid_rgb = np.array([252,238,170])/256.
@@ -4560,59 +4949,366 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
 
     if pngpath[-1] != '/':
         pngpath += '/'
+
+    L21_dict = level21_to_dict(L21_fn)
+
+    Nalt, Nt = np.shape(L21_dict['los_wind'])
+    alt = np.ma.filled(L21_dict['alt'], np.nan) # convert from masked array to array
+    t = L21_dict['time']
+    slt = L21_dict['slt']
+    sensor = L21_dict['sensor'] # A or B
+
+    L21_pngs = []
+    nrows, ncols = 4, 3
+    csize = '3%' # For adding colorbar
+    cpad = 0.08  # For adding colorbar
+    clabelpad = 15 # For colorbar label
+
+    # Load magnetic coordinates
+    lonlat_m10, lonlat_0, lonlat_p10 = mag_lines()
+
+    assert any(t), "All data in the L2.2 are masked. No plot can be created."
+
+    # Organize figures by SLT. Create one plot for each (SLT) noon-to-noon period.
+    sltu_2D = unwrap_slt(t,slt)
+    sltu = np.nanmean(sltu_2D, axis=0) # Reference SLT for each column
+    n = np.around(sltu/24.) # for each element, the figure it should go in
+
+    # Create istart, istop
+    istart = []
+    istop = []
+    for ii in np.unique(n[~np.isnan(n)]):
+        idx = np.where(n == ii)[0]
+        istart.append(idx[0])
+        istop.append(idx[-1]+1)
+    nfigs = len(istart)
+
+    if first_only:
+        istop = istop[0:1]
+        istart = istart[0:1]
+        nfigs = 1
+
+
+    # Loop and create figures
+    for n, (i1, i2) in enumerate(zip(istart, istop)):
+
+        if i2-i1 <= 1: # corner case: skip this plot
+            continue
+
+        # pcolormesh wants the coordinates of the corners (not the middle) of each pixel
+        # middle values:
+        xm = np.mod(sltu[i1:i2] + 12., 24) - 12.
+        dx = np.diff(xm)
+        Ym = alt[:,i1:i2] # this is a matrix, unlike the L2.2 case
+        dY = np.diff(Ym, axis=0)
+        ny,nx = np.shape(Ym)
+        X = np.zeros((ny+1, nx+1))
+        Y = np.zeros((ny+1, nx+1))
+        # Find SLT edges
+        X[:,0] = xm[0] - dx[0]
+        X[:,1:-1] = xm[:-1] + dx
+        X[:,-1] = xm[-1] + dx[-1]
+        # Find altitude edges (column 0 is special case)
+        Y[0,1:] = Ym[0,:] - dY[0,:]/2
+        Y[1:-1,1:] = Ym[:-1,:] + dY/2
+        Y[-1,1:] = Ym[-1,:] + dY[-1,:]/2
+        Y[:,0] = Y[:,1] # Copy second column into first
+        # Mask gaps
+        igap = np.where(dx > gap_slt)[0]
+
+        fig, axarr = plt.subplots(nrows, ncols, figsize=(7.3*ncols,3*nrows))
+        ax_format = [] # Will hold axes containing the normal Altitude vs. Longitude vs. Color plots, for later common formatting
+
+        ########### Wind and wind error ###########
+        ax = axarr[0,0]
+        C = L21_dict['los_wind'][:,i1:i2]
+        C[:,igap] = np.nan
+        h = ax.pcolormesh(X, Y, C, cmap='bwr', vmin=-v_max, vmax=v_max)
+        ax.set_title('LoS Wind')        
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        fig.colorbar(h, cax=cax).set_label('m/s',rotation=-90,labelpad=clabelpad)
+        ax_format.append(ax)
+
+        ax = axarr[1,0]
+        C = L21_dict['los_wind_error'][:,i1:i2]
+        C[:,igap] = np.nan
+        h = ax.pcolormesh(X, Y, C, cmap='viridis_r', norm=LogNorm(vmin=ve_min, vmax=ve_max))
+        ax.set_title('LoS Wind Error')        
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        fig.colorbar(h, cax=cax).set_label('m/s',rotation=-90,labelpad=clabelpad)
+        ax_format.append(ax)
+
+        ############ VER and VER Error ##########
+        ax = axarr[0,1]
+        C = L21_dict['ver'][:,i1:i2]
+        C[:,igap] = np.nan
+        h = ax.pcolormesh(X, Y, C, cmap='viridis', norm=LogNorm(vmin=a_min, vmax=a_max))
+        ax.set_title('Relative VER')        
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        fig.colorbar(h, cax=cax).set_label('ph/cm$^3$/s',rotation=-90,labelpad=clabelpad)
+        ax_format.append(ax)
+
+        ax = axarr[1,1]
+        C = L21_dict['los_wind_error'][:,i1:i2]
+        C[:,igap] = np.nan
+        h = ax.pcolormesh(X, Y, C, cmap='viridis', norm=LogNorm(vmin=ae_min, vmax=ae_max))
+        ax.set_title('Relative VER Error')      
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        fig.colorbar(h, cax=cax).set_label('ph/cm$^3$/s',rotation=-90,labelpad=clabelpad)
+        ax_format.append(ax)
+
+        ############ Quality Factors #############
+        cmap = cmap_byr
+        bounds = [-0.33,0.33,0.67,1.33]
+        norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)  
+
+        ax = axarr[2,0]
+        C = 1 - L21_dict['wind_quality'][:,i1:i2]
+        C[:,igap] = np.nan
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('Wind Quality')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.5,1])
+        cb.ax.set_yticklabels(['Good','Caution','Bad'], rotation=-90, va='center')
+        ax_format.append(ax)
+
+        ax = axarr[2,1]
+        C = 1 - L21_dict['ver_quality'][:,i1:i2]
+        C[:,igap] = np.nan
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('VER Quality')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.5,1])
+        cb.ax.set_yticklabels(['Good','Caution','Bad'], rotation=-90, va='center')
+        ax_format.append(ax)
+
+        ############ Location #############
+        try: # because I'm worried something funny may happen with this hacky code
+            ax = axarr[3,0]
+            j = int(ny/2) # Use middle altitude for reference lat/lon
+            # Annoying code to work longitude ranges for Basemap [-360, 720]
+            lon = L21_dict['lon'][j,i1:i2]
+            lonu = fix_longitudes(lon)
+            lonoff = lonu[0] - (np.mod(lonu[0] + 180., 360.)-180.) # offset to put min lon in [-180, 180]
+            lonplot = lonu - lonoff
+            latplot = L21_dict['lat'][j,i1:i2]
+            # Compute lonmin and lonmax for plot. This is an unfortunately hacky way to ensure
+            # that the x axis on the map matches the x axis on the other plots, even for 
+            # partial orbits.
+            c = np.polyfit(xm, lonplot, 1)
+            dlon_dslt = c[0]
+            lon_slt0 = c[1]
+            lonmin = dlon_dslt*-12 + lon_slt0
+            lonmax = dlon_dslt*12  + lon_slt0
+            m = Basemap(ax=ax, llcrnrlon=lonmin, urcrnrlon=lonmax, llcrnrlat=-50., urcrnrlat=50.,\
+                        resolution='l',projection='merc',lat_ts=0.,\
+                        fix_aspect=False)
+            m.plot(lonplot, latplot, 'C1-', lw=3, latlon=True, label='Observations')
+            xm,ym = m(lonlat_0[:,0], lonlat_0[:,1])
+            ax.plot(xm,ym, 'k-', lw=1, label='MLAT=0')
+            xm,ym = m(lonlat_m10[:,0], lonlat_m10[:,1])
+            ax.plot(xm,ym, 'k--', lw=1, label='MLAT=+/-10 deg')
+            xm,ym = m(lonlat_p10[:,0], lonlat_p10[:,1])
+            ax.plot(xm,ym, 'k--', lw=1)
+            cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad) # Helps alignment
+            cax.set_visible(False) # Helps alignment
+            m.drawcoastlines(linewidth=0.5);
+            m.fillcontinents()
+            m.drawparallels(np.arange(-90.,91.,30.), labels=[0,1,0,1]); # LRTB
+            m.drawmeridians(np.arange(-180.,361.,90.), labels=[0,1,0,1]);
+            ax.legend(loc='lower left', prop={'size':8})
+        except Exception as e:
+            print 'Error creating map: %s' % e
+
+        ############ Quality flags ############
+        # There isn't enough room to plot all the flags, so we'll plot the most important ones (subject to change)
+        cmap = cmap_byr
+        bounds = [-0.5,0.5,1.5]
+        norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)  
+
+        ax = axarr[0,2]
+        C = 1.0 * L21_dict['quality_flags'][:,i1:i2,0]
+        C[:,igap] = np.nan
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('Low SNR')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,1])
+        ax_format.append(ax)
+
+        ax = axarr[1,2]
+        C = 1.0 * L21_dict['quality_flags'][:,i1:i2,1]
+        C[:,igap] = np.nan
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('South Atlantic Anomaly')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,1])
+        ax_format.append(ax)
+
+        ax = axarr[2,2]
+        C = 1.0 * L21_dict['quality_flags'][:,i1:i2,7]
+        C[:,igap] = np.nan
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('Airglow above 300 km')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,1])
+        ax_format.append(ax)
+
+        ax = axarr[3,2]
+        C = 1.0 * L21_dict['quality_flags'][:,i1:i2,8]
+        C[:,igap] = np.nan
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('LoS crosses terminator')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,1])
+        ax_format.append(ax)
+
+
+        #### Turn off unused axes
+        axarr[3,1].axis('off')
+
+        #### Make the 2D plots look nice
+        for ax in ax_format:
+            plt.sca(ax)
+            ax.patch.set_facecolor('gray')
+            ax.set_ylabel('Altitude [km]')
+            ax.yaxis.set_ticks([100,200,300])
+            ax.set_ylim((85,320))
+            ax.set_yscale('log')
+            ax.yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
+            ax.yaxis.set_minor_formatter(matplotlib.ticker.FormatStrFormatter('%.0f'))
+            ax.set_xlim((-12,12))
+            ax.set_xticks(np.arange(-12,13,3))
+            ax.set_xticklabels(['%.0f' % np.mod(x,24.) for x in ax.get_xticks()])
+            ax.set_xlabel('Solar LT [hr]')
+
+
+        plt.tight_layout(rect=[0,0.02,1,0.96]) # leave room for suptitle
+        # Create date and time string for this plot
+        t0 = L21_dict['time'][i1]
+        t1 = L21_dict['time'][i2-1]
+        t_mid = t0 + timedelta(seconds=(t1-t0).total_seconds()/2.)
+        datetime_str = t_mid.strftime('%Y-%m-%d-%H%M%S')
+
+        fig.suptitle('%s MIGHTI-%s %s' % (datetime_str, sensor, L21_dict['emission_color'].capitalize()), fontsize=28)
+
+        #### Save
+        versrev = L21_fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
+        desc = L21_fn.split('/')[-1].split('_')[-3] #e.g., Vector-Wind-Green
+        pngfn = pngpath + 'ICON_L2_MIGHTI-%s_Plot-%s_%s_%s.png'%(sensor, desc, datetime_str, versrev)
+        plt.savefig(pngfn, dpi=120)
+        L21_pngs.append(pngfn)
+        if close: 
+            # There seems to be a memory leak here, despite this:
+            fig.clf()
+            plt.close(fig)
+            plt.close('all')
+            
+    # Be extra careful for memory leaks
+    del L21_dict
+
+    return L21_pngs
+
+
+
+
+
+def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., 
+                 a_min = 1., a_max = 1000., ae_min = 0.1, ae_max = 100., close=True,
+                 first_only=False):
+    '''
+    Create Tohban plots for Level 2.2 data. The nominal L2.2 file contains 24 hours of data. The 
+    Tohban plots are split up by solar local time. There is one plot per noon-to-noon LT period.
     
+    INPUTS:
+    
+      *  L22_fn       --TYPE:str,   Full path to a L2.2 file
+      *  pngpath      --TYPE:str,   Directory to save the resulting png(s) to
+   
+    OPTIONAL INPUTS:
+   
+      *  v_max        --TYPE:float, Maximum wind velocity for colorbar [m/s]
+      *  ve_min       --TYPE:float, Minimum wind error for colorbar [m/s]
+      *  ve_max       --TYPE:float, Maximum wind error for colorbar [m/s]
+      *  a_min        --TYPE:float, Minimum VER for colorbar [ph/cm^3/s]
+      *  a_max        --TYPE:float, Maximum VER for colorbar [ph/cm^3/s]
+      *  ae_min       --TYPE:float, Minimum VER error for colorbar [ph/cm^3/s]
+      *  ae_max       --TYPE:float, Maximum VER error for colorbar [ph/cm^3/s]
+      *  close        --TYPE:bool,  If True, close the figure after saving it.
+      *  first_only   --TYPE:bool,  If True, only make the first plot (useful for debugging).
+                                   
+    OUTPUT:
+    
+      *  L22_pngs     --TYPE:list of str,  Full path to the saved png files
+      
+    '''
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    from matplotlib.colors import LinearSegmentedColormap
+
+    # Custom colormap for quality factor/flags
+    low_rgb = [0.7, 0.7, 1.0]
+    #mid_rgb = np.array([252,238,170])/256.
+    mid_rgb = np.array([253,185,40])/256.
+    hi_rgb  = [0.7, 0.0, 0.0]
+    cdict = {'red':   ((0.0, low_rgb[0], low_rgb[0]),
+                       (0.5, mid_rgb[0], mid_rgb[0]),
+                       (1.0, hi_rgb [0], hi_rgb [0])),
+             'green': ((0.0, low_rgb[1], low_rgb[1]),
+                       (0.5, mid_rgb[1], mid_rgb[1]),
+                       (1.0, hi_rgb [1], hi_rgb [1])),
+             'blue':  ((0.0, low_rgb[2], low_rgb[2]),
+                       (0.5, mid_rgb[2], mid_rgb[2]),
+                       (1.0, hi_rgb [2], hi_rgb [2]))}
+    cmap_byr = LinearSegmentedColormap('Custom', cdict)
+
+    if pngpath[-1] != '/':
+        pngpath += '/'
+
     L22_dict = level22_to_dict(L22_fn)
 
     Nalt, Nlon = np.shape(L22_dict['u'])
     lonu = L22_dict['lon_unwrapped']
-    alt = L22_dict['alt']
+    alt = np.ma.filled(L22_dict['alt'], np.nan) # convert from masked array to array
     t = L22_dict['epoch']
+    
     L22_pngs = []
     nrows, ncols = 5, 4
     csize = '3%' # For adding colorbar
     cpad = 0.08  # For adding colorbar
     clabelpad = 15 # For colorbar label
-    
+
+    # Load magnetic coordinates
+    lonlat_m10, lonlat_0, lonlat_p10 = mag_lines()
+
     assert any(t), "All data in the L2.2 are masked. No plot can be created."
-    
+
     # Organize figures by SLT. Create one plot for each (SLT) noon-to-noon period.
-    # Anytime there is a negative jump in the SLT, start a new plot.
-    # The following code is awkward because it has to handle missing data, including 
-    # missing data across noon. Missing data in the middle of orbits must be filled in with a 
-    # reasonable interpolation, since pcolormesh can't (and shouldn't) take masked arrays for X or Y.
-    # Note that no *data* is being interpolated, just *coordinates*.
-    mask = t.mask
-    t_hr = np.array([(ti - datetime(ti.year, ti.month, ti.day, 0, 0, 0)).total_seconds()/3600. for ti in t.filled()])
-    t_hr[mask] = np.nan
-    # Interpolate missing times, for ability to plot quality flags and such.
-    valid = np.where(np.isfinite(t_hr))[0]
-    i0 = valid[0]
-    i1 = valid[-1]+1
-    x = t_hr[i0:i1]
-    i = np.arange(i0,i1)
-    good = np.isfinite(x)
-    x[~good] = np.interp(i[~good], i[good], x[good]) # linear interpolation across gaps
-    t_hr[i0:i1] = x
-    # Extrapolate times before and after i0 and i1, again just for plotting. Assume starts at 00:00 and ends at 23:59:59
-    t_hr[:i0] = np.linspace(0, t_hr[i0], i0+1)[:-1]
-    t_hr[i1:] = np.linspace(t_hr[i1-1], 23. + 3599./3600., Nlon-i1+1)[1:]
-    # Compute solar local time in hours using middle altitude for longitude reference
-    j = int(Nalt/2)
-    slt_hr_u = t_hr + 24./360.*lonu[j,:] # unwrapped SLT
-    # Wrap SLT to [-12,12)
-    slt_hr = np.mod(slt_hr_u + 12., 24.) - 12.
-    ijump = np.where(np.diff(slt_hr) < 0.0)[0] # all negative jumps
-    # stop index (exclusive) is one past each negative jump, plus the end
-    istop = np.concatenate((ijump+1, [Nlon]))
-    # start index (inclusive) is the same as above, including 0 but not the end
-    istart = np.concatenate(([0], ijump+1))
+    sltu_2D = unwrap_slt(t,L22_dict['slt'])
+    sltu = np.nanmean(sltu_2D, axis=0) # Reference SLT for each column
+    n = np.around(sltu/24.) # for each element, the figure it should go in
+
+    # Create istart, istop (i.e., deciding which columns go in which figures)
+    istart = []
+    istop = []
+    for ii in np.unique(n[~np.isnan(n)]):
+        idx = np.where(n == ii)[0]
+        istart.append(idx[0])
+        istop.append(idx[-1]+1)
     nfigs = len(istart)
-    
+
+    if first_only:
+        istop = istop[0:1]
+        istart = istart[0:1]
+        nfigs = 1
+
     # Loop and create figures
     for n, (i1, i2) in enumerate(zip(istart, istop)):
-        
+
+        if i2-i1 <= 1: # corner case: skip this plot
+            continue
+
         # pcolormesh wants the coordinates of the corners (not the middle) of each pixel
-        x = slt_hr[i1:i2]
+        x = np.mod(sltu[i1:i2] + 12., 24) - 12.
+        x = fill(x) # (SLT) Fill in nans in the middle with linear interpolation
         y = alt
         nx = len(x)
         ny = len(y)
@@ -4621,10 +5317,10 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         xo = np.concatenate([[x[0]-dx[0]/2], x[:-1] + dx/2, [x[-1]+dx[-1]/2]])
         yo = np.concatenate([[y[0]-dy[0]/2], y[:-1] + dy/2, [y[-1]+dy[-1]/2]])
         X,Y = np.meshgrid(x,y)
-        
-        fig, axarr = plt.subplots(nrows, ncols, figsize=(8*ncols,3*nrows))
+
+        fig, axarr = plt.subplots(nrows, ncols, figsize=(7.3*ncols,3*nrows))
         ax_format = [] # Will hold axes containing the normal Altitude vs. Longitude vs. Color plots, for later common formatting
-        
+
         ########### Wind and wind error ###########
         ax = axarr[0,0]
         h = ax.pcolormesh(X, Y, L22_dict['u'][:,i1:i2], cmap='bwr', vmin=-v_max, vmax=v_max)
@@ -4632,28 +5328,28 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         fig.colorbar(h, cax=cax).set_label('m/s',rotation=-90,labelpad=clabelpad)
         ax_format.append(ax)
-        
+
         ax = axarr[1,0]
         h = ax.pcolormesh(X, Y, L22_dict['v'][:,i1:i2], cmap='bwr', vmin=-v_max, vmax=v_max)
         ax.set_title('Meridional Wind')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         fig.colorbar(h, cax=cax).set_label('m/s',rotation=-90,labelpad=clabelpad)
         ax_format.append(ax)
-        
+
         ax = axarr[0,1]
         h = ax.pcolormesh(X, Y, L22_dict['u_error'][:,i1:i2], cmap='viridis_r', norm=LogNorm(vmin=ve_min, vmax=ve_max))
         ax.set_title('Zonal Wind Error')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         fig.colorbar(h, cax=cax).set_label('m/s',rotation=-90,labelpad=clabelpad)
         ax_format.append(ax)
-        
+
         ax = axarr[1,1]
         h = ax.pcolormesh(X, Y, L22_dict['v_error'][:,i1:i2], cmap='viridis_r', norm=LogNorm(vmin=ve_min, vmax=ve_max))
         ax.set_title('Meridional Wind Error')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         fig.colorbar(h, cax=cax).set_label('m/s',rotation=-90,labelpad=clabelpad)
         ax_format.append(ax)
-        
+
         ############ VER/Amplitude and error ############
         ax = axarr[2,0]
         h = ax.pcolormesh(X, Y, L22_dict['ver'][:,i1:i2], cmap='viridis', norm=LogNorm(vmin=a_min, vmax=a_max))
@@ -4661,20 +5357,20 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         fig.colorbar(h, cax=cax).set_label('ph/cm$^3$/s',rotation=-90,labelpad=clabelpad)
         ax_format.append(ax)
-        
+
         ax = axarr[2,1]
         h = ax.pcolormesh(X, Y, L22_dict['ver_error'][:,i1:i2], cmap='viridis', norm=LogNorm(vmin=ae_min, vmax=ae_max))
         ax.set_title('Relative VER Error')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         fig.colorbar(h, cax=cax).set_label('ph/cm$^3$/s',rotation=-90,labelpad=clabelpad)
         ax_format.append(ax)
-        
-        
+
+
         ############ Quality Factors #############
         cmap = cmap_byr
         bounds = [-0.33,0.33,0.67,1.33]
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)  
-        
+
         ax = axarr[3,0]
         h = ax.pcolormesh(X, Y, 1 - L22_dict['wind_quality'][:,i1:i2], cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
         ax.set_title('Wind Quality')
@@ -4682,7 +5378,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.5,1])
         cb.ax.set_yticklabels(['Good','Caution','Bad'], rotation=-90, va='center')
         ax_format.append(ax)
-        
+
         ax = axarr[3,1]
         h = ax.pcolormesh(X, Y, 1 - L22_dict['ver_quality'][:,i1:i2], cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
         ax.set_title('VER Quality')
@@ -4690,46 +5386,68 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.5,1])
         cb.ax.set_yticklabels(['Good','Caution','Bad'], rotation=-90, va='center')
         ax_format.append(ax)
-        
+
         ############ Location #############
-        ax = axarr[4,0]
-        j = int(Nalt/2) # Use middle altitude for reference latitude
-        ax.plot(slt_hr[i1:i2], L22_dict['lat'][j,i1:i2], 'k-')
-        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad) # Make dummy axis for alignment
-        cax.axis('off') # and make it invisible
-        ax.set_title('Tangent Latitude')
-        ax.set_ylabel('Latitude [deg]')
-        ax.set_xlabel('Solar LT [hr]')
-        ax.set_ylim((-45,45))
-        ax.set_xlim((-12,12))
-        ax.set_xticks(np.arange(-12,13,3))
-        ax.set_xticklabels(['%.0f' % np.mod(x,24.) for x in ax.get_xticks()])
+        try: # because I'm worried something funny may happen with this hacky code
+            ax = axarr[4,0]
+            j = int(Nalt/2) # Use middle altitude for reference lat/lon
+            # Annoying code to work longitude ranges for Basemap [-360, 720]
+            lonoff = lonu[j,i1] - (np.mod(lonu[j,i1] + 180., 360.)-180.) # offset to put min lon in [-180, 180]
+            lonplot = lonu[j,i1:i2] - lonoff
+            latplot = L22_dict['lat'][j,i1:i2]
+            # Compute lonmin and lonmax for plot. This is an unfortunately hacky way to ensure
+            # that the x axis on the map matches the x axis on the other plots, even for 
+            # partial orbits.
+            c = np.polyfit(x, lonplot, 1)
+            dlon_dslt = c[0]
+            lon_slt0 = c[1]
+            lonmin = dlon_dslt*-12 + lon_slt0
+            lonmax = dlon_dslt*12  + lon_slt0
+            m = Basemap(ax=ax, llcrnrlon=lonmin, urcrnrlon=lonmax, llcrnrlat=-50., urcrnrlat=50.,\
+                        resolution='l',projection='merc',lat_ts=0.,\
+                        fix_aspect=False)
+            m.plot(lonplot, latplot, 'C1-', lw=3, latlon=True, label='Observations')
+            xm,ym = m(lonlat_0[:,0], lonlat_0[:,1])
+            ax.plot(xm,ym, 'k-', lw=1, label='MLAT=0')
+            xm,ym = m(lonlat_m10[:,0], lonlat_m10[:,1])
+            ax.plot(xm,ym, 'k--', lw=1, label='MLAT=+/-10 deg')
+            xm,ym = m(lonlat_p10[:,0], lonlat_p10[:,1])
+            ax.plot(xm,ym, 'k--', lw=1)
+            cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad) # Helps alignment
+            cax.set_visible(False) # Helps alignment
+            m.drawcoastlines(linewidth=0.5);
+            m.fillcontinents()
+            m.drawparallels(np.arange(-90.,91.,30.), labels=[0,1,0,1]); # LRTB
+            m.drawmeridians(np.arange(-180.,361.,90.), labels=[0,1,0,1]);
+            ax.legend(loc='lower left', prop={'size':8})
+        except Exception as e:
+            print 'Error creating map: %s' % e
 
         ############ Quality flags derived at L2.2 ############
         # There isn't enough room to plot all the flags, so we'll plot the most important ones (subject to change)
         cmap = cmap_byr
         bounds = [-0.5,0.5,1.5]
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)  
-        
+
         ax = axarr[0,2]
         h = ax.pcolormesh(X, Y, L22_dict['quality_flags'][:,i1:i2,28], cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
         ax.set_title('Spherical asymmetry detected')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
         ax_format.append(ax)
-        
+
         ax = axarr[3,3]
         h = ax.pcolormesh(X, Y, L22_dict['quality_flags'][:,i1:i2,33], cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
         ax.set_title('Unknown Error: Notify MIGHTI team')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
         ax_format.append(ax)
-        
+
         ############ Quality Flags derived at L1 and L2.1 (separate MIGHTI A and B) #############
         cmap = cmap_byr
         bounds = [-0.167, 0.167, 0.5, 0.833, 1.167]
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N) 
-        
+
         ax = axarr[1,2]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,24] + 0.667*L22_dict['quality_flags'][:,i1:i2,25]
         h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
@@ -4738,7 +5456,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
         cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
         ax_format.append(ax)
-        
+
         ax = axarr[2,2]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,0] + 0.667*L22_dict['quality_flags'][:,i1:i2,12]
         h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
@@ -4747,7 +5465,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
         cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
         ax_format.append(ax)
-        
+
         ax = axarr[3,2]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,7] + 0.667*L22_dict['quality_flags'][:,i1:i2,19]
         h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
@@ -4756,7 +5474,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
         cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
         ax_format.append(ax)
-        
+
         ax = axarr[0,3]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,8] + 0.667*L22_dict['quality_flags'][:,i1:i2,20]
         h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
@@ -4765,7 +5483,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
         cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
         ax_format.append(ax)
-        
+
         ax = axarr[1,3]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,2] + 0.667*L22_dict['quality_flags'][:,i1:i2,14]
         h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
@@ -4774,7 +5492,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
         cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
         ax_format.append(ax)
-        
+
         ax = axarr[2,3]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,26] + 0.667*L22_dict['quality_flags'][:,i1:i2,27]
         h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
@@ -4783,7 +5501,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
         cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
         ax_format.append(ax)
-        
+
         ax = axarr[4,2]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,1] + 0.667*L22_dict['quality_flags'][:,i1:i2,13]
         h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
@@ -4792,11 +5510,11 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
         cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
         ax_format.append(ax)
-        
+
         #### Turn off unused axes
         axarr[4,1].axis('off')
         axarr[4,3].axis('off')
-        
+
         #### Make the 2D plots look nice
         for ax in ax_format:
             plt.sca(ax)
@@ -4814,12 +5532,13 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
 
         plt.tight_layout(rect=[0,0.02,1,0.96]) # leave room for suptitle
         # Create date and time string for this plot
-        t_hr_mid = np.nanmean(t_hr[i1:i2])
-        t_mid = L22_dict['time_start'] + timedelta(hours=t_hr_mid)
+        t0 = L22_dict['epoch'][i1]
+        t1 = L22_dict['epoch'][i2-1]
+        t_mid = t0 + timedelta(seconds=(t1-t0).total_seconds()/2.)
         datetime_str = t_mid.strftime('%Y-%m-%d-%H%M%S')
-        
+
         fig.suptitle('%s %s' % (datetime_str, L22_dict['emission_color']), fontsize=28)
-        
+
         #### Save
         versrev = L22_fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
         desc = L22_fn.split('/')[-1].split('_')[-3] #e.g., Vector-Wind-Green
@@ -4828,12 +5547,379 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         L22_pngs.append(pngfn)
         if close: 
             # There seems to be a memory leak here, despite this:
+            fig.clf()
             plt.close(fig)
             plt.close('all')
     # Be extra careful for memory leaks
     del L22_dict
 
     return L22_pngs
+
+
+
+def mag_lines():
+    '''
+    Helper function to define magnetic latitude -10, 0, and 10 degrees.
+    
+    OUTPUTS:
+    
+    lonlat_m10 -- TYPE:array(n,2), UNITS:deg. Geographic Longitude and Latitude of MLAT=-10
+    lonlat_0   -- TYPE:array(n,2), UNITS:deg. Geographic Longitude and Latitude of MLAT=0
+    lonlat_p10 -- TYPE:array(n,2), UNITS:deg. Geographic Longitude and Latitude of MLAT=+10
+    '''
+    
+    lonlat_m10 = np.array([[-1.80000000e+02, -6.89663865e+00],
+       [-1.73934866e+02, -7.89473684e+00],
+       [-1.72727273e+02, -8.09094760e+00],
+       [-1.65454545e+02, -9.18946721e+00],
+       [-1.58181818e+02, -1.02280458e+01],
+       [-1.50909091e+02, -1.12260749e+01],
+       [-1.43636364e+02, -1.21902194e+01],
+       [-1.36363636e+02, -1.31261068e+01],
+       [-1.36114617e+02, -1.31578947e+01],
+       [-1.29090909e+02, -1.40714935e+01],
+       [-1.21818182e+02, -1.50878128e+01],
+       [-1.14545455e+02, -1.62505655e+01],
+       [-1.07272727e+02, -1.75944366e+01],
+       [-1.03152466e+02, -1.84210526e+01],
+       [-1.00000000e+02, -1.90623662e+01],
+       [-9.27272727e+01, -2.04554277e+01],
+       [-8.54545455e+01, -2.14698205e+01],
+       [-7.81818182e+01, -2.18049765e+01],
+       [-7.09090909e+01, -2.11985346e+01],
+       [-6.36363636e+01, -1.94469971e+01],
+       [-6.10635145e+01, -1.84210526e+01],
+       [-5.63636364e+01, -1.64569984e+01],
+       [-5.04255273e+01, -1.31578947e+01],
+       [-4.90909091e+01, -1.23970405e+01],
+       [-4.18181818e+01, -7.89982720e+00],
+       [-4.18093917e+01, -7.89473684e+00],
+       [-3.45454545e+01, -3.90585729e+00],
+       [-3.16027050e+01, -2.63157895e+00],
+       [-2.72727273e+01, -9.11362092e-01],
+       [-2.00000000e+01,  1.01222503e+00],
+       [-1.27272727e+01,  2.06884921e+00],
+       [-5.45454545e+00,  2.48026461e+00],
+       [ 1.81818182e+00,  2.44923610e+00],
+       [ 9.09090909e+00,  2.10314163e+00],
+       [ 1.63636364e+01,  1.50189804e+00],
+       [ 2.36363636e+01,  6.88556237e-01],
+       [ 3.09090909e+01, -2.56265826e-01],
+       [ 3.81818182e+01, -1.19303805e+00],
+       [ 4.54545455e+01, -1.95113074e+00],
+       [ 5.27272727e+01, -2.39259438e+00],
+       [ 6.00000000e+01, -2.47651452e+00],
+       [ 6.72727273e+01, -2.28518665e+00],
+       [ 7.45454545e+01, -1.99157011e+00],
+       [ 8.18181818e+01, -1.77998248e+00],
+       [ 8.90909091e+01, -1.76111782e+00],
+       [ 9.63636364e+01, -1.92681549e+00],
+       [ 1.03636364e+02, -2.16655645e+00],
+       [ 1.10909091e+02, -2.33444107e+00],
+       [ 1.18181818e+02, -2.33197268e+00],
+       [ 1.25454545e+02, -2.16680375e+00],
+       [ 1.32727273e+02, -1.95996319e+00],
+       [ 1.40000000e+02, -1.89764262e+00],
+       [ 1.47272727e+02, -2.15012851e+00],
+       [ 1.52687138e+02, -2.63157895e+00],
+       [ 1.54545455e+02, -2.79630350e+00],
+       [ 1.61818182e+02, -3.78633647e+00],
+       [ 1.69090909e+02, -4.99365044e+00],
+       [ 1.76363636e+02, -6.26923698e+00],
+       [ 1.83636364e+02, -7.50601752e+00],
+       [ 1.86091614e+02, -7.89473684e+00],
+       [ 1.90909091e+02, -8.64922866e+00],
+       [ 1.98181818e+02, -9.71476394e+00],
+       [ 2.05454545e+02, -1.07314437e+01],
+       [ 2.12727273e+02, -1.17122790e+01],
+       [ 2.20000000e+02, -1.26607199e+01],
+       [ 2.23902453e+02, -1.31578947e+01],
+       [ 2.27272727e+02, -1.35945186e+01],
+       [ 2.34545455e+02, -1.45658774e+01],
+       [ 2.41818182e+02, -1.56469785e+01],
+       [ 2.49090909e+02, -1.69010974e+01],
+       [ 2.56363636e+02, -1.83184386e+01],
+       [ 2.56876685e+02, -1.84210526e+01],
+       [ 2.63636364e+02, -1.97870406e+01],
+       [ 2.70909091e+02, -2.10292572e+01],
+       [ 2.78181818e+02, -2.17399031e+01],
+       [ 2.85454545e+02, -2.16337604e+01],
+       [ 2.92727273e+02, -2.04756936e+01],
+       [ 2.99061810e+02, -1.84210526e+01],
+       [ 3.00000000e+02, -1.81032581e+01],
+       [ 3.07272727e+02, -1.45325622e+01],
+       [ 3.09584369e+02, -1.31578947e+01],
+       [ 3.14545455e+02, -1.01639914e+01],
+       [ 3.18274624e+02, -7.89473684e+00],
+       [ 3.21818182e+02, -5.81797757e+00],
+       [ 3.28247928e+02, -2.63157895e+00],
+       [ 3.29090909e+02, -2.24527946e+00],
+       [ 3.36363636e+02,  1.70549785e-01],
+       [ 3.43636364e+02,  1.63571825e+00],
+       [ 3.50909091e+02,  2.34109777e+00],
+       [ 3.58181818e+02,  2.51013362e+00],
+       [ 3.65454545e+02,  2.31071579e+00],
+       [ 3.72727273e+02,  1.83205057e+00],
+       [ 3.80000000e+02,  1.11806273e+00],
+       [ 3.87272727e+02,  2.25153663e-01],
+       [ 3.94545455e+02, -7.36236307e-01],
+       [ 4.01818182e+02, -1.60466114e+00],
+       [ 4.09090909e+02, -2.21684555e+00],
+       [ 4.16363636e+02, -2.47690612e+00],
+       [ 4.23636364e+02, -2.40579198e+00],
+       [ 4.30909091e+02, -2.13881868e+00],
+       [ 4.38181818e+02, -1.86606516e+00],
+       [ 4.45454545e+02, -1.74406975e+00],
+       [ 4.52727273e+02, -1.82601168e+00],
+       [ 4.60000000e+02, -2.04671554e+00],
+       [ 4.67272727e+02, -2.26764156e+00],
+       [ 4.74545455e+02, -2.35688517e+00],
+       [ 4.81818182e+02, -2.26449603e+00],
+       [ 4.89090909e+02, -2.05760473e+00],
+       [ 4.96363636e+02, -1.89871579e+00],
+       [ 5.03636364e+02, -1.97676564e+00],
+       [ 5.10909091e+02, -2.42435614e+00],
+       [ 5.12715523e+02, -2.63157895e+00],
+       [ 5.18181818e+02, -3.25468679e+00],
+       [ 5.25454545e+02, -4.37257051e+00],
+       [ 5.32727273e+02, -5.63105858e+00],
+       [ 5.40000000e+02, -6.89663865e+00]])
+    
+    lonlat_0 = np.array([[-1.80000000e+02,  2.90487384e+00],
+       [-1.78373570e+02,  2.63157895e+00],
+       [-1.72727273e+02,  1.70386852e+00],
+       [-1.65454545e+02,  6.10021466e-01],
+       [-1.58181818e+02, -4.05664667e-01],
+       [-1.50909091e+02, -1.36953882e+00],
+       [-1.43636364e+02, -2.29116986e+00],
+       [-1.40831637e+02, -2.63157895e+00],
+       [-1.36363636e+02, -3.17163838e+00],
+       [-1.29090909e+02, -4.04274534e+00],
+       [-1.21818182e+02, -4.97019120e+00],
+       [-1.14545455e+02, -6.04013854e+00],
+       [-1.07272727e+02, -7.30729788e+00],
+       [-1.04255692e+02, -7.89473684e+00],
+       [-1.00000000e+02, -8.73680021e+00],
+       [-9.27272727e+01, -1.01239583e+01],
+       [-8.54545455e+01, -1.11316219e+01],
+       [-7.81818182e+01, -1.13846254e+01],
+       [-7.09090909e+01, -1.05470471e+01],
+       [-6.36363636e+01, -8.40225687e+00],
+       [-6.25317751e+01, -7.89473684e+00],
+       [-5.63636364e+01, -4.99024863e+00],
+       [-5.23132529e+01, -2.63157895e+00],
+       [-4.90909091e+01, -7.81479445e-01],
+       [-4.32073017e+01,  2.63157895e+00],
+       [-4.18181818e+01,  3.39111761e+00],
+       [-3.45454545e+01,  6.79374775e+00],
+       [-3.13756709e+01,  7.89473684e+00],
+       [-2.72727273e+01,  9.20476725e+00],
+       [-2.00000000e+01,  1.06952133e+01],
+       [-1.27272727e+01,  1.14788784e+01],
+       [-5.45454545e+00,  1.17397502e+01],
+       [ 1.81818182e+00,  1.16297846e+01],
+       [ 9.09090909e+00,  1.12411799e+01],
+       [ 1.63636364e+01,  1.06185188e+01],
+       [ 2.36363636e+01,  9.79950626e+00],
+       [ 3.09090909e+01,  8.85884952e+00],
+       [ 3.81818182e+01,  7.92778763e+00],
+       [ 3.85017458e+01,  7.89473684e+00],
+       [ 4.54545455e+01,  7.17161638e+00],
+       [ 5.27272727e+01,  6.73081052e+00],
+       [ 6.00000000e+01,  6.64065813e+00],
+       [ 6.72727273e+01,  6.81625386e+00],
+       [ 7.45454545e+01,  7.08868574e+00],
+       [ 8.18181818e+01,  7.28449618e+00],
+       [ 8.90909091e+01,  7.30464741e+00],
+       [ 9.63636364e+01,  7.16326920e+00],
+       [ 1.03636364e+02,  6.97087634e+00],
+       [ 1.10909091e+02,  6.87134012e+00],
+       [ 1.18181818e+02,  6.96088319e+00],
+       [ 1.25454545e+02,  7.22794149e+00],
+       [ 1.32727273e+02,  7.54549472e+00],
+       [ 1.40000000e+02,  7.72047750e+00],
+       [ 1.47272727e+02,  7.57424174e+00],
+       [ 1.54545455e+02,  7.01451596e+00],
+       [ 1.61818182e+02,  6.06754373e+00],
+       [ 1.69090909e+02,  4.85844917e+00],
+       [ 1.76363636e+02,  3.55102938e+00],
+       [ 1.81627680e+02,  2.63157895e+00],
+       [ 1.83636364e+02,  2.28823630e+00],
+       [ 1.90909091e+02,  1.14526538e+00],
+       [ 1.98181818e+02,  9.43432514e-02],
+       [ 2.05454545e+02, -8.93050892e-01],
+       [ 2.12727273e+02, -1.83562355e+00],
+       [ 2.19152899e+02, -2.63157895e+00],
+       [ 2.20000000e+02, -2.73585842e+00],
+       [ 2.27272727e+02, -3.60503288e+00],
+       [ 2.34545455e+02, -4.49409831e+00],
+       [ 2.41818182e+02, -5.48236814e+00],
+       [ 2.49090909e+02, -6.64883482e+00],
+       [ 2.55768931e+02, -7.89473684e+00],
+       [ 2.56363636e+02, -8.00762700e+00],
+       [ 2.63636364e+02, -9.45515866e+00],
+       [ 2.70909091e+02, -1.06986272e+01],
+       [ 2.78181818e+02, -1.13753096e+01],
+       [ 2.85454545e+02, -1.11194654e+01],
+       [ 2.92727273e+02, -9.64455314e+00],
+       [ 2.97308313e+02, -7.89473684e+00],
+       [ 3.00000000e+02, -6.83629819e+00],
+       [ 3.07272727e+02, -2.92306400e+00],
+       [ 3.07754507e+02, -2.63157895e+00],
+       [ 3.14545455e+02,  1.36354360e+00],
+       [ 3.16840647e+02,  2.63157895e+00],
+       [ 3.21818182e+02,  5.19666074e+00],
+       [ 3.28428178e+02,  7.89473684e+00],
+       [ 3.29090909e+02,  8.14330208e+00],
+       [ 3.36363636e+02,  1.00495545e+01],
+       [ 3.43636364e+02,  1.11637361e+01],
+       [ 3.50909091e+02,  1.16638939e+01],
+       [ 3.58181818e+02,  1.17239142e+01],
+       [ 3.65454545e+02,  1.14668000e+01],
+       [ 3.72727273e+02,  1.09571595e+01],
+       [ 3.80000000e+02,  1.02301614e+01],
+       [ 3.87272727e+02,  9.33746819e+00],
+       [ 3.94545455e+02,  8.38201285e+00],
+       [ 3.98657954e+02,  7.89473684e+00],
+       [ 4.01818182e+02,  7.51691930e+00],
+       [ 4.09090909e+02,  6.90677022e+00],
+       [ 4.16363636e+02,  6.64452154e+00],
+       [ 4.23636364e+02,  6.70463879e+00],
+       [ 4.30909091e+02,  6.95214569e+00],
+       [ 4.38181818e+02,  7.20482002e+00],
+       [ 4.45454545e+02,  7.31837321e+00],
+       [ 4.52727273e+02,  7.24893720e+00],
+       [ 4.60000000e+02,  7.06428747e+00],
+       [ 4.67272727e+02,  6.90146648e+00],
+       [ 4.74545455e+02,  6.89027940e+00],
+       [ 4.81818182e+02,  7.07779225e+00],
+       [ 4.89090909e+02,  7.39181165e+00],
+       [ 4.96363636e+02,  7.66328961e+00],
+       [ 5.03636364e+02,  7.69592668e+00],
+       [ 5.10909091e+02,  7.34722401e+00],
+       [ 5.18181818e+02,  6.58336382e+00],
+       [ 5.25454545e+02,  5.48556896e+00],
+       [ 5.32727273e+02,  4.20727716e+00],
+       [ 5.40000000e+02,  2.90487384e+00]])
+    
+    lonlat_p10 = np.array([[-1.80000000e+02,  1.31806916e+01],
+       [-1.79866290e+02,  1.31578947e+01],
+       [-1.72727273e+02,  1.19606722e+01],
+       [-1.65454545e+02,  1.08223414e+01],
+       [-1.58181818e+02,  9.75361312e+00],
+       [-1.50909091e+02,  8.73139526e+00],
+       [-1.44727125e+02,  7.89473684e+00],
+       [-1.43636364e+02,  7.75040342e+00],
+       [-1.36363636e+02,  6.81799221e+00],
+       [-1.29090909e+02,  5.90682935e+00],
+       [-1.21818182e+02,  4.96470576e+00],
+       [-1.14545455e+02,  3.91187988e+00],
+       [-1.07272727e+02,  2.69122434e+00],
+       [-1.06950209e+02,  2.63157895e+00],
+       [-1.00000000e+02,  1.32875181e+00],
+       [-9.27272727e+01,  2.54727232e-02],
+       [-8.54545455e+01, -8.77955905e-01],
+       [-7.81818182e+01, -9.65469003e-01],
+       [-7.09090909e+01,  1.26827273e-01],
+       [-6.36363636e+01,  2.55621740e+00],
+       [-6.34813079e+01,  2.63157895e+00],
+       [-5.63636364e+01,  6.06466795e+00],
+       [-5.30595454e+01,  7.89473684e+00],
+       [-4.90909091e+01,  9.98325206e+00],
+       [-4.27223458e+01,  1.31578947e+01],
+       [-4.18181818e+01,  1.35742242e+01],
+       [-3.45454545e+01,  1.63544287e+01],
+       [-2.72727273e+01,  1.83453108e+01],
+       [-2.68434008e+01,  1.84210526e+01],
+       [-2.00000000e+01,  1.95634108e+01],
+       [-1.27272727e+01,  2.02184891e+01],
+       [-5.45454545e+00,  2.04478806e+01],
+       [ 1.81818182e+00,  2.03562685e+01],
+       [ 9.09090909e+00,  2.00074414e+01],
+       [ 1.63636364e+01,  1.94368716e+01],
+       [ 2.36363636e+01,  1.86823618e+01],
+       [ 2.58551978e+01,  1.84210526e+01],
+       [ 3.09090909e+01,  1.78157790e+01],
+       [ 3.81818182e+01,  1.69670617e+01],
+       [ 4.54545455e+01,  1.62858018e+01],
+       [ 5.27272727e+01,  1.58905693e+01],
+       [ 6.00000000e+01,  1.58111134e+01],
+       [ 6.72727273e+01,  1.59673518e+01],
+       [ 7.45454545e+01,  1.62081917e+01],
+       [ 8.18181818e+01,  1.63861666e+01],
+       [ 8.90909091e+01,  1.64229595e+01],
+       [ 9.63636364e+01,  1.63370075e+01],
+       [ 1.03636364e+02,  1.62276666e+01],
+       [ 1.10909091e+02,  1.62223175e+01],
+       [ 1.18181818e+02,  1.64046168e+01],
+       [ 1.25454545e+02,  1.67585495e+01],
+       [ 1.32727273e+02,  1.71626131e+01],
+       [ 1.40000000e+02,  1.74375221e+01],
+       [ 1.47272727e+02,  1.74163153e+01],
+       [ 1.54545455e+02,  1.70016484e+01],
+       [ 1.61818182e+02,  1.61937799e+01],
+       [ 1.69090909e+02,  1.50854702e+01],
+       [ 1.76363636e+02,  1.38235170e+01],
+       [ 1.80174807e+02,  1.31578947e+01],
+       [ 1.83636364e+02,  1.25611700e+01],
+       [ 1.90909091e+02,  1.13813258e+01],
+       [ 1.98181818e+02,  1.02809067e+01],
+       [ 2.05454545e+02,  9.23762319e+00],
+       [ 2.12727273e+02,  8.23477864e+00],
+       [ 2.15281778e+02,  7.89473684e+00],
+       [ 2.20000000e+02,  7.27995405e+00],
+       [ 2.27272727e+02,  6.36203047e+00],
+       [ 2.34545455e+02,  5.44440273e+00],
+       [ 2.41818182e+02,  4.45701865e+00],
+       [ 2.49090909e+02,  3.32332622e+00],
+       [ 2.52968064e+02,  2.63157895e+00],
+       [ 2.56363636e+02,  2.01863805e+00],
+       [ 2.63636364e+02,  6.51342439e-01],
+       [ 2.70909091e+02, -5.01734460e-01],
+       [ 2.78181818e+02, -1.04943682e+00],
+       [ 2.85454545e+02, -5.83290324e-01],
+       [ 2.92727273e+02,  1.17669678e+00],
+       [ 2.96225931e+02,  2.63157895e+00],
+       [ 3.00000000e+02,  4.20671545e+00],
+       [ 3.06980785e+02,  7.89473684e+00],
+       [ 3.07272727e+02,  8.04317382e+00],
+       [ 3.14545455e+02,  1.18544487e+01],
+       [ 3.17357577e+02,  1.31578947e+01],
+       [ 3.21818182e+02,  1.50616612e+01],
+       [ 3.29090909e+02,  1.74473297e+01],
+       [ 3.33444056e+02,  1.84210526e+01],
+       [ 3.36363636e+02,  1.90346944e+01],
+       [ 3.43636364e+02,  1.99521450e+01],
+       [ 3.50909091e+02,  2.03789130e+01],
+       [ 3.58181818e+02,  2.04372863e+01],
+       [ 3.65454545e+02,  2.02114280e+01],
+       [ 3.72727273e+02,  1.97479881e+01],
+       [ 3.80000000e+02,  1.90791866e+01],
+       [ 3.85837049e+02,  1.84210526e+01],
+       [ 3.87272727e+02,  1.82562161e+01],
+       [ 3.94545455e+02,  1.73798016e+01],
+       [ 4.01818182e+02,  1.65966245e+01],
+       [ 4.09090909e+02,  1.60479571e+01],
+       [ 4.16363636e+02,  1.58139763e+01],
+       [ 4.23636364e+02,  1.58683613e+01],
+       [ 4.30909091e+02,  1.60874109e+01],
+       [ 4.38181818e+02,  1.63120930e+01],
+       [ 4.45454545e+02,  1.64233450e+01],
+       [ 4.52727273e+02,  1.63905480e+01],
+       [ 4.60000000e+02,  1.62771386e+01],
+       [ 4.67272727e+02,  1.62049053e+01],
+       [ 4.74545455e+02,  1.62883091e+01],
+       [ 4.81818182e+02,  1.65655992e+01],
+       [ 4.89090909e+02,  1.69649793e+01],
+       [ 4.96363636e+02,  1.73277318e+01],
+       [ 5.03636364e+02,  1.74721342e+01],
+       [ 5.10909091e+02,  1.72605420e+01],
+       [ 5.18181818e+02,  1.66429396e+01],
+       [ 5.25454545e+02,  1.56686139e+01],
+       [ 5.32727273e+02,  1.44640313e+01],
+       [ 5.40000000e+02,  1.31806916e+01]])
+    
+    return lonlat_m10, lonlat_0, lonlat_p10
     
     
 ################################################################################################################
