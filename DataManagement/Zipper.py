@@ -152,9 +152,9 @@ def activeinstruments():
     #code['arg']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.204/log.txt','email':UIemail}
     #code['xxx']['xxx']['00'] = {'local_dir':'.','email':UIemail}
 
-    # Kwaj FPI
-    code['kwj']['fpi']['09'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'/usr/bin/split','email':UIemail}
-    code['kwj']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/User/My Documents/ClarityII/','email':UIemail}
+    # Kwaj FPI (moved as of 6/25/2019)
+    #code['kwj']['fpi']['09'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'/usr/bin/split','email':UIemail}
+    #code['kwj']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/User/My Documents/ClarityII/','email':UIemail}
     #code['kwj']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.0.2/log.txt','email':UIemail}
     
     # Last index is for remote2 admin related issues (not site based)
