@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 21 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 22 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -1903,7 +1903,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         parents.append('%s > %s' % (post, pre))
 
 
-    L21_fn = 'ICON_L2-1_MIGHTI-%s_LOS-Wind-%s_%s_v%02ir%02i.NC' % (sensor,L21_dict['emission_color'].capitalize(),
+    L21_fn = 'ICON_L2-1_MIGHTI-%s_LOS-Wind-%s_%s_v%02ir%03i.NC' % (sensor,L21_dict['emission_color'].capitalize(),
                                                            date0.strftime('%Y-%m-%d'),
                                                            data_version_major, data_revision)
     L21_full_fn = '%s%s'%(path, L21_fn)
@@ -2824,7 +2824,7 @@ def level1_to_level21(info_fn):
     # (3) Get GPI filename
     gpi_fn = None
     if 'GPI' in info.keys():
-        gpi_fn = info['GPI']
+        gpi_fn = './Input/'+info['GPI']
     
     # Read GPI file, if it exists
     year_day = None
@@ -4027,7 +4027,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         parents.append('%s > %s' % (post, pre))
 
     ######################### Open file for writing ##############################
-    L22_fn = 'ICON_L2-2_MIGHTI_VEC-Wind-%s_%s_v%02ir%02i.NC' % (L22_dict['emission_color'].capitalize(),
+    L22_fn = 'ICON_L2-2_MIGHTI_VEC-Wind-%s_%s_v%02ir%03i.NC' % (L22_dict['emission_color'].capitalize(),
                                                         t_start.strftime('%Y-%m-%d'),
                                                         data_version_major, data_revision)
     L22_full_fn = '%s%s'%(path, L22_fn)
@@ -5359,7 +5359,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         #### Save
         versrev = L21_fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
         desc = L21_fn.split('/')[-1].split('_')[-3] #e.g., Vector-Wind-Green
-        pngfn = pngpath + 'ICON_L2_MIGHTI-%s_Plot-%s_%s_%s.png'%(sensor, desc, datetime_str, versrev)
+        pngfn = pngpath + 'ICON_L2-1_MIGHTI-%s_Plot-%s_%s_%s.PNG'%(sensor, desc, datetime_str, versrev)
         plt.savefig(pngfn, dpi=120)
         L21_pngs.append(pngfn)
         if close: 
@@ -5707,7 +5707,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         #### Save
         versrev = L22_fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
         desc = L22_fn.split('/')[-1].split('_')[-3] #e.g., Vector-Wind-Green
-        pngfn = pngpath + 'ICON_L2_MIGHTI_Plot-%s_%s_%s.png'%(desc,datetime_str,versrev)
+        pngfn = pngpath + 'ICON_L2-2_MIGHTI_Plot-%s_%s_%s.PNG'%(desc,datetime_str,versrev)
         plt.savefig(pngfn, dpi=120)
         L22_pngs.append(pngfn)
         if close: 
