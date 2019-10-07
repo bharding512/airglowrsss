@@ -747,6 +747,8 @@ def DataSummary(files, times, bin_time = np.arange(17,32,0.5),
                         eT = eT[idx]
                         I = I[idx]
                         eI = eI[idx]
+                        dop = dop[idx]
+                        edop = edop[idx]
 
                 # Find bad data points
                 idx = (eT < 100) & (eT > 0)
@@ -755,6 +757,8 @@ def DataSummary(files, times, bin_time = np.arange(17,32,0.5),
                 eT = eT[idx]
                 I = I[idx]
                 eI = eI[idx]
+                dop = dop[idx]
+                edop = edop[idx]
 
                 if len(st) > 0:
                     # Bin the data
