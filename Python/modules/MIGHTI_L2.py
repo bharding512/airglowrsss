@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 19 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 22 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -94,9 +94,10 @@ from matplotlib.colors import LogNorm
 
 # Added in v1.19
 from mpl_toolkits.basemap import Basemap # For putting map on Tohban plots
-#import pyglow # for correcting VER for temperature visibility reduction
 import pysatMagVect # for reporting winds in magnetic coordinates
 
+# Added in v1.20
+from pyglow import pyglow # for correcting VER for temperature visibility reduction
 
 # Some aesthetics for plots
 matplotlib.rcParams['xtick.labelsize'] = 'small'
@@ -134,7 +135,7 @@ def phase_to_wind_factor(sigma_opd):
 
 
 
-def visibility_temperature(t, lat, lon, alt):
+def visibility_temperature(t, lat, lon, alt, f107=None, f107a=None, f107p=None, apmsis=None):
     '''
     Return the temperature to be used to compute the fringe visibility reduction. 
     Currently implemented with MSIS.
@@ -144,15 +145,27 @@ def visibility_temperature(t, lat, lon, alt):
       *  lat  -- TYPE:float,  UNITS:deg. Latitude of requested point.
       *  lon  -- TYPE:float,  UNITS:deg. Longitude (0-360) of requested point.
       *  alt  -- TYPE:float,  UNITS:km.  Altitude of requested point.
-      
+      *  f107 -- TYPE:float,  UNITS:sfu. F10.7 value for the date of interest (None is use values from pyglow)
+      *  f107a-- TYPE:float,  UNITS:sfu. F10.7a value for the date of interest (None is use values from pyglow)
+      *  f107p-- TYPE:float,  UNITS:sfu. F10.7p value for the date of interest (None is use values from pyglow)
+      *  apmsis--TYPE:array(7).          Ap vector that MSIS expects (None is use values from pyglow)
+
     OUTPUTS:
       *  T    -- TYPE:float,  UNITS:K.   Temperature at requested point.
     '''
-    # For now, MSIS is disabled since we would need the GPI file in practice. 
-    # TBD how we're going to handle this.
-#     pt = pyglow.Point(t, lat, lon, alt)
-#     pt.run_msis()
-    return 500.
+    
+    
+    if apmsis is None:
+        pt = pyglow.Point(t, lat, lon, alt)
+    else:
+        pt = pyglow.Point(t, lat, lon, alt, user_ind=True)
+        pt.f107 = f107
+        pt.f107a = f107a
+        pt.f107p = f107p
+        pt.apmsis = apmsis
+    pt.run_msis()
+    T = pt.Tn_msis
+    return T
     
     
 
@@ -1359,7 +1372,8 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
 def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_layer = None, H = None,
                                 integration_order = None, account_for_local_projection = None, 
                                 bin_size = None,
-                                top_layer_thresh = None, terminator_thresh = None):
+                                top_layer_thresh = None, terminator_thresh = None,
+                                f107 = None, f107a = None, f107p = None, apmsis = None, Tmult=1.):
     '''
     High-level function to run the Level 2.1 processing. It takes a dictionary (containing
     input variables extracted from a Level 1 file) and outputs a dictionary (containing 
@@ -1484,6 +1498,12 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                             terminator, raise a quality flag. Note that this quality flag will also be raised if
                                             any observations at lower zenith angles for the same observation are flagged, because
                                             the inversion mixes information from those observations.
+      *  f107                -- TYPE:float, UNITS:sfu. F10.7 value for the date of interest (None is use values from pyglow)
+      *  f107a               -- TYPE:float, UNITS:sfu. F10.7a value for the date of interest (None is use values from pyglow)
+      *  f107p               -- TYPE:float, UNITS:sfu. F10.7p value for the date of interest (None is use values from pyglow)
+      *  apmsis              --TYPE:array(7), Ap vector that MSIS expects (None is use values from pyglow)      
+      *  Tmult               -- TYPE:float, Artificial multiplier to apply to MSIS, for sensitivity studies (default 1)
+
                                             
     OUTPUTS:
     
@@ -1636,8 +1656,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     #### Transform from fringe amplitude to VER
     r = np.zeros(ny) # amp-to-R factor, altitude dependent
     for i in range(ny):
-        T = visibility_temperature(tmid, lat[i], lon[i], alt[i])
-#         T = 600. # TODO: delete me
+        T = visibility_temperature(tmid, lat[i], lon[i], alt[i], f107=f107, f107a=f107a, f107p=f107p, apmsis=apmsis)
+        T = T*Tmult
         r[i] = amp_to_R_factor(np.mean(sigma_opd), T)
     ver = r * amp
     ver_uncertainty = r * amp_uncertainty    
@@ -1883,7 +1903,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         parents.append('%s > %s' % (post, pre))
 
 
-    L21_fn = 'ICON_L2-1_MIGHTI-%s_LOS-Wind-%s_%s_v%02ir%02i.NC' % (sensor,L21_dict['emission_color'].capitalize(),
+    L21_fn = 'ICON_L2-1_MIGHTI-%s_LOS-Wind-%s_%s_v%02ir%03i.NC' % (sensor,L21_dict['emission_color'].capitalize(),
                                                            date0.strftime('%Y-%m-%d'),
                                                            data_version_major, data_revision)
     L21_full_fn = '%s%s'%(path, L21_fn)
@@ -2480,9 +2500,112 @@ def combine_level21(L21_dicts):
     return L21_dict
 
 
+    
+
+def get_GPI(dn, year_day, f107, f107a, ap, ap3):
+    '''
+    Operational Code to pull the geophysical indices from the standard GPI
+    ancillary file.
+    INPUTS:
+        dn - datetime to be used
+        year_day - vector containing the year/day of the GPIs (yyyddd)
+        f107 - vector containing the f107 index
+        f107a - vector containing the proxy for f107a average
+        ap - vector containing the daily ap index
+        ap3 - array containing the 3-hour ap index
+    OUTPUT:
+        returns the f107, f107a, f107p, ap, and ap3 for the requested time (dn)
+    NOTES:
+        Can be used in conjunction with get_msisGPI to generate the msis ap vector.
+    HISTORY:
+        02-Jun-2017: Written by Jonathan Makela (jmakela@illinois.edu)
+        14-Aug-2019: Copied from FUV_L2.py to MIGHTI_L2.py
+    '''
+
+    yd = dn.year*1000+dn.timetuple().tm_yday
+
+    # Check bounds
+    if (yd < year_day.min()) or (yd > year_day.max()):
+        return np.nan, np.nan, np.nan, np.nan
+
+    # Get the index into the year_day dimension
+    i = np.argwhere(year_day == yd).flatten()[0]
+
+    # Get the index into the 3 hour dimension
+    j = dn.hour/3
+
+    return f107[i], f107a[i], ap[i], ap3[j,i]
+
+
 
     
-def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_revision=0, sigma=None, top_layer=None, 
+def get_msisGPI(dn, year_day, f107, f107a, ap, ap3):
+    '''
+    Operational Code to pull the geophysical indices from the standard GPI
+    ancillary file and generate the ap vector required by MSIS.
+    INPUTS:
+        dn - datetime to be used
+        year_day - vector containing the year/day of the GPIs (yyyddd)
+        f107 - vector containing the f107 index
+        f107a - vector containing the proxy for f107a average
+        ap - vector containing the daily ap index
+        ap3 - array containing the 3-hour ap index
+    OUTPUT:
+        returns the f107, f107a, msis ap for the requested time (dn)
+    NOTES:
+        As defined in the MSIS code the msis ap is a vector containing:
+             (1) DAILY AP
+             (2) 3 HR AP INDEX FOR CURRENT TIME
+             (3) 3 HR AP INDEX FOR 3 HRS BEFORE CURRENT TIME
+             (4) 3 HR AP INDEX FOR 6 HRS BEFORE CURRENT TIME
+             (5) 3 HR AP INDEX FOR 9 HRS BEFORE CURRENT TIME
+             (6) AVERAGE OF EIGHT 3 HR AP INDICIES FROM 12 TO 33 HRS
+                 PRIOR   TO CURRENT TIME
+             (7) AVERAGE OF EIGHT 3 HR AP INDICIES FROM 36 TO 57 HRS
+                 PRIOR  TO CURRENT TIME
+    HISTORY:
+        02-Jun-2017: Written by Jonathan Makela (jmakela@illinois.edu)
+        01-Nov-2017: Added the prior-day f107 value needed by MSIS (jmakela@illinois.edu)
+        14-Aug-2019: Copied with superficial edits from FUV_L2.py to MIGHTI_L2.py
+    '''
+
+    # Where to store the
+    my_apmsis = np.zeros(7)
+    
+    # Get f107, f107a, daily ap, and 3-hour ap
+    my_f107, my_f107a, my_apmsis[0], my_apmsis[1] = get_GPI(dn+timedelta(hours=0),year_day,f107,f107a,ap,ap3)
+    
+    # Get the previous day f107
+    my_f107p, _, _, _ = get_GPI(dn+timedelta(hours=0)+timedelta(days=-1),year_day,f107,f107a,ap,ap3)
+    
+    # Get 3-hour ap for -3, -6, and -9 hours
+    _, _, _, my_apmsis[2] = get_GPI(dn+timedelta(hours = -3),year_day,f107,f107a,ap,ap3)
+    _, _, _, my_apmsis[3] = get_GPI(dn+timedelta(hours = -6),year_day,f107,f107a,ap,ap3)
+    _, _, _, my_apmsis[4] = get_GPI(dn+timedelta(hours = -9),year_day,f107,f107a,ap,ap3)
+    
+    # Get average 3-hour ap for -12 to -33 hours
+    temp_ap = 0
+    for delta in range(-12,-33-1,-3):
+        _, _, _, temp = get_GPI(dn+timedelta(hours = delta),year_day,f107,f107a,ap,ap3)
+        temp_ap += temp
+    my_apmsis[5] = temp_ap/8.
+    
+    # Get average 3-hour ap for -36 to -57 hours
+    temp_ap = 0
+    for delta in range(-36,-57-1,-3):
+        _, _, _, temp = get_GPI(dn+timedelta(hours = delta),year_day,f107,f107a,ap,ap3)
+        temp_ap += temp
+    my_apmsis[6] = temp_ap/8.
+    
+    return my_f107, my_f107a, my_f107p, my_apmsis
+    
+    
+
+
+
+def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_revision=0,
+                                        gpi_yearday=None, gpi_f107=None, gpi_f107a=None, gpi_ap=None, gpi_ap3=None,
+                                        sigma=None, top_layer=None, 
                                         H = None, integration_order=None, account_for_local_projection=None, 
                                         bin_size=None, top_layer_thresh=None, terminator_thresh=None,):
     '''
@@ -2504,6 +2627,11 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
     
       *  data_revision       -- TYPE:int,  The minor version of the data [0-999]. The major version is set
                                            by this software's major version. (default 0)
+      *  gpi_yearday         -- TYPE:array(N), YYYYDDD ints, taken from GPI file (None is use values from pyglow)
+      *  gpi_f107            -- TYPE:array(N), UNITS:sfu. F10.7 value for each day (None is use values from pyglow)
+      *  gpi_f107a           -- TYPE:array(N), UNITS:sfu. F10.7a value for each day (None is use values from pyglow)
+      *  gpi_ap              -- TYPE:array(N), Daily Ap for each day (None is use values from pyglow)
+      *  gpi_ap3             -- TYPE:array(8,N), 3-hourly Ap value for each day (None is use values from pyglow)
 
     MORE OPTIONAL INPUTS - If None, defaults from MIGHTI_L2.global_params will be used 
     
@@ -2536,6 +2664,8 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
 
     '''
     assert len(L1_fns)>0, "No files specified."
+    x = [gpi_yearday is None, gpi_f107 is None, gpi_f107a is None, gpi_ap is None, gpi_ap3 is None]
+    assert (all(x)) or (not any(x)), "All GPI inputs must be specified, or all must be None."
     
     L1_fns.sort() # To make sure it's in the right time order
         
@@ -2552,12 +2682,18 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
             # Read L1 file into a dictionary
             L1_dict = level1_to_dict(L1_fn, emission_color)
 
+            # If GPI inputs are specified, calculate the relevant inputs for MSIS:
+            f107, f107a, f107p, apmsis = None, None, None, None
+            if gpi_yearday is not None:
+                f107, f107a, f107p, apmsis = get_msisGPI(L1_dict['time_start'], gpi_yearday, gpi_f107, gpi_f107a, gpi_ap, gpi_ap3)
+            
             # Perform L1 to L2.1 processing
             L21_dict = level1_dict_to_level21_dict(L1_dict, sigma = sigma, top_layer = top_layer, H = H,
                                                    integration_order = integration_order, 
                                                    account_for_local_projection = account_for_local_projection, 
                                                    bin_size = bin_size,
-                                                   top_layer_thresh = top_layer_thresh, terminator_thresh = terminator_thresh)
+                                                   top_layer_thresh = top_layer_thresh, terminator_thresh = terminator_thresh,
+                                                   f107=f107, f107a=f107a, f107p=f107p, apmsis=apmsis)
             L21_dicts.append(L21_dict)
             
         except Exception as e:
@@ -2635,9 +2771,9 @@ def read_info_file(info_fn):
             line = f.readline()
             
     return info, files
-                    
-    
-    
+
+
+
     
 def level1_to_level21(info_fn):
     '''
@@ -2654,6 +2790,7 @@ def level1_to_level21(info_fn):
                                         [PARAMETERS]
                                         Revision=001
                                         Directory=/path/to/wherever/
+                                        GPI=/path/to/gpi_file.NC   (This line is optional)
                                         <other parameters>
 
                                         [FILES]
@@ -2664,7 +2801,7 @@ def level1_to_level21(info_fn):
       *  ret     -- TYPE:str. '' if everything worked. If not, a human-readable error message for each file that failed
     
     '''    
-    
+    # Read information.txt file
     info, L1_fns = read_info_file(info_fn)
     
     # Parse the info
@@ -2684,6 +2821,32 @@ def level1_to_level21(info_fn):
     # be specified.
     assert len(data_revision)==1, "Multiple revision numbers not supported for Level 2.1 processing"
     data_revision = data_revision[0]
+    # (3) Get GPI filename
+    gpi_fn = None
+    if 'GPI' in info.keys():
+        gpi_fn = './Input/'+info['GPI']
+    
+    # Read GPI file, if it exists
+    year_day = None
+    f107 = None
+    f107a = None
+    ap = None
+    ap3 = None
+    if gpi_fn:
+        gpi = netCDF4.Dataset(gpi_fn,mode='r')
+        # Read the geophysical indeces
+        ap3 = gpi['ap3'][:]
+        ap = gpi['ap'][:]
+        year_day = gpi['year_day'][:]
+        f107 = gpi['f107d'][:]
+        # Make sure this GPI has the average f107 in it
+        if 'f107a' in gpi.variables.keys():
+            f107a = gpi['f107a'][:]
+        else:
+            print 'Cannot find f107a in provided GPI file. Using daily f107 instead'
+            f107a = gpi['f107d']
+        gpi.close()
+    
     
     # Loop and call the lower-level function which does all the real work.
     # Split files into A and B sets, and run red and green for each set.
@@ -2693,7 +2856,9 @@ def level1_to_level21(info_fn):
         L1AB = [fn for fn in L1_full_fns if 'MIGHTI-%s'%sensor in fn]
         for emission_color in ['red','green']:
             try:
-                L21_fn, msg = level1_to_level21_without_info_file(L1AB, emission_color, direc + 'Output/', data_revision = data_revision)
+                L21_fn, msg = level1_to_level21_without_info_file(L1AB, emission_color, direc + 'Output/', 
+                                              gpi_yearday = year_day, gpi_f107=f107, gpi_f107a=f107a, gpi_ap=ap, gpi_ap3=ap3,
+                                              data_revision = data_revision)
                 L21_fns.append(L21_fn)
                 failure_messages.extend(msg)
             except Exception as e:
@@ -3862,7 +4027,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         parents.append('%s > %s' % (post, pre))
 
     ######################### Open file for writing ##############################
-    L22_fn = 'ICON_L2-2_MIGHTI_VEC-Wind-%s_%s_v%02ir%02i.NC' % (L22_dict['emission_color'].capitalize(),
+    L22_fn = 'ICON_L2-2_MIGHTI_VEC-Wind-%s_%s_v%02ir%03i.NC' % (L22_dict['emission_color'].capitalize(),
                                                         t_start.strftime('%Y-%m-%d'),
                                                         data_version_major, data_revision)
     L22_full_fn = '%s%s'%(path, L22_fn)
@@ -5194,7 +5359,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         #### Save
         versrev = L21_fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
         desc = L21_fn.split('/')[-1].split('_')[-3] #e.g., Vector-Wind-Green
-        pngfn = pngpath + 'ICON_L2_MIGHTI-%s_Plot-%s_%s_%s.png'%(sensor, desc, datetime_str, versrev)
+        pngfn = pngpath + 'ICON_L2-1_MIGHTI-%s_Plot-%s_%s_%s.PNG'%(sensor, desc, datetime_str, versrev)
         plt.savefig(pngfn, dpi=120)
         L21_pngs.append(pngfn)
         if close: 
@@ -5542,7 +5707,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         #### Save
         versrev = L22_fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
         desc = L22_fn.split('/')[-1].split('_')[-3] #e.g., Vector-Wind-Green
-        pngfn = pngpath + 'ICON_L2_MIGHTI_Plot-%s_%s_%s.png'%(desc,datetime_str,versrev)
+        pngfn = pngpath + 'ICON_L2-2_MIGHTI_Plot-%s_%s_%s.PNG'%(desc,datetime_str,versrev)
         plt.savefig(pngfn, dpi=120)
         L22_pngs.append(pngfn)
         if close: 
