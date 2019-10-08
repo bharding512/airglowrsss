@@ -149,7 +149,7 @@ def get_instrument_constants():
         'readnoise': 16.8, # electrons rms, per binned pixel. Englert et al 2016
   'fringe_contrast': 0.72, # Englert et al 2016, Green Night (worst case)
          'exptime': 60., # Night.
-            'gain': 1.7,
+            'gain': 1.69,
                   }
 
     #### TEMPORARY INSTRUMENT TO RE-CREATE CSR ANALYSIS ####                 
@@ -379,19 +379,20 @@ def get_greenline_airglow(pt):
     return V_5577
 
     
-  
-def L1_filt(f, showplot=False):
+
+def L1_filt(f, showplot=False, width1=20, width2=5):
     '''
     Filter a row of the interferogram as done in the L1 processing, with a 
     Hann window surrounding the peak.
+    
+    width1 = width of Hann window
+    width2 = width of plateau in middle of Hann window
     '''
     F = np.fft.fft(f)
     N = len(F)
     n = np.arange(N)
     # Create filter as per Ken Marr's email 2013/10/29
     peaki = abs(F[5:int(np.floor(N/2))]).argmax() + 5
-    width1 = 20 # width of Hann window
-    width2 = 5 # width of plateau
     if peaki-width1/2-(width2-1)/2 < 0: # this row is probably mostly noise
         # Just do something as a placeholder
         peaki = width1/2 + (width2-1)/2 + 1
@@ -408,8 +409,9 @@ def L1_filt(f, showplot=False):
     Fnew = np.fft.fft(fap)
     F2 = Fnew * H
     f2 = np.fft.ifft(F2)
-
-    return f2
+    f2 = 2*f2 # To account for the fact that we only kept positive phase.
+    
+    return f2/ap
     
     
     
