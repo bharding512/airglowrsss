@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 23 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 24 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -3092,7 +3092,28 @@ def geog_to_mag_coords(u, v, w, lat, lon, alt, t, fast=False):
      *  wind_mag_zon   -- TYPE:array(n)               Magnetic zonal component of wind
      
     '''
+    # Ensure array input, not list
+    u = np.array(u)
+    v = np.array(v)
+    w = np.array(w)
+    lat = np.array(lat)
+    lon = np.mod(np.array(lon), 360) # Russell's code needs -180 to 360
+    alt = np.array(alt)
+    t = np.array(t)
+    
     n = len(u)
+    ze = np.nan * np.zeros(n)
+    zn = np.nan * np.zeros(n)
+    zu = np.nan * np.zeros(n)
+    be = np.nan * np.zeros(n)
+    bn = np.nan * np.zeros(n)
+    bu = np.nan * np.zeros(n)
+    me = np.nan * np.zeros(n)
+    mn = np.nan * np.zeros(n)
+    mu = np.nan * np.zeros(n)
+    
+    if np.isnan(u).all():
+        return np.nan*np.zeros(n), np.nan*np.zeros(n), np.nan*np.zeros(n)
     
     # If only zero or one element is non-nan, then use fast=False to avoid corner cases with fast=True
     if np.isfinite(u).sum() <= 1:
@@ -3100,13 +3121,30 @@ def geog_to_mag_coords(u, v, w, lat, lon, alt, t, fast=False):
     
     if not fast: # Compute the entire array
         
-        # Reference height of 80 is used to ensure it is below all MIGHTI samples.
-        zx,zy,zz,bx,by,bz,mx,my,mz = pysatMagVect.calculate_mag_drift_unit_vectors_ecef(lat, lon, alt, t, ref_height=80.)
-
+        # Skip elements that are nan
+        i = np.isfinite(u)
+        try: # pySatMagVect v0.4.0 uses the ref_height parameter.
+             # The new (as yet unversioned) development code does not support this parameter.
+            zx,zy,zz,bx,by,bz,mx,my,mz = pysatMagVect.calculate_mag_drift_unit_vectors_ecef(lat[i], lon[i], alt[i], t[i], ref_height=80.)
+        except:
+            zx,zy,zz,bx,by,bz,mx,my,mz = pysatMagVect.calculate_mag_drift_unit_vectors_ecef(lat[i], lon[i], alt[i], t[i])
+            
+        
         # Convert unit vectors from ECEF to ENU using pysatMagVect calculation
-        ze, zn, zu = pysatMagVect.ecef_to_enu_vector(zx, zy, zz, lat, lon)
-        be, bn, bu = pysatMagVect.ecef_to_enu_vector(bx, by, bz, lat, lon)
-        me, mn, mu = pysatMagVect.ecef_to_enu_vector(mx, my, mz, lat, lon)   
+        ze0, zn0, zu0 = pysatMagVect.ecef_to_enu_vector(zx, zy, zz, lat[i], lon[i])
+        be0, bn0, bu0 = pysatMagVect.ecef_to_enu_vector(bx, by, bz, lat[i], lon[i])
+        me0, mn0, mu0 = pysatMagVect.ecef_to_enu_vector(mx, my, mz, lat[i], lon[i])   
+        
+        ze[i] = ze0
+        zn[i] = zn0
+        zu[i] = zu0
+        be[i] = be0
+        bn[i] = bn0
+        bu[i] = bu0
+        me[i] = me0
+        mn[i] = mn0
+        mu[i] = mu0
+        
         
     else: # Fast: compute the first and last elements and linearly interpolate the rest
         # Be careful not to use the first or last element if they are nan.
@@ -3114,26 +3152,23 @@ def geog_to_mag_coords(u, v, w, lat, lon, alt, t, fast=False):
         i0 = i[0]
         i1 = i[-1]
         
-        # Reference height of 80 is used to ensure it is below all MIGHTI samples.
-        zx,zy,zz,bx,by,bz,mx,my,mz = pysatMagVect.calculate_mag_drift_unit_vectors_ecef([lat[i0], lat[i1]], 
+        try: # pySatMagVect v0.4.0 uses the ref_height parameter.
+             # The new (as yet unversioned) development code does not support this parameter.
+            zx,zy,zz,bx,by,bz,mx,my,mz = pysatMagVect.calculate_mag_drift_unit_vectors_ecef([lat[i0], lat[i1]], 
                                                                                         [lon[i0], lon[i1]],
                                                                                         [alt[i0], alt[i1]],
                                                                                         [t[i0], t[i1]],
                                                                                         ref_height=80.)
+        except:
+            zx,zy,zz,bx,by,bz,mx,my,mz = pysatMagVect.calculate_mag_drift_unit_vectors_ecef([lat[i0], lat[i1]], 
+                                                                                        [lon[i0], lon[i1]],
+                                                                                        [alt[i0], alt[i1]],
+                                                                                        [t[i0], t[i1]])
+        
         # Convert unit vectors from ECEF to ENU using pysatMagVect calculation
         ze0, zn0, zu0 = pysatMagVect.ecef_to_enu_vector(zx, zy, zz, [lat[i0], lat[i1]], [lon[i0], lon[i1]])
         be0, bn0, bu0 = pysatMagVect.ecef_to_enu_vector(bx, by, bz, [lat[i0], lat[i1]], [lon[i0], lon[i1]])
         me0, mn0, mu0 = pysatMagVect.ecef_to_enu_vector(mx, my, mz, [lat[i0], lat[i1]], [lon[i0], lon[i1]])
-        
-        ze = np.nan * np.zeros(len(alt))
-        zn = np.nan * np.zeros(len(alt))
-        zu = np.nan * np.zeros(len(alt))
-        be = np.nan * np.zeros(len(alt))
-        bn = np.nan * np.zeros(len(alt))
-        bu = np.nan * np.zeros(len(alt))
-        me = np.nan * np.zeros(len(alt))
-        mn = np.nan * np.zeros(len(alt))
-        mu = np.nan * np.zeros(len(alt))
         
         ze[i0:i1+1] = np.linspace(ze0[0], ze0[-1], i1-i0+1)
         zn[i0:i1+1] = np.linspace(zn0[0], zn0[-1], i1-i0+1)
