@@ -130,7 +130,7 @@ class ImgImageFile(ImageFile.ImageFile):
                      'LocalTime':LocalTime,'CCDTemperature':CCDTemperature[0]}
 
         # size in pixels (width, height)
-        self.size = rows[0]/YBinning[0], cols[0]/XBinning[0]
+        self._size = rows[0]/YBinning[0], cols[0]/XBinning[0]
 
 	# mode setting
 	self.mode = "I;16L"
