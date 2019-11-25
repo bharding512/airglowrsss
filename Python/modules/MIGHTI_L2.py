@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 24 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 25 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -2844,7 +2844,7 @@ def level1_to_level21(info_fn):
             f107a = gpi['f107a'][:]
         else:
             print 'Cannot find f107a in provided GPI file. Using daily f107 instead'
-            f107a = gpi['f107d']
+            f107a = gpi['f107d'][:]
         gpi.close()
     
     
@@ -5193,8 +5193,9 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
     for n, (i1, i2) in enumerate(zip(istart, istop)):
 
         if i2-i1 <= 1: # corner case: skip this plot
+            print 'Skipping plot %i for %s\n\t(Can\'t make plot with only one time sample)' % (n, L21_fn)
             continue
-
+        
         # pcolormesh wants the coordinates of the corners (not the middle) of each pixel
         # middle values:
         xm = np.mod(sltu[i1:i2] + 12., 24) - 12.
