@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 25 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 26 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -1625,6 +1625,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                          
     #### Bin data: average nearby rows together
     I        = bin_image(bin_size, I)
+    I_dc     = bin_array(bin_size, I_dc)
     tang_lat = bin_array(bin_size, tang_lat)
     tang_lon = bin_array(bin_size, tang_lon, lon=True)
     tang_alt = bin_array(bin_size, tang_alt)
