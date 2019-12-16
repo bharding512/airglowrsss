@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 26 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 27 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -1885,10 +1885,13 @@ def save_nc_level21(path, L21_dict, data_revision=0):
     ### Sensor:
     sensor = L21_dict['sensor']
     ### Timing:
-    date0 = L21_dict['time'][0].date()
-    for i in range(nt):
-        date1 = L21_dict['time'][i].date()
-        assert date0 == date1, 'Files from different dates: %s %s' % (date0, date1)
+    # 2019-12-16: This section was commented out because the SDC sometimes wants to include 
+    # 1 time sample from the previous day.
+#     date0 = L21_dict['time'][0].date()
+#     for i in range(nt):
+#         date1 = L21_dict['time'][i].date()
+#         assert date0 == date1, 'Files from different dates: %s %s' % (date0, date1)
+    date_ref = L21_dict['time'][nt/2].date() # Assume middle time provides the definition of "today's date"
     t_start_msec = np.array([(t - datetime(1970,1,1)).total_seconds()*1e3 for t in L21_dict['time_start']]).astype(np.int64) # milliseconds since epoch
     t_stop_msec  = np.array([(t - datetime(1970,1,1)).total_seconds()*1e3 for t in L21_dict['time_stop']]).astype(np.int64)
     t_mid_msec   = np.array([(t - datetime(1970,1,1)).total_seconds()*1e3 for t in L21_dict['time']]).astype(np.int64)
@@ -1905,7 +1908,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
 
     L21_fn = 'ICON_L2-1_MIGHTI-%s_LOS-Wind-%s_%s_v%02ir%03i.NC' % (sensor,L21_dict['emission_color'].capitalize(),
-                                                           date0.strftime('%Y-%m-%d'),
+                                                           date_ref.strftime('%Y-%m-%d'),
                                                            data_version_major, data_revision)
     L21_full_fn = '%s%s'%(path, L21_fn)
     ncfile = netCDF4.Dataset(L21_full_fn,mode='w',format='NETCDF4') 
@@ -3337,7 +3340,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                    * slt             -- TYPE:array(ny,nx), UNITS:hour.    Solar local time
                                                                    
     '''
-        
+            
     N_flags = 34 # Update this if the number of quality flags changes.
 
     ################################## Parse Inputs ####################################
@@ -4742,7 +4745,8 @@ def level21_to_level22_without_info_file(A_curr_fn, B_curr_fn, A_prev_fn, B_prev
 
     # Define start and stop times (based on "A_curr" data) to include a 30 minute buffer
     # before and after the current 24-hour period.
-    t0 = L21_A_curr['time'][0]
+    nt = len(L21_A_curr['time'])
+    t0 = L21_A_curr['time'][nt/2] # Assume midpoint time in A_curr_fn defines "today's date"
     tstart = datetime(t0.year, t0.month, t0.day) - timedelta(hours=0.5)
     tstop  = tstart + timedelta(hours=25.)
 
