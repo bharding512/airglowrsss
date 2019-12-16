@@ -13,7 +13,7 @@ Todo:
 # These need to be manually changed, when necessary.
 # NOTE: When the major version is updated, you should change the History global attribute
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 5 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 6 # [0-99], increment on ALL published changes, resetting when the major version changes
 software_version = float(software_version_major)+software_version_minor/1000.
 ####################################################################################################
 
@@ -73,7 +73,6 @@ import multiprocessing
 
 # From the sys module we need the exit function
 import sys
-
 
 # Function that contains all the instrument parameters for ICON_FUV
 def get_FUV_instrument_constants():
@@ -755,8 +754,8 @@ def find_latm_lonm_F2(lat_vector,lon_vector,alt_vector,hmF2):
         idx            - index of the maximum intensity point of the O+ profile
     '''
     idx = (np.abs(alt_vector - hmF2)).argmin()
-    latmF2 = lat_vector[idx]
-    lonmF2 = lon_vector[idx]
+    latmF2 = np.squeeze(lat_vector)[idx]
+    lonmF2 = np.squeeze(lon_vector)[idx]
     return latmF2, lonmF2, idx
 
 '''
@@ -1090,8 +1089,8 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
 
     # Parse the filename for version and revision. Assumes the provided filename conforms to
     # the ICON conventions: ICON_<LEVEL>_<INSTRUMENT>[_<DESCRIPTION>]_<DATE>[_<TOD>]_v<VERSION>r<REVISION>.NC
-    data_versionmajor = np.int(L25_full_fn[-8:-6])
-    data_revision = np.int(L25_full_fn[-5:-3])
+    data_versionmajor, data_revision = L25_full_fn.split('v')[-1].split('.')[0].split('r')
+    data_versionmajor, data_revision = int(data_versionmajor), int(data_revision)
     data_version =  np.float(data_versionmajor)+data_revision/100.# TODO: how will this be calculated? It goes into global attr Data_Version
 
     # TODO: How will sensor be determined? Will it be in L1 file?
@@ -1739,7 +1738,6 @@ def Get_lvl2_5_product(file_input = None,
 
     # Work on each individual stripe
     for stripe, d in enumerate(mirror_dir):
-#         print('stripe: %d' % stripe)
         night_ind = []
         for ind, mode in enumerate(FUV_mode):
             # Check if we are in night mode
@@ -1818,7 +1816,7 @@ def Get_lvl2_5_product(file_input = None,
                     FUV_sigma_hmF2[ind,stripe] = sig_hm
                     FUV_NmF2[ind,stripe] = Nm
                     FUV_sigma_NmF2[ind,stripe] = sig_Nm
-                    FUV_local_time[ind,stripe] = local_time[ind, 255-idx_hmF2, stripe]
+                    FUV_local_time[ind,stripe] = local_time[ind, 255-idx_hmf2, stripe]
 
                     # Check the input, ancillary, and output variables
                     inv_quality, error_code = variable_checker(bright, h, satlatlonalt, az, ze, ver = ver, Ne = Ne)
@@ -2038,11 +2036,11 @@ def variable_checker(bright, alt_vector, satlatlonalt, az, ze, ver = None, Ne = 
     alt_vector - Tangent altitudes (valid range: [140,600] km)
     satlatlonalt[0] - Satellite latitude (valid range: [-90,90] degrees)
     satlatlonalt[1] - Satellite longitude (valid range: [0,360] degrees)
-    satlatlonalt[2] - Satellite altitude (valid range: [540,585] km)
+    satlatlonalt[2] - Satellite altitude (valid range: [0,1000] km)
     az - Azimuth Angles (valid range: [0,180] degrees)
     ze - Zenith Angles (valid range: [90,135] degrees)
     These conditions of the other variables are also checked together with some other conditions, and an output array
-    (error_code) is generated and based on that. The error code is an N by M array, whereN is the number of checked
+    (error_code) is generated based on that. The error code is an N by M array, where N is the number of checked
     variables, and M is the number of checked attributes.
     The checked variables and attributes with the same order as in the error_code array are
     Variables:
@@ -2070,7 +2068,7 @@ def variable_checker(bright, alt_vector, satlatlonalt, az, ze, ver = None, Ne = 
         alt_vector - Tangent altitudes (valid range: [140,600] km)
         satlatlonalt[0] - Satellite latitude (valid range: [-90,90] degrees)
         satlatlonalt[1] - Satellite longitude (valid range: [0,360] degrees)
-        satlatlonalt[2] - Satellite altitude (valid range: [540,585] km)
+        satlatlonalt[2] - Satellite altitude (valid range: [0,1000] km)
         az - Azimuth Angles (valid range: [0,180] degrees)
         ze - Zenith Angles (valid range: [90,135] degrees)
         ver - Estimated VER profile (valid range: [0,10] ph/cm^3/s)
@@ -2104,7 +2102,7 @@ def variable_checker(bright, alt_vector, satlatlonalt, az, ze, ver = None, Ne = 
     assert np.min(alt_vector) >= 140 and np.max(alt_vector) <= 600, 'Tangent altitudes out of its range [140,600] km!'
     assert np.min(satlatlonalt[0]) >= -90 and np.max(satlatlonalt[0]) <= 90, 'Satellite latitude out of its range [-90,90] degrees!'
     assert np.min(satlatlonalt[1]) >= 0 and np.max(satlatlonalt[1]) <= 360, 'Satellite longitude out of its range [0,360] degrees!'
-    assert np.min(satlatlonalt[2]) >= 540 and np.max(satlatlonalt[2]) <= 585, 'Satellite altitude out of its range [540,585] km!'
+    assert np.min(satlatlonalt[2]) >= 0 and np.max(satlatlonalt[2]) <= 1000, 'Satellite altitude out of its range [0,1000] km!'
     assert np.min(az) >= 0 and np.max(az) <= 180, 'Azimuth angles out of its range [0,180] degrees!'
     assert np.min(ze) >= 90 and np.max(ze) <= 135, 'Zenith angles out of its range [90,135] km!'
 
@@ -2199,7 +2197,7 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
         for orbit in np.unique(orbits):
 
             try:
-                file_png = png_stub[0:-22] + '-o%05d' % orbit + png_stub[-22:]
+                png_stub.split('v')[-2][:-12] + '-o%05d' % orbit + png_stub.split('v')[-2][-12:] + png_stub.split('v')[-1]
                 orbit_ind = np.squeeze(np.where(orbits == orbit))
                 ds = np.array([i.total_seconds() for i in dn-dn[orbit_ind][0]])
                 orbit_ind = np.squeeze(np.where(abs(ds) < 2000.))
