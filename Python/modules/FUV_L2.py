@@ -13,7 +13,7 @@ Todo:
 # These need to be manually changed, when necessary.
 # NOTE: When the major version is updated, you should change the History global attribute
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 6 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 7 # [0-99], increment on ALL published changes, resetting when the major version changes
 software_version = float(software_version_major)+software_version_minor/1000.
 ####################################################################################################
 
@@ -2197,7 +2197,7 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
         for orbit in np.unique(orbits):
 
             try:
-                png_stub.split('v')[-2][:-12] + '-o%05d' % orbit + png_stub.split('v')[-2][-12:] + png_stub.split('v')[-1]
+                file_png = png_stub.split('v')[-2][:-12] + '-o%05d' % orbit + png_stub.split('v')[-2][-12:] + png_stub.split('v')[-1]
                 orbit_ind = np.squeeze(np.where(orbits == orbit))
                 ds = np.array([i.total_seconds() for i in dn-dn[orbit_ind][0]])
                 orbit_ind = np.squeeze(np.where(abs(ds) < 2000.))
