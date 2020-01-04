@@ -13,7 +13,7 @@ Todo:
 # These need to be manually changed, when necessary.
 # NOTE: When the major version is updated, you should change the History global attribute
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 7 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 8 # [0-99], increment on ALL published changes, resetting when the major version changes
 software_version = float(software_version_major)+software_version_minor/1000.
 ####################################################################################################
 
@@ -1695,7 +1695,7 @@ def Get_lvl2_5_product(file_input = None,
         # Get science mode
         FUV_mode = ancillary.variables['ICON_ANCILLARY_FUV_ACTIVITY'][:]
 
-        if FUV_mode[FUV_mode==2].shape[0] == 0:
+        if FUV_mode[FUV_mode==258].shape[0] == 0:
             print 'No nighttime data to process. Output file will not be produced.'
             return 0
 
@@ -2197,7 +2197,7 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
         for orbit in np.unique(orbits):
 
             try:
-                file_png = png_stub.split('v')[-2][:-12] + '-o%05d' % orbit + png_stub.split('v')[-2][-12:] + png_stub.split('v')[-1]
+                file_png = png_stub.split('v')[-2][:-12] + '-o%05d' % orbit + png_stub.split('v')[-2][-12:] + 'v' + png_stub.split('v')[-1]
                 orbit_ind = np.squeeze(np.where(orbits == orbit))
                 ds = np.array([i.total_seconds() for i in dn-dn[orbit_ind][0]])
                 orbit_ind = np.squeeze(np.where(abs(ds) < 2000.))
@@ -2301,10 +2301,6 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
                     labels_x2.append('{}\n{:.0f}\n{:.0f}'.format(locstr, lon0, lat0))
 
                 axes[4].set_xticklabels(labels_x2)
-                # tmpax=axes[4].get_xticks()
-                # import ipdb; ipdb.set_trace()
-                # tmpax[1]='amo'
-                # axes[4].set_xticklabels(tmpax)
 
                 an = axes[4].annotate('(%s)' % (f.variables['ICON_L25_Inversion_Method'][:]),
                                  xy=(1.1, 0.02), xytext=(0, 10),
