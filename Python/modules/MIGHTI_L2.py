@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 27 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 28 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -1609,6 +1609,10 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     L1_quality_flags = L1_dict['quality_flags']
     L1_quality       = L1_dict['quality']
     I_dc = L1_dict['I_dc']
+    mag_lat = L1_dict['mag_lat']
+    mag_lon = L1_dict['mag_lon']
+    sza     = L1_dict['sza']
+    slt     = L1_dict['slt']
     
     # Load parameters which are averaged from start to stop of exposure.
     icon_alt = (L1_dict['icon_alt_start'] + L1_dict['icon_alt_stop'])/2
@@ -1636,6 +1640,10 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     L1_quality       = bin_array(bin_size, L1_quality,       method='min') # bin quality factor, taking *min* over the bin
     I_amp_uncertainty   = bin_uncertainty(bin_size, I_amp_uncertainty)
     I_phase_uncertainty = bin_uncertainty(bin_size, I_phase_uncertainty)
+    mag_lat = bin_array(bin_size, mag_lat)
+    mag_lon = bin_array(bin_size, mag_lon)
+    sza     = bin_array(bin_size, sza)
+    slt     = bin_array(bin_size, slt)
     
     
     #### Determine geographical locations of inverted wind
@@ -1709,10 +1717,10 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
              'att_lvlh_reverse'             : L1_dict['att_lvlh_reverse'],
              'att_limb_pointing'            : L1_dict['att_limb_pointing'],
              'att_conjugate'                : L1_dict['att_conjugate'],
-             'mag_lat'                      : L1_dict['mag_lat'],
-             'mag_lon'                      : L1_dict['mag_lon'],
-             'sza'                          : L1_dict['sza'],
-             'slt'                          : L1_dict['slt'],
+             'mag_lat'                      : mag_lat,
+             'mag_lon'                      : mag_lon,
+             'sza'                          : sza,
+             'slt'                          : slt,
              'ver_dc'                       : ver_dc,
     }
     
@@ -2970,7 +2978,7 @@ def level21_to_dict(L21_fn, skip_att=[], keep_att=[], tstartstop = None):
     d = netCDF4.Dataset(L21_fn,'r')
 
     sens  = d.Instrument[-1] # 'A' or 'B'
-    color = L21_fn.split('/')[-1].split('_')[3].split('-')[-1] # Red or Green
+    color = L21_fn.split('/')[-1].split('_')[3].split('-')[2] # Red or Green
     versrev = L21_fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
     vers = int(versrev[1:3])
     rev = int(versrev[4:])
@@ -4903,7 +4911,10 @@ def level21_to_level22(info_fn):
     # Warn if input files were not used.
     for in_fn in L21_fns:
         if in_fn not in L21_fns_used:
-            failure_messages.append('Input file not used: %s' % in_fn)
+            # 2020 Jan 21 BJH: The SDC sometimes adds extra files, e.g., the day after tomorrow. In this
+            # case the code should not report a code failure, just print to the log.
+#             failure_messages.append('Input file not used: %s' % in_fn)
+            print('Input file not used: %s' % in_fn)
     
     
     if not failure_messages: # Everything worked
@@ -5318,11 +5329,11 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
             ax.plot(xm,ym, 'k--', lw=1)
             cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad) # Helps alignment
             cax.set_visible(False) # Helps alignment
-            m.drawcoastlines(linewidth=0.5);
-            m.fillcontinents()
             m.drawparallels(np.arange(-90.,91.,30.), labels=[0,1,0,1]); # LRTB
             m.drawmeridians(np.arange(-180.,361.,90.), labels=[0,1,0,1]);
             ax.legend(loc='lower left', prop={'size':8})
+            m.drawcoastlines(linewidth=0.5);
+            m.fillcontinents()
         except Exception as e:
             print 'Error creating map: %s' % e
 
@@ -5621,11 +5632,11 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
             ax.plot(xm,ym, 'k--', lw=1)
             cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad) # Helps alignment
             cax.set_visible(False) # Helps alignment
-            m.drawcoastlines(linewidth=0.5);
-            m.fillcontinents()
             m.drawparallels(np.arange(-90.,91.,30.), labels=[0,1,0,1]); # LRTB
             m.drawmeridians(np.arange(-180.,361.,90.), labels=[0,1,0,1]);
             ax.legend(loc='lower left', prop={'size':8})
+            m.drawcoastlines(linewidth=0.5);
+            m.fillcontinents()
         except Exception as e:
             print 'Error creating map: %s' % e
 
