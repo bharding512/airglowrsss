@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 28 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 29 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -626,9 +626,50 @@ def create_local_projection_matrix(tang_alt, icon_alt):
      
 
     
+def unwrap(x, start=0):
+    '''
+    Unwrap a monotonically increasing phase signal to remove -2*pi jumps.
+    This is very similar to np.unwrap, but only unwraps negative jumps,
+    and it works with nans.
+    
+    INPUTS:
+    
+      *  x     -- TYPE:array, UNITS:rad. Signal that has -2*pi jumps to remove
+      
+    OPTIONAL INPUTS:
+    
+      * start  -- TYPE:int.              The pixel at which to begin unwrapping
+      
+    OUTPUTS:
+    
+      *  xnew  -- TYPE:array, UNITS:rad. Copy of x with -2*pi jumps removed
+      
+    '''
+
+    assert(isinstance(start,int)), "Input 'start' must be an integer"
+
+    xnew = np.zeros(len(x))
+    xnew[start] = x[start]
+
+    # Go from start forwards
+    dx = np.diff(x[start:])
+    #idx = dx < -np.pi # This throws a warning for nans, so use a more complicated expression:
+    idx = np.array([dxi < -np.pi if not np.isnan(dxi) else False for dxi in dx], dtype=bool)
+    dx[idx] = dx[idx] + 2.*np.pi
+    xnew[start+1:] = xnew[start] + np.cumsum(dx)
+
+    # Go from start backwards
+    dx = np.diff(x[start::-1])
+    #idx = dx > np.pi # This throws a warning for nans, so use a more complicated expression:
+    idx = np.array([dxi > np.pi if not np.isnan(dxi) else False for dxi in dx], dtype=bool)
+    dx[idx] = dx[idx] - 2.*np.pi
+    xnew[:start] = xnew[start] + np.cumsum(dx)[::-1]
+
+    return xnew
     
     
-def analyze_row(row):
+    
+def analyze_row(row, unwrap_phase=False):
     '''
     Given a 1-D interference pattern (i.e., a row of the complex intererogram), 
     analyze it to get a scalar phase value, which represents the wind, and a
@@ -638,6 +679,11 @@ def analyze_row(row):
     
       *  row               -- TYPE:array(nx), UNITS:arb.   A row of the complex-valued, MIGHTI interferogram.
       
+    OPTIONAL INPUTS:
+    
+      *  unwrap_phase      -- TYPE:bool.                   If True, remove 2pi discontinuities before analyzing
+                                                           (default False)
+    
     OUTPUTS:
     
       *  phase             -- TYPE:float,     UNITS:rad.   A scalar phase which represents the observed wind.
@@ -649,6 +695,11 @@ def analyze_row(row):
         return np.nan, np.nan, np.nan
     
     row_phase = np.angle(row)
+    
+    if unwrap_phase: # BJH added 3 Feb 2020. This should (probably) never be used on finalized public data.
+        nx = len(row)
+        row_phase =  unwrap(row_phase, start=nx/2) # Remove negative jumps
+        row_phase = -unwrap(-row_phase, start=nx/2) # Remove positive jumps
     
     tot_phase = np.nanmean(row_phase)
     
@@ -667,7 +718,7 @@ def analyze_row(row):
     
 def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertainty,
                       top_layer='exp', H=26., integration_order=0, account_for_local_projection=True,
-                      linear_amp = True):
+                      linear_amp = True, unwrap_phase = False):
     '''
     Perform the onion-peeling inversion on the interferogram to return
     a new interferogram, whose rows refer to specific altitudes. In effect,
@@ -702,6 +753,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
                                            same in the absence of noise, but may make a difference at low SNR,
                                            especially for computing uncertainties. (default True)
       *  H                 -- TYPE:float, UNITS:km. The VER scale height to use if top_layer='exp' (default 26)
+      *  unwrap_phase      -- TYPE:bool,   If True, unwrap the onion-peeled phase to remove 2pi discontinuities (default False)
                                            
                                                            
     OUTPUTS:
@@ -757,15 +809,15 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
         Li = Li/dii
         Ip[i,:] = Li
         # Analyze the layer to get the phase, and store it.
-        p,a,c = analyze_row(Ip[i,:])
+        p,a,c = analyze_row(Ip[i,:], unwrap_phase=unwrap_phase)
         phase[i] = p
         amp[i] = a
         chi2[i] = c
-            
+        
     if linear_amp: # Replace the onion-peeled amplitude with the linear inversion
         amp_L1 = np.zeros(ny) # fringe amplitude at each row of L1 interferogram
         for i in range(ny):
-            _, a, _ = analyze_row(I[i,:])
+            _, a, _ = analyze_row(I[i,:], unwrap_phase=unwrap_phase)
             amp_L1[i] = a
         # Be careful with nans. If left unchecked they will contaminate other
         # altitudes. For purposes of inverting amplitude/VER, treat nan 
@@ -784,7 +836,7 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     ph_L1 = np.zeros(ny)
     A_L1 = np.zeros(ny)
     for i in range(ny):
-        p,a,_ = analyze_row(I[i,:])
+        p,a,_ = analyze_row(I[i,:], unwrap_phase=unwrap_phase)
         ph_L1[i] = p
         A_L1[i] = a
     ph_L2 = phase.copy() # this was calculated above
@@ -1337,6 +1389,28 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
     if any(quality_flags[:,8]):
         i = np.where(quality_flags[:,8] > 0)[0].max()
         quality_flags[:i,8] = 1
+        
+    #### Low SNR after inversion
+    # Ideally this flag should never be tripped, because if data are flagged at L1
+    # they shouldn't need to be flagged at L2.1. However things are not ideal (Jan 29, 2020 BJH).
+    # If this part of the code is here to stay, the parameters used should be moved to the top of
+    # the file and treated as global variables which are easier to maintain.
+    phot = L21_dict['ver'].copy() # A version of VER that is corrected for the increased sensitivity at night
+    night = L21_dict['exp_time'] > 45.
+    phot[:,night] *= 13.3 # This should now be approx proportional to measured photons
+    phot = phot / L21_dict['bin_size']
+    phot_thresh = 0.0
+    if L21_dict['sensor'] == 'A':
+        if L21_dict['emission_color'] == 'green':
+            phot_thresh = 15.0 # 20.0 # 20 seemed good but I want it to pass more data and match B
+        else:
+            phot_thresh = 10.0 # 15.0 # 15 seemed good, ditto above
+    else: # sensor == B
+        if L21_dict['emission_color'] == 'green':
+            phot_thresh = 15.0 # ???
+        else:
+            phot_thresh = 10.0
+    quality_flags[:,6] = phot < phot_thresh
     
     ########################### Calculate overall quality (floor set by L1 quality) ############################
     # There are a lot of opinions built in to this section of the code.
@@ -1347,8 +1421,8 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
         # The final quality factor should be the minimum of all the ratings. 
         wind_ratings = [1.0] # start with 1.0 -- if there are no dings, the quality factor is 1.0
         ver_ratings = [1.0]
-        if quality_flags[i,6]: #SNR too low
-            wind_ratings.append(0.0) # phase is definitely bad
+        if quality_flags[i,6]: # SNR too low
+            wind_ratings.append(0.0) # phase is definitely bad (?)
             ver_ratings.append(0.5) # but VER might be ok
         if quality_flags[i,7]: # airglow above 300 km
             wind_ratings.append(0.5)
@@ -1373,7 +1447,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                 integration_order = None, account_for_local_projection = None, 
                                 bin_size = None,
                                 top_layer_thresh = None, terminator_thresh = None,
-                                f107 = None, f107a = None, f107p = None, apmsis = None, Tmult=1.):
+                                f107 = None, f107a = None, f107p = None, apmsis = None, Tmult=1.,
+                                unwrap_phase = False):
     '''
     High-level function to run the Level 2.1 processing. It takes a dictionary (containing
     input variables extracted from a Level 1 file) and outputs a dictionary (containing 
@@ -1503,6 +1578,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
       *  f107p               -- TYPE:float, UNITS:sfu. F10.7p value for the date of interest (None is use values from pyglow)
       *  apmsis              --TYPE:array(7), Ap vector that MSIS expects (None is use values from pyglow)      
       *  Tmult               -- TYPE:float, Artificial multiplier to apply to MSIS, for sensitivity studies (default 1)
+      *  unwrap_phase        -- TYPE:bool.  If True, unwrap the onion-peeled phase to remove 2pi discontinuities (default False)
 
                                             
     OUTPUTS:
@@ -1654,7 +1730,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     Ip, phase, amp, phase_uncertainty, amp_uncertainty, chi2 = perform_inversion(I, tang_alt, icon_alt, 
                            I_phase_uncertainty, I_amp_uncertainty,
                            top_layer=top_layer, integration_order=integration_order,
-                           account_for_local_projection=account_for_local_projection, linear_amp=linear_amp, H=H)
+                           account_for_local_projection=account_for_local_projection, linear_amp=linear_amp, H=H,
+                           unwrap_phase = unwrap_phase)
 
     #### Transform from phase to wind
     f = phase_to_wind_factor(np.mean(sigma_opd)) # Use average OPD to analyze entire row
@@ -2971,6 +3048,7 @@ def level21_to_dict(L21_fn, skip_att=[], keep_att=[], tstartstop = None):
                   * slt               -- TYPE:array(ny,nt), UNITS:hour.    Solar local time
                   * ver_dc            -- TYPE:array(ny,nt), UNITS:ph/cm^3/s. Volume emission rate derived from 
                                                                            interferogram DC value.
+                  * bin_size          -- TYPE:int.                    Number of pixels binned together in altitude dimension.
     '''
     
     assert bool(keep_att) + bool(skip_att) + bool(tstartstop) <= 1, "More than one optional input specified"
@@ -3056,6 +3134,7 @@ def level21_to_dict(L21_fn, skip_att=[], keep_att=[], tstartstop = None):
     z['mag_lat']          = read('%s_Magnetic_Latitude' % prefix)[idx_good]
     z['mag_lon']          = read('%s_Magnetic_Longitude' % prefix)[idx_good]
     z['ver_dc']           = read('%s_Relative_VER_DC' % prefix)[idx_good]
+    z['bin_size']         = read('%s_Bin_Size' % prefix)[...].item()
 
 
     for v in z.keys():
@@ -3903,10 +3982,11 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             if any(qflags[i,k,[26,27]]):
                 wind_ratings.append(0.0)
                 ver_ratings.append(0.0)
-            # Spherical asymmetry: 0.5 for wind and VER
+            # Spherical asymmetry:
             if qflags[i,k,28]:
-                wind_ratings.append(0.5)
-                ver_ratings.append(0.5)
+                # BJH 2020 Feb 3: temporarily disabled this flag until we fix VER estimates
+                wind_ratings.append(1.0)
+                ver_ratings.append(1.0)
             # Quality flag for time_start/time_stop will be handled below
             # Add L2.1 quality factors and determine final rating.
             wind_ratings.append(wind_quality_A_pt)
@@ -3950,6 +4030,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             k0 = k
             break    # Find the last index before time_stop (if it exists)
     sec_stop = (time_stop - time_start).total_seconds()
+    k_save = -1
     for k in range(k0,len(epoch_sec)):
         if np.isfinite(epoch_sec[k]) and epoch_sec[k] < sec_stop:
             # The last time this test passes is the k1 we want (minus 1)
@@ -5347,12 +5428,21 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,0]
         C[:,igap] = np.nan
         h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
-        ax.set_title('Low SNR')
+        ax.set_title('Low SNR (before inversion)')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,1])
+        ax_format.append(ax)
+        
+        ax = axarr[1,2]
+        C = 1.0 * L21_dict['quality_flags'][:,i1:i2,6]
+        C[:,igap] = np.nan
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('Low SNR (after inversion)')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
         ax_format.append(ax)
 
-        ax = axarr[1,2]
+        ax = axarr[2,2]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,1]
         C[:,igap] = np.nan
         h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
@@ -5361,7 +5451,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
         ax_format.append(ax)
 
-        ax = axarr[2,2]
+        ax = axarr[3,2]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,7]
         C[:,igap] = np.nan
         h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
@@ -5370,7 +5460,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
         ax_format.append(ax)
 
-        ax = axarr[3,2]
+        ax = axarr[3,1]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,8]
         C[:,igap] = np.nan
         h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
@@ -5381,7 +5471,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
 
 
         #### Turn off unused axes
-        axarr[3,1].axis('off')
+#         axarr[3,1].axis('off')
 
         #### Make the 2D plots look nice
         for ax in ax_format:
@@ -5677,13 +5767,22 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         ax = axarr[2,2]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,0] + 0.667*L22_dict['quality_flags'][:,i1:i2,12]
         h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
-        ax.set_title('MIGHTI A or B: Low SNR')
+        ax.set_title('MIGHTI A or B: Low SNR before inversion')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
         cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
         ax_format.append(ax)
 
         ax = axarr[3,2]
+        z = 0.333*L22_dict['quality_flags'][:,i1:i2,6] + 0.667*L22_dict['quality_flags'][:,i1:i2,18]
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('MIGHTI A or B: Low SNR after inversion')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
+        cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
+        ax_format.append(ax)
+
+        ax = axarr[4,1]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,7] + 0.667*L22_dict['quality_flags'][:,i1:i2,19]
         h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
         ax.set_title('MIGHTI A or B: Airglow above 300 km')
@@ -5729,7 +5828,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         ax_format.append(ax)
 
         #### Turn off unused axes
-        axarr[4,1].axis('off')
+#         axarr[4,1].axis('off')
         axarr[4,3].axis('off')
 
         #### Make the 2D plots look nice
