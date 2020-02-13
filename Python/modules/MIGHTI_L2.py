@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 29 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 30 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -1421,6 +1421,9 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
         # The final quality factor should be the minimum of all the ratings. 
         wind_ratings = [1.0] # start with 1.0 -- if there are no dings, the quality factor is 1.0
         ver_ratings = [1.0]
+        if quality_flags[i,1]: # SAA
+            wind_ratings.append(0.5)
+            ver_ratings.append(0.5)
         if quality_flags[i,6]: # SNR too low
             wind_ratings.append(0.0) # phase is definitely bad (?)
             ver_ratings.append(0.5) # but VER might be ok
@@ -3866,10 +3869,10 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             N_used_A[idx_A_0:idx_A_1+1, kA0:kA1+1] += 1
             N_used_B[idx_B_0:idx_B_1+1, kB0:kB1+1] += 1
             # "Interpolate" quality factor and flags from A&B to this point.
-            wind_quality_A_pt = wind_quality_A[idx_A_0:idx_A_1+1, kA0:kA1+1].max() # quality dominated by worst point
-            wind_quality_B_pt = wind_quality_B[idx_B_0:idx_B_1+1, kB0:kB1+1].max()
-            ver_quality_A_pt = ver_quality_A[idx_A_0:idx_A_1+1, kA0:kA1+1].max()
-            ver_quality_B_pt = ver_quality_B[idx_B_0:idx_B_1+1, kB0:kB1+1].max()
+            wind_quality_A_pt = wind_quality_A[idx_A_0:idx_A_1+1, kA0:kA1+1].min() # quality dominated by worst point
+            wind_quality_B_pt = wind_quality_B[idx_B_0:idx_B_1+1, kB0:kB1+1].min()
+            ver_quality_A_pt = ver_quality_A[idx_A_0:idx_A_1+1, kA0:kA1+1].min()
+            ver_quality_B_pt = ver_quality_B[idx_B_0:idx_B_1+1, kB0:kB1+1].min()
             N_flags_L21 = np.shape(qflags_A)[2] # Number of flags at L2.1 (assume same for A and B)
             qflags_A_pt = np.zeros(N_flags_L21) # A 1D array of flags from A, "interpolated" to this grid point
             qflags_B_pt = np.zeros(N_flags_L21) # A 1D array of flags from B, "interpolated" to this grid point
