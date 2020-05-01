@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 31 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 32 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -6037,7 +6037,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ax_format.append(ax)
 
         ax = axarr[1,1]
-        C = L21_dict['los_wind_error'][:,i1:i2]
+        C = L21_dict['ver_error'][:,i1:i2]
         C[:,igap] = np.nan
         h = ax.pcolormesh(X, Y, C, cmap='viridis', norm=LogNorm(vmin=ae_min, vmax=ae_max))
         ax.set_title('Relative VER Error')      
@@ -6437,7 +6437,6 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
             m.fillcontinents()
         except Exception as e:
             print 'Error creating map: %s' % e
-            raise
 
         ############ Quality flags derived at L2.2 ############
         # There isn't enough room to plot all the flags, so we'll plot the most important ones (subject to change)
