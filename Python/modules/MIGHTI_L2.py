@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 2 # Should only be incremented on major changes
-software_version_minor = 0 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 1 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -1991,9 +1991,9 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     I_amp_uncertainty   = bin_uncertainty(bin_size, I_amp_uncertainty)
     I_phase_uncertainty = bin_uncertainty(bin_size, I_phase_uncertainty)
     mag_lat = bin_array(bin_size, mag_lat)
-    mag_lon = bin_array(bin_size, mag_lon)
+    mag_lon = bin_array(bin_size, mag_lon, lon=True)
     sza     = bin_array(bin_size, sza)
-    slt     = bin_array(bin_size, slt)
+    slt     = bin_array(bin_size, slt*15., lon=True)/15. # Avoid discontinuity problem by multiplying by 15 and treating like lon
     
     
     #### Determine geographical locations of inverted wind
@@ -2298,7 +2298,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ncfile.setncattr_string('File_Date',                      t_file.strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC')
         ncfile.setncattr_string('Generated_By',                   'ICON SDC > ICON UIUC MIGHTI L2.1 Processor v%s, B. J. Harding' % __version__)
         ncfile.setncattr_string('Generation_Date',                t_file.strftime('%Y%m%d'))
-        ncfile.setncattr_string('History',                        'v1.0: First release of MIGHTI L2.1/L2.2 software, B. J. Harding, 05 Mar 2018')
+        ncfile.setncattr_string('History',                        ['v1.0: First release of MIGHTI L2.1/L2.2 software, B. J. Harding, 05 Mar 2018', 
+                                                                   'v2.0: First run of on-orbit data, using external zero wind reference and smooth daily-averaged profiles, B. J. Harding, 01 May 2020'])
         ncfile.setncattr_string('HTTP_LINK',                      'http://icon.ssl.berkeley.edu/Instruments/MIGHTI')
         ncfile.setncattr_string('Instrument',                     'MIGHTI-%s' % sensor)
         ncfile.setncattr_string('Instrument_Type',                'Imagers (space)')
@@ -2330,11 +2331,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                     "processing (not discussed here). See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for more details of the inversion algorithm. One update "
                     "to this paper is relevant: Zero wind removal is now performed prior to the creation of the Level 1 file, instead of during the L2.1 processing. "
                     ]
-        if L21_dict['zero_wind_ref'] == 'external':
-            text_supp.append("For this release, the zero wind phase has been determined by comparing a long-term average of MIGHTI data to a long-term average " 
-                             "of the Horizontal Wind Model 2014 (Drob et al., 2015, doi:10.1002/2014EA000089) at the same times and locations. This is done "
-                             "separately for each sensor (A and B), for each color (red and green), for each mode (day and night), and for each row. "
-                             "A future data release will utilize the zero wind phase determined using on-orbit data from the zero wind maneuver.")
+
         ncfile.setncattr_string('Text_Supplement',                text_supp)
         ncfile.setncattr_string('Time_Resolution',                '30 - 60 seconds')
         ncfile.setncattr_string('Title',                          'ICON MIGHTI Line-of-sight Wind Profiles (DP 2.1)')
@@ -2395,22 +2392,36 @@ def save_nc_level21(path, L21_dict, data_revision=0):
             
         ######### Data Variables #########
 
-        # Line-of-sight wind profile
+        # Line-of-sight wind profile -- this one is special because it has var notes that vary depending on the zero_wind_ref
+        varnotes = ["The wind is the primary data product in this file. This variable contains the projection of the horizontal wind "
+                  "(at the tangent point) onto the line of sight. An entire altitude profile is observed simultaneously. An onion-peeling "
+                  "inversion is used on the raw observations to remove the effects of the integration along the line of sight. The "
+                  "line-of-sight wind is defined such that a positive value indicates motion towards the spacecraft. This direction is given "
+                  "by the Line_of_Sight_Azimuth variable. It is assumed that the vertical wind is zero, but even large vertical winds "
+                  "(~100 m/s) do not significantly affect this data product, since the line of sight is nearly horizontal everywhere. It "
+                  "should be noted that while this measurement is ascribed to a particular latitude, longitude and altitude, it is actually "
+                  "an average over many hundreds of kilometers horizontally, and 2.5-30 kilometers vertically (depending on the binning). "
+                  "See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."]
+        if L21_dict['zero_wind_ref'] == 'external':
+            varnotes.append("Knowledge of the zero wind phase is needed for any instrument using Doppler shifts to determine winds. "
+                             "The zero wind phase is defined as the measured phase that corresponds to the rest "
+                             "wavelength of the emission. For this initial data release, the zero wind phase has been determined by comparing a 60-day average of MIGHTI data "
+                             "to a 60-day average of the Horizontal Wind Model 2014 (HWM14, Drob et al., 2015, doi:10.1002/2014EA000089), which is a climatological fit to "
+                             "previous wind measurements. At each time and location of a MIGHTI "
+                             "measurement, the MIGHTI measurement is simulated by integrating HWM14 along the line of sight, weighted by the estimated volume emission rate "
+                             "as determined by the measured fringe amplitude profile. The 60-day-average difference between the measured and simulated phases is taken as "
+                             "the zero wind phase. This is done separately for each sensor (A and B), for each color (red and green), for each mode (day and night), and "
+                             "for each row (i.e., each altitude). This approach to determining the zero wind phase is analogous to the approach taken for the UARS/HRDI "
+                             "instrument (Hays et al., 1992, doi:10.1016/0032-0633(92)90119-9), which assumed a long-term average of the meridional wind is zero. "
+                             "Although the long-term average altitude profile is constrained to match HWM14, measured variations in time, latitude, longitude, and from day to day "
+                             "are retained using this approach. A future data release will leverage ICON's unique \"zero wind maneuver\" to determine an independent zero wind phase."
+                            )
         var = _create_variable(ncfile, '%s_Line_of_Sight_Wind'%prefix, L21_dict['los_wind'], 
                               dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Line-of-sight horizontal wind profile. A positive wind is towards MIGHTI.', 
                               display_type='altitude_profile', field_name='Line-of-sight Wind', fill_value=None, label_axis='LoS Wind', bin_location=0.5,
                               units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nt,ny],
-                              notes="The wind is the primary data product in this file. This variable contains the projection of the horizontal wind "
-                              "(at the tangent point) onto the line of sight. An entire altitude profile is observed simultaneously. An onion-peeling "
-                              "inversion is used on the raw observations to remove the effects of the integration along the line of sight. The "
-                              "line-of-sight wind is defined such that a positive value indicates motion towards the spacecraft. This direction is given "
-                              "by the Line_of_Sight_Azimuth variable. It is assumed that the vertical wind is zero, but even large vertical winds "
-                              "(~100 m/s) do not significantly affect this data product, since the line of sight is nearly horizontal everywhere. It "
-                              "should be noted that while this measurement is ascribed to a particular latitude, longitude and altitude, it is actually "
-                              "an average over many hundreds of kilometers horizontally, and 2.5-30 kilometers vertically (depending on the binning). "
-                              "See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."
-                              )
+                              notes=varnotes)
         
         # Line-of-sight wind error profile
         var = _create_variable(ncfile, '%s_Line_of_Sight_Wind_Error'%prefix, L21_dict['los_wind_error'], 
@@ -3564,7 +3575,8 @@ def level21_to_dict(L21_fn, skip_att=[], keep_att=[], tstartstop = None):
                                                                      documentation for level1_dict_to_level21_dict(...)
                                                                      for meaning of each flag.
                   * emission_color  -- TYPE:str,                     'red' or 'green'.
-                  * acknowledgement -- TYPE:str.                     The Acknowledgment attribute in the first file
+                  * acknowledgement -- TYPE:str.                     The Acknowledgment attribute in the file
+                  * zero_wind_ref   -- TYPE:str.                     The Zero_Wind_ref attribute in the file
                   * att_lvlh_normal   -- TYPE:array(nt)              Attitude register bit 0: LVLH Normal
                   * att_lvlh_reverse  -- TYPE:array(nt)              Attitude register bit 1: LVLH Reverse
                   * att_limb_pointing -- TYPE:array(nt)              Attitude register bit 2: Earth Limb Pointing
@@ -3682,6 +3694,11 @@ def level21_to_dict(L21_fn, skip_att=[], keep_att=[], tstartstop = None):
     except KeyError:
         print('WARNING: Orbit_Number variable not found.')
         z['orbit_number'] = np.nan * np.ones_like(z['icon_lat']) # fill in with nan
+    try:
+        z['zero_wind_ref'] = d.Zero_Wind_Ref
+    except Exception as e:
+        print('WARNING: Zero_Wind_Ref attribute not found.')
+        z['zero_wind_ref'] = ''
 
 
     for v in z.keys():
@@ -4057,6 +4074,9 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                                                           parts of the orbit are used, it is an interpolated value.
                    * orbit_number    -- TYPE:array(ny,nx).                Orbit number. This is usually an integer but is fractional
                                                                           when samples from different orbits are used.
+                   * zero_wind_ref   -- TYPE:str.                         The zero wind reference used to create the Level 2.1 files.
+                                                                          'external': uses HWM14 or some outside reference
+                                                                          'internal': uses on-orbit value with on correction at Level 2
     '''
             
     N_flags = 34 # Update this if the number of quality flags changes.
@@ -4070,6 +4090,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
         t_diff_AB = params['t_diff_AB']
 
     assert L21_A_dict['emission_color'] == L21_B_dict['emission_color'], "Files for A and B are for different emissions"
+    assert L21_A_dict['zero_wind_ref'] == L21_B_dict['zero_wind_ref'], "Files for A and B use different zero wind references"
     # Make sure a LVLH Normal/Reverse maneuver doesn't happen in the middle of the dataset.
     for d in [L21_A_dict, L21_B_dict]:
         assert (all(d['att_lvlh_normal'])  and not any(d['att_lvlh_reverse'])) or \
@@ -4750,6 +4771,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     L22_dict['slt']                 = slt[:,k0:k1]
     L22_dict['orbit_number']        = orb_num[:,k0:k1]
     L22_dict['orbit_node']          = orb_desc[:,k0:k1]
+    L22_dict['zero_wind_ref']       = L21_A_dict['zero_wind_ref']
     
     return L22_dict
 
@@ -4971,23 +4993,38 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
 #                               "grid points are labeled with empty strings.")       
 
         ######### Data Variables #########
-
+        # var notes for zonal and meridional wind are identical, and have a special case if zero_wind_ref == 'external'
+        varnotes = ["The zonal (positive eastward) and meridional (positive northward) winds are the primary "
+                  "data product in this file. They are defined on a grid with dimensions of time and altitude, "
+                  "spanning 24 hours and nominally 90-300 km (150-300 km for the red channel). The altitude, time, "
+                  "latitude and longitude corresponding to each point in the grid are given by other variables in "
+                  "this file. It should be noted that while each measurement is ascribed to a particular latitude, "
+                  "longitude, altitude, and time, it is actually an average over many hundreds of kilometers "
+                  "horizontally and 2.5-30 kilometers vertically (depending on the binning). It also assumes stationarity "
+                  "over the 5-8 minutes between the MIGHTI-A and B measurements used for each point. See Harding et "
+                  "al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."]
+        if L22_dict['zero_wind_ref'] == 'external':
+            varnotes.append("Knowledge of the zero wind phase is needed for any instrument using Doppler shifts to determine winds. "
+                             "The zero wind phase is defined as the measured phase that corresponds to the rest "
+                             "wavelength of the emission. For this initial data release, the zero wind phase has been determined by comparing a 60-day average of MIGHTI data "
+                             "to a 60-day average of the Horizontal Wind Model 2014 (HWM14, Drob et al., 2015, doi:10.1002/2014EA000089), which is a climatological fit to "
+                             "previous wind measurements. At each time and location of a MIGHTI "
+                             "measurement, the MIGHTI measurement is simulated by integrating HWM14 along the line of sight, weighted by the estimated volume emission rate "
+                             "as determined by the measured fringe amplitude profile. The 60-day-average difference between the measured and simulated phases is taken as "
+                             "the zero wind phase. This is done separately for each sensor (A and B), for each color (red and green), for each mode (day and night), and "
+                             "for each row (i.e., each altitude). This approach to determining the zero wind phase is analogous to the approach taken for the UARS/HRDI "
+                             "instrument (Hays et al., 1992, doi:10.1016/0032-0633(92)90119-9), which assumed a long-term average of the meridional wind is zero. "
+                             "Although the long-term average altitude profile is constrained to match HWM14, measured variations in time, latitude, longitude, and from day to day "
+                             "are retained using this approach. A future data release will leverage ICON's unique \"zero wind maneuver\" to determine an independent zero wind phase."
+                            )            
+        
         # Zonal Wind
         var = _create_variable(ncfile, '%s_Zonal_Wind'%prefix, L22_dict['u'].T, 
                               dimensions=('Epoch', var_alt_name), depend_0 = 'Epoch', depend_1 = var_alt_name,
                               format_nc='f8', format_fortran='F', desc='Zonal component of the horizontal wind. Positive Eastward.', 
                               display_type='image', field_name='Zonal Wind', fill_value=None, label_axis='Zonal Wind', bin_location=0.5,
                               units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
-                              notes="The zonal (positive eastward) and meridional (positive northward) winds are the primary "
-                              "data product in this file. They are defined on a grid with dimensions of time and altitude, "
-                              "spanning 24 hours and nominally 90-300 km (150-300 km for the red channel). The altitude, time, "
-                              "latitude and longitude corresponding to each point in the grid are given by other variables in "
-                              "this file. It should be noted that while each measurement is ascribed to a particular latitude, "
-                              "longitude, altitude, and time, it is actually an average over many hundreds of kilometers "
-                              "horizontally and 2.5-30 kilometers vertically (depending on the binning). It also assumes stationarity "
-                              "over the 5-8 minutes between the MIGHTI-A and B measurements used for each point. See Harding et "
-                              "al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."
-                              )
+                              notes=varnotes)
 
         # Meridional Wind
         var = _create_variable(ncfile, '%s_Meridional_Wind'%prefix, L22_dict['v'].T, 
@@ -4995,16 +5032,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               format_nc='f8', format_fortran='F', desc='Meridional component of the horizontal wind. Positive Northward.', 
                               display_type='image', field_name='Meridional Wind', fill_value=None, label_axis='Merid Wind', bin_location=0.5,
                               units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
-                              notes="The zonal (positive eastward) and meridional (positive northward) winds are the primary "
-                              "data product in this file. They are defined on a grid with dimensions of time and altitude, "
-                              "spanning 24 hours and nominally 90-300 km (150-300 km for the red channel). The altitude, time, "
-                              "latitude and longitude corresponding to each point in the grid are given by other variables in "
-                              "this file. It should be noted that while each measurement is ascribed to a particular latitude, "
-                              "longitude, altitude, and time, it is actually an average over many hundreds of kilometers "
-                              "horizontally and 2.5-30 kilometers vertically (depending on the binning). It also assumes stationarity "
-                              "over the 5-8 minutes between the MIGHTI-A and B measurements used for each point. See Harding et "
-                              "al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."
-                              )    
+                              notes=varnotes)    
 
         # Zonal Wind Error
         var = _create_variable(ncfile, '%s_Zonal_Wind_Error'%prefix, L22_dict['u_error'].T, 
@@ -5490,16 +5518,21 @@ def level21_to_level22_without_info_file(A_curr_fn, B_curr_fn, A_prev_fn, B_prev
         i1 = (t1 >= tstart) & (t1 <= tstop)
         for v in d0.keys():
 
-            # Special case variable: source_files.
-            if v == 'source_files':
+            # Special case variables.
+            if v in ['source_files']: 
                 d[v] = np.concatenate((d0[v], d1[v]))
+                continue
+                
+            # These do not need to match and will not be included in output file (redundant information in
+            # source_files)
+            if v in ['version', 'revision']:
                 continue
 
             # All other variables can be handled with the following general code:
             ndim = np.ndim(d0[v]) # number of dimensions of the variable
             if ndim == 0: # Don't append anything
                 # Make sure they are the same though
-                assert d0[v] == d1[v], "Variables do not match: v = %s vs %s" % (v, d0[v], d1[v])
+                assert d0[v] == d1[v], "Variable '%s' does not match: v = %s vs %s" % (v, d0[v], d1[v])
                 d[v] = d0[v]
             elif ndim == 1: # It's the time dimension
                 d[v] = np.concatenate((d0[v][i0], d1[v][i1]))
