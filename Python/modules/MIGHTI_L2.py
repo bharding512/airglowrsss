@@ -2403,19 +2403,20 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                   "an average over many hundreds of kilometers horizontally, and 2.5-30 kilometers vertically (depending on the binning). "
                   "See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."]
         if L21_dict['zero_wind_ref'] == 'external':
-            varnotes.append("Knowledge of the zero wind phase is needed for any instrument using Doppler shifts to determine winds. "
-                             "The zero wind phase is defined as the measured phase that corresponds to the rest "
+            varnotes.append("Knowledge of the \"zero wind phase\" is needed for any instrument using Doppler shifts to determine winds. "
+                             "The zero wind phase is defined as the measured interference fringe phase that corresponds to the rest "
                              "wavelength of the emission. For this initial data release, the zero wind phase has been determined by comparing a 60-day average of MIGHTI data "
-                             "to a 60-day average of the Horizontal Wind Model 2014 (HWM14, Drob et al., 2015, doi:10.1002/2014EA000089), which is a climatological fit to "
+                             "to a 60-day average of the empirical Horizontal Wind Model 2014 (HWM14, Drob et al., 2015, doi:10.1002/2014EA000089), which is a fit to decades of "
                              "previous wind measurements. At each time and location of a MIGHTI "
-                             "measurement, the MIGHTI measurement is simulated by integrating HWM14 along the line of sight, weighted by the estimated volume emission rate "
+                             "measurement, the MIGHTI measurement is simulated by integrating HWM14 along the line of sight, weighted by the observed volume emission rate "
                              "as determined by the measured fringe amplitude profile. The 60-day-average difference between the measured and simulated phases is taken as "
                              "the zero wind phase. This is done separately for each sensor (A and B), for each color (red and green), for each mode (day and night), and "
                              "for each row (i.e., each altitude). This approach to determining the zero wind phase is analogous to the approach taken for the UARS/HRDI "
-                             "instrument (Hays et al., 1992, doi:10.1016/0032-0633(92)90119-9), which assumed a long-term average of the meridional wind is zero. "
-                             "Although the long-term average altitude profile is constrained to match HWM14, measured variations in time, latitude, longitude, and from day to day "
+                             "instrument (Hays et al., 1992, doi:10.1016/0032-0633(92)90119-9), which assumed that a long-term average of the meridional wind is zero. "
+                             "Although the long-term average altitude profile is constrained to match HWM14 in this initial MIGHTI data release, measured variations "
+                             "in time, latitude, longitude, and from day to day "
                              "are retained using this approach. A future data release will leverage ICON's unique \"zero wind maneuver\" to determine an independent zero wind phase."
-                            )
+                            )   
         var = _create_variable(ncfile, '%s_Line_of_Sight_Wind'%prefix, L21_dict['los_wind'], 
                               dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Line-of-sight horizontal wind profile. A positive wind is towards MIGHTI.', 
@@ -5004,17 +5005,18 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                   "over the 5-8 minutes between the MIGHTI-A and B measurements used for each point. See Harding et "
                   "al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."]
         if L22_dict['zero_wind_ref'] == 'external':
-            varnotes.append("Knowledge of the zero wind phase is needed for any instrument using Doppler shifts to determine winds. "
-                             "The zero wind phase is defined as the measured phase that corresponds to the rest "
+            varnotes.append("Knowledge of the \"zero wind phase\" is needed for any instrument using Doppler shifts to determine winds. "
+                             "The zero wind phase is defined as the measured interference fringe phase that corresponds to the rest "
                              "wavelength of the emission. For this initial data release, the zero wind phase has been determined by comparing a 60-day average of MIGHTI data "
-                             "to a 60-day average of the Horizontal Wind Model 2014 (HWM14, Drob et al., 2015, doi:10.1002/2014EA000089), which is a climatological fit to "
+                             "to a 60-day average of the empirical Horizontal Wind Model 2014 (HWM14, Drob et al., 2015, doi:10.1002/2014EA000089), which is a fit to decades of "
                              "previous wind measurements. At each time and location of a MIGHTI "
-                             "measurement, the MIGHTI measurement is simulated by integrating HWM14 along the line of sight, weighted by the estimated volume emission rate "
+                             "measurement, the MIGHTI measurement is simulated by integrating HWM14 along the line of sight, weighted by the observed volume emission rate "
                              "as determined by the measured fringe amplitude profile. The 60-day-average difference between the measured and simulated phases is taken as "
                              "the zero wind phase. This is done separately for each sensor (A and B), for each color (red and green), for each mode (day and night), and "
                              "for each row (i.e., each altitude). This approach to determining the zero wind phase is analogous to the approach taken for the UARS/HRDI "
-                             "instrument (Hays et al., 1992, doi:10.1016/0032-0633(92)90119-9), which assumed a long-term average of the meridional wind is zero. "
-                             "Although the long-term average altitude profile is constrained to match HWM14, measured variations in time, latitude, longitude, and from day to day "
+                             "instrument (Hays et al., 1992, doi:10.1016/0032-0633(92)90119-9), which assumed that a long-term average of the meridional wind is zero. "
+                             "Although the long-term average altitude profile is constrained to match HWM14 in this initial MIGHTI data release, measured variations "
+                             "in time, latitude, longitude, and from day to day "
                              "are retained using this approach. A future data release will leverage ICON's unique \"zero wind maneuver\" to determine an independent zero wind phase."
                             )            
         
