@@ -221,7 +221,7 @@ Story.append(Spacer(1,6))
 text = """
 The dimensions used by the variables in this file are given below, along with nominal sizes. Note that the size 
 may vary from file to file. For example, the "Epoch" dimension, which describes the number of time samples 
-contained in this file, will likely have a varying size.
+contained in this file, will have a varying size.
 """
 Story.append(Paragraph(text, styles["Justify"]))
 Story.append(Spacer(1, 12))
@@ -289,8 +289,8 @@ for var_type in var_type_ordered:
         ## HACK
         desc_col.append(Spacer(1,6))
         for text in var['var_notes']: # Append paragraphs for each string in Var_Notes
-           desc_col.append(Spacer(1,6))
-           desc_col.append(Paragraph(text, styles["Small"]))
+            desc_col.append(Spacer(1,6))
+            desc_col.append(Paragraph(text, styles["Small"]))
         # Second, create other cells
         name_p = Paragraph('<font face="Courier">%s</font>' % (var['name']), styles["Smallish"])
         units_p = Paragraph(var['units'], styles["Smallish"])
@@ -303,7 +303,7 @@ for var_type in var_type_ordered:
                dims_p]
         tab_data.append(row)           
 
-    tab = Table(tab_data, colWidths=[1.8*inch,3.1*inch,0.6*inch,1.3*inch],
+    tab = Table(tab_data, colWidths=[1.6*inch,3.3*inch,0.6*inch,1.3*inch],
                 repeatRows=1)
     tab.setStyle(TableStyle([('INNERGRID', (0,0), (-1,-1), 0.25, colors.black), # Grid
                              ('BOX', (0,0), (-1,-1), 0.25, colors.black), # Grid
