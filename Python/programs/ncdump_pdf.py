@@ -108,7 +108,7 @@ except:
     raise
     
 #### Global attributes which are required
-req_a = ['text_supplement','description','data_type','software_version']
+req_a = ['text_supplement','description','data_type','software_version','acknowledgement']
 for attr in req_a:
     if attr not in a.keys() or not isvalid(a[attr]):
         a[attr] = 'MISSING %s' % attr
@@ -313,12 +313,21 @@ for var_type in var_type_ordered:
     Story.append(Spacer(1, 20))
     
 
-                     
+    
+################### Acknowledgements ####################
+Story.append(PageBreak()) # new page
+text1 = 'Acknowledgement'
+Story.append(Paragraph(text1, styles["Heading2"]))
+Story.append(Spacer(1, 6))
+text = a['acknowledgement'].replace('\n', '<br />\n')
+Story.append(Paragraph(text, styles["Smallish"]))
+
 ###################### Final Stuff #####################
 # Generation notes
 text1 = 'This document was automatically generated on <font face="Courier">%s</font> using the file:'%t
 text2 = '<font face="Courier">%s</font>' % (fn_in.split('/')[-1])
 text3 = 'Software version: <font face="Courier">%s</font>' % (a['software_version'])
+Story.append(Spacer(1, 40))
 Story.append(Paragraph(text1, styles["Small"]))
 Story.append(Paragraph(text2, styles["Small"]))
 Story.append(Paragraph(text3, styles["Small"]))
