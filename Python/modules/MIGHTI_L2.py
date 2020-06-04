@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 2 # Should only be incremented on major changes
-software_version_minor = 2 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 3 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -36,6 +36,16 @@ global_params['red'] = {
                                            # emission above 300 km. Profiles were generated from the Zhang/Shepherd model and
                                            # from photochemical models fed by IRI/MSIS. (See Harding et al. [2017] SSR paper 
                                            # for details on airglow models).
+    'zero_wind_ref'       : 'external',    # 'external': Use a long-term average of HWM14, compared with a long-term average of MIGHTI
+                                           #             data, to set the zero wind phase. This option can be used to alleviate systematic
+                                           #             errors seen in v1.2.8 of the Level 1 processing.
+                                           # 'internal': Use the zero wind maneuver to set the zero wind phase.
+    'corr_notch_drift'    : True,          # True:  Apply a pre-determined function to remove the long-term 
+                                           #        drift of data due to not accounting for notch drift at Level 1.  
+                                           # False: Don't do any corrections.
+    'smooth_profile'      : True,          # True: constrain the 24h-averaged phase profile to be smooth (Two processing runs are required per day)
+                                           # False: don't do any smoothing
+                                           # NOTE: currently implemented only as a global parameter
                                             
     
     ###################### Quality control parameters #################
@@ -61,13 +71,6 @@ global_params['red'] = {
                                            # probably small, but it's unknown, so it will be flagged.
     'jitter_thresh'       : 0.01,          # [deg]. If the jitter is larger than this, then the S/C velocity subtraction is too
                                            # uncertain, and the data are marked as "caution."
-    'zero_wind_ref'       : 'external',    # 'external': Use a long-term average of HWM14, compared with a long-term average of MIGHTI
-                                           #             data, to set the zero wind phase. This option can be used to alleviate systematic
-                                           #             errors seen in v1.2.8 of the Level 1 processing.
-                                           # 'internal': Use the zero wind maneuver to set the zero wind phase.
-    'smooth_profile'      : True,          # True: constrain the 24h-averaged phase profile to be smooth (Two processing runs are required per day)
-                                           # False: don't do any smoothing
-                                           # NOTE: currently implemented only as a global parameter
 }
 
 global_params['green'] = { # See above for descriptions
@@ -85,6 +88,7 @@ global_params['green'] = { # See above for descriptions
     'jitter_thresh'       : 0.01,
     'zero_wind_ref'       : 'external',
     'smooth_profile'      : True,
+    'corr_notch_drift'    : True,
 }
 
 
@@ -1531,6 +1535,44 @@ def zero_wind_phase_ext(sensor, emission_color, day):
 
 
 
+def notch_drift_corr(tmid, emission_color, sensor):
+    '''
+    Return the velocity to subtract from the level 1 data to account for the fact that notch drift was
+    not accounted for at Level 1. This is a pre-determined function based on fitting data from Dec 6, 2019 to
+    May 1, 2020. It was chosen to make the red and green channels agree, on average, during this period.
+    
+    INPUTS:
+      * tmid           -- TYPE:datetime. Time for correction
+      * emission_color -- TYPE:str.  'red' or 'green'
+      * sensor         -- TYPE:str.  'A' or 'B'
+
+    OUTPUT:
+    
+      * dv            -- TYPE:array(ny). The velocity to subtract from L1 data.
+      
+    '''    
+    assert sensor in ['A', 'B'], "ERROR: sensor not recognized"
+    assert emission_color in ['red', 'green'], "ERROR: emission_color not recognized"
+    
+    if sensor == 'A':
+        c0 = 1.526e-8 # pixels/second
+        t0 = datetime(2020, 1, 25, 4, 10, 16)
+    elif sensor == 'B':
+        c0 = 1.485e-8
+        t0 = datetime(2020, 2, 1, 9, 43, 19)
+    
+    if emission_color == 'green':
+        a0 = 168. # m/s/pixel
+    elif emission_color == 'red':
+        a0 = -98. # m/s/pixel
+    
+    dx = c0 * (tmid - t0).total_seconds() # Linear fit, [pixels]
+    dv = a0 * dx # m/s
+
+    return dv
+        
+    
+
 
 def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0, terminator_thresh = 0.0):
     '''
@@ -1680,6 +1722,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                 integration_order = None, account_for_local_projection = None, 
                                 bin_size = None,
                                 top_layer_thresh = None, terminator_thresh = None, zero_wind_ref = None,
+                                corr_notch_drift = None,
                                 f107 = None, f107a = None, f107p = None, apmsis = None, Tmult=1.,
                                 unwrap_phase = False):
     '''
@@ -1811,15 +1854,17 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                             terminator, raise a quality flag. Note that this quality flag will also be raised if
                                             any observations at lower zenith angles for the same observation are flagged, because
                                             the inversion mixes information from those observations.
-      * zero_wind_ref        -- TYPE:str or array.  'external': Use a long-term average of HWM14, compared with a long-term average of MIGHTI
+      *  zero_wind_ref       -- TYPE:str or array.  'external': Use a long-term average of HWM14, compared with a long-term average of MIGHTI
                                                                 data, to set the zero wind phase. This option can be used to alleviate systematic
                                                                 errors seen in v1.2.8 of the Level 1 processing.
                                                     'internal': Use the zero wind maneuver to set the zero wind phase.
                                                     array(ny) : If this is an array, then use it as a "manual" zero wind phase.
+      *  corr_notch_drift    -- TYPE:bool,          If True, apply a pre-determined function to remove the long-term 
+                                                    drift of data due to not accounting for notch drift at Level 1.     
       *  f107                -- TYPE:float, UNITS:sfu. F10.7 value for the date of interest (None is use values from pyglow)
       *  f107a               -- TYPE:float, UNITS:sfu. F10.7a value for the date of interest (None is use values from pyglow)
       *  f107p               -- TYPE:float, UNITS:sfu. F10.7p value for the date of interest (None is use values from pyglow)
-      *  apmsis              --TYPE:array(7), Ap vector that MSIS expects (None is use values from pyglow)      
+      *  apmsis              -- TYPE:array(7), Ap vector that MSIS expects (None is use values from pyglow)      
       *  Tmult               -- TYPE:float, Artificial multiplier to apply to MSIS, for sensitivity studies (default 1)
       *  unwrap_phase        -- TYPE:bool.  If True, unwrap the onion-peeled phase to remove 2pi discontinuities (default False)
 
@@ -1855,6 +1900,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                     * bin_size                  -- TYPE:int.                      Bin size used in the processing
                     * top_layer                 -- TYPE:str.                      How the top layer was handled: 'thin' or 'exp'
                     * zero_wind_ref             -- TYPE:str.                      How the zero wind was handled: 'external' or 'internal' (see input)
+                    * corr_notch_drift          -- TYPE:bool,                     How the notch drift correction was handled (see input)                  
                     * H                         -- TYPE:float.       UNITS:km.    The VER scale height used if top_layer='exp' 
                     * integration_order         -- TYPE:int.                      Order of integration used in inversion: 0 or 1
                     * I                         -- TYPE:array(ny,nx) UNITS:arb.   The complex-valued, onion-peeled interferogram
@@ -1920,6 +1966,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
         terminator_thresh = params['terminator_thresh']
     if zero_wind_ref is None:
         zero_wind_ref = params['zero_wind_ref']
+    if corr_notch_drift is None:
+        corr_notch_drift = params['corr_notch_drift']
         
             
     ####  Load parameters from input dictionary
@@ -1941,6 +1989,14 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     mag_lon = L1_dict['mag_lon']
     sza     = L1_dict['sza']
     slt     = L1_dict['slt']
+    # Load parameters which are averaged from start to stop of exposure.
+    icon_alt = (L1_dict['icon_alt_start'] + L1_dict['icon_alt_stop'])/2
+    icon_lat = (L1_dict['icon_lat_start'] + L1_dict['icon_lat_stop'])/2
+    icon_lon = circular_mean(L1_dict['icon_lon_start'], L1_dict['icon_lon_stop'])
+    tang_alt = (L1_dict['tang_alt_start'] + L1_dict['tang_alt_stop'])/2
+    tang_lat = (L1_dict['tang_lat_start'] + L1_dict['tang_lat_stop'])/2
+    tang_lon = circular_mean(L1_dict['tang_lon_start'], L1_dict['tang_lon_stop'])
+    tmid     = L1_dict['time_start'] + (L1_dict['time_stop'] - L1_dict['time_start'])/2
     
     # Zero wind adjustment, if needed.
     ny0, nx0 = Iraw.shape
@@ -1961,15 +2017,15 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
             Iraw[:,j] = Iraw[:,j]*np.exp(-1j*zero_wind_ref)
     else:
         raise Exception('zero_wind_ref not understood. Use "internal", "external", or an array of length %i' % ny0)
+        
+    # Notch drift correction, if needed
+    if corr_notch_drift:
+        dv = notch_drift_corr(tmid, emission_color, sensor) # [m/s]
+        f = phase_to_wind_factor(np.mean(sigma_opd))
+        pn = dv/f # [rad]
+        Iraw = Iraw * np.exp(-1j*pn)
     
-    # Load parameters which are averaged from start to stop of exposure.
-    icon_alt = (L1_dict['icon_alt_start'] + L1_dict['icon_alt_stop'])/2
-    icon_lat = (L1_dict['icon_lat_start'] + L1_dict['icon_lat_stop'])/2
-    icon_lon = circular_mean(L1_dict['icon_lon_start'], L1_dict['icon_lon_stop'])
-    tang_alt = (L1_dict['tang_alt_start'] + L1_dict['tang_alt_stop'])/2
-    tang_lat = (L1_dict['tang_lat_start'] + L1_dict['tang_lat_stop'])/2
-    tang_lon = circular_mean(L1_dict['tang_lon_start'], L1_dict['tang_lon_stop'])
-    tmid     = L1_dict['time_start'] + (L1_dict['time_stop'] - L1_dict['time_start'])/2
+
     
     #### Remove Satellite Velocity
     icon_latlonalt = np.array([icon_lat, icon_lon, icon_alt])
@@ -2057,6 +2113,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
              'bin_size'                     : bin_size,
              'top_layer'                    : top_layer,
              'zero_wind_ref'                : zero_wind_ref_str, # internal or external
+             'corr_notch_drift'             : corr_notch_drift, # True or False
              'H'                            : H,
              'integration_order'            : integration_order,
              'I'                            : Ip,
@@ -2329,7 +2386,28 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                     "An onion-peeling inversion is performed to remove the effect of the line-of-sight integration. After the inversion, each row (i.e., altitude) "
                     "is analyzed to extract the phase, and thus the line-of-sight wind. Level 2.1 files from MIGHTI-A and MIGHTI-B are combined during the Level 2.2 "
                     "processing (not discussed here). See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for more details of the inversion algorithm. One update "
-                    "to this paper is relevant: Zero wind removal is now performed prior to the creation of the Level 1 file, instead of during the L2.1 processing. "
+                    "to this paper is relevant: Zero wind removal is now performed prior to the creation of the Level 1 file, instead of during the L2.1 processing. ",
+                    
+                     "Known issues with the initial data release (labeled v02) are listed below. These issues are expected to be resolved in future data releases. "
+                     "In future releases, some data points may change by up to 50 m/s, but most changes are expected to be much smaller. Future updates to the "
+                     "\"zero wind phase\" (discussed in detail below, in the notes for the wind variable) will change the winds by a bulk offset, "
+                     "but most relative variations in time, latitude, longitude, and from day to day will remain. ",
+
+                     "Known issues with v02:<br/>"
+                     " * Some artifacts from preliminary calibrations are present (e.g., thermal drift, flat field, and visibility corrections). These manifest as "
+                     "artifical offsets that affect a single altitude or a single local solar time, persisting for an entire UT day. <br/>"
+                     " * The quality flag indicating contamination by the South Atlantic Anomaly is too conservative, so some high-quality data points are given "
+                     "a lower quality factor. <br/>"
+                     " * The reported wind error includes the effect of dark, read, and shot noise in the observations, but does not include calibration uncertainty. "
+                     "It is likely that a future release will revise the reported error upward by approximately 50%.<br/>"
+                     " * The bottom two rows of data (corresponding to altitudes of ~88 and ~91 km) are masked out pending updated calibrations. These rows are near the "
+                     "edge of the field of view and not all columns are illuminated, which requires special consideration. <br/>"
+                     " * No effort was yet made to absolutely- or cross-calibrate the brightness observations for MIGHTI-A and MIGHTI-B, and thus the Relative_VER "
+                     "variable should be treated with caution.<br/>"
+                     " * A calibration lamp is used for one orbit per day to assess the periodic thermal drift of MIGHTI. This is used to correct all other "
+                     "orbits that day. In v02 data, the thermal drift is ascribed entirely to interferometer drift, but some fraction is due to mechanical "
+                     "drift. This will be corrected by using the observed drift of the fiducial notches. The error in the current approach is estimated to be less "
+                     "than 10 m/s (???)",
                     ]
 
         ncfile.setncattr_string('Text_Supplement',                text_supp)
@@ -2343,6 +2421,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
             ncfile.setncattr_string('Smooth_Profile_Night',       L21_dict['ph0_night'])
         if 'ph0_day' in L21_dict.keys():
             ncfile.setncattr_string('Smooth_Profile_Day',         L21_dict['ph0_day'])
+        # Added in v2.03, but may be removed in future once notch drift is accounted for at Level 1
+        ncfile.setncattr_string('Corr_Notch_Drift',               str(L21_dict['corr_notch_drift'])) # "True" or "False"
 
 
         ################################## Dimensions ########################################
@@ -2448,7 +2528,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                                      "While the intent is that the variable ICON_...Line_of_Sight_Wind_Error accurately characterizes the statistical "
                                      "error in the wind data, it is possible that systematic errors are present, or that the statistical error "
                                      "estimation is not accurate. If it is suspected that this is the case, the quality will be less than 1.0. If "
-                                     "the data are definitely unusable, the the quality will be 0.0 and the sample will be masked. Users should "
+                                     "the data are definitely unusable, the quality will be 0.0 and the sample will be masked. Users should "
                                      "exercise caution when the quality is less than 1.0.",
                                      "This parameter can currently take 3 values: 0.0 (Bad), 0.5 (Caution), 1.0 (Good)"
                                      ])
@@ -2462,9 +2542,9 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               notes="An approximate volume emission rate (VER) profile in arbitrary units. Technically this a profile of the "
                               "amplitude of the fringes, which has a dependence on thermospheric temperature and background emission. Thus, it does not "
                               "truly represent volume emission rate. However, it is a useful proxy. The units are arbitrary, but an attempt has "
-                              "been made to cross-calibrate MIGHTI-A with MIGHTI-B. In contrast with the wind inversion, which is nonlinear due to the "
+                              "been made to cross-calibrate MIGHTI-A with MIGHTI-B. In contrast to the wind inversion, which is nonlinear due to the "
                               "phase extraction step, the amplitude inversion is purely linear. The Level 1 interferogram is analyzed to obtain a single "
-                              "brightness value per observing angle, and this is inverted with the distance matrix to obtain a value of the amplitude "
+                              "brightness value per zenith angle, and this is inverted with the distance matrix to obtain a value of the amplitude "
                               "per altitude."
                               )
 
@@ -2493,7 +2573,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                                "Please contact the MIGHTI team before performing any studies that require absolute calibration. "
                                "The statistical (1-sigma) error for this variable is provided in "
                                "the variable ICON_..._Relative_VER_Error, though it is expected that systematic calibration errors dominate "
-                               "the total error."
+                               "the total error. See the Fringe_Amplitude variable for a discussion of the inversion."
                               )
         
         # Relative VER Error 
@@ -2573,7 +2653,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               "inherently a horizontal average over many hundreds of kilometers. "
                               "Quasi-dipole latitude and longitude are calculated using the fast implementation developed by "
                               "Emmert et al. (2010, doi:10.1029/2010JA015326) and the Python wrapper apexpy "
-                              "(https://github.com/aburrell/apexpy/). "
+                              "(doi.org/10.5281/zenodo.1214207). "
                               )
         
         # Magnetic Longitude
@@ -2588,7 +2668,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               "inherently a horizontal average over many hundreds of kilometers. "
                               "Quasi-dipole latitude and longitude are calculated using the fast implementation developed by "
                               "Emmert et al. (2010, doi:10.1029/2010JA015326) and the Python wrapper apexpy "
-                              "(https://github.com/aburrell/apexpy/). "
+                              "(doi.org/10.5281/zenodo.1214207). Quasi-dipole longitude is defined such that zero "
+                              "occurs where the geodetic longitude is near 285 deg east (depending on latitude)."
                               )
         
 
@@ -2644,17 +2725,17 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               display_type='altitude_profile', field_name='Variance of each phase row', fill_value=None, label_axis='Chi^2', bin_location=0.5,
                               units='rad^2', valid_min=0., valid_max=1e30, var_type='metadata', chunk_sizes=[nt, ny],
                               notes="In consolidating each row of the unwrapped interferogram into a single phase value, the variance of the "
-                              "phase is saved in this variable. Ideally this should provide no new information above that which is provided "
+                              "phase is saved in this variable. Ideally this should provide no new information beyond what is provided "
                               "by the wind uncertainty, but it is a useful diagnostic."
                               )
         
         # ICON velocity vector
         var = _create_variable(ncfile, '%s_Observatory_Velocity_Vector'%prefix, L21_dict['icon_velocity_ecef_vector'], 
                               dimensions=('Epoch','Vector'), depend_0 = 'Epoch',
-                              format_nc='f8', format_fortran='F', desc="ICON's velocity vector in Earth-centered, Earth-fixed coordinates", 
+                              format_nc='f8', format_fortran='F', desc="ICON S/C velocity vector in Earth-centered, Earth-fixed coordinates", 
                               display_type='time_series', field_name='ICON Velocity Vector', fill_value=None, label_axis='S/C Vel', bin_location=0.5,
                               units='m/s', valid_min=-100e6, valid_max=100e6, var_type='metadata', chunk_sizes=[nt,3],
-                              notes="At each time, this is a length-3 vector [vx,vy,vz] of ICON's velocity in Earth-centered Earth-fixed (ECEF) "
+                              notes="At each time, this is a length-3 vector [vx,vy,vz] of the ICON spacecraft's velocity in Earth-centered Earth-fixed (ECEF) "
                               "coordinates at the "
                               "midpoint time of the observation. The effect of spacecraft velocity has already been removed from the "
                               "ICON_..._Line_of_Sight_Wind variable.")
@@ -2662,26 +2743,26 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         # ICON latitude
         var = _create_variable(ncfile, '%s_Observatory_Latitude'%prefix, L21_dict['icon_lat'], 
                               dimensions=('Epoch'), depend_0 = 'Epoch',
-                              format_nc='f8', format_fortran='F', desc='The WGS84 latitude of ICON', 
+                              format_nc='f8', format_fortran='F', desc='The WGS84 latitude of the ICON S/C', 
                               display_type='time_series', field_name='Spacecraft Latitude', fill_value=None, label_axis='S/C Lat', bin_location=0.5,
                               units='deg', valid_min=-90., valid_max=90., var_type='metadata', chunk_sizes=[nt],
-                              notes='The latitude of ICON at the midpoint time of the observation, using the WGS84 ellipsoid.')
+                              notes='The latitude of the ICON spacecraft at the midpoint time of the observation, using the WGS84 ellipsoid.')
 
         # ICON longitude
         var = _create_variable(ncfile, '%s_Observatory_Longitude'%prefix, L21_dict['icon_lon'], 
                               dimensions=('Epoch'), depend_0 = 'Epoch',
-                              format_nc='f8', format_fortran='F', desc='The WGS84 longitude of ICON', 
+                              format_nc='f8', format_fortran='F', desc='The WGS84 longitude of the ICON S/C', 
                               display_type='time_series', field_name='Spacecraft Longitude', fill_value=None, label_axis='S/C Lon', bin_location=0.5,
                               units='deg', valid_min=0., valid_max=360., var_type='metadata', chunk_sizes=[nt],
-                              notes='The longitude (0-360) of ICON at the midpoint time of the observation, using the WGS84 ellipsoid.')
+                              notes='The longitude (0-360) of the ICON spacecraft at the midpoint time of the observation, using the WGS84 ellipsoid.')
 
         # ICON altitude
         var = _create_variable(ncfile, '%s_Observatory_Altitude'%prefix, L21_dict['icon_alt'], 
                               dimensions=('Epoch'), depend_0 = 'Epoch',
-                              format_nc='f8', format_fortran='F', desc='The WGS84 altitude of ICON', 
+                              format_nc='f8', format_fortran='F', desc='The WGS84 altitude of the ICON S/C', 
                               display_type='time_series', field_name='Spacecraft Altitude', fill_value=None, label_axis='S/C Alt', bin_location=0.5,
                               units='km', valid_min=100., valid_max=2000., var_type='metadata', chunk_sizes=[nt],
-                              notes='The altitude of ICON at the midpoint time of the observation, using the WGS84 ellipsoid.')
+                              notes='The altitude of the ICON spacecraft at the midpoint time of the observation, using the WGS84 ellipsoid.')
 
 #         # Along-track resolution
 #         val = L21_dict['resolution_along_track']
@@ -2893,6 +2974,7 @@ def combine_level21(L21_dicts):
                    'emission_color',
                    'bin_size', # if this varies within a day, we can't save all profiles in one file
                    'zero_wind_ref',
+                   'corr_notch_drift',
                   ]
     changing_keys = L21_dicts[0].keys()
     for k in common_keys:
@@ -3038,6 +3120,10 @@ def level21_preprocess_smooth_profile(L1_fns, emission_color, zero_wind_ref=None
         This is intended to be a temporary function that is only used until the L1 product
         removes the altitude-dependent systematic errors.
         '''
+        
+        print('%s: Running preprocessing %s %s' % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), emission_color, L1_fn.split('/')[-1]))
+        import sys
+        sys.stdout.flush()
 
         L1_dict = level1_to_dict(L1_fn, emission_color, startstop=True)
         Ny, Nx = np.shape(L1_dict['I_phase'])
@@ -3173,6 +3259,10 @@ def level21_preprocess_smooth_profile(L1_fns, emission_color, zero_wind_ref=None
     L1_fns_day = []
     L1_fns_night = []
     for L1_fn in L1_fns:
+        print('%s: Sorting day/night %s' % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), L1_fn.split('/')[-1]))
+        import sys
+        sys.stdout.flush()
+        
         d = netCDF4.Dataset(L1_fn)
         sens = L1_fn.split('/')[-1].split('_')[2][-1] # sensor
         if d.variables[u'ICON_L0_MIGHTI_%s_Time_Integration'%sens][...] < 45000:
@@ -3199,7 +3289,8 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
                                         gpi_yearday=None, gpi_f107=None, gpi_f107a=None, gpi_ap=None, gpi_ap3=None,
                                         sigma=None, top_layer=None, 
                                         H = None, integration_order=None, account_for_local_projection=None, 
-                                        bin_size=None, top_layer_thresh=None, terminator_thresh=None, zero_wind_ref=None,):
+                                        bin_size=None, top_layer_thresh=None, terminator_thresh=None, zero_wind_ref=None,
+                                        corr_notch_drift=None,):
     '''
     High-level function to apply the Level-1-to-Level-2.1 algorithm to a series of Level 1 files. The input files
     must all come from the same sensor (MIGHTI-A or B, not both) and from the same date. It is expected that this 
@@ -3252,6 +3343,8 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
                                                                 errors seen in v1.2.8 of the Level 1 processing.
                                                     'internal': Use the zero wind maneuver to set the zero wind phase.
                                                     array(ny) : If this is an array, then use it as a "manual" zero wind phase.
+      *  corr_notch_drift    -- TYPE:bool, If True, apply a pre-determined function to remove the long-term drift of data due to not
+                                           accounting for notch drift at Level 1.
                                            
     OUTPUTS:      
     
@@ -3280,6 +3373,10 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
     L21_dicts = []
     failure_msg = []
     for L1_fn in L1_fns:
+        print('%s: Running L2.1 %s %s' % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), emission_color, L1_fn.split('/')[-1]))
+        import sys
+        sys.stdout.flush()
+        
         try:
             # Read L1 file into a dictionary
             L1_dict = level1_to_dict(L1_fn, emission_color)
@@ -3298,12 +3395,16 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
                     L1_dict['I_phase'] = (L1_dict['I_phase'].T - ph0_night).T
             
             # Perform L1 to L2.1 processing
+            print('%s: Calling level1_dict_to_level21_dict %s %s' % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), emission_color, L1_fn.split('/')[-1]))
+            import sys
+            sys.stdout.flush()
+            
             L21_dict = level1_dict_to_level21_dict(L1_dict, sigma = sigma, top_layer = top_layer, H = H,
                                                    integration_order = integration_order, 
                                                    account_for_local_projection = account_for_local_projection, 
                                                    bin_size = bin_size,
                                                    top_layer_thresh = top_layer_thresh, terminator_thresh = terminator_thresh,
-                                                   zero_wind_ref = zero_wind_ref,
+                                                   zero_wind_ref = zero_wind_ref, corr_notch_drift = corr_notch_drift,
                                                    f107=f107, f107a=f107a, f107p=f107p, apmsis=apmsis)
             L21_dicts.append(L21_dict)
             
@@ -3700,6 +3801,11 @@ def level21_to_dict(L21_fn, skip_att=[], keep_att=[], tstartstop = None):
     except Exception as e:
         print('WARNING: Zero_Wind_Ref attribute not found.')
         z['zero_wind_ref'] = ''
+    try:
+        z['corr_notch_drift'] = bool(d.Corr_Notch_Drift)
+    except Exception as e:
+        print('WARNING: Corr_Notch_Drift attribute not found.')
+        z['corr_notch_drift'] = False
 
 
     for v in z.keys():
@@ -4078,6 +4184,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                    * zero_wind_ref   -- TYPE:str.                         The zero wind reference used to create the Level 2.1 files.
                                                                           'external': uses HWM14 or some outside reference
                                                                           'internal': uses on-orbit value with on correction at Level 2
+                   * corr_notch_drift-- TYPE:bool.                        Whether a correction for notch drift was used to create the Level 2.1 files.
     '''
             
     N_flags = 34 # Update this if the number of quality flags changes.
@@ -4092,6 +4199,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
 
     assert L21_A_dict['emission_color'] == L21_B_dict['emission_color'], "Files for A and B are for different emissions"
     assert L21_A_dict['zero_wind_ref'] == L21_B_dict['zero_wind_ref'], "Files for A and B use different zero wind references"
+    assert L21_A_dict['corr_notch_drift'] == L21_B_dict['corr_notch_drift'], "Files for A and B use different corr_notch_drift"
     # Make sure a LVLH Normal/Reverse maneuver doesn't happen in the middle of the dataset.
     for d in [L21_A_dict, L21_B_dict]:
         assert (all(d['att_lvlh_normal'])  and not any(d['att_lvlh_reverse'])) or \
@@ -4773,6 +4881,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
     L22_dict['orbit_number']        = orb_num[:,k0:k1]
     L22_dict['orbit_node']          = orb_desc[:,k0:k1]
     L22_dict['zero_wind_ref']       = L21_A_dict['zero_wind_ref']
+    L22_dict['corr_notch_drift']       = L21_A_dict['corr_notch_drift']
     
     return L22_dict
 
@@ -4881,7 +4990,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         ncfile.setncattr_string('Text',                           'ICON explores the boundary between Earth and space - the ionosphere - ' +\
                                                                   'to understand the physical connection between our world and the immediate '+\
                                                                   'space environment around us. Visit \'http://icon.ssl.berkeley.edu\' for more details.')
-        ncfile.setncattr_string('Text_Supplement',                ['This data product contains cardinal (i.e., zonal and meridional) thermospheric winds ' +
+        ncfile.setncattr_string('Text_Supplement',                [
+        'This data product contains cardinal (i.e., zonal and meridional) thermospheric winds ' +
         'obtained by combining Level 2.1 (line-of-sight winds) from MIGHTI A and MIGHTI B. The cardinal winds are given as a function of time ' +
         '(spanning 24 hours) and altitude (spanning nominally 90-300 km). There is one file per emission color (red or green).',
          
@@ -4890,11 +5000,35 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         'measures a nearly orthogonal wind component at approximately the same location. A coordinate rotation is performed on the two line-of-sight '+
         'components to obtain the northward and eastward components reported in this file. The assumption is that the thermospheric wind has not changed '+
         'during this interval. Because the Level 2.1 data are naturally on an irregular grid, '+
-        'they are first interpolated to a regular grid of longitude and altitude before the coordinate rotation is performed. See Harding et al. [2017, '+
-        'doi:10.1007/s11214-017-0359-3] for more details of the Level 2.2 algorithm.'])
+        'they are first interpolated to a regular, pre-defined grid of longitude and altitude before the coordinate rotation is performed. See Harding et al. [2017, '+
+        'doi:10.1007/s11214-017-0359-3] for more details of the Level 2.2 algorithm.',
+
+         "Known issues with the initial data release (labeled v02) are listed below. These issues are expected to be resolved in future data releases. "
+         "In future releases, some data points may change by up to 50 m/s, but most changes are expected to be much smaller. Future updates to the "
+         "\"zero wind phase\" (discussed in detail below, in the notes for the wind variable) will change the winds by a bulk offset, "
+         "but most relative variations in time, latitude, longitude, and from day to day will remain. ",
+
+         "Known issues with v02:<br/>"
+         " * Some artifacts from preliminary calibrations are present (e.g., thermal drift, flat field, and visibility corrections). These manifest as "
+         "artifical offsets that affect a single altitude or a single local solar time, persisting for an entire UT day. <br/>"
+         " * The quality flag indicating contamination by the South Atlantic Anomaly is too conservative, so some high-quality data points are given "
+         "a lower quality factor. <br/>"
+         " * The reported wind error includes the effect of dark, read, and shot noise in the observations, but does not include calibration uncertainty. "
+         "It is likely that a future release will revise the reported error upward by approximately 50%.<br/>"
+         " * The bottom two rows of data (corresponding to altitudes of ~88 and ~91 km) are masked out pending updated calibrations. These rows are near the "
+         "edge of the field of view and not all columns are illuminated, which requires special consideration. <br/>"
+         " * No effort was yet made to absolutely- or cross-calibrate the brightness observations for MIGHTI-A and MIGHTI-B, and thus the Relative_VER "
+         "variable should be treated with caution.<br/>"
+         " * A calibration lamp is used for one orbit per day to assess the periodic thermal drift of MIGHTI. This is used to correct all other "
+         "orbits that day. In v02 data, the thermal drift is ascribed entirely to interferometer drift, but some fraction is due to mechanical "
+         "drift. This will be corrected by using the observed drift of the fiducial notches. The error in the current approach is estimated to be less "
+         "than 10 m/s.",
+        ])
         ncfile.setncattr_string('Time_Resolution',                '30 - 60 seconds')
         ncfile.setncattr_string('Title',                          'ICON MIGHTI Cardinal Vector Winds (DP 2.2)')
-        
+        ncfile.setncattr_string('Zero_Wind_Ref',                  L22_dict['zero_wind_ref'])
+        ncfile.setncattr_string('Corr_Notch_Drift',               str(L22_dict['corr_notch_drift']))
+
 
 
         ################################## Dimensions ########################################
@@ -5078,7 +5212,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               "While the intent is that the XXX_Wind_Error variable accurately characterizes the statistical "
                               "error in the wind data, it is possible that systematic errors are present, or that the statistical error "
                               "estimation is not accurate. If this is suspected to be the case, the quality will be less than 1.0. If "
-                              "the data are definitely unusable, the the quality will be 0.0 and the sample will be masked. Users should "
+                              "the data are definitely unusable, the quality will be 0.0 and the sample will be masked. Users should "
                               "exercise caution when the quality is less than 1.0.",
                               "Currently, the quality can take values of 0 (Bad), 0.5 (Caution), or 1 (Good)."
                                      ])
@@ -5115,7 +5249,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               format_nc='f8', format_fortran='F', desc='Relative volume emission rate', 
                               display_type='image', field_name='Relative VER', fill_value=None, label_axis='Rel VER', bin_location=0.5,
                               units='ph/cm^3/s', valid_min=0, valid_max=1e30, var_type='data', chunk_sizes=[nx,ny],
-                              notes= "The volume emission rate (VER) obtained by scaling the fringe amplitude by a calibration factor. "
+                              notes= "The volume emission rate (VER) obtained by averaging the VER from MIGHTI-A and MIGHTI-B, which is "
+                               "obtained by scaling the fringe amplitude by a calibration factor, as described in Data Product 2.1. "
                                "Pre-flight calibrations and on-orbit comparisons with ground-based instruments are used to determine the "
                                "best possible calibration. The fringe amplitude has a dependence on temperature, which is corrected using "
                                "the MSIS model. Because the on-orbit calibration is uncertain, and because the MSIS "
@@ -5150,7 +5285,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               "While the intent is that the XXX_VER_Error variable accurately characterizes the statistical "
                               "error in the VER data, it is possible that systematic errors are present, or that the statistical error "
                               "estimation is not accurate. If it is suspected that this is the case, the quality will be less than 1.0. If "
-                              "the data are definitely unusable, the the quality will be 0.0 and the sample will be masked. Users should "
+                              "the data are definitely unusable, the quality will be 0.0 and the sample will be masked. Users should "
                               "exercise caution when the quality is less than 1.0.",
                               "Currently, the quality can take values of 0 (Bad), 0.5 (Caution), or 1 (Good)."
                                ])       
@@ -5161,13 +5296,14 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               format_nc='f8', format_fortran='F', desc='Magnetic field-aligned component of the wind', 
                               display_type='image', field_name='MgFA Wind', fill_value=None, label_axis='MgFA Wind', bin_location=0.5,
                               units='m/s', valid_min=-4000., valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
-                              notes="The component of the wind in the direction of the magnetic field, assuming vertical winds "
+                              notes="The component of the wind in the direction of the magnetic field line, assuming vertical winds "
                                "are negligible. This variable is calculated by taking the geographic zonal and meridional wind "
                                "(the primary data products in this file) and expressing the wind vector in a local magnetic coordinate "
-                               "system defined using the Python package pysatMagVect (https://github.com/rstoneback/pysatMagVect). "
+                               "system defined using the Python package OMMBV (https://github.com/rstoneback/OMMBV). "
                                "The "
                                "coordinate system used here is orthogonal and is identical to the coordinate system used to express the ion "
-                               "drifts in the ICON IVM data product 2.7."
+                               "drifts in the ICON IVM data product 2.7 (i.e., the variables ICON_L27_Ion_Velocity_Meridional, ICON_L27_Ion_Velocity_Zonal, "
+                               "and ICON_L27_Ion_Velocity_Field_Aligned)."
                                )
         
         var = _create_variable(ncfile, '%s_Magnetic_Meridional_Wind'%prefix, L22_dict['wind_mag_mer'].T, 
@@ -5178,9 +5314,9 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               notes="The component of the wind in the magnetic meridional direction, assuming vertical winds are negligible. "
                                "This variable is calculated by taking the geographic zonal and meridional wind "
                                "(the primary data products in this file) and expressing the wind vector in a local magnetic coordinate "
-                               "system defined using the Python package pysatMagVect (https://github.com/rstoneback/pysatMagVect). "
-                               "The magnetic meridional unit vector is orthogonal to the magnetic field but within the plane of "
-                               "the magnetic meridian. "
+                               "system defined using the Python package OMMBV (https://github.com/rstoneback/OMMBV). "
+                               "The magnetic meridional unit vector is orthogonal to the magnetic field line but within the plane of "
+                               "the magnetic meridian (defined by the apex of the field line and its footpoint ). "
                                "At the magnetic equator, the meridional direction points up, while away from the equator it has "
                                "a poleward component (north in the northern hemisphere, south in the southern hemisphere). "
                                "Note that in some ion-neutral coupling models, a definition of magnetic meridional is often used that is "
@@ -5189,7 +5325,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                "Note also that "
                                "the definition of magnetic meridional and zonal used here differs from quasi-dipole and apex coordinate bases. The "
                                "coordinate system used here is orthonormal and is identical to the coordinate system used to express the ion "
-                               "drifts in the ICON IVM data product 2.7. "
+                               "drifts in the ICON IVM data product 2.7 (i.e., the variables ICON_L27_Ion_Velocity_Meridional, ICON_L27_Ion_Velocity_Zonal, "
+                               "and ICON_L27_Ion_Velocity_Field_Aligned)."
                               )
         
         var = _create_variable(ncfile, '%s_Magnetic_Zonal_Wind'%prefix, L22_dict['wind_mag_zon'].T, 
@@ -5200,12 +5337,13 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               notes="The component of the wind in the magnetic zonal direction, assuming vertical winds are negligible. "
                                "This variable is calculated by taking the geographic zonal and meridional wind "
                                "(the primary data products in this file) and expressing the wind vector in a local magnetic coordinate "
-                               "system defined using the Python package pysatMagVect (https://github.com/rstoneback/pysatMagVect). "
+                               "system defined using the Python package OMMBV (https://github.com/rstoneback/OMMBV). "
                                "At the magnetic equator, the zonal direction points horizontally, while away from the equator "
                                "it can have a slightly vertical component. Note that "
                                "the definition of magnetic meridional and zonal used here differs from quasi-dipole and apex coordinate bases. The "
                                "coordinate system used here is orthonormal and is identical to the coordinate system used to express the ion "
-                               "drifts in the ICON IVM data product 2.7. "
+                               "drifts in the ICON IVM data product 2.7 (i.e., the variables ICON_L27_Ion_Velocity_Meridional, ICON_L27_Ion_Velocity_Zonal, "
+                               "and ICON_L27_Ion_Velocity_Field_Aligned)."
                               )
 
         ######### Data Location Variables #########
@@ -5218,8 +5356,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               display_type='image', field_name='Altitude', fill_value=None, label_axis='Altitude', bin_location=0.5,
                               units='km', valid_min=50., valid_max=1000., var_type='support_data', chunk_sizes=[ny], monoton='Increase',
                               notes="A one-dimensional array defining the altitude dimension of the data grid (the other dimension "
-                              "being time). For each Level 2.2 file, the altitude grid is defined based on the minimum and maximum altitudes, "
-                              "(and highest resolution) in the Level 2.1 (line-of-sight wind) files. Altitude is defined using the WGS84 ellipsoid."
+                              "being time). Altitude is defined using the WGS84 ellipsoid."
                               )
 
 
@@ -5260,7 +5397,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               "inherently a horizontal average over many hundreds of kilometers. "
                               "Quasi-dipole latitude and longitude are calculated using the fast implementation developed by "
                               "Emmert et al. (2010, doi:10.1029/2010JA015326) and the Python wrapper apexpy "
-                              "(https://github.com/aburrell/apexpy/). "
+                              "(doi.org/10.5281/zenodo.1214207). "
                               )
         
         # Magnetic Longitude
@@ -5275,7 +5412,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               "inherently a horizontal average over many hundreds of kilometers. "
                               "Quasi-dipole latitude and longitude are calculated using the fast implementation developed by "
                               "Emmert et al. (2010, doi:10.1029/2010JA015326) and the Python wrapper apexpy "
-                              "(https://github.com/aburrell/apexpy/). "
+                              "(doi.org/10.5281/zenodo.1214207). Quasi-dipole longitude is defined such that zero "
+                              "occurs where the geodetic longitude is near 285 deg east (depending on latitude)."
                               )
         
         ######### Other Metadata Variables #########
