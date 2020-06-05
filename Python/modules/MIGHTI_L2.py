@@ -9,8 +9,8 @@
 # These need to be manually changed, when necessary.
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
-software_version_major = 2 # Should only be incremented on major changes
-software_version_minor = 3 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_major = 3 # Should only be incremented on major changes
+software_version_minor = 0 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -1345,6 +1345,9 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     except Exception as e:
         print('SC_Pointing_Jitter variable not found. Setting to 0.0. Error = "%s"' % e)
         L1_dict['jitter'] = 0.0    
+        
+    # Cal lamp indicator
+
     
     # Quality factors and flags
     L1_dict['quality'] =  f['ICON_L1_MIGHTI_%s_%s_Quality_Factor' % (sensor, emission_color.capitalize())][0]
@@ -1358,6 +1361,9 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     L1_dict['quality_flags'][:,0] = f['ICON_L1_MIGHTI_%s_Quality_Flag_Low_Signal_To_Noise_%s'%(sensor, emission_color.capitalize())][0,:]
     L1_dict['quality_flags'][:,1] = f['ICON_L1_MIGHTI_%s_Quality_Flag_SAA'%sensor][0]
     L1_dict['quality_flags'][:,2] = f['ICON_L1_MIGHTI_%s_Quality_Flag_Bad_Calibration'%sensor][0]
+    # Not technically a L1 flag, but it fits here:
+    L1_dict['quality_flags'][:,3] = bool(f[u'ICON_L0_MIGHTI_%s_Calibration_Lamp_1' % sensor][...].item()) | \
+                                    bool(f[u'ICON_L0_MIGHTI_%s_Calibration_Lamp_2' % sensor][...].item())
     
     # Dummy placeholder code for reading global attributes, if that matters
     nc_attrs = f.ncattrs()
@@ -1691,6 +1697,9 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
         if quality_flags[i,1]: # SAA
             wind_ratings.append(0.5)
             ver_ratings.append(0.5)
+        if quality_flags[i,3]: # Cal lamps on (TODO: Remove this once we trust it better)
+            wind_ratings.append(0.5)
+            ver_ratings.append(0.5)
         if quality_flags[i,6]: # SNR too low
             wind_ratings.append(0.0) # phase is definitely bad (?)
             ver_ratings.append(0.5) # but VER might be ok
@@ -1701,7 +1710,7 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
             wind_ratings.append(0.5) 
             ver_ratings.append(0.5)
         if quality_flags[i,10]: # S/C pointing is not stable:
-            wind_ratings.append(0.0) # phase is not trustworthy because S/C velocity subtraction is uncertain
+            wind_ratings.append(0.5) # phase is not trustworthy because S/C velocity subtraction is uncertain
             ver_ratings.append(1.0) # but there's no reason to distrust VER
         if quality_flags[i,2]: # Bad calibration, including the problem at bottom two rows of green
             wind_ratings.append(0.0) # don't use wind but VER is fine. TODO: remove this
@@ -1811,7 +1820,6 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                                                       ICON orbit number
                                       * jitter                     -- TYPE:float.        UNITS:deg
                                                                       How much the S/C pointing is changing.
-                                                                      This is the stddev of the residual of a linear fit to the Euler angles in a 60-sec window.
                                       * I_dc                       -- TYPE:array(ny)     UNITS:R.
                                                                       Brightness observed at each row. Like I_amp, but generated from the 
                                                                       DC value of the measured interferogram, not the fringe amplitude.
@@ -1824,7 +1832,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                                                        * 0: High if SNR is low enough to cause possible systematic errors
                                                                        * 1: Proximity to South Atlantic Anomaly
                                                                        * 2: Bad calibration detected
-                                                                       * 3: Unused
+                                                                       * 3: Calibration lamps are on
                                                                        * 4: Unused
                                                                        * 5: Unused
                                                                                   
@@ -1900,7 +1908,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                     * bin_size                  -- TYPE:int.                      Bin size used in the processing
                     * top_layer                 -- TYPE:str.                      How the top layer was handled: 'thin' or 'exp'
                     * zero_wind_ref             -- TYPE:str.                      How the zero wind was handled: 'external' or 'internal' (see input)
-                    * corr_notch_drift          -- TYPE:bool,                     How the notch drift correction was handled (see input)                  
+                    * corr_notch_drift          -- TYPE:bool,                     How the notch drift correction was handled (see input)                 
                     * H                         -- TYPE:float.       UNITS:km.    The VER scale height used if top_layer='exp' 
                     * integration_order         -- TYPE:int.                      Order of integration used in inversion: 0 or 1
                     * I                         -- TYPE:array(ny,nx) UNITS:arb.   The complex-valued, onion-peeled interferogram
@@ -1915,7 +1923,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                                                                    * 0 : (From L1) SNR too low to reliably perform L1 processing
                                                                                    * 1 : (From L1) Proximity to South Atlantic Anomaly
                                                                                    * 2 : (From L1) Bad calibration 
-                                                                                   * 3 : (From L1) Unused
+                                                                                   * 3 : (From L1) Calibration lamps are on
                                                                                    * 4 : (From L1) Unused
                                                                                    * 5 : (From L1) Unused
                                                                                    * 6 : SNR too low after inversion
@@ -2356,7 +2364,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ncfile.setncattr_string('Generated_By',                   'ICON SDC > ICON UIUC MIGHTI L2.1 Processor v%s, B. J. Harding' % __version__)
         ncfile.setncattr_string('Generation_Date',                t_file.strftime('%Y%m%d'))
         ncfile.setncattr_string('History',                        ['v1.0: First release of MIGHTI L2.1/L2.2 software, B. J. Harding, 05 Mar 2018', 
-                                                                   'v2.0: First run of on-orbit data, using external zero wind reference and smooth daily-averaged profiles, B. J. Harding, 01 May 2020'])
+                                                                   'v2.0: First run of on-orbit data, using external zero wind reference and smooth daily-averaged profiles, B. J. Harding, 01 May 2020',
+                                                                   'v3.0: Correction for long-term mechanical drift, B. J. Harding, 04 Jun 2020'])
         ncfile.setncattr_string('HTTP_LINK',                      'http://icon.ssl.berkeley.edu/Instruments/MIGHTI')
         ncfile.setncattr_string('Instrument',                     'MIGHTI-%s' % sensor)
         ncfile.setncattr_string('Instrument_Type',                'Imagers (space)')
@@ -2388,12 +2397,12 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                     "processing (not discussed here). See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for more details of the inversion algorithm. One update "
                     "to this paper is relevant: Zero wind removal is now performed prior to the creation of the Level 1 file, instead of during the L2.1 processing. ",
                     
-                     "Known issues with the initial data release (labeled v02) are listed below. These issues are expected to be resolved in future data releases. "
+                     "Known issues with the initial data release (labeled v03) are listed below. These issues are expected to be resolved in future data releases. "
                      "In future releases, some data points may change by up to 50 m/s, but most changes are expected to be much smaller. Future updates to the "
                      "\"zero wind phase\" (discussed in detail below, in the notes for the wind variable) will change the winds by a bulk offset, "
                      "but most relative variations in time, latitude, longitude, and from day to day will remain. ",
 
-                     "Known issues with v02:<br/>"
+                     "Known issues with v03:<br/>"
                      " * Some artifacts from preliminary calibrations are present (e.g., thermal drift, flat field, and visibility corrections). These manifest as "
                      "artifical offsets that affect a single altitude or a single local solar time, persisting for an entire UT day. <br/>"
                      " * The quality flag indicating contamination by the South Atlantic Anomaly is too conservative, so some high-quality data points are given "
@@ -2405,9 +2414,9 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                      " * No effort was yet made to absolutely- or cross-calibrate the brightness observations for MIGHTI-A and MIGHTI-B, and thus the Relative_VER "
                      "variable should be treated with caution.<br/>"
                      " * A calibration lamp is used for one orbit per day to assess the periodic thermal drift of MIGHTI. This is used to correct all other "
-                     "orbits that day. In v02 data, the thermal drift is ascribed entirely to interferometer drift, but some fraction is due to mechanical "
+                     "orbits that day. In v03 data, the thermal drift is ascribed entirely to interferometer drift, but some fraction is due to mechanical "
                      "drift. This will be corrected by using the observed drift of the fiducial notches. The error in the current approach is estimated to be less "
-                     "than 10 m/s (???)",
+                     "than 10 m/s.",
                     ]
 
         ncfile.setncattr_string('Text_Supplement',                text_supp)
@@ -2912,7 +2921,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                                        "0 : (From L1) SNR too low to reliably perform L1 processing",
                                        "1 : (From L1) Proximity to South Atlantic Anomaly",
                                        "2 : (From L1) Bad calibration",
-                                       "3 : (From L1) Unused",
+                                       "3 : (From L1) Calibration lamps are on",
                                        "4 : (From L1) Unused",
                                        "5 : (From L1) Unused",
                                        "6 : SNR too low after inversion",
@@ -4090,7 +4099,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                                                            * 0 : (From L1 A) SNR too low to reliably perform L1 processing
                                                                            * 1 : (From L1 A) Proximity to South Atlantic Anomaly
                                                                            * 2 : (From L1 A) Bad calibration 
-                                                                           * 3 : (From L1 A) Unused
+                                                                           * 3 : (From L1 A) Calibration lamps are on
                                                                            * 4 : (From L1 A) Unused
                                                                            * 5 : (From L1 A) Unused
                                                                            * 6 : (From L2.1 A) SNR too low after inversion
@@ -4968,7 +4977,9 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         ncfile.setncattr_string('File_Date',                      t_file.strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC')
         ncfile.setncattr_string('Generated_By',                   'ICON SDC > ICON UIUC MIGHTI L2.2 Processor v%s, B. J. Harding' % __version__)
         ncfile.setncattr_string('Generation_Date',                t_file.strftime('%Y%m%d'))
-        ncfile.setncattr_string('History',                        'v1.0: First release of MIGHTI L2.1/L2.2 software, B. J. Harding, 05 Mar 2018')
+        ncfile.setncattr_string('History',                        ['v1.0: First release of MIGHTI L2.1/L2.2 software, B. J. Harding, 05 Mar 2018', 
+                                                                   'v2.0: First run of on-orbit data, using external zero wind reference and smooth daily-averaged profiles, B. J. Harding, 01 May 2020',
+                                                                   'v3.0: Correction for long-term mechanical drift, B. J. Harding, 04 Jun 2020'])
         ncfile.setncattr_string('HTTP_LINK',                      'http://icon.ssl.berkeley.edu/Instruments/MIGHTI')
         ncfile.setncattr_string('Instrument',                     'MIGHTI')
         ncfile.setncattr_string('Instrument_Type',                'Imagers (space)')
@@ -5003,12 +5014,12 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         'they are first interpolated to a regular, pre-defined grid of longitude and altitude before the coordinate rotation is performed. See Harding et al. [2017, '+
         'doi:10.1007/s11214-017-0359-3] for more details of the Level 2.2 algorithm.',
 
-         "Known issues with the initial data release (labeled v02) are listed below. These issues are expected to be resolved in future data releases. "
+         "Known issues with the initial data release (labeled v03) are listed below. These issues are expected to be resolved in future data releases. "
          "In future releases, some data points may change by up to 50 m/s, but most changes are expected to be much smaller. Future updates to the "
          "\"zero wind phase\" (discussed in detail below, in the notes for the wind variable) will change the winds by a bulk offset, "
          "but most relative variations in time, latitude, longitude, and from day to day will remain. ",
 
-         "Known issues with v02:<br/>"
+         "Known issues with v03:<br/>"
          " * Some artifacts from preliminary calibrations are present (e.g., thermal drift, flat field, and visibility corrections). These manifest as "
          "artifical offsets that affect a single altitude or a single local solar time, persisting for an entire UT day. <br/>"
          " * The quality flag indicating contamination by the South Atlantic Anomaly is too conservative, so some high-quality data points are given "
@@ -5020,7 +5031,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
          " * No effort was yet made to absolutely- or cross-calibrate the brightness observations for MIGHTI-A and MIGHTI-B, and thus the Relative_VER "
          "variable should be treated with caution.<br/>"
          " * A calibration lamp is used for one orbit per day to assess the periodic thermal drift of MIGHTI. This is used to correct all other "
-         "orbits that day. In v02 data, the thermal drift is ascribed entirely to interferometer drift, but some fraction is due to mechanical "
+         "orbits that day. In v03 data, the thermal drift is ascribed entirely to interferometer drift, but some fraction is due to mechanical "
          "drift. This will be corrected by using the observed drift of the fiducial notches. The error in the current approach is estimated to be less "
          "than 10 m/s.",
         ])
@@ -5543,7 +5554,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                        "* 0 : (From L1 A) SNR too low to reliably perform L1 processing",
                                        "* 1 : (From L1 A) Proximity to South Atlantic Anomaly",
                                        "* 2 : (From L1 A) Bad calibration",
-                                       "* 3 : (From L1 A) Unused",
+                                       "* 3 : (From L1 A) Calibration lamps are on",
                                        "* 4 : (From L1 A) Unused",
                                        "* 5 : (From L1 A) Unused",
                                        "* 6 : (From L2.1 A) SNR too low after inversion",
@@ -5555,7 +5566,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                        "* 12: (From L1 B) SNR too low to reliably perform L1 processing",
                                        "* 13: (From L1 B) Proximity to South Atlantic Anomaly",
                                        "* 14: (From L1 B) Bad calibration",
-                                       "* 15: (From L1 B) Unused",
+                                       "* 15: (From L1 B) Calibration lamps are on",
                                        "* 16: (From L1 B) Unused",
                                        "* 17: (From L1 B) Unused",
                                        "* 18: (From L2.1 B) SNR too low after inversion",
@@ -6349,9 +6360,17 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
         ax_format.append(ax)
+        
+        ax = axarr[2,3]
+        C = 1.0 * L21_dict['quality_flags'][:,i1:i2,3]
+        C[:,igap] = np.nan
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('Calibration lamps are on')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,1])
+        ax_format.append(ax)
 
         #### Turn off unused axes
-        axarr[2,3].axis('off')
         axarr[3,3].axis('off')
 
         #### Make the 2D plots look nice
@@ -6725,11 +6744,19 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
         cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
         ax_format.append(ax)
+        
+        ax = axarr[5,3]
+        z = 0.333*L22_dict['quality_flags'][:,i1:i2,3] + 0.667*L22_dict['quality_flags'][:,i1:i2,15]
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('MIGHTI A or B: Calibration lamps are on')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
+        cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
+        ax_format.append(ax)
 
         #### Turn off unused axes
         axarr[5,1].axis('off')
         axarr[5,2].axis('off')
-        axarr[5,3].axis('off')
 
         #### Make the 2D plots look nice
         for ax in ax_format:
