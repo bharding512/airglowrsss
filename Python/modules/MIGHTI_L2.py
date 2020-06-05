@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 3 # Should only be incremented on major changes
-software_version_minor = 0 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 1 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -2387,11 +2387,17 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ncfile.setncattr_string('Text',                           'ICON explores the boundary between Earth and space - the ionosphere - '
                                                                   'to understand the physical connection between our world and the immediate '
                                                                   'space environment around us. Visit \'http://icon.ssl.berkeley.edu\' for more details.')
-        text_supp = ["This data product contains altitude profiles of the line-of-sight winds for 24 hours of "
-                    "data taken by MIGHTI. There is one file for each sensor (A or B), for each color (red or green) and for each day. The profile "
+        text_supp = ["This data product contains altitude profiles of the line-of-sight winds (inverted wind profiles in the direction of the sensor's line of "
+                    "sight) for 24 hours of data taken by MIGHTI. In addition to the line-of-sight wind data and the corresponding ancillary data, "
+                    "such as time and location, this product contains supporting data, such as fringe amplitude profiles and "
+                    "relative volume emission rate profiles. Absolute calibration and MIGHTI-A/B cross calibration of these data "
+                    "is not necessary to obtain the wind data, and therefore any direct analysis of these supporting data requires caution. ",
+                     
+                    "There is one file for each sensor (A or B), for each color (red or green) and for each day. The profile "
                     "spans from an altitude of ~90 km (for green) or ~150 km (for red) to ~300 km, though altitudes with low signal levels are masked out. This data product is "
-                    "generated from the Level 1 MIGHTI product, which comprises calibrated amplitudes and phases. The spacecraft velocity is removed from the "
-                    "interferogram phase, then (optionally) the data are binned from their native altitude resolution (~2.5 km) to improve statistics. "
+                    "generated from the Level 1 MIGHTI product, which comprises calibrated interference fringe amplitudes and phases. The effect of "
+                    "spacecraft velocity is removed from the "
+                    "interferogram phase, then (optionally) the data are binned from their native altitude sampling (~2.5 km) to improve statistics. "
                     "An onion-peeling inversion is performed to remove the effect of the line-of-sight integration. After the inversion, each row (i.e., altitude) "
                     "is analyzed to extract the phase, and thus the line-of-sight wind. Level 2.1 files from MIGHTI-A and MIGHTI-B are combined during the Level 2.2 "
                     "processing (not discussed here). See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for more details of the inversion algorithm. One update "
@@ -2403,18 +2409,20 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                      "but most relative variations in time, latitude, longitude, and from day to day will remain. ",
 
                      "Known issues with v03:<br/>"
-                     " * Some artifacts from preliminary calibrations are present (e.g., thermal drift, flat field, and visibility corrections). These manifest as "
-                     "artifical offsets that affect a single altitude or a single local solar time, persisting for an entire UT day. <br/>"
+                     " * Some artifacts from preliminary calibrations are present (e.g., thermal instrument drift, detector flat field, and fringe "
+                     "visibility correction). These manifest as "
+                     "artificial offsets that affect a single altitude or a single local solar time, persisting for an entire UT day. <br/>"
                      " * The quality flag indicating contamination by the South Atlantic Anomaly is too conservative, so some high-quality data points are given "
                      "a lower quality factor. <br/>"
                      " * The reported wind error includes the effect of dark, read, and shot noise in the observations, but does not include calibration uncertainty. "
                      "It is likely that a future release will revise the reported error upward by approximately 50%.<br/>"
                      " * The bottom two rows of data (corresponding to altitudes of ~88 and ~91 km) are masked out pending updated calibrations. These rows are near the "
                      "edge of the field of view and not all columns are illuminated, which requires special consideration. <br/>"
-                     " * No effort was yet made to absolutely- or cross-calibrate the brightness observations for MIGHTI-A and MIGHTI-B, and thus the Relative_VER "
+                     " * Airglow brightness observations are not a required mission product, and no effort was yet made to absolutely- or cross-calibrate "
+                     "the brightness observations for MIGHTI-A and MIGHTI-B, and thus the Relative_VER "
                      "variable should be treated with caution.<br/>"
                      " * A calibration lamp is used for one orbit per day to assess the periodic thermal drift of MIGHTI. This is used to correct all other "
-                     "orbits that day. In v03 data, the thermal drift is ascribed entirely to interferometer drift, but some fraction is due to mechanical "
+                     "observations that day. In v03 data, the thermal drift is ascribed entirely to interferometer drift, but some fraction is due to mechanical "
                      "drift. This will be corrected by using the observed drift of the fiducial notches. The error in the current approach is estimated to be less "
                      "than 10 m/s.",
                     ]
@@ -2483,7 +2491,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
         # Line-of-sight wind profile -- this one is special because it has var notes that vary depending on the zero_wind_ref
         varnotes = ["The wind is the primary data product in this file. This variable contains the projection of the horizontal wind "
-                  "(at the tangent point) onto the line of sight. An entire altitude profile is observed simultaneously. An onion-peeling "
+                  "(at the tangent point) onto the line of sight direction. An entire altitude profile is observed simultaneously. An onion-peeling "
                   "inversion is used on the raw observations to remove the effects of the integration along the line of sight. The "
                   "line-of-sight wind is defined such that a positive value indicates motion towards the spacecraft. This direction is given "
                   "by the Line_of_Sight_Azimuth variable. It is assumed that the vertical wind is zero, but even large vertical winds "
@@ -2705,7 +2713,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               format_nc='f8', format_fortran='F', desc='Solar zenith angle of each wind sample', 
                               display_type='image', field_name='SZA', fill_value=None, label_axis='SZA', bin_location=0.5,
                               units='deg', valid_min=0., valid_max=180., var_type='support_data', chunk_sizes=[nt,ny],
-                              notes="Angle between the ray towards the sun and towards zenith, at the location of each wind sample."
+                              notes="Angle between the vectors towards the sun and towards zenith, at the location of each wind sample."
                               )
                                
         # Solar local time                      
@@ -2842,7 +2850,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               units='', valid_min=np.int8(1), valid_max=np.int8(100), var_type='metadata', chunk_sizes=1,
                               notes="To improve statistics, adjacent rows of the interferogram can be averaged together before the inversion. "
                               "This improves precision at the cost of vertical resolution. If no binning is performed, this value will be 1, "
-                              "corresponding to ~2.5 km resolution. A value of 2 corresponds to ~5 km resolution, etc."
+                              "corresponding to ~2.5 km sampling. A value of 2 corresponds to ~5 km sampling, etc."
                               )
 
         # Integration order
@@ -2852,7 +2860,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               display_type='time_series', field_name='Order', fill_value=None, label_axis='Order', bin_location=0.5,
                               units='', valid_min=np.int8(0), valid_max=np.int8(1), var_type='metadata', chunk_sizes=[nt],
                               notes="In formulating the inversion, an assumption must be made regarding the choice of basis functions, "
-                              "which can be thought of as an assumption regarding the behavior of the wind and amplitude within each altitude "
+                              "which can be thought of as an assumption regarding the behavior of the wind and fringe amplitude (airglow volume emission rate) "
+                              "within each altitude "
                               "layer. The most basic assumption is that these quantities are constant within each altitude layer, which corresponds "
                               "to Integration_Order=0. However, if it is assumed that the variation within each layer is linear, "
                               "Integration_Order=1. This sacrifices precision to improve vertical resolution."
@@ -5004,13 +5013,16 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         ncfile.setncattr_string('Text_Supplement',                [
         'This data product contains cardinal (i.e., zonal and meridional) thermospheric winds ' +
         'obtained by combining Level 2.1 (line-of-sight winds) from MIGHTI A and MIGHTI B. The cardinal winds are given as a function of time ' +
-        '(spanning 24 hours) and altitude (spanning nominally 90-300 km). There is one file per emission color (red or green).',
+        '(spanning 24 hours) and altitude (spanning nominally 90-300 km). In addition to the cardinal vector wind data and the corresponding ancillary data, ' +
+        'such as time and location, this product contains supporting data, such as fringe amplitude profiles and relative volume emission rate profiles. ' +
+        'Absolute calibration and MIGHTI-A/B cross calibration of these data is not necessary to obtain the wind data, and therefore any direct analysis ' +
+        'of these supporting data requires caution. There is one file per emission color (red or green).',
          
-        'Cardinal wind observations are enabled by the 90-degree offset between the two MIGHTI sensors. First, MIGHTI A measures a wind component along '+
+        'Cardinal wind observations are enabled by the ~90-degree offset between the two MIGHTI sensors. First, MIGHTI A measures a wind component along '+
         'its line of sight. Five to eight minutes later, depending on tangent point altitude, the spacecraft has moved to a position such that MIGHTI B '+
         'measures a nearly orthogonal wind component at approximately the same location. A coordinate rotation is performed on the two line-of-sight '+
         'components to obtain the northward and eastward components reported in this file. The assumption is that the thermospheric wind has not changed '+
-        'during this interval. Because the Level 2.1 data are naturally on an irregular grid, '+
+        'during this time interval. Because the Level 2.1 data are naturally on an irregular grid, '+
         'they are first interpolated to a regular, pre-defined grid of longitude and altitude before the coordinate rotation is performed. See Harding et al. [2017, '+
         'doi:10.1007/s11214-017-0359-3] for more details of the Level 2.2 algorithm.',
 
@@ -5020,18 +5032,20 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
          "but most relative variations in time, latitude, longitude, and from day to day will remain. ",
 
          "Known issues with v03:<br/>"
-         " * Some artifacts from preliminary calibrations are present (e.g., thermal drift, flat field, and visibility corrections). These manifest as "
-         "artifical offsets that affect a single altitude or a single local solar time, persisting for an entire UT day. <br/>"
+         " * Some artifacts from preliminary calibrations are present (e.g., thermal instrument drift, detector flat field, and fringe "
+         "visibility correction). These manifest as "
+         "artificial offsets that affect a single altitude or a single local solar time, persisting for an entire UT day. <br/>"
          " * The quality flag indicating contamination by the South Atlantic Anomaly is too conservative, so some high-quality data points are given "
          "a lower quality factor. <br/>"
          " * The reported wind error includes the effect of dark, read, and shot noise in the observations, but does not include calibration uncertainty. "
          "It is likely that a future release will revise the reported error upward by approximately 50%.<br/>"
          " * The bottom two rows of data (corresponding to altitudes of ~88 and ~91 km) are masked out pending updated calibrations. These rows are near the "
          "edge of the field of view and not all columns are illuminated, which requires special consideration. <br/>"
-         " * No effort was yet made to absolutely- or cross-calibrate the brightness observations for MIGHTI-A and MIGHTI-B, and thus the Relative_VER "
+         " * Airglow brightness observations are not a required mission product, and no effort was yet made to absolutely- or cross-calibrate "
+         "the brightness observations for MIGHTI-A and MIGHTI-B, and thus the Relative_VER "
          "variable should be treated with caution.<br/>"
          " * A calibration lamp is used for one orbit per day to assess the periodic thermal drift of MIGHTI. This is used to correct all other "
-         "orbits that day. In v03 data, the thermal drift is ascribed entirely to interferometer drift, but some fraction is due to mechanical "
+         "observations that day. In v03 data, the thermal drift is ascribed entirely to interferometer drift, but some fraction is due to mechanical "
          "drift. This will be corrected by using the observed drift of the fiducial notches. The error in the current approach is estimated to be less "
          "than 10 m/s.",
         ])
@@ -5435,7 +5449,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               format_nc='f8', format_fortran='F', desc='Solar zenith angle of each wind sample', 
                               display_type='image', field_name='SZA', fill_value=None, label_axis='SZA', bin_location=0.5,
                               units='deg', valid_min=0., valid_max=180., var_type='support_data', chunk_sizes=[nx,ny],
-                              notes="Angle between the ray towards the sun and towards zenith, for each point in the grid."
+                              notes="Angle between the vectors towards the sun and towards zenith, for each point in the grid."
                               )
                                
         # Solar local time                      
