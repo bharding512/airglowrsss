@@ -13,7 +13,7 @@ Todo:
 # These need to be manually changed, when necessary.
 # NOTE: When the major version is updated, you should change the History global attribute
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 9 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 10 # [0-99], increment on ALL published changes, resetting when the major version changes
 software_version = float(software_version_major)+software_version_minor/1000.
 ####################################################################################################
 
@@ -1697,7 +1697,7 @@ def Get_lvl2_5_product(file_input = None,
         night_ind = []
         for ind, (mode, l1_qual) in enumerate(zip(FUV_mode, l1_quality)):
             # Check if we are in night mode
-            print('{}/{} - {}/{}'.format(stripe+1, 6, ind+1, len(FUV_mode)))
+            # print('{}/{} - {}/{}'.format(stripe+1, 6, ind+1, len(FUV_mode)))
             if mode==2:
                 try:
                     # We are in nighttime science mode, process the data
@@ -1779,6 +1779,7 @@ def Get_lvl2_5_product(file_input = None,
                     lat_magnetic,lon_magnetic = apex_point.convert(
                         latm,lonm,'geo','qd',height=hm
                     )
+                    lon_magnetic = lon_magnetic+360 if lon_magnetic < 0 else lon_magnetic
                     FUV_hmF2[ind,stripe] = hm
                     FUV_latmF2[ind,stripe] = latm
                     FUV_lonmF2[ind,stripe] = lonm
