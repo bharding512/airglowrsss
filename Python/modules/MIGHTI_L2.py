@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 3 # Should only be incremented on major changes
-software_version_minor = 1 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 2 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -91,6 +91,8 @@ global_params['green'] = { # See above for descriptions
     'corr_notch_drift'    : True,
 }
 
+global_params['verbose'] = False # TODO TEMPORARY: for debugging memory issues in the SDC, set to True if this is called as a script
+
 
 #####################################################################################################
 
@@ -114,8 +116,7 @@ import matplotlib.pyplot as plt
 from matplotlib import dates
 from matplotlib.colors import LogNorm
 
-# Added in v1.19
-from mpl_toolkits.basemap import Basemap # For putting map on Tohban plots
+
 
 # Added in v1.31: pysatMagVect was renamed to OMMBV as of v0.5.1. MIGHTI code should accept versions 0.4.0 - 0.5.1
 # (Used for reporting winds in magnetic coordinates)
@@ -136,6 +137,23 @@ matplotlib.rcParams['ytick.labelsize'] = 'small'
 
 # Ignore errors having to do with NaN. These clog up the log file.
 np.seterr(invalid='ignore')
+
+
+# TODO: REMOVE. Used for debugging
+def mem_usage():
+    '''
+    Return a string that describes the memory usage.
+    '''
+    import psutil
+    vm = psutil.virtual_memory()
+    s = 'T-%.2fGB A-%.2fGB %.1f%%' % (vm.total/2.**30, vm.available/2.**30, vm.percent)
+    return s
+
+def timestamp():
+    '''
+    Return timestamp with optional mem usage string
+    '''
+    return datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' ' + mem_usage()
 
 
 ############################################################################################################
@@ -805,9 +823,13 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     ny,nx = np.shape(I)
     
     # Create the path matrix
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Creating observation matrix '% (timestamp()))
     D = create_observation_matrix(tang_alt, icon_alt, top_layer=top_layer, integration_order=integration_order, H=H)
     
     # Create local horizontal projection matrix (and set it to unity if we are to ignore this effect)
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Creating horz proj matrix '% (timestamp()))
     B = np.ones((ny,ny))
     if account_for_local_projection:
         B = create_local_projection_matrix(tang_alt, icon_alt)
@@ -821,6 +843,8 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     # This code implements Eq (9) in the MIGHTI L2 Space Science Reviews
     # paper (Harding et al. 2017).
 
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Beginning onion-peeling '% (timestamp()))
     for i in range(ny)[::-1]: # onion-peel from the top altitude down
         dii = D[i,i] # path length
         Li = I[i,:] # we will peel off the other layers from this row
@@ -862,6 +886,8 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     # (i.e., as if account_for_local_projection=False) to a very good approximation
     # (less than 1% error).
     
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Beginning uncertainty propagation '% (timestamp()))
     ### Step 0: Characterize L1 and L2.1 interferograms with a single amp/phase per row
     ph_L1 = np.zeros(ny)
     A_L1 = np.zeros(ny)
@@ -931,6 +957,9 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     # propagating uncertainty, but should now be corrected)
     amp_uncertainty[np.isnan(amp)] = np.nan
     phase_uncertainty[np.isnan(phase)] = np.nan
+    
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Returning from perform_inversion()'% (timestamp()))
             
     return Ip, phase, amp, phase_uncertainty, amp_uncertainty, chi2
 
@@ -1250,6 +1279,8 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
 
     '''
     
+    if global_params['verbose']:
+        print('%s:\t\t Opening %s' % (timestamp(), L1_fn.split('/')[-1]))
     f = netCDF4.Dataset(L1_fn)
     
     # Is this A or B? There's no variable that says it (yet?) so we have to infer it from the file name
@@ -1373,7 +1404,9 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     for v in L1_dict.keys():
         if isinstance(L1_dict[v], np.ma.masked_array):
             L1_dict[v] = L1_dict[v].filled(np.nan)
-    
+            
+    if global_params['verbose']:
+        print('%s:\t\t Closing %s' % (timestamp(), L1_fn.split('/')[-1]))
     f.close()
     
     return L1_dict
@@ -1674,6 +1707,7 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
             phot_thresh = 15.0 # ???
         else:
             phot_thresh = 10.0
+#     phot_thresh = -np.inf # TEMP TODO HACK
     quality_flags[:,6] = phot < phot_thresh
     
     #### S/C pointing is not stable -- Jitter is too large
@@ -2007,6 +2041,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     tmid     = L1_dict['time_start'] + (L1_dict['time_stop'] - L1_dict['time_start'])/2
     
     # Zero wind adjustment, if needed.
+    if global_params['verbose']:
+        print('%s:\t\t\t Adjusting zero wind (%s)'% (timestamp(), zero_wind_ref))
     ny0, nx0 = Iraw.shape
     if zero_wind_ref == 'external': 
         zero_wind_ref_str = 'external' # string indicator to save in L2.1 file.
@@ -2028,6 +2064,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
         
     # Notch drift correction, if needed
     if corr_notch_drift:
+        if global_params['verbose']:
+            print('%s:\t\t\t Adjusting for notch drift '% (timestamp()))
         dv = notch_drift_corr(tmid, emission_color, sensor) # [m/s]
         f = phase_to_wind_factor(np.mean(sigma_opd))
         pn = dv/f # [rad]
@@ -2036,10 +2074,14 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
 
     
     #### Remove Satellite Velocity
+    if global_params['verbose']:
+        print('%s:\t\t\t Removing S/C velocity '% (timestamp()))
     icon_latlonalt = np.array([icon_lat, icon_lon, icon_alt])
     I = remove_satellite_velocity(Iraw, icon_latlonalt, icon_velocity_vector, mighti_ecef_vectors, sigma_opd)
                          
     #### Bin data: average nearby rows together
+    if global_params['verbose']:
+        print('%s:\t\t\t Binning inputs '% (timestamp()))
     I        = bin_image(bin_size, I)
     I_dc     = bin_array(bin_size, I_dc)
     tang_lat = bin_array(bin_size, tang_lat)
@@ -2065,6 +2107,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                                    integration_order=integration_order)
     
     #### Onion-peel interferogram
+    if global_params['verbose']:
+        print('%s:\t\t\t Entering perform_inversion '% (timestamp()))
     Ip, phase, amp, phase_uncertainty, amp_uncertainty, chi2 = perform_inversion(I, tang_alt, icon_alt, 
                            I_phase_uncertainty, I_amp_uncertainty,
                            top_layer=top_layer, integration_order=integration_order,
@@ -2145,6 +2189,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     }
     
     #### Quality control and flagging
+    if global_params['verbose']:
+        print('%s:\t\t\t Computing quality flags '% (timestamp()))
     wind_quality, ver_quality, quality_flags = level21_quality(L1_quality_flags, L21_dict, L1_quality=L1_quality,
                                                                top_layer_thresh=top_layer_thresh, 
                                                                terminator_thresh = terminator_thresh)
@@ -2164,6 +2210,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     L21_dict['ver_error'][idx] = np.nan
     L21_dict['ver_dc'][idx] = np.nan
     
+    if global_params['verbose']:
+        print('%s:\t\t\t Returning from L2.1 core'% (timestamp()))
     return L21_dict
 
 
@@ -2424,7 +2472,13 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                      " * A calibration lamp is used for one orbit per day to assess the periodic thermal drift of MIGHTI. This is used to correct all other "
                      "observations that day. In v03 data, the thermal drift is ascribed entirely to interferometer drift, but some fraction is due to mechanical "
                      "drift. This will be corrected by using the observed drift of the fiducial notches. The error in the current approach is estimated to be less "
-                     "than 10 m/s.",
+                     "than 10 m/s.<br/>"
+                     " * During the one orbit per day when the calibration lamp is on, the wind data are noisier and a slight bias is evident. For this release, these "
+                     "orbits have been labeled with quality=0.5 (i.e., caution). Work is underway to remove this restriction.<br/>"
+                     " * The top 3-5 rows of the red channel are experiencing a long-term drift relative to other rows. The error is estimated to be zero on 2020-02-01 "
+                     "and approximately 50 m/s on 2020-05-15, for both MIGHTI-A and MIGHTI-B. Users should use caution with data above 273 km. This artifact has been "
+                     "identified as an uncorrected drift in the phase distortion and will be corrected in a future release.",
+                     
                     ]
 
         ncfile.setncattr_string('Text_Supplement',                text_supp)
@@ -3139,7 +3193,8 @@ def level21_preprocess_smooth_profile(L1_fns, emission_color, zero_wind_ref=None
         removes the altitude-dependent systematic errors.
         '''
         
-        print('%s: Running preprocessing %s %s' % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), emission_color, L1_fn.split('/')[-1]))
+        if global_params['verbose']:
+            print('%s: Running preprocessing %s %s' % (timestamp(), emission_color, L1_fn.split('/')[-1]))
         import sys
         sys.stdout.flush()
 
@@ -3277,7 +3332,8 @@ def level21_preprocess_smooth_profile(L1_fns, emission_color, zero_wind_ref=None
     L1_fns_day = []
     L1_fns_night = []
     for L1_fn in L1_fns:
-        print('%s: Sorting day/night %s' % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), L1_fn.split('/')[-1]))
+        if global_params['verbose']:
+            print('%s: Sorting day/night %s %s' % (timestamp(), emission_color, L1_fn.split('/')[-1]))
         import sys
         sys.stdout.flush()
         
@@ -3371,6 +3427,11 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
                                             failures occurred, this is an empty list.
 
     '''
+    
+    if global_params['verbose']:
+        print('\n%s: Starting Overall Run \n' % (timestamp()))
+    
+    
     # TODO: Delete these lines once systematic errors are fixed in L1.
     smooth_profile = global_params[emission_color]['smooth_profile'] # Should this be an input? If so it should flow to the file saving step
     if smooth_profile:
@@ -3391,7 +3452,9 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
     L21_dicts = []
     failure_msg = []
     for L1_fn in L1_fns:
-        print('%s: Running L2.1 %s %s' % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), emission_color, L1_fn.split('/')[-1]))
+        
+        if global_params['verbose']:
+            print('%s: Running L2.1 %s %s' % (timestamp(), emission_color, L1_fn.split('/')[-1]))
         import sys
         sys.stdout.flush()
         
@@ -3413,7 +3476,8 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
                     L1_dict['I_phase'] = (L1_dict['I_phase'].T - ph0_night).T
             
             # Perform L1 to L2.1 processing
-            print('%s: Calling level1_dict_to_level21_dict %s %s' % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), emission_color, L1_fn.split('/')[-1]))
+            if global_params['verbose']:
+                print('%s: \tCalling level1_dict_to_level21_dict %s %s' % (timestamp(), emission_color, L1_fn.split('/')[-1]))
             import sys
             sys.stdout.flush()
             
@@ -3435,6 +3499,8 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
     
     
     ########## Concatenate all of the L2.1 inversions into one dictionary and save ##############
+    if global_params['verbose']:
+        print('%s: \tCombining L2.1 dictionaries' % (timestamp()))
     L21_dict = combine_level21(L21_dicts)
     if smooth_profile:
         L21_dict['ph0_night'] = ph0_night
@@ -3455,7 +3521,11 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
         L21_dict['quality_flags'][j,:,9] = 1
     
     ########## Save L2.1 file
+    if global_params['verbose']:
+        print('%s: \tSaving L2.1 file' % (timestamp()))
     L21_fn = save_nc_level21(L21_path, L21_dict, data_revision)
+    if global_params['verbose']:
+        print('%s: \tCompleted level1_to_level21_without_info_file()' % (timestamp()))
 
     return L21_fn, failure_msg
     
@@ -3590,7 +3660,7 @@ def level1_to_level21(info_fn):
         if 'f107a' in gpi.variables.keys():
             f107a = gpi['f107a'][:]
         else:
-            print 'Cannot find f107a in provided GPI file. Using daily f107 instead'
+            print('Cannot find f107a in provided GPI file. Using daily f107 instead')
             f107a = gpi['f107d'][:]
         gpi.close()
     
@@ -4403,12 +4473,12 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
         dB = dlon_B_interp(loni).item()
         dlon = min(dA,dB)
         if np.isinf(dlon): # This should not happen
-            print 'WARNING: possibly invalid value longitude delta definition (dlon=%s)'%dlon
+            print('WARNING: possibly invalid value longitude delta definition (dlon=%s)'%dlon)
             # Should this crash, or should we let it fly? UPDATE 2020/04/01: Let it fly. This sometimes occurs if the edges
             # of the time sample occur near a maneuver, or for missing data from A or B.
 #             raise Exception('WARNING: invalid value longitude delta definition (dlon=%s)'%dlon) 
         if dlon <= 0.0: # This is a problem
-            print 'WARNING: invalid value longitude delta definition (dlon=%s)'%dlon
+            print('WARNING: invalid value longitude delta definition (dlon=%s)'%dlon)
             # Should this crash, or should we let it fly? I think we have to crash here since the longitude grid doesn't make sense.
             raise Exception('WARNING: invalid value longitude delta definition (dlon=%s)'%dlon) 
         if dlon > dlon_max: # if there are really large gaps (e.g., EUV calibration), then use a reasonable cadence
@@ -5047,7 +5117,12 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
          " * A calibration lamp is used for one orbit per day to assess the periodic thermal drift of MIGHTI. This is used to correct all other "
          "observations that day. In v03 data, the thermal drift is ascribed entirely to interferometer drift, but some fraction is due to mechanical "
          "drift. This will be corrected by using the observed drift of the fiducial notches. The error in the current approach is estimated to be less "
-         "than 10 m/s.",
+         "than 10 m/s.<br/>"
+         " * During the one orbit per day when the calibration lamp is on, the wind data are noisier and a slight bias is evident. For this release, these "
+         "orbits have been labeled with quality=0.5 (i.e., caution). Work is underway to remove this restriction.<br/>"
+         " * The top 3-5 rows of the red channel are experiencing a long-term drift relative to other rows. The error is estimated to be zero on 2020-02-01 "
+         "and approximately 50 m/s on 2020-05-15, for both MIGHTI-A and MIGHTI-B. Users should use caution with data above 273 km. This artifact has been "
+         "identified as an uncorrected drift in the phase distortion and will be corrected in a future release.",
         ])
         ncfile.setncattr_string('Time_Resolution',                '30 - 60 seconds')
         ncfile.setncattr_string('Title',                          'ICON MIGHTI Cardinal Vector Winds (DP 2.2)')
@@ -6112,7 +6187,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
     
       *  L21_pngs     --TYPE:list of str,  Full path to the saved png files
     '''
-
+    from mpl_toolkits.basemap import Basemap # For putting map on Tohban plots
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     from matplotlib.colors import LinearSegmentedColormap
 
@@ -6178,7 +6253,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
     for n, (i1, i2) in enumerate(zip(istart, istop)):
 
         if i2-i1 <= 1: # corner case: skip this plot
-            print 'Skipping plot %i for %s\n\t(Can\'t make plot with only one time sample)' % (n, L21_fn)
+            print('Skipping plot %i for %s\n\t(Can\'t make plot with only one time sample)' % (n, L21_fn))
             continue
         
         # pcolormesh wants the coordinates of the corners (not the middle) of each pixel
@@ -6304,7 +6379,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
             m.drawcoastlines(linewidth=0.5);
             m.fillcontinents()
         except Exception as e:
-            print 'Error creating map: %s' % e
+            print('Error creating map: %s' % e)
 
         ############ Quality flags ############
         # There isn't enough room to plot all the flags, so we'll plot the most important ones (subject to change)
@@ -6462,6 +6537,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
       *  L22_pngs     --TYPE:list of str,  Full path to the saved png files
       
     '''
+    from mpl_toolkits.basemap import Basemap # For putting map on Tohban plots
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     from matplotlib.colors import LinearSegmentedColormap
 
@@ -6642,7 +6718,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
             m.drawcoastlines(linewidth=0.5);
             m.fillcontinents()
         except Exception as e:
-            print 'Error creating map: %s' % e
+            print('Error creating map: %s' % e)
 
         ############ Quality flags derived at L2.2 ############
         # There isn't enough room to plot all the flags, so we'll plot the most important ones (subject to change)
@@ -7199,11 +7275,13 @@ def main(argv):
         argv --TYPE:str. The command line arguments, provided by sys.argv.
         
     '''
+    global_params['verbose'] = True # TODO: TEMPORARY FOR DEBUGGING
+    
     info_fn = './Input/Information.TXT'
     
     usagestr = 'usage: python MIGHTI_L2.py -L2.x  (where x is 1 or 2)'
     if len(argv)!=2:
-        print usagestr
+        print(usagestr)
         sys.exit(1)
         
     plt.switch_backend('Agg') # to generate pngs without opening windows
@@ -7216,12 +7294,12 @@ def main(argv):
     elif argv[1] == '-L2.2':
         err = level21_to_level22(info_fn)
     else:
-        print usagestr
+        print(usagestr)
         sys.exit(1)
     
     # If the processing had a problem, print it and exit with error
     if err:
-        print err
+        print(err)
         sys.exit(1)
     else:
         sys.exit(0)
