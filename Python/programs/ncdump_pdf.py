@@ -1,11 +1,14 @@
 # This script reads a netCDF4 file and outputs a formatted PDF with a description of the 
 # data product, dimensions, and variables. All information comes from metadata in the 
-# netCDF4 file. Only Python 2.7 is supported. To run this script:
+# netCDF4 file. To run this script:
 #
 # $ python ncdump_pdf.py /path/to/ICON_L2_xxxx.NC
 #
 # A pdf will be created in the current working directory, with a name that is generated
 # from the NC filename.
+#
+# Author: Brian Harding, bharding@ssl.berkeley.edu
+#         Updated 2020 Jul 15 by Colin Triplett for Python 3 compatibility.
 
 import numpy as np
 import reportlab
@@ -25,7 +28,7 @@ PARAG_LIMIT = 17 # Limit the number of paragraphs in Var_Notes, otherwise report
 ##### Define input and output filenames
 usagestr = 'usage: python ncdump_pdf.py /path/to/ICON_L2_xxxx.NC'
 if len(sys.argv)!=2:
-    print usagestr
+    print( usagestr )
     sys.exit(1)
 fn_in = sys.argv[1]
 
@@ -43,7 +46,7 @@ def isvalid(x):
     - something else that isn't NaN
     '''
     # isnan(s) results in an error if s is a string, so:
-    if isinstance(x,(str, unicode)):
+    if isinstance(x,(str, 'unicode')):
         return True
     if hasattr(x, '__len__'):
         return True
@@ -138,11 +141,11 @@ for var_type in v:
 
 
 #### Convert Var_Notes and Text_Supplement to multi-strings, if they are not already.
-if isinstance(a['text_supplement'], (str, unicode)):
+if isinstance(a['text_supplement'], (str, 'unicode')):
     a['text_supplement'] = [a['text_supplement']]
 for var_type in v:
     for var_dict in v[var_type]:
-        if isinstance(var_dict['var_notes'], (str,unicode)):
+        if isinstance(var_dict['var_notes'], (str,'unicode')):
             var_dict['var_notes'] = [var_dict['var_notes']]
 
 #### Convert new lines to line breaks
@@ -158,7 +161,7 @@ for var_type in v:
     for var in v[var_type]:
         nparag = len(var['var_notes'])
         if nparag > PARAG_LIMIT:
-            print 'WARNING: Truncating Var_Notes for %s' % (var['name'])
+            print( 'WARNING: Truncating Var_Notes for %s' % (var['name']) )
             var['var_notes'] = var['var_notes'][:PARAG_LIMIT]
             var['var_notes'].append('NOTE: Var_Notes truncated. See NC file for full description.')
             
@@ -336,4 +339,4 @@ Story.append(Spacer(1, 12))
 doc.title = a['description']
 doc.build(Story)
 
-print 'Created %s' % fn_out
+print( 'Created %s' % fn_out )
