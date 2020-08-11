@@ -54,7 +54,7 @@ def activeinstruments():
     # 2. for remote2 server for emailing person of interest.
 
     # Email list
-    UIemail = ['grawe2@illinois.edu','jmakela@illinois.edu']
+    UIemail = ['lnav@illinois.edu','grawe2@illinois.edu','jmakela@illinois.edu']
     BZemail = ['rburiti.ufcg@gmail.com']
     AKemail = []
     MOemail = ['zouhair@uca.ac.ma']
@@ -158,8 +158,8 @@ def activeinstruments():
     #code['kwj']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.0.2/log.txt','email':UIemail}
    
     # Leo FPI
-    code['leo']['fpi']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
-    #code['leo']['bwc']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/meriwej/Documents/ClarityII/','email':UIemail}
+    code['leo']['fpi']['80'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
+    #code['leo']['bwc']['80'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/meriwej/Documents/ClarityII/','email':UIemail}
 
     # Last index is for remote2 admin related issues (not site based)
     code['ADMIN']={'email':['jmakela@illinois.edu']}
