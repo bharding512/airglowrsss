@@ -8,7 +8,7 @@
 # from the NC filename.
 #
 # Author: Brian Harding, bharding@ssl.berkeley.edu
-#         Updated 2020 Jul 15 by Colin Triplett for Python 3 compatibility.
+#         Updated 2020 Jul 15 by Colin Triplett for Python 3.
 
 import numpy as np
 import reportlab
@@ -46,7 +46,8 @@ def isvalid(x):
     - something else that isn't NaN
     '''
     # isnan(s) results in an error if s is a string, so:
-    if isinstance(x,(str, 'unicode')):
+#     if isinstance(x,(str, 'unicode')):
+    if isinstance(x, str): # In Python3, all strings are unicode.
         return True
     if hasattr(x, '__len__'):
         return True
@@ -141,20 +142,21 @@ for var_type in v:
 
 
 #### Convert Var_Notes and Text_Supplement to multi-strings, if they are not already.
-if isinstance(a['text_supplement'], (str, 'unicode')):
+if isinstance(a['text_supplement'], str):
     a['text_supplement'] = [a['text_supplement']]
 for var_type in v:
     for var_dict in v[var_type]:
-        if isinstance(var_dict['var_notes'], (str,'unicode')):
+        if isinstance(var_dict['var_notes'], str):
             var_dict['var_notes'] = [var_dict['var_notes']]
 
+#### BJH 2020 Aug 17: I enabled these lines to run the L1 FUV files. I'm not sure if this will break other products or not.
 #### Convert new lines to line breaks
-#for i in range(len(a['Text_Supplement'])):
-#    a['Text_Supplement'][i] = a['Text_Supplement'][i].replace('\n','<br />\n')
-#for var_type in v:
-#    for var_dict in v[var_type]:
-#        for i in range(len(var_dict['Var_Notes'])):
-#            var_dict['Var_Notes'][i] = var_dict['Var_Notes'][i].replace('\n','<br />\n')
+for i in range(len(a['text_supplement'])):
+    a['text_supplement'][i] = a['text_supplement'][i].replace('\n','<br />\n')
+for var_type in v:
+    for var_dict in v[var_type]:
+        for i in range(len(var_dict['var_notes'])):
+            var_dict['var_notes'][i] = var_dict['var_notes'][i].replace('\n','<br />\n')
             
 #### If Var_Notes are too long, truncate it so the pdf can be created.
 for var_type in v:
