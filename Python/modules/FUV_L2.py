@@ -13,7 +13,7 @@ Todo:
 # These need to be manually changed, when necessary.
 # NOTE: When the major version is updated, you should change the History global attribute
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 11 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 12 # [0-99], increment on ALL published changes, resetting when the major version changes
 software_version = float(software_version_major)+software_version_minor/1000.
 ####################################################################################################
 
@@ -1102,7 +1102,7 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
     ncfile.Generated_By =                   'ICON SDC > ICON UIUC FUV L2.5 Processor v%.2f, J. J. Makela, D. Iliou' % software_version
     ncfile.Generation_Date =                t_file.strftime('%Y%m%d')
     ncfile.History =                        'Version %i, %s, %s, ' % (data_version, user_name, t_file.strftime('%Y-%m-%dT%H:%M:%S')) +\
-                                            'FUV L2.5 Processor v%.2f ' % software_version # TODO: Tori suggested we make this a history
+                                            'FUV L2.5 Processor v%.3f ' % software_version # TODO: Tori suggested we make this a history
                                                                                               # of the software versions instead of data versions
     ncfile.HTTP_LINK =                      'http://icon.ssl.berkeley.edu/Instruments/FUV'
     ncfile.Instrument =                     'FUV'
@@ -1645,6 +1645,9 @@ def Get_lvl2_5_product(file_input = None,
         # l1 quality flag - use if 0(LVLH) or 1(R-LVLH)
         l1_quality = data.variables['ICON_L1_FUVA_SWP_Quality_Flag'][:]
 
+        # FUV turret angle
+        turret_angle = data.variables['ICON_L1_FUV_Turret'][:]
+
         # Get science mode
         FUV_mode = data.variables['ICON_L1_FUV_Mode'][:]
 
@@ -1704,8 +1707,9 @@ def Get_lvl2_5_product(file_input = None,
                     # We are in nighttime science mode, process the data
                     # Save the index of this measurement
                     night_ind.append(ind)
-                    if not (l1_qual==0 or l1_qual==1):
-                        inv_quality, quality_flag = quality_check(l1_quality=l1_qual)
+                    if ((l1_qual!=0 and l1_qual!=1) or abs(turret_angle[ind])>1):
+                        inv_quality, quality_flag = quality_check(
+                            l1_quality=l1_qual, turret_angle=turret_angle[ind])
                         FUV_quality[ind,stripe] = inv_quality
                         FUV_quality_flag[ind,stripe] = quality_flag
                         continue
@@ -2005,7 +2009,8 @@ def nan_checker(arr):
     else:
         return np.arange(len(arr)) # if not, don't do any operation
 
-def quality_check(bright=None, Ne=None, hmF2=None, l1_quality=None,  inv_error=0):
+def quality_check(bright=None, Ne=None, hmF2=None, l1_quality=None, inv_error=0,
+                    turret_angle=0):
     '''
     Checks a couple of variables and outputs an inversion quality together
     with a quality code that describes quality conditions.
@@ -2014,6 +2019,7 @@ def quality_check(bright=None, Ne=None, hmF2=None, l1_quality=None,  inv_error=0
         Ne - retrieved O+ density profile
         inv_error - Inversion error (binary variable: 1/0)
         l1_quality - quality flag for level 1 brightness profiles
+        turret_angle - angle of the turret (float)
     OUTPUTS:
         inv_quality - number that indicates the quality of inversion [0, 0.5, 1]
             1: input data and retrieved data look nominal
@@ -2033,7 +2039,7 @@ def quality_check(bright=None, Ne=None, hmF2=None, l1_quality=None,  inv_error=0
         if inv_error is 1:
             binary_code[0] = 1
         # Digit 1: Insufficient L1 quality
-        if not (l1_quality==0 or l1_quality==1):
+        if ((l1_quality!=0 and l1_quality!=1) or abs(turret_angle)>1):
             binary_code[1] = 1
         # Digit 2: Very low input signal level
         if (bright is not None) and (np.size(bright)>10):
