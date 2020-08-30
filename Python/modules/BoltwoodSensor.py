@@ -2,8 +2,56 @@
 import numpy as np
 from datetime import datetime, timedelta
 #import matplotlib.pyplot as plt
-import pytz
+import pytz,os
 from pytz import timezone
+
+def SkyAlertLog_format(file, tz):
+    """
+    Parser for SkyAlert Cloud Sensors log files
+    
+    INPUT:
+        file : the name of the file to be parsed
+    
+    OUTPUT:
+        dns : array of datetime object of the parsed file
+        sky_temp : array of sky temperatures
+        amb_temp : array of ambient temperatures
+    
+    Notes:
+        Full format description in https://interactiveastronomy.com/skyalerthelp/WeatherDataFile.html
+        Example:
+        "36)  2020-08-29 20:41:41.00 C K -9.1   21.2  21      0      59  12.6   000 0 0 00020 044072.86229 1 1 1 1 0 0   "
+        
+        BoltWood Sensor provides with SkyT=Sky-Ambient Temperature (https://diffractionlimited.com/wp-content/uploads/2016/04/Cloud-SensorII-Users-Manual.pdf)
+        so we do the same here.
+        
+        Still not sure if these conditions are also reached on this sensor, not mentioned on literature so probably not
+            sky_temp[sky_temp == -998] = 0 # replace wet values with 0 (cloudy)
+            sky_temp[sky_temp == -999] = float('nan') # replace bad values with nan
+    History:
+        8/30/20 : Written by Luis Navarro (lnav@illinois.edu)
+    """
+
+    # Get the local timezone
+    local = pytz.timezone(tz)
+
+    if not os.path.exists(file):
+        print file, 'does not exist'
+        return [],[],[]
+    
+    def parser(row):
+        words=row.split()
+        dt=datetime.strptime(words[1]+"-"+words[2][:-3],"%Y-%m-%d-%H:%M:%S")
+        dt = local.localize(dt)
+        SkyTemp=np.float(words[5])
+        AmbientTemp=np.float(words[6])
+        SkyTemp_BoltWood=SkyTemp-AmbientTemp
+        return [dt,SkyTemp_BoltWood,AmbientTemp]
+    
+    lines=open(file,'r').readlines()
+    data=np.array(map(parser,lines))
+    
+    return data[:,0],data[:,1],data[:,2]
 
 def ReadTempLog_newformat(file, tz):
     """
@@ -242,28 +290,47 @@ def ReadTempLog_oldformat(file,tz):
 
     return dns, sky_temp, amb_temp
 
-def DetermineIfOldFormat(file):
+def DetermineFormat(file):
+    """
+    History:
+        Written by Timothy Duly (duly2@illinois.edu)
+        08/29/2020 Modified to include Sky Alert logs format files by L. Navarro (lnav@illinois.edu)
+    """
+    _format="new Boltwood format"
+    
     fid = open(file,'r')
-    old = 0
     for line in fid:
         # this messy string is only in the old format:
         if "FvrSkyTemAmbBlkHeaFlgC1sC1tC1aC1bC2sC2tC2aC2bC3sC3tC3aC3bTetAmtRqtSmtDitVctSeqChk" in line:
-            old = 1
-            return old
-    return old
+            _format="old BoltWood format"
+            break
+        if ")" in line[:5]:
+            _format="Sky Alert format"
+            break
+    fid.close()
+    
+    return _format
 
 def ReadTempLog(file,tz):
+    """
+    History:
+        Written by Timothy Duly (duly2@illinois.edu)
+        08/29/2020 Modified to include Sky Alert logs format files by L. Navarro (lnav@illinois.edu)
+    """
     try:
-	with open(file) as f: pass
+        with open(file) as f: pass
     except:
-    	return ([],[],[])
+        return ([],[],[])
 	
-    if DetermineIfOldFormat(file):
+    format=DetermineFormat(file)
+    if "old" in format.lower():
         #print "old format"
         dns, sky_temp, amb_temp = ReadTempLog_oldformat(file,tz)
-    else:
+    elif "new" in format.lower():
         #print "new format"
         dns, sky_temp, amb_temp = ReadTempLog_newformat(file,tz)
+    elif "sky" in format.lower():
+        dns, sky_temp, amb_temp = SkyAlertLog_format(file,tz)
     return dns, sky_temp, amb_temp
 
 
@@ -304,13 +371,20 @@ if __name__ == '__main__':
     #file2 = "/Users/duly/data/FPIData/temps/Cloud_UAO_20120811.txt"
     #dns, sky_temp, amb_temp = ReadTempLog(file2,'US/Eastern')
 
-    file1 = "/data/FPIData/temps/PARCloud.txt"
-    file2 = "/data/FPIData/temps/EKUCloud.txt"
-
-    dns1, sky_temp1, amb_temp1 = ReadRawTempLog(file1,'US/Eastern')
-    dns2, sky_temp2, amb_temp2 = ReadRawTempLog(file2,'US/Eastern')
+#     file1 = "/data/FPIData/temps/PARCloud.txt"
+#     file2 = "/data/FPIData/temps/EKUCloud.txt"
+    
+#     dns1, sky_temp1, amb_temp1 = ReadRawTempLog(file1,'US/Eastern')
+#     dns2, sky_temp2, amb_temp2 = ReadRawTempLog(file2,'US/Eastern')
 
     #data = ReadRawTempLog(file1,'US/Eastern')
+    
+    
+    file1 = "/Users/land/Desktop/08-29-2020.txt"
+    dns2, sky_temp2, amb_temp2 = ReadTempLog(file1,'US/Eastern')
+    print dns2
+    print sky_temp2
+    print amb_temp2
 
 
 

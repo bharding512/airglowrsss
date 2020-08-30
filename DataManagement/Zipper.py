@@ -64,7 +64,8 @@ def activeinstruments():
 
     code['uao']['fpi']['05'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
     #code['uao']['sky']['01'] = {'send_dir':'D:/Sending/', 'local_dir':'D:/Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
-    code['uao']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/MiniME/Documents/ClarityII/','email':UIemail}
+    #code['uao']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/MiniME/Documents/ClarityII/','email':UIemail}
+    code['uao']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/MiniME/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
     code['uao']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.0.2/log.txt','email':UIemail}
 
     # EKU is being moved as of 2-17-2016
@@ -299,12 +300,17 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
         if 'bwc' == instr:
             name = "%04s-%02s-%02s.txt" %(year,month,day)
             filename = "Cloud_%s_%04s%02s%02s.txt" %(site,year,month,day)
+            # try SkyAlert
+            if "SkyAlert" in code[site][instr][num]['local_dir']:
+                name = "/Weatherdata Files/%02s-%02s-%04s.txt" %(month,day,year)
             if os.path.isfile(code[site][instr][num]['local_dir']+name):
                 #os.rename(code[site][instr][num]['local_dir']+name,code[site][instr][num]['send_dir']+filename)
                 shutil.copy2(code[site][instr][num]['local_dir']+name,code[site][instr][num]['send_dir']+filename)
                 # If Downloading yesterday get todays partial file too.
                 if prior == 1:
                     name = "%04s-%02s-%02s.txt" %(tyear,tmonth,tday)
+                    if "SkyAlert" in code[site][instr][num]['local_dir']:
+                        name = "weatherdatafiles.txt"
                     filename = "Cloud_%s_%04s%02s%02s.txt" %(site,tyear,tmonth,tday)
                     shutil.copy2(code[site][instr][num]['local_dir']+name,code[site][instr][num]['send_dir']+filename)
             else:
