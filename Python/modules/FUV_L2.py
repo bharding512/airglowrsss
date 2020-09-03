@@ -13,7 +13,7 @@ Todo:
 # These need to be manually changed, when necessary.
 # NOTE: When the major version is updated, you should change the History global attribute
 software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 12 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 13 # [0-99], increment on ALL published changes, resetting when the major version changes
 software_version = float(software_version_major)+software_version_minor/1000.
 ####################################################################################################
 
@@ -2227,9 +2227,9 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
                 plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
                 plt.gca().xaxis.set_major_locator(mdates.MinuteLocator(interval=10))
                 axes[4].set_title('Inversion Quality')
-                axes[4].set_xlabel('Local Time\n LON\n LAT')
+                axes[4].set_xlabel('UTC Time\n Local Time\n LON\n LAT')
                 axes[4].xaxis.set_label_coords(-0.10, -0.060)
-                lgd = plt.legend(ncol=6,numpoints=1, bbox_to_anchor=(0.7, -0.43))
+                lgd = plt.legend(ncol=6,numpoints=1, bbox_to_anchor=(0.7, -0.49))
                 fig.canvas.draw()
                 labels_x = [item.get_text() for item in axes[4].get_xticklabels()]
 
@@ -2244,14 +2244,14 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
                     if Op_lon.mask.size==1:
                         if Op_lon.mask==False:
                             locstr = u'{:02d}:{:02d}'.format(dn2_hour[orbit_ind[tick_ind]], dn2_min[orbit_ind[tick_ind]])
-                            labels_x2.append('{}\n{:.0f}\n{:.0f}'.format(locstr, lon0, lat0))
+                            labels_x2.append('{}\n{}\n{:.0f}\n{:.0f}'.format(lbl, locstr, lon0, lat0))
                         else:
-                            labels_x2.append('')
+                            labels_x2.append(lbl)
                     elif Op_lon.mask[orbit_ind[tick_ind]]==False:
                             locstr = u'{:02d}:{:02d}'.format(dn2_hour[orbit_ind[tick_ind]], dn2_min[orbit_ind[tick_ind]])
-                            labels_x2.append('{}\n{:.0f}\n{:.0f}'.format(locstr, lon0, lat0))
+                            labels_x2.append('{}\n{}\n{:.0f}\n{:.0f}'.format(lbl, locstr, lon0, lat0))
                     else:
-                        labels_x2.append('')
+                        labels_x2.append(lbl)
 
                 axes[4].set_xticklabels(labels_x2)
 
@@ -2262,7 +2262,7 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
                                  ha='right', va='top')
 
                 axes[4].annotate('Stripe Colors:',
-                                 xy=(0, 0.02), xytext=(0, 10),
+                                 xy=(0, 0.017), xytext=(0, 10),
                                  xycoords=('axes fraction', 'figure fraction'),
                                  textcoords='offset points',
                                  ha='right', va='top')
