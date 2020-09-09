@@ -8,7 +8,8 @@
 # from the NC filename.
 #
 # Author: Brian Harding, bharding@ssl.berkeley.edu
-#         Updated 2020 Jul 15 by Colin Triplett for Python 3.
+#         Updated 2020 Jul 15 by Colin Triplett for Python 3 -- Python 2 is no longer supported.
+#         Updated 2020 Sep  9 by Brian Harding to add History section.
 
 import numpy as np
 import reportlab
@@ -112,7 +113,7 @@ except:
     raise
     
 #### Global attributes which are required
-req_a = ['text_supplement','description','data_type','software_version','acknowledgement']
+req_a = ['text_supplement','description','data_type','software_version','acknowledgement','history']
 for attr in req_a:
     if attr not in a.keys() or not isvalid(a[attr]):
         a[attr] = 'MISSING %s' % attr
@@ -141,18 +142,22 @@ for var_type in v:
                 var_dict[attr] = ', '.join(var_dict[attr])
 
 
-#### Convert Var_Notes and Text_Supplement to multi-strings, if they are not already.
+#### Convert History, Var_Notes, and Text_Supplement to multi-strings, if they are not already.
 if isinstance(a['text_supplement'], str):
     a['text_supplement'] = [a['text_supplement']]
+if isinstance(a['history'], str):
+    a['history'] = [a['history']]
 for var_type in v:
     for var_dict in v[var_type]:
         if isinstance(var_dict['var_notes'], str):
             var_dict['var_notes'] = [var_dict['var_notes']]
 
 #### BJH 2020 Aug 17: I enabled these lines to run the L1 FUV files. I'm not sure if this will break other products or not.
-#### Convert new lines to line breaks
+#### Convert new lines to line breaks in History, Text_Supplement, and Var_Notes
 for i in range(len(a['text_supplement'])):
     a['text_supplement'][i] = a['text_supplement'][i].replace('\n','<br />\n')
+for i in range(len(a['history'])):
+    a['history'][i] = a['history'][i].replace('\n','<br />\n')
 for var_type in v:
     for var_dict in v[var_type]:
         for i in range(len(var_dict['var_notes'])):
@@ -210,18 +215,28 @@ for text in a['text_supplement']:
     Story.append(Spacer(1, 12))
 
 
+####################### History ##############################
+text1 = 'History'
+Story.append(Paragraph(text1, styles["Heading1"]))
+Story.append(Spacer(1,6))
 
-# Introduction
-text = """NetCDF files contain <b>variables</b> and the <b>dimensions</b> over which 
-those variables are defined. First, the dimensions are defined, then all variables in the 
-file are described."""
-Story.append(Paragraph(text, styles["Justify"]))
-Story.append(Spacer(1, 12))
+# One paragraph per string
+for text in a['history']:
+    Story.append(Paragraph(text, styles["Justify"]))
+    Story.append(Spacer(1, 12))
 
 ####################### Dimensions ##############################
 text1 = 'Dimensions'
 Story.append(Paragraph(text1, styles["Heading1"]))
 Story.append(Spacer(1,6))
+
+# Segue to Dimesions/variables section
+text = """NetCDF files contain <b>variables</b> and the <b>dimensions</b> over which 
+those variables are defined. First, the dimensions are defined, then all variables in the 
+file are described."""
+
+Story.append(Paragraph(text, styles["Justify"]))
+Story.append(Spacer(1, 12))
 
 text = """
 The dimensions used by the variables in this file are given below, along with nominal sizes. Note that the size 
