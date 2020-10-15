@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 3 # Should only be incremented on major changes
-software_version_minor = 2 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 3 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -92,6 +92,7 @@ global_params['green'] = { # See above for descriptions
 }
 
 global_params['verbose'] = False # TODO TEMPORARY: for debugging memory issues in the SDC, set to True if this is called as a script
+global_params['reject_sun_contam'] = False # TODO TEMPORARY: for temporary use until v04. Set to True if this is called as a script (like in the SDC).
 
 
 #####################################################################################################
@@ -524,8 +525,9 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', H=26., integr
                                           
     OUTPUTS:
     
-      *  D          -- TYPE:array(ny,ny), UNITS:km.   Observation matrix. Also called the "path matrix"
-                                                      or "distance matrix"
+      *  D          -- TYPE:array(ny,ny), UNITS:km/10.   Observation matrix. Also called the "path matrix"
+                                                         or "distance matrix". The factor of 10 is to account
+                                                         for the conversion from VER [ph/cm^3/s] to Rayleighs.
                                                       
     '''
     
@@ -1578,7 +1580,14 @@ def notch_drift_corr(tmid, emission_color, sensor):
     '''
     Return the velocity to subtract from the level 1 data to account for the fact that notch drift was
     not accounted for at Level 1. This is a pre-determined function based on fitting data from Dec 6, 2019 to
-    May 1, 2020. It was chosen to make the red and green channels agree, on average, during this period.
+    Sep 4, 2020. It was chosen to make the red and green channels agree, on average, in the ~160-190 km altitude
+    range during the day. It is assumed to be the same at night.
+    
+    In v3.03 this was updated from a linear trend to a more complicated function that captures the settling
+    post-May-2020, as well as the precession cycle sinusoid.
+    
+    When v4.00 is used, this function should probably be removed entirely, as this correction will be implemented by
+    the Level 1 notch drift code.
     
     INPUTS:
       * tmid           -- TYPE:datetime. Time for correction
@@ -1589,28 +1598,76 @@ def notch_drift_corr(tmid, emission_color, sensor):
     
       * dv            -- TYPE:array(ny). The velocity to subtract from L1 data.
       
-    '''    
+    '''
+    
+    def softplus(p, t):
+        '''
+        f(t) = p0 * log( 1 + exp(-p1*(t-p2))) + p3.
+
+        t = same units as p2, and reciprocal units of p1. Presumably it's days
+
+        When t << p2, then it's a linear function: -p1*p0*t + p0*p1*p2*p3
+        When t >> p2, then it's a constant: p3
+
+            _ _ _ _ _ _ _ _ 
+          /
+         /
+        /
+        '''
+
+        return p[0] * np.log( 1 + np.exp(-p[1]*(t-p[2]))) + p[3]
+    
+    def softplus_and_sin(p, t):
+        '''
+        softplus with sinusoidal variation added on top.
+
+        p[4] = multiplier on cos term
+        p[5] = multiplier on sin term
+        p[6] = period (same units as t)
+        '''
+        y = softplus(p[:4], t)
+        y += p[4]*np.cos(2*np.pi*(t-p[2])/p[6]) + p[5]*np.sin(2*np.pi*(t-p[2])/p[6]) 
+
+        return y
+    
     assert sensor in ['A', 'B'], "ERROR: sensor not recognized"
     assert emission_color in ['red', 'green'], "ERROR: emission_color not recognized"
     
+    tref = datetime(2019,12,6) # arbitrary reference. p[2] defines the transition time
+    ag = 168. # m/s/pixel, green, from John Harlander
+    ar = -98. # m/s/pixel, red, from John Harlander
+    
+    tdays = (tmid-tref).total_seconds()/86400.
+    
     if sensor == 'A':
-        c0 = 1.526e-8 # pixels/second
-        t0 = datetime(2020, 1, 25, 4, 10, 16)
+        p = np.array([-7.53838867e-02,  5.40049279e+00,  1.31429246e+02,  3.48291809e+01,
+                       8.96260246e+00, -6.01542219e+00,  4.80129840e+01])
     elif sensor == 'B':
-        c0 = 1.485e-8
-        t0 = datetime(2020, 2, 1, 9, 43, 19)
-    
+        p = np.array([-6.49071134e-02,  5.25828861e+00,  1.34983585e+02,  2.58346396e+01,
+                       1.53315846e+00, -2.89988797e+00,  4.86377236e+01])
     if emission_color == 'green':
-        a0 = 168. # m/s/pixel
+        a0 = ag
     elif emission_color == 'red':
-        a0 = -98. # m/s/pixel
+        a0 = ar
     
-    dx = c0 * (tmid - t0).total_seconds() # Linear fit, [pixels]
-    dv = a0 * dx # m/s
+    # Compute the "green - red" difference for this day, using the fitted formula
+    vdeltagr = softplus_and_sin(p, tdays) # green minus red on this day
+    # Apply the right amount to red or green
+    dv = a0/(ag-ar) * vdeltagr
+    
+    # Formulation, with verification:
+    # dvg - dvr = vdeltagr
+    # Apply correction:
+    #        |value to subtract |          |value to subtract |
+    # (dvg - ag/(ag+ar)*vdeltagr) - (dvr - ar/(ag+ar)*vdeltagr)
+    # (dvg - ag/(ag+ar)*(dvg - dvr)) - (dvr - ar/(ag+ar)*(dvg-dvr))
+    # dvg - dvr - (ag + ar)*(1/(ag+ar)) * (dvg - dvr) = 0 (verified)
+    
 
     return dv
-        
     
+
+
 
 
 def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0, terminator_thresh = 0.0):
@@ -2039,7 +2096,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     tang_lat = (L1_dict['tang_lat_start'] + L1_dict['tang_lat_stop'])/2
     tang_lon = circular_mean(L1_dict['tang_lon_start'], L1_dict['tang_lon_stop'])
     tmid     = L1_dict['time_start'] + (L1_dict['time_stop'] - L1_dict['time_start'])/2
-    
+        
     # Zero wind adjustment, if needed.
     if global_params['verbose']:
         print('%s:\t\t\t Adjusting zero wind (%s)'% (timestamp(), zero_wind_ref))
@@ -3430,16 +3487,30 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
     
     if global_params['verbose']:
         print('\n%s: Starting Overall Run \n' % (timestamp()))
-    
-    
-    # TODO: Delete these lines once systematic errors are fixed in L1.
-    smooth_profile = global_params[emission_color]['smooth_profile'] # Should this be an input? If so it should flow to the file saving step
-    if smooth_profile:
-        ph0_day, ph0_night = level21_preprocess_smooth_profile(L1_fns, emission_color, zero_wind_ref=zero_wind_ref)
-    
+        
     assert len(L1_fns)>0, "No files specified."
     x = [gpi_yearday is None, gpi_f107 is None, gpi_f107a is None, gpi_ap is None, gpi_ap3 is None]
     assert (all(x)) or (not any(x)), "All GPI inputs must be specified, or all must be None."
+    
+    # TODO: Delete these lines once sun/moon contamination has been addressed in L1 (presumably v04)
+    # List from JIRA ICNSDCPL-355 from John Harlander. Here, only sun contamination is addressed since:
+    #  1. that causes a bigger artifact, lasting the whole day
+    #  2. It won't happen again until summer 2021, at which point v04 will be out. Attempting to account
+    #     for the moon here would surely miss some dates in October, November, etc.
+    if global_params['reject_sun_contam']:
+        # Read the last file and determine day of year
+        L1d = level1_to_dict(L1_fns[-1], 'green')
+        t = L1d['time_start']
+        doy = (t - datetime(t.year, 1, 1)).days + 1
+        if (t.year == 2020) and (doy in [144, 145, 147, 148, 149, 153, 154, 155, 156, 157, 158, 159, 190,\
+                   191, 192, 193, 194, 200, 201, 202, 203, 204, 205]):
+            raise Exception('This day is being manually rejected due to sun contamination (ICNSDCPL-355)') 
+    
+    # TODO: Delete these lines once systematic errors are fixed in L1 (presumably v04)
+    smooth_profile = global_params[emission_color]['smooth_profile'] # Should this be an input? If so it should flow to the file saving step
+    if smooth_profile:
+        ph0_day, ph0_night = level21_preprocess_smooth_profile(L1_fns, emission_color, zero_wind_ref=zero_wind_ref)
+
     
     L1_fns.sort() # To make sure it's in the right time order
         
@@ -4190,7 +4261,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                                                            * 12: (From L1 B) SNR too low to reliably perform L1 processing
                                                                            * 13: (From L1 B) Proximity to South Atlantic Anomaly
                                                                            * 14: (From L1 B) Bad calibration 
-                                                                           * 15: (From L1 B) Unused
+                                                                           * 15: (From L1 B) Calibration lamps are on
                                                                            * 16: (From L1 B) Unused
                                                                            * 17: (From L1 B) Unused
                                                                            * 18: (From L2.1 B) SNR too low after inversion
@@ -7276,6 +7347,7 @@ def main(argv):
         
     '''
     global_params['verbose'] = True # TODO: TEMPORARY FOR DEBUGGING
+    global_params['reject_sun_contam'] = True # TODO: Temporary until v04
     
     info_fn = './Input/Information.TXT'
     
