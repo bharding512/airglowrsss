@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 3 # Should only be incremented on major changes
-software_version_minor = 3 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 4 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -49,7 +49,6 @@ global_params['red'] = {
                                             
     
     ###################### Quality control parameters #################
-    # Some of these depend on sensor: A or B
     'top_layer_thresh'  : 0.17,            # Fraction of airglow above the top observed altitude. Consider the total column 
                                            # brightness (i.e, the integral of the VER profile). When a large fraction
                                            # comes from above the top observed altitude, the quality flag is raised.
@@ -70,7 +69,11 @@ global_params['red'] = {
                                            # so the thermal drift correction might be wrong. It is thought that this effect is 
                                            # probably small, but it's unknown, so it will be flagged.
     'jitter_thresh'       : 0.01,          # [deg]. If the jitter is larger than this, then the S/C velocity subtraction is too
-                                           # uncertain, and the data are marked as "caution."
+                                           # uncertain, and the data are marked as "caution."    
+    'chi2_thresh'         : 0.20,          # [rad^2]. If the mean-square phase across a row is more than this, then this wind
+                                           # measurement is definitely bad, and should be set to quality=0
+    'chi2_thresh_caution' : 0.07,          # [rad^2]. If the mean-square phase across a row is more than this, then this wind
+                                           # measurement should be treated with caution (quality=0.5).
 }
 
 global_params['green'] = { # See above for descriptions
@@ -89,10 +92,14 @@ global_params['green'] = { # See above for descriptions
     'zero_wind_ref'       : 'external',
     'smooth_profile'      : True,
     'corr_notch_drift'    : True,
+    'chi2_thresh'         : 0.4,
+    'chi2_thresh_caution' : 0.2,
 }
 
-global_params['verbose'] = False # TODO TEMPORARY: for debugging memory issues in the SDC, set to True if this is called as a script
-global_params['reject_sun_contam'] = False # TODO TEMPORARY: for temporary use until v04. Set to True if this is called as a script (like in the SDC).
+global_params['verbose'] = False # TODO TEMPORARY: for debugging memory issues in the SDC.
+                                 # Set to True if this is called as a script
+global_params['reject_sun_contam'] = False # TODO TEMPORARY: for temporary use until it is obviated by L1 software. 
+                                           # Set to True if this is called as a script (like in the SDC).
 
 
 #####################################################################################################
@@ -769,7 +776,7 @@ def analyze_row(row, unwrap_phase=False):
     
 def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertainty,
                       top_layer='exp', H=26., integration_order=0, account_for_local_projection=True,
-                      linear_amp = True, unwrap_phase = False):
+                      linear_amp = True, unwrap_phase = False, chi2_thresh = np.inf):
     '''
     Perform the onion-peeling inversion on the interferogram to return
     a new interferogram, whose rows refer to specific altitudes. In effect,
@@ -805,6 +812,8 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
                                            especially for computing uncertainties. (default True)
       *  H                 -- TYPE:float, UNITS:km. The VER scale height to use if top_layer='exp' (default 26)
       *  unwrap_phase      -- TYPE:bool,   If True, unwrap the onion-peeled phase to remove 2pi discontinuities (default False)
+      *  chi2_thresh       -- TYPE:float, UNITS:rad^2. If the mean-square phase residual is larger than this, treat the row as 
+                                           pure noise (i.e., ignore it and set it to 0)
                                            
                                                            
     OUTPUTS:
@@ -869,6 +878,14 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
         phase[i] = p
         amp[i] = a
         chi2[i] = c
+        
+        # Initial quality control for chi^2 (noise), to make sure we're
+        # not propagating pure noise
+        if c > chi2_thresh:
+            Ip[i,:] = 0.0 # So as to not contaminate other rows
+            amp[i] = 0.0 # This is overly conservative. We probably 
+                         # trust amplitudes more than phase. Note that
+                         # this will be overwritten if linear_amp = True
         
     if linear_amp: # Replace the onion-peeled amplitude with the linear inversion
         amp_L1 = np.zeros(ny) # fringe amplitude at each row of L1 interferogram
@@ -1614,8 +1631,10 @@ def notch_drift_corr(tmid, emission_color, sensor):
          /
         /
         '''
-
-        return p[0] * np.log( 1 + np.exp(-p[1]*(t-p[2]))) + p[3]
+        e = -p[1]*(t-p[2])
+        if e > 100.: # avoid overflow in np.exp, which is important for early dates.
+            e = 100.
+        return p[0] * np.log( 1 + np.exp(e)) + p[3]
     
     def softplus_and_sin(p, t):
         '''
@@ -1670,7 +1689,8 @@ def notch_drift_corr(tmid, emission_color, sensor):
 
 
 
-def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0, terminator_thresh = 0.0):
+def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0, terminator_thresh = 0.0, 
+                    chi2_thresh = np.inf, chi2_thresh_caution = np.inf):
     '''
     Assess the quality of the L2.1 data product. This function generates quality flags and overall 
     quality factor (0-1) for wind and VER.
@@ -1696,6 +1716,11 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
                                                 terminator, raise a quality flag. Note that this quality flag will also be raised if
                                                 any observations at higher tangent altitudes for the same observation are flagged, because
                                                 the inversion mixes information from those observations. (default 0.0)
+      *  chi2_thresh         -- TYPE:float, UNITS:rad^2.  If the mean-square residual of phase within a row is larger than this,
+                                                          the sample is discarded, and isn't used in the inversion. (default np.inf)
+      *  chi2_thresh_caution -- TYPE:float, UNITS:rad^2.  If the mean-square residual of phase within a row is larger than this,
+                                                          the sample should be treated with caution but is used in the inversion. This
+                                                          affects the quality control only. (default np.inf)
                                    
     OUTPUTS:
     
@@ -1744,28 +1769,9 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
         quality_flags[:i,8] = 1
         
     #### Low SNR after inversion
-    # Ideally this flag should never be tripped, because if data are flagged at L1
-    # they shouldn't need to be flagged at L2.1. However things are not ideal (Jan 29, 2020 BJH).
-    # If this part of the code is here to stay, the parameters used should be moved to the top of
-    # the file and treated as global variables which are easier to maintain. It may make more sense to do
-    # this thresholding based on chi2 and not on VER.
-    phot = L21_dict['ver'].copy() # A version of VER that is corrected for the increased sensitivity at night
-    night = L21_dict['exp_time'] > 45.
-    phot[:,night] *= 13.3 # This should now be approx proportional to measured photons
-#     phot = phot / L21_dict['bin_size'] # I commented this out 2020 Apr 6. I'm not sure why I put it in initially.
-    phot_thresh = 0.0
-    if L21_dict['sensor'] == 'A':
-        if L21_dict['emission_color'] == 'green':
-            phot_thresh = 15.0 # 20.0 # 20 seemed good but I want it to pass more data and match B
-        else:
-            phot_thresh = 10.0 # 15.0 # 15 seemed good, ditto above
-    else: # sensor == B
-        if L21_dict['emission_color'] == 'green':
-            phot_thresh = 15.0 # ???
-        else:
-            phot_thresh = 10.0
-#     phot_thresh = -np.inf # TEMP TODO HACK
-    quality_flags[:,6] = phot < phot_thresh
+    # Use two thresholds of chi^2
+    quality_flags[:,6]  = L21_dict['chi2'] > chi2_thresh
+    quality_flags[:,11] = (L21_dict['chi2'] > chi2_thresh_caution) & (L21_dict['chi2'] <= chi2_thresh)
     
     #### S/C pointing is not stable -- Jitter is too large
     if L21_dict['jitter'] > global_params[L21_dict['emission_color']]['jitter_thresh']:
@@ -1785,15 +1791,18 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
         # The final quality factor should be the minimum of all the ratings. 
         wind_ratings = [1.0] # start with 1.0 -- if there are no dings, the quality factor is 1.0
         ver_ratings = [1.0]
-        if quality_flags[i,1]: # SAA
-            wind_ratings.append(0.5)
-            ver_ratings.append(0.5)
+#         if quality_flags[i,1]: # SAA  # Commented 2020-10-15 BJH: chi^2 filtering is replacing this.
+#             wind_ratings.append(0.5)
+#             ver_ratings.append(0.5)
         if quality_flags[i,3]: # Cal lamps on (TODO: Remove this once we trust it better)
             wind_ratings.append(0.5)
             ver_ratings.append(0.5)
         if quality_flags[i,6]: # SNR too low
             wind_ratings.append(0.0) # phase is definitely bad (?)
-            ver_ratings.append(0.5) # but VER might be ok
+            ver_ratings.append(0.0) # in practice, it seems the VERs are bad here too, especially in the SAA
+        if quality_flags[i,11]: # SNR possibly too low ("Caution")
+            wind_ratings.append(0.5) # phase is maybe bad
+            ver_ratings.append(0.5) # VER is probably fine, but still questionable, especially in SAA
         if quality_flags[i,7]: # airglow above 300 km
             wind_ratings.append(0.5)
             ver_ratings.append(0.5)
@@ -1805,6 +1814,12 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
             ver_ratings.append(1.0) # but there's no reason to distrust VER
         if quality_flags[i,2]: # Bad calibration, including the problem at bottom two rows of green
             wind_ratings.append(0.0) # don't use wind but VER is fine. TODO: remove this
+        if np.isnan(L21_dict['ver'][i]): # If VER is nan, the quality should be set to 0 
+                                         # (I'm not sure why this is happening but suspect it's from L1)
+            ver_ratings.append(0.0)        
+        if np.isnan(L21_dict['los_wind'][i]): # If wind is nan, the quality should be set to 0 
+                                         # (I'm not sure why this is happening but suspect it's from L1)
+            wind_ratings.append(0.0)
         # Lastly, append the L1 quality factor because that should be the maximum allowed rating
         wind_ratings.append(L1_quality[i])
         ver_ratings.append(L1_quality[i]) # Should I do this?
@@ -1822,7 +1837,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                 integration_order = None, account_for_local_projection = None, 
                                 bin_size = None,
                                 top_layer_thresh = None, terminator_thresh = None, zero_wind_ref = None,
-                                corr_notch_drift = None,
+                                corr_notch_drift = None, chi2_thresh = None, chi2_thresh_caution = None,
                                 f107 = None, f107a = None, f107p = None, apmsis = None, Tmult=1.,
                                 unwrap_phase = False):
     '''
@@ -1959,7 +1974,12 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                                     'internal': Use the zero wind maneuver to set the zero wind phase.
                                                     array(ny) : If this is an array, then use it as a "manual" zero wind phase.
       *  corr_notch_drift    -- TYPE:bool,          If True, apply a pre-determined function to remove the long-term 
-                                                    drift of data due to not accounting for notch drift at Level 1.     
+                                                    drift of data due to not accounting for notch drift at Level 1.   
+      *  chi2_thresh         -- TYPE:float, UNITS:rad^2.  If the mean-square residual of phase within a row is larger than this,
+                                                          the sample is discarded, and isn't used in the inversion.
+      *  chi2_thresh_caution -- TYPE:float, UNITS:rad^2.  If the mean-square residual of phase within a row is larger than this,
+                                                          the sample should be treated with caution but is used in the inversion. This
+                                                          affects the quality control only.
       *  f107                -- TYPE:float, UNITS:sfu. F10.7 value for the date of interest (None is use values from pyglow)
       *  f107a               -- TYPE:float, UNITS:sfu. F10.7a value for the date of interest (None is use values from pyglow)
       *  f107p               -- TYPE:float, UNITS:sfu. F10.7p value for the date of interest (None is use values from pyglow)
@@ -2022,7 +2042,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                                                                    * 8 : Line of sight crosses the terminator
                                                                                    * 9 : Thermal drift correction is uncertain
                                                                                    * 10: S/C pointing is not stable
-                                                                                   * 11: Unused
+                                                                                   * 11: SNR possibly too low
                     * acknowledgement           -- TYPE:str.                      A copy of the Acknowledgement attribute in the L1 file.
                     * att_lvlh_normal           -- TYPE:int. 0 or 1               Attitude register bit 0: LVLH Normal
                     * att_lvlh_reverse          -- TYPE:int. 0 or 1               Attitude register bit 1: LVLH Reverse
@@ -2067,6 +2087,10 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
         zero_wind_ref = params['zero_wind_ref']
     if corr_notch_drift is None:
         corr_notch_drift = params['corr_notch_drift']
+    if chi2_thresh is None:
+        chi2_thresh = params['chi2_thresh']
+    if chi2_thresh_caution is None:
+        chi2_thresh_caution = params['chi2_thresh_caution']
         
             
     ####  Load parameters from input dictionary
@@ -2170,7 +2194,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                            I_phase_uncertainty, I_amp_uncertainty,
                            top_layer=top_layer, integration_order=integration_order,
                            account_for_local_projection=account_for_local_projection, linear_amp=linear_amp, H=H,
-                           unwrap_phase = unwrap_phase)
+                           unwrap_phase = unwrap_phase, chi2_thresh = chi2_thresh)
 
     #### Transform from phase to wind
     f = phase_to_wind_factor(np.mean(sigma_opd)) # Use average OPD to analyze entire row
@@ -2250,7 +2274,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
         print('%s:\t\t\t Computing quality flags '% (timestamp()))
     wind_quality, ver_quality, quality_flags = level21_quality(L1_quality_flags, L21_dict, L1_quality=L1_quality,
                                                                top_layer_thresh=top_layer_thresh, 
-                                                               terminator_thresh = terminator_thresh)
+                                                               terminator_thresh = terminator_thresh, 
+                                                               chi2_thresh = chi2_thresh, chi2_thresh_caution=chi2_thresh_caution)
     L21_dict['wind_quality'] = wind_quality
     L21_dict['ver_quality'] = ver_quality
     L21_dict['quality_flags'] = quality_flags
@@ -3044,12 +3069,12 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                                        "3 : (From L1) Calibration lamps are on",
                                        "4 : (From L1) Unused",
                                        "5 : (From L1) Unused",
-                                       "6 : SNR too low after inversion",
+                                       "6 : SNR is very low after inversion",
                                        "7 : Significant airglow above 300 km",
                                        "8 : Line of sight crosses the terminator",
                                        "9 : Thermal drift correction is uncertain",
                                        "10: S/C pointing is not stable",
-                                       "11: Unused",
+                                       "11: SNR is low after inversion, but maybe still usable",
                                     ])
         
         # Alternative VER product derived from DC value of interferogram
@@ -4257,7 +4282,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                                                            * 8 : (From L2.1 A) Line of sight crosses the terminator
                                                                            * 9 : (From L2.1 A) Thermal drift correction is uncertain
                                                                            * 10: (From L2.1 A) S/C pointing is not stable
-                                                                           * 11: (From L2.1 A) Unused
+                                                                           * 11: (From L2.1 A) SNR is low after inversion, but maybe usable
                                                                            * 12: (From L1 B) SNR too low to reliably perform L1 processing
                                                                            * 13: (From L1 B) Proximity to South Atlantic Anomaly
                                                                            * 14: (From L1 B) Bad calibration 
@@ -4269,7 +4294,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                                                            * 20: (From L2.1 B) Line of sight crosses the terminator
                                                                            * 21: (From L2.1 B) Thermal drift correction is uncertain
                                                                            * 22: (From L2.1 B) S/C pointing is not stable
-                                                                           * 23: (From L2.1 B) Unused
+                                                                           * 23: (From L2.1 B) SNR is low after inversion, but maybe usable
                                                                            * 24: Missing MIGHTI-A file
                                                                            * 25: Missing MIGHTI-B file
                                                                            * 26: MIGHTI-A did not sample this altitude
@@ -5722,7 +5747,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                        "* 8 : (From L2.1 A) Line of sight crosses the terminator",
                                        "* 9 : (From L2.1 A) Thermal drift correction is uncertain",
                                        "* 10: (From L2.1 A) S/C pointing is not stable",
-                                       "* 11: (From L2.1 A) Unused",
+                                       "* 11: (From L2.1 A) SNR is low after inversion, but maybe usable",
                                        "* 12: (From L1 B) SNR too low to reliably perform L1 processing",
                                        "* 13: (From L1 B) Proximity to South Atlantic Anomaly",
                                        "* 14: (From L1 B) Bad calibration",
@@ -5734,7 +5759,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                        "* 20: (From L2.1 B) Line of sight crosses the terminator",
                                        "* 21: (From L2.1 B) Thermal drift correction is uncertain",
                                        "* 22: (From L2.1 B) S/C pointing is not stable",
-                                       "* 23: (From L2.1 B) Unused",
+                                       "* 23: (From L2.1 B) SNR is low after inversion, but maybe usable",
                                        "* 24: Missing MIGHTI-A file",
                                        "* 25: Missing MIGHTI-B file",
                                        "* 26: MIGHTI-A did not sample this altitude",
@@ -6462,7 +6487,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,0]
         C[:,igap] = np.nan
         h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
-        ax.set_title('Low SNR (before inversion)')
+        ax.set_title('Very low SNR (before inversion)')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
         ax_format.append(ax)
@@ -6471,12 +6496,21 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,6]
         C[:,igap] = np.nan
         h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
-        ax.set_title('Low SNR (after inversion)')
+        ax.set_title('Very low SNR (after inversion)')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,1])
+        ax_format.append(ax)
+        
+        ax = axarr[2,2]
+        C = 1.0 * L21_dict['quality_flags'][:,i1:i2,11]
+        C[:,igap] = np.nan
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('Cautiously low SNR (after inversion)')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
         ax_format.append(ax)
 
-        ax = axarr[2,2]
+        ax = axarr[3,2]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,1]
         C[:,igap] = np.nan
         h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
@@ -6485,7 +6519,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
         ax_format.append(ax)
 
-        ax = axarr[3,2]
+        ax = axarr[3,3]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,7]
         C[:,igap] = np.nan
         h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
@@ -6531,7 +6565,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ax_format.append(ax)
 
         #### Turn off unused axes
-        axarr[3,3].axis('off')
+#         axarr[3,3].axis('off')
 
         #### Make the 2D plots look nice
         for ax in ax_format:
@@ -6828,7 +6862,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         ax = axarr[2,2]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,0] + 0.667*L22_dict['quality_flags'][:,i1:i2,12]
         h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
-        ax.set_title('MIGHTI A or B: Low SNR before inversion')
+        ax.set_title('MIGHTI A or B: Very low SNR before inversion')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
         cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
@@ -6837,7 +6871,16 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         ax = axarr[3,2]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,6] + 0.667*L22_dict['quality_flags'][:,i1:i2,18]
         h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
-        ax.set_title('MIGHTI A or B: Low SNR after inversion')
+        ax.set_title('MIGHTI A or B: Very low SNR after inversion')
+        cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
+        cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
+        cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
+        ax_format.append(ax)
+        
+        ax = axarr[4,2]
+        z = 0.333*L22_dict['quality_flags'][:,i1:i2,11] + 0.667*L22_dict['quality_flags'][:,i1:i2,23]
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        ax.set_title('MIGHTI A or B: Cauiously low SNR after inversion')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
         cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
@@ -6879,7 +6922,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         cb.ax.set_yticklabels(['Neither','A','B','Both'], rotation=-90, va='center')
         ax_format.append(ax)
 
-        ax = axarr[4,2]
+        ax = axarr[5,2]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,1] + 0.667*L22_dict['quality_flags'][:,i1:i2,13]
         h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
         ax.set_title('MIGHTI A or B: South Atlantic Anomaly')
@@ -6917,7 +6960,6 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
 
         #### Turn off unused axes
         axarr[5,1].axis('off')
-        axarr[5,2].axis('off')
 
         #### Make the 2D plots look nice
         for ax in ax_format:
