@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 4 # Should only be incremented on major changes
-software_version_minor = 0 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 1 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -2495,7 +2495,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ncfile.setncattr_string('Generation_Date',                t_file.strftime('%Y%m%d'))
         ncfile.setncattr_string('History',                        ['v1.0: First release of MIGHTI L2.1/L2.2 software, B. J. Harding, 05 Mar 2018', 
                                                                    'v2.0: First run of on-orbit data, using external zero wind reference and smooth daily-averaged profiles, B. J. Harding, 01 May 2020',
-                                                                   'v3.0: Correction for long-term mechanical drift, B. J. Harding, 04 Jun 2020'])
+                                                                   'v3.0: Correction for long-term mechanical drift, B. J. Harding, 04 Jun 2020',
+                                                                   'v4.0: Updated correction for long-term mechanical drift to handle settling after ~May 2020 and precession cycle variation. LoS winds have changed by a bulk offset of up to 30 m/s. Studies using only perturbations from the mean (e.g., non-migrating tidal retrievals) are unlikely to be affected.'])
         ncfile.setncattr_string('HTTP_LINK',                      'http://icon.ssl.berkeley.edu/Instruments/MIGHTI')
         ncfile.setncattr_string('Instrument',                     'MIGHTI-%s' % sensor)
         ncfile.setncattr_string('Instrument_Type',                'Imagers (space)')
@@ -2533,12 +2534,12 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                     "processing (not discussed here). See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for more details of the inversion algorithm. One update "
                     "to this paper is relevant: Zero wind removal is now performed prior to the creation of the Level 1 file, instead of during the L2.1 processing. ",
                     
-                     "Known issues with the initial data release (labeled v03) are listed below. These issues are expected to be resolved in future data releases. "
+                     "Known issues with the initial data release (labeled v03/v04) are listed below. These issues are expected to be resolved in future data releases. "
                      "In future releases, some data points may change by up to 50 m/s, but most changes are expected to be much smaller. Future updates to the "
                      "\"zero wind phase\" (discussed in detail below, in the notes for the wind variable) will change the winds by a bulk offset, "
                      "but most relative variations in time, latitude, longitude, and from day to day will remain. ",
 
-                     "Known issues with v03:<br/>"
+                     "Known issues with v03/v04:<br/>"
                      " * Some artifacts from preliminary calibrations are present (e.g., thermal instrument drift, detector flat field, and fringe "
                      "visibility correction). These manifest as "
                      "artificial offsets that affect a single altitude or a single local solar time, persisting for an entire UT day. <br/>"
@@ -5154,7 +5155,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         ncfile.setncattr_string('Generation_Date',                t_file.strftime('%Y%m%d'))
         ncfile.setncattr_string('History',                        ['v1.0: First release of MIGHTI L2.1/L2.2 software, B. J. Harding, 05 Mar 2018', 
                                                                    'v2.0: First run of on-orbit data, using external zero wind reference and smooth daily-averaged profiles, B. J. Harding, 01 May 2020',
-                                                                   'v3.0: Correction for long-term mechanical drift, B. J. Harding, 04 Jun 2020'])
+                                                                   'v3.0: Correction for long-term mechanical drift, B. J. Harding, 04 Jun 2020',
+                                                                   'v4.0: Updated correction for long-term mechanical drift to handle settling after ~May 2020 and precession cycle variation. LoS winds have changed by a bulk offset of up to 30 m/s. Studies using only perturbations from the mean (e.g., non-migrating tidal retrievals) are unlikely to be affected.'])
         ncfile.setncattr_string('HTTP_LINK',                      'http://icon.ssl.berkeley.edu/Instruments/MIGHTI')
         ncfile.setncattr_string('Instrument',                     'MIGHTI')
         ncfile.setncattr_string('Instrument_Type',                'Imagers (space)')
@@ -5192,12 +5194,12 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         'they are first interpolated to a regular, pre-defined grid of longitude and altitude before the coordinate rotation is performed. See Harding et al. [2017, '+
         'doi:10.1007/s11214-017-0359-3] for more details of the Level 2.2 algorithm.',
 
-         "Known issues with the initial data release (labeled v03) are listed below. These issues are expected to be resolved in future data releases. "
+         "Known issues with the initial data release (labeled v03/v04) are listed below. These issues are expected to be resolved in future data releases. "
          "In future releases, some data points may change by up to 50 m/s, but most changes are expected to be much smaller. Future updates to the "
          "\"zero wind phase\" (discussed in detail below, in the notes for the wind variable) will change the winds by a bulk offset, "
          "but most relative variations in time, latitude, longitude, and from day to day will remain. ",
 
-         "Known issues with v03:<br/>"
+         "Known issues with v03/v04:<br/>"
          " * Some artifacts from preliminary calibrations are present (e.g., thermal instrument drift, detector flat field, and fringe "
          "visibility correction). These manifest as "
          "artificial offsets that affect a single altitude or a single local solar time, persisting for an entire UT day. <br/>"
