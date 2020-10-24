@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 4 # Should only be incremented on major changes
-software_version_minor = 1 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 2 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -92,8 +92,8 @@ global_params['green'] = { # See above for descriptions
     'zero_wind_ref'       : 'external',
     'smooth_profile'      : True,
     'corr_notch_drift'    : True,
-    'chi2_thresh'         : 0.4,
-    'chi2_thresh_caution' : 0.2,
+    'chi2_thresh'         : 0.6,
+    'chi2_thresh_caution' : 0.3,
 }
 
 global_params['verbose'] = False # TODO TEMPORARY: for debugging memory issues in the SDC.
