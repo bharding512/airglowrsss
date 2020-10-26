@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 4 # Should only be incremented on major changes
-software_version_minor = 2 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 3 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -836,11 +836,15 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     # Create the path matrix
     if global_params['verbose']:
         print('%s:\t\t\t\t Creating observation matrix '% (timestamp()))
+        import sys
+        sys.stdout.flush()
     D = create_observation_matrix(tang_alt, icon_alt, top_layer=top_layer, integration_order=integration_order, H=H)
     
     # Create local horizontal projection matrix (and set it to unity if we are to ignore this effect)
     if global_params['verbose']:
         print('%s:\t\t\t\t Creating horz proj matrix '% (timestamp()))
+        import sys
+        sys.stdout.flush()
     B = np.ones((ny,ny))
     if account_for_local_projection:
         B = create_local_projection_matrix(tang_alt, icon_alt)
@@ -856,6 +860,8 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
 
     if global_params['verbose']:
         print('%s:\t\t\t\t Beginning onion-peeling '% (timestamp()))
+        import sys
+        sys.stdout.flush()
     for i in range(ny)[::-1]: # onion-peel from the top altitude down
         dii = D[i,i] # path length
         Li = I[i,:] # we will peel off the other layers from this row
@@ -979,6 +985,8 @@ def perform_inversion(I, tang_alt, icon_alt, I_phase_uncertainty, I_amp_uncertai
     
     if global_params['verbose']:
         print('%s:\t\t\t\t Returning from perform_inversion()'% (timestamp()))
+        import sys
+        sys.stdout.flush()
             
     return Ip, phase, amp, phase_uncertainty, amp_uncertainty, chi2
 
@@ -1300,6 +1308,8 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     
     if global_params['verbose']:
         print('%s:\t\t Opening %s' % (timestamp(), L1_fn.split('/')[-1]))
+        import sys
+        sys.stdout.flush()
     f = netCDF4.Dataset(L1_fn)
     
     # Is this A or B? There's no variable that says it (yet?) so we have to infer it from the file name
@@ -1426,6 +1436,8 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
             
     if global_params['verbose']:
         print('%s:\t\t Closing %s' % (timestamp(), L1_fn.split('/')[-1]))
+        import sys
+        sys.stdout.flush()
     f.close()
     
     return L1_dict
@@ -1631,10 +1643,14 @@ def notch_drift_corr(tmid, emission_color, sensor):
          /
         /
         '''
-        e = -p[1]*(t-p[2])
-        if e > 100.: # avoid overflow in np.exp, which is important for early dates.
-            e = 100.
-        return p[0] * np.log( 1 + np.exp(e)) + p[3]
+
+        # This computes p[0] * np.log( 1 + np.exp(-p[1]*(t-p[2]))) + p[3] 
+        # without allowing overflow.
+        e1 = 0
+        e2 = -p[1]*(t-p[2])
+        x = np.logaddexp(e1, e2)
+
+        return p[0] * x + p[3]
     
     def softplus_and_sin(p, t):
         '''
@@ -1678,8 +1694,8 @@ def notch_drift_corr(tmid, emission_color, sensor):
     # dvg - dvr = vdeltagr
     # Apply correction:
     #        |value to subtract |          |value to subtract |
-    # (dvg - ag/(ag+ar)*vdeltagr) - (dvr - ar/(ag+ar)*vdeltagr)
-    # (dvg - ag/(ag+ar)*(dvg - dvr)) - (dvr - ar/(ag+ar)*(dvg-dvr))
+    # (dvg - ag/(ag-ar)*vdeltagr) - (dvr - ar/(ag-ar)*vdeltagr)
+    # (dvg - ag/(ag-ar)*(dvg - dvr)) - (dvr - ar/(ag-ar)*(dvg-dvr))
     # dvg - dvr - (ag + ar)*(1/(ag+ar)) * (dvg - dvr) = 0 (verified)
     
 
@@ -2061,8 +2077,11 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                                                                   of the residual of a linear fit to the Euler angles in a 
                                                                                   60-sec window.
     '''
-    
     #### Parse input parameters and load defaults
+    if global_params['verbose']:
+        print('%s:\t\t\t Parsing input params'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     emission_color = L1_dict['emission_color']
     sensor = L1_dict['sensor']
     params = global_params[emission_color]
@@ -2094,6 +2113,10 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
         
             
     ####  Load parameters from input dictionary
+    if global_params['verbose']:
+        print('%s:\t\t\t Loading input dict'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     Iraw = L1_dict['I_amp']*np.exp(1j*L1_dict['I_phase'])
     I_amp_uncertainty = L1_dict['I_amp_uncertainty']
     I_phase_uncertainty = L1_dict['I_phase_uncertainty']
@@ -2124,6 +2147,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     # Zero wind adjustment, if needed.
     if global_params['verbose']:
         print('%s:\t\t\t Adjusting zero wind (%s)'% (timestamp(), zero_wind_ref))
+        import sys
+        sys.stdout.flush()
     ny0, nx0 = Iraw.shape
     if zero_wind_ref == 'external': 
         zero_wind_ref_str = 'external' # string indicator to save in L2.1 file.
@@ -2147,6 +2172,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     if corr_notch_drift:
         if global_params['verbose']:
             print('%s:\t\t\t Adjusting for notch drift '% (timestamp()))
+            import sys
+            sys.stdout.flush()
         dv = notch_drift_corr(tmid, emission_color, sensor) # [m/s]
         f = phase_to_wind_factor(np.mean(sigma_opd))
         pn = dv/f # [rad]
@@ -2157,12 +2184,16 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     #### Remove Satellite Velocity
     if global_params['verbose']:
         print('%s:\t\t\t Removing S/C velocity '% (timestamp()))
+        import sys
+        sys.stdout.flush()
     icon_latlonalt = np.array([icon_lat, icon_lon, icon_alt])
     I = remove_satellite_velocity(Iraw, icon_latlonalt, icon_velocity_vector, mighti_ecef_vectors, sigma_opd)
                          
     #### Bin data: average nearby rows together
     if global_params['verbose']:
         print('%s:\t\t\t Binning inputs '% (timestamp()))
+        import sys
+        sys.stdout.flush()
     I        = bin_image(bin_size, I)
     I_dc     = bin_array(bin_size, I_dc)
     tang_lat = bin_array(bin_size, tang_lat)
@@ -2190,6 +2221,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     #### Onion-peel interferogram
     if global_params['verbose']:
         print('%s:\t\t\t Entering perform_inversion '% (timestamp()))
+        import sys
+        sys.stdout.flush()
     Ip, phase, amp, phase_uncertainty, amp_uncertainty, chi2 = perform_inversion(I, tang_alt, icon_alt, 
                            I_phase_uncertainty, I_amp_uncertainty,
                            top_layer=top_layer, integration_order=integration_order,
@@ -2272,6 +2305,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     #### Quality control and flagging
     if global_params['verbose']:
         print('%s:\t\t\t Computing quality flags '% (timestamp()))
+        import sys
+        sys.stdout.flush()
     wind_quality, ver_quality, quality_flags = level21_quality(L1_quality_flags, L21_dict, L1_quality=L1_quality,
                                                                top_layer_thresh=top_layer_thresh, 
                                                                terminator_thresh = terminator_thresh, 
@@ -2294,6 +2329,8 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     
     if global_params['verbose']:
         print('%s:\t\t\t Returning from L2.1 core'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     return L21_dict
 
 
@@ -3278,8 +3315,8 @@ def level21_preprocess_smooth_profile(L1_fns, emission_color, zero_wind_ref=None
         
         if global_params['verbose']:
             print('%s: Running preprocessing %s %s' % (timestamp(), emission_color, L1_fn.split('/')[-1]))
-        import sys
-        sys.stdout.flush()
+            import sys
+            sys.stdout.flush()
 
         L1_dict = level1_to_dict(L1_fn, emission_color, startstop=True)
         Ny, Nx = np.shape(L1_dict['I_phase'])
@@ -3417,8 +3454,8 @@ def level21_preprocess_smooth_profile(L1_fns, emission_color, zero_wind_ref=None
     for L1_fn in L1_fns:
         if global_params['verbose']:
             print('%s: Sorting day/night %s %s' % (timestamp(), emission_color, L1_fn.split('/')[-1]))
-        import sys
-        sys.stdout.flush()
+            import sys
+            sys.stdout.flush()
         
         d = netCDF4.Dataset(L1_fn)
         sens = L1_fn.split('/')[-1].split('_')[2][-1] # sensor
@@ -3513,6 +3550,8 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
     
     if global_params['verbose']:
         print('\n%s: Starting Overall Run \n' % (timestamp()))
+        import sys
+        sys.stdout.flush()
         
     assert len(L1_fns)>0, "No files specified."
     x = [gpi_yearday is None, gpi_f107 is None, gpi_f107a is None, gpi_ap is None, gpi_ap3 is None]
@@ -3552,8 +3591,8 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
         
         if global_params['verbose']:
             print('%s: Running L2.1 %s %s' % (timestamp(), emission_color, L1_fn.split('/')[-1]))
-        import sys
-        sys.stdout.flush()
+            import sys
+            sys.stdout.flush()
         
         try:
             # Read L1 file into a dictionary
@@ -3575,8 +3614,8 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
             # Perform L1 to L2.1 processing
             if global_params['verbose']:
                 print('%s: \tCalling level1_dict_to_level21_dict %s %s' % (timestamp(), emission_color, L1_fn.split('/')[-1]))
-            import sys
-            sys.stdout.flush()
+                import sys
+                sys.stdout.flush()
             
             L21_dict = level1_dict_to_level21_dict(L1_dict, sigma = sigma, top_layer = top_layer, H = H,
                                                    integration_order = integration_order, 
@@ -3598,6 +3637,8 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
     ########## Concatenate all of the L2.1 inversions into one dictionary and save ##############
     if global_params['verbose']:
         print('%s: \tCombining L2.1 dictionaries' % (timestamp()))
+        import sys
+        sys.stdout.flush()
     L21_dict = combine_level21(L21_dicts)
     if smooth_profile:
         L21_dict['ph0_night'] = ph0_night
@@ -3620,9 +3661,13 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
     ########## Save L2.1 file
     if global_params['verbose']:
         print('%s: \tSaving L2.1 file' % (timestamp()))
+        import sys
+        sys.stdout.flush()
     L21_fn = save_nc_level21(L21_path, L21_dict, data_revision)
     if global_params['verbose']:
         print('%s: \tCompleted level1_to_level21_without_info_file()' % (timestamp()))
+        import sys
+        sys.stdout.flush()
 
     return L21_fn, failure_msg
     
@@ -3779,12 +3824,21 @@ def level1_to_level21(info_fn):
                 failure_messages.append('Failed processing:\n\tsensor  = %s\n\tcolor   = %s\n%s\n'%(sensor, emission_color, traceback.format_exc()))
     
     # Summary plots: One plot for each file
+    if global_params['verbose']:
+        print('%s: \tCreating summary plots...' % (timestamp()))
+        import sys
+        sys.stdout.flush()
     for fn in L21_fns:
         try:
             plot_level21(fn, direc + 'Output/')
         except Exception as e:
-            failure_messages.append('Failed creating summary plot for file:\n\tTs\n%s\n'%(fn, traceback.format_exc()))
+            failure_messages.append('Failed creating summary plot for file:\n\t%s\n%s\n'%(fn, traceback.format_exc()))
 
+    if global_params['verbose']:
+        print('%s: \tDone.' % (timestamp()))
+        import sys
+        sys.stdout.flush()
+        
     if not failure_messages: # Everything worked
         return ''
     
