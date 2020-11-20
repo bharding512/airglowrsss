@@ -10,7 +10,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 4 # Should only be incremented on major changes
-software_version_minor = 3 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 4 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -1748,6 +1748,21 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
                                                 Some flags are propaged directly from the L1 file. See documentation for 
                                                 level1_dict_to_level21_dict(...) for flag definitions.
     '''
+    
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Entered level21_quality(...) with inputs:'% (timestamp()))
+        print('L1_quality_flags=\n%s\n'% repr(L1_quality_flags))
+        print('L21_dict = (see below)\n')
+        print('L1_quality=\n%s\n'% repr(L1_quality))
+        print('top_layer_thresh=%s\n'% repr(top_layer_thresh))
+        print('terminator_thresh=%s\n'% repr(terminator_thresh))
+        print('chi2_thresh=%s\n'% repr(chi2_thresh))
+        print('chi2_thresh_caution=%s\n'% repr(chi2_thresh_caution))
+        for var in ['los_wind', 'fringe_amplitude', 'H', 'alt', 'mighti_ecef_vectors', 'lat', 'lon', 'alt', 'time', 'chi2', 'jitter', 'ver']:
+            print('L21_dict[\'%s\']=\n%s\n'% (var, repr(L21_dict[var])))
+        import sys
+        sys.stdout.flush()
+        
     # Note that the "thermal drift correction is uncertain" flag is calculated after a full day of data is run, in
     # level1_to_level21_without_info_file(...). This is necessary so gaps can be detected (i.e., it can't be calculated 
     # for an individual profile.)
@@ -1759,6 +1774,10 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
     quality_flags[:,:6] = L1_quality_flags[:,:] # copied from L1
     
     #### Significant airglow above top altitude
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Checking airglow above top altitude'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     a = L21_dict['fringe_amplitude'] # VER profile
     H = L21_dict['H'] #  scale height above the top altitude that was assumed in the inversion
     dz = np.diff(L21_dict['alt'])
@@ -1767,6 +1786,10 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
         quality_flags[:,7] = 1
     
     #### Line of sight crosses the terminator
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Checking LoS crossing terminator'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     RE = 6371. # km, earth radius
     h_sc = 80. # km, EUV screening height
     for i in range(ny):
@@ -1780,25 +1803,45 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
         if np.sign(sza0-sza_term) != np.sign(sza1-sza_term): # then the points straddle the terminator
             quality_flags[i,8] = 1
     # If any points above this point are flagged, flag this point too.
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Masking points above the LoS-terminator-flagged point'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     if any(quality_flags[:,8]):
         i = np.where(quality_flags[:,8] > 0)[0].max()
         quality_flags[:i,8] = 1
         
     #### Low SNR after inversion
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Checking for low SNR after inversion'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     # Use two thresholds of chi^2
     quality_flags[:,6]  = L21_dict['chi2'] > chi2_thresh
     quality_flags[:,11] = (L21_dict['chi2'] > chi2_thresh_caution) & (L21_dict['chi2'] <= chi2_thresh)
     
     #### S/C pointing is not stable -- Jitter is too large
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Checking for jitter'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     if L21_dict['jitter'] > global_params[L21_dict['emission_color']]['jitter_thresh']:
         quality_flags[:,10] = 1
         
     #### Bottom two rows of green are untrustworthy. Set this using the L1 quality flag
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Masking bottom two rows of green'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     # TODO: remove this once we figure it out.
     if L21_dict['emission_color'] == 'green':
         quality_flags[:2,2] = 1 # "Bad calibration"
     
     ########################### Calculate overall quality (floor set by L1 quality) ############################
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Beginning overall quality calculation'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     # There are a lot of opinions built in to this section of the code.
     wind_quality = np.ones(ny)
     ver_quality = np.ones(ny)
@@ -1842,6 +1885,10 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
         # Compile final quality factor
         wind_quality[i] = min(wind_ratings)
         ver_quality[i]  = min(ver_ratings)
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Ending overall quality calculation'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     
     return wind_quality, ver_quality, quality_flags
 
@@ -2304,23 +2351,47 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     
     #### Quality control and flagging
     if global_params['verbose']:
-        print('%s:\t\t\t Computing quality flags '% (timestamp()))
+        print('%s:\t\t\t Computing quality flags'% (timestamp()))
+        import sys
+        sys.stdout.flush()
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Entering level21_quality(...) '% (timestamp()))
         import sys
         sys.stdout.flush()
     wind_quality, ver_quality, quality_flags = level21_quality(L1_quality_flags, L21_dict, L1_quality=L1_quality,
                                                                top_layer_thresh=top_layer_thresh, 
                                                                terminator_thresh = terminator_thresh, 
                                                                chi2_thresh = chi2_thresh, chi2_thresh_caution=chi2_thresh_caution)
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Exited level21_quality(...)'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     L21_dict['wind_quality'] = wind_quality
     L21_dict['ver_quality'] = ver_quality
     L21_dict['quality_flags'] = quality_flags
     
     ### Mask out points with very bad quality
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Finding indices of low quality wind data'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     idx = L21_dict['wind_quality'] == 0.0
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Masking those indices'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     L21_dict['los_wind'][idx] = np.nan
     L21_dict['los_wind_error'][idx] = np.nan
     
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Finding indices of low quality VER data'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     idx = L21_dict['ver_quality'] == 0.0
+    if global_params['verbose']:
+        print('%s:\t\t\t\t Masking those indices'% (timestamp()))
+        import sys
+        sys.stdout.flush()
     L21_dict['fringe_amplitude'][idx] = np.nan
     L21_dict['fringe_amplitude_error'][idx] = np.nan
     L21_dict['ver'][idx] = np.nan
