@@ -203,7 +203,7 @@ def CardFinder(dn,site1,project, reference):
         d.error = True
         return [d]
     d.f += "\n%s" % f
-    npzfile = np.load(f)
+    npzfile = np.load(f,allow_pickle=True)
     r1 = npzfile['FPI_Results'].ravel()[0]
     #r1['el'] = 90 - r1['ze']  # Elevation angles
     npzfile.close()
@@ -434,7 +434,7 @@ def CVFinder(dn,site1,site2,project, reference):
         d.error = True
         return [d]
     d.f += "\n%s" % f
-    npzfile = np.load(f)
+    npzfile = np.load(f,allow_pickle=True)
     r1 = npzfile['FPI_Results'].ravel()[0]
     # r1['az'] = 90 - r1['ze']
     npzfile.close()
@@ -447,7 +447,7 @@ def CVFinder(dn,site1,site2,project, reference):
         d.error = True
         return [d]
     d.f += "\n%s" % f
-    npzfile = np.load(f)
+    npzfile = np.load(f,allow_pickle=True)
     r2 = npzfile['FPI_Results'].ravel()[0]
     # r2['az'] = 90 - r2['ze']
     npzfile.close()

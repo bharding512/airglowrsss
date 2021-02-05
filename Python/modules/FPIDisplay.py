@@ -58,7 +58,7 @@ def MonthlySummary(site_name, year, month):
     f = glob.glob('/rdata/airglow/fpi/results/%s_%s_%04d%02d*.npz' % (instrument,site_name,year,month))
     
     # Calculate sunrise and sunset time
-    npzfile = np.load(f[-1])
+    npzfile = np.load(f[-1],allow_pickle=True)
     d = npzfile['FPI_Results'].ravel()[0]
     del npzfile.f
     npzfile.close()
@@ -136,7 +136,7 @@ def MonthlySummary(site_name, year, month):
 
             try:
                 # Calculate sunrise and sunset time
-                npzfile = np.load(files[-1])
+                npzfile = np.load(files[-1],allow_pickle=True)
                 d = npzfile['FPI_Results'].ravel()[0]
                 del npzfile.f
                 npzfile.close()
@@ -295,7 +295,7 @@ def MonthlySummary(site_name, year, month):
 
         for f in files:
             if os.path.isfile(f):
-                npzfile = np.load(f)
+                npzfile = np.load(f,allow_pickle=True)
                 d = npzfile['FPI_Results'].ravel()[0]
                 del npzfile.f
                 npzfile.close()
@@ -669,7 +669,7 @@ def DataSummary(files, times, bin_time = np.arange(17,32,0.5),
     # Work with the data from the files provided
     for f in files:
         # Load the file
-        npzfile = np.load(f)
+        npzfile = np.load(f,allow_pickle=True)
 
         # Save data to FPI_Results and site dictionaries
         FPI_Results = npzfile['FPI_Results']
@@ -1030,7 +1030,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
 #   Removed zenith_times argument (bjh)
 
     # Read in the file
-    npzfile = np.load(f)
+    npzfile = np.load(f,allow_pickle=True)
     FPI_Results = npzfile['FPI_Results']
     FPI_Results = FPI_Results.reshape(-1)[0]
     site = npzfile['site']
@@ -1242,7 +1242,7 @@ def CompareData(files, full_clear=-30, full_cloud=-20,
     
     for f in files:
         # Read in the file
-        npzfile = np.load(f)
+        npzfile = np.load(f,allow_pickle=True)
         FPI_Results = npzfile['FPI_Results']
         FPI_Results = FPI_Results.reshape(-1)[0]
         site = npzfile['site']
@@ -1481,7 +1481,7 @@ def Map(sites,m,times,MapTemperatures=False, MapDopplers=False, avg_time=15, tit
             plt.text(xpt+50000,ypt+50000,'%s' % (site))
 
             # Load a npz file with processed data and read required variables
-            npzfile = np.load(sites[site]['fname'])
+            npzfile = np.load(sites[site]['fname'],allow_pickle=True)
             FPI_Results = npzfile['FPI_Results']
             FPI_Results = FPI_Results.reshape(-1)[0]
             

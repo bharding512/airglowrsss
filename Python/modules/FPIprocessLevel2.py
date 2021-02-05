@@ -143,7 +143,7 @@ class Level1:
 
         # make sure we have data to work with:
         try:
-            npzfile = np.load(self.f)
+            npzfile = np.load(self.f,allow_pickle=True)
             self.r = npzfile['FPI_Results'].ravel()[0]
             del npzfile.f
             npzfile.close() # Brian's fix.
