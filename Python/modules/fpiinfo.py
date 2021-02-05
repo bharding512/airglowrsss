@@ -72,6 +72,10 @@ _dates['minime09']['vti'] = { 'start': datetime.datetime(2013, 8, 2),
 _dates['minime09']['kwj'] = { 'start': datetime.datetime(2018, 1, 1),
                               'stop' : None, }
 
+#DASI FPIs
+_dates['minime11'] ={}
+_dates['minime11']['uao'] = { 'start':datetime.datetime(2020,10,20),
+			      'stop':None, }
 
 # The minime9* instruments have "always" been at their sites. (TODO)
 _dates['minime90'] = {}
@@ -106,6 +110,7 @@ _dates['noto02']['ao'] = { 'start': datetime.datetime(1900,1,1), # TODO, if it m
 _dates['minime80'] = {}
 _dates['minime80']['leo'] = {'start': datetime.datetime(2018,9,19),
                              'stop': None, }
+
 
 # Define network information
 _networks = {}
@@ -715,6 +720,7 @@ _sites['sjs'] = {
     }
 
 
+
 # TODO: If we ever end up controlling these peruvian sites, make sure
 # this stuff is correct.
 _sites['mrh'] = {
@@ -997,8 +1003,16 @@ _instruments['minime03'] = {
                                'a2': -1.472e-01,
                                'b0': -1.197e-01,
                                'b1': -2.140e-01,
+<<<<<<< .mine
+                               'b2': 9.668e-01,
+                           'center':  (287.7,270.2),
+||||||| .r391
+                               'b2': 9.668e-01, 
+                           'center':  (283.71, 276.92),
+=======
                                'b2': 9.668e-01,
                            'center':  (283.71, 276.92),
+>>>>>>> .r435
                           },
         'sql_winds_id'          : 99,           # ID for SQL database
         'sql_temperatures_id'   : 100,           # ID for SQL database
@@ -1007,7 +1021,13 @@ _instruments['minime03'] = {
         'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
+<<<<<<< .mine
+        'skyI_quality_thresh'   : [0.2275, 0.1074], # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
+||||||| .r391
+        'skyI_quality_thresh'   : [-np.inf, -np.inf], # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
+=======
         'skyI_quality_thresh'   : [0.04, 0.025], # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
+>>>>>>> .r435
     }
 
 _instruments['minime04'] = {
@@ -1205,6 +1225,38 @@ _instruments['minime09'] = {
         'skyI_quality_thresh'   : [0.0708,-np.inf], # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
     }
 
+_instruments['minime11'] = {
+        'name'          : 'minime11',
+        'N'             : 500,          # Number of annuli
+        'N0'            : 0,            # First annulus to use
+        'N1'            : 500,          # Last annulus to use
+        'focal_length'  : 300e-3,       # focal length of lens in m
+        'pix_size'      : 13e-6,        # pixel size on CCD in m
+        'lam_laser'     : 632.8e-9,     # laser wavelength in m
+        'lam0'          : 630.0e-9,     # nominal line center wavelength in m
+        'nominal_t'     : 1.5e-2,       # approximate etalon gap in m
+        'default_params': {# instrument params to be used if the laser fails (i.e., zenith reference)
+                                'R': 0.77,
+                            'alpha': 7.7e-5,
+                                'I': 1.0,
+                                'B': 0.0,
+                               'a1': -8.6e-1,
+                               'a2': -4.0e-2,
+                               'b0': 1.3,
+                               'b1': 2.7e-1,
+                               'b2': -3.8e-2,
+                           'center':  (255.0, 255.),
+                          },
+        'sql_winds_id'          : 117,           # ID for SQL database
+        'sql_temperatures_id'   : 118,           # ID for SQL database
+        'sql_diagnostics_id'    : 119,           # ID for SQL database
+        'many_fringes'          : True,         # indicates whether radial falloff terms should be used
+        'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
+        'skyI_quality_thresh'   : [0.5439,0.3701], #The brightness [counts/sec] below which we raise the quality flag
+    }
+
 _instruments['minime80'] = { #Update this from a laser image or two!
         'name'          : 'minime80',
         'N'             : 500,          # Number of annuli
@@ -1234,7 +1286,7 @@ _instruments['minime80'] = { #Update this from a laser image or two!
         'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
-        'skyI_quality_thresh'   : [0.0708,0.0224] # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
+        'skyI_quality_thresh'   : [0.3469,0.2292] # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
     }
 
 # TODO: Default instrument params for minime90
@@ -1600,6 +1652,40 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
                                    'b2': 7.130e-02,
                                'center':  (266.3, 265.7),
                               }
+        # On 7/13/2018, the instrument was tuned and refocused.
+        # These are the instrument parameters from before that period:
+        elif dn < datetime.datetime(2018,7,13,0,0):
+            instrument['default_params'] = {# instrument params to be used if the laser fails (i.e., zenith reference)
+                                    'R': 5.115e-01,
+                                'alpha': 8.370e-05,
+                                    'I': 1.0,
+                                    'B': 0.0,
+                                   'a1': 5.810e-02,
+                                   'a2': -2.618e-02,
+                                   'b0': 2.319e-01,
+                                   'b1': 3.423e-01,
+                                   'b2': 7.130e-02,
+                               'center':  (287.1,270.1),
+                              }
+	# The laser failed on 10/01/2019
+        # These are the instrument parameters from before that period:
+        elif dn < datetime.datetime(2019,10,1,0,0):
+            instrument['default_params'] = {# instrument params to be used if the laser fails (i.e., zenith reference)
+                                    'R': 5.115e-01,
+                                'alpha': 8.370e-05,
+                                    'I': 1.0,
+                                    'B': 0.0,
+                                   'a1': 5.810e-02,
+                                   'a2': -2.618e-02,
+                                   'b0': 2.319e-01,
+                                   'b1': 3.423e-01,
+                                   'b2': 7.130e-02,
+                               'center': (283.7,276.9),
+                              }
+
+
+
+
     # On Aug 4, 2015, the CAR FPI was rebuilt with parts from the CAJ FPI.
     if instr_name=='minime01' and dn > datetime.datetime(2015,8,4):
         instrument['default_params'] = {# instrument params to be used if the laser fails (i.e., zenith reference)
