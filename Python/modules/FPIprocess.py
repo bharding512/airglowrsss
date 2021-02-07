@@ -352,38 +352,39 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
     laser_fns = []
     sky_fns = []
     local = pytz.timezone(site['Timezone'])
-    for day_offset in [-1, 0, 1]: # search folders around the day of interest
-        dir_dt = nominal_dt + datetime.timedelta(days = day_offset)
-        # Create the YYYYMMDD date format
-        yearstr = dir_dt.strftime('%Y')
-        datestr = dir_dt.strftime('%Y%m%d')
-        # Create the directory name for the data to be processed
-        data_dir = data_stub + yearstr + '/' + datestr + '/'
-        print(data_dir)
-        # Look in the data directory, and grab the files if they were
-        # taken between the start and stop times.
-        # First, lasers:
-        fns_all = get_all_laser_images(data_dir)
-        for fn in fns_all:
-            d = FPI.ReadIMG(fn)
-            dtime = local.localize(d.info['LocalTime'])
-            if dtime > start_dt and dtime < stop_dt:
-                laser_fns.append(fn)
-        # Second, sky:
-        fns_all = get_all_sky_images(data_dir)
-        for fn in fns_all:
-            d = FPI.ReadIMG(fn)
-            dtime = local.localize(d.info['LocalTime'])
-            if dtime > start_dt and dtime < stop_dt:
-                sky_fns.append(fn)
-    laser_fns.sort()
-    sky_fns.sort()
+
+    if not use_npz:
+        for day_offset in [-1, 0, 1]: # search folders around the day of interest
+            dir_dt = nominal_dt + datetime.timedelta(days = day_offset)
+            # Create the YYYYMMDD date format
+            yearstr = dir_dt.strftime('%Y')
+            datestr = dir_dt.strftime('%Y%m%d')
+            # Create the directory name for the data to be processed
+            data_dir = data_stub + yearstr + '/' + datestr + '/'
+            # Look in the data directory, and grab the files if they were
+            # taken between the start and stop times.
+            # First, lasers:
+            fns_all = get_all_laser_images(data_dir)
+            for fn in fns_all:
+                d = FPI.ReadIMG(fn)
+                dtime = local.localize(d.info['LocalTime'])
+                if dtime > start_dt and dtime < stop_dt:
+                    laser_fns.append(fn)
+            # Second, sky:
+            fns_all = get_all_sky_images(data_dir)
+            for fn in fns_all:
+                d = FPI.ReadIMG(fn)
+                dtime = local.localize(d.info['LocalTime'])
+                if dtime > start_dt and dtime < stop_dt:
+                    sky_fns.append(fn)
+        laser_fns.sort()
+        sky_fns.sort()
 
     # Uncomment these for rapid testing of new code
     #laser_fns = laser_fns[::6]
     #sky_fns = [sky_fns[20],sky_fns[78],sky_fns[119]]
 
-    if not laser_fns and not sky_fns:
+    if not laser_fns and not sky_fns and not use_npz:
         raise Exception('No %s data found between %s and %s. \n' % (instr_name, str(start_dt), str(stop_dt)))
 
     datestr = nominal_dt.strftime('%Y%m%d')
@@ -448,9 +449,11 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
 
     # Try to load the Boltwood and X300 data. This is inside a try block so that
     # the npz will still save if there is a problem.
-    FPI_Results['Clouds'] = None # defaults
-    FPI_Results['Dome']   = None
-    FPI_Results['Inside'] = None
+    print( np.any(np.isfinite(FPI_Results['Clouds']['mean'])) )
+    if not use_npz:# Do not overwrite
+        FPI_Results['Clouds'] = None # defaults
+        FPI_Results['Dome']   = None
+        FPI_Results['Inside'] = None
     try:
         # call modules from BoltWood for the two days required and combine the data
         if (FPI_Results['sky_times'][0].strftime("%Y%m%d") == FPI_Results['sky_times'][-1].strftime("%Y%m%d")):
@@ -512,15 +515,17 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
                 Inside[count,:] = [np.nan,np.nan,np.nan]
 
             count = count+1
-
+        print(np.any(np.isfinite(Clouds['mean'])))
         if(np.size(bw_date) == 0):
-            FPI_Results['Clouds'] = None
+            if not use_npz:#Do not overwrite
+                FPI_Results['Clouds'] = None
         else:
             FPI_Results['Clouds'] = {'mean': Clouds[:,0], 'max': Clouds[:,1], 'min': Clouds[:,2]}
 
         if(np.size(x_date) == 0):
-            FPI_Results['Dome'] = None
-            FPI_Results['Inside'] = None
+            if not use_npz:#Do not overwrite
+                FPI_Results['Dome'] = None
+                FPI_Results['Inside'] = None
         else:
             FPI_Results['Dome'] = {'mean': Dome[:,0], 'max': Dome[:,1], 'min': Dome[:,2]}
             FPI_Results['Inside'] = {'mean': Inside[:,0], 'max': Inside[:,1], 'min': Inside[:,2]}
@@ -529,7 +534,8 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
         if FPI_Results['Clouds'] is None: # if it wasn't found
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'No Boltwood cloud sensor data found.\n')
             c = np.nan*np.zeros(len(FPI_Results['LOSwind']))
-            FPI_Results['Clouds'] = {'mean': c, 'max': c, 'min': c}
+            if not use_npz:#Do not overwrite
+                FPI_Results['Clouds'] = {'mean': c, 'max': c, 'min': c}
             if bw_dir: # it should have been found
                 notify_the_humans = True
         else:
@@ -541,7 +547,8 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Found and loaded X300 temperature sensor data.\n')
     except: # There was an error in the Boltwood or X300 code. Write the log but continue.
         c = np.nan*np.zeros(len(FPI_Results['LOSwind']))
-        FPI_Results['Clouds'] = {'mean': c, 'max': c, 'min': c}
+        if not use_npz:#Do not overwrite
+            FPI_Results['Clouds'] = {'mean': c, 'max': c, 'min': c}
         tracebackstr = traceback.format_exc()
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Unknown error obtaining Boltwood or X300 data for %s. Traceback listed below. Analysis will continue without these data.\n-----------------------------------\n%s\n-----------------------------------\n' % (datestr,tracebackstr))
         notify_the_humans = True
@@ -676,23 +683,26 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
     # Try to make plots
     try:
         # Plot some quick-look single-station data (LOSwinds and Temps)
-        (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, reference = reference)
+        if use_npz:
+            Diagnostic_Fig=FPIDisplay.PlotDiagnosticDay(npzname, cloud_thresh, instrument['skyI_quality_thresh'], LASERPARAMINTERP='linear')
+        else:
+            # Add Level 1 diagnostics to diagnostics fig
+            ax = Diagnostic_Fig.add_subplot(427) # TODO: generalize diagnostic figure generation?
+            if FPI_Results['Clouds'] is not None:
+                ct = FPI_Results['sky_times']
+                cloud = FPI_Results['Clouds']['mean']
+                ax.plot(ct, cloud, 'k.-')
+                ax.plot([ct[0],ct[-1]], [cloud_thresh[0],cloud_thresh[0]], 'k--')
+                ax.plot([ct[0],ct[-1]], [cloud_thresh[1],cloud_thresh[1]], 'k--')
+                ax.set_xlim([ct[0] - datetime.timedelta(hours=0.5), ct[-1] + datetime.timedelta(hours=0.5)])
+                ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+                ax.set_ylim([-50,0])
+                ax.set_ylabel('Cloud indicator\n[degrees C]')
+                ax.grid(True)
+                ax.set_xlabel('Universal Time, [hours]')
+            Diagnostic_Fig.tight_layout()
 
-        # Add Level 1 diagnostics to diagnostics fig
-        ax = Diagnostic_Fig.add_subplot(427) # TODO: generalize diagnostic figure generation?
-        if FPI_Results['Clouds'] is not None:
-            ct = FPI_Results['sky_times']
-            cloud = FPI_Results['Clouds']['mean']
-            ax.plot(ct, cloud, 'k.-')
-            ax.plot([ct[0],ct[-1]], [cloud_thresh[0],cloud_thresh[0]], 'k--')
-            ax.plot([ct[0],ct[-1]], [cloud_thresh[1],cloud_thresh[1]], 'k--')
-            ax.set_xlim([ct[0] - datetime.timedelta(hours=0.5), ct[-1] + datetime.timedelta(hours=0.5)])
-            ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
-            ax.set_ylim([-50,0])
-            ax.set_ylabel('Cloud indicator\n[degrees C]')
-            ax.grid(True)
-            ax.set_xlabel('Universal Time, [hours]')
-        Diagnostic_Fig.tight_layout()
+        (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, reference = reference)
     except:
         # Summary plots crashed. We still want to send the diagnostics and log to the
         # website, so continue on with dummy plots.
@@ -746,8 +756,6 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
     #    summary_fns.pop(0)
 
     for fig, fn in zip(summary_figs, summary_fns):
-        if use_npz and 'diagnostic' in fn:# dont update diagnostics fig
-            continue
         fig.savefig(temp_plots_stub + fn, bbox_inches='tight') # save it in the remote2 data dir
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Created %s.\n' % fn)
         plt.close(fig)
@@ -771,45 +779,56 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
 
         site_id = site['sql_id']
         utc = pytz.utc # Define timezones
-        # Start and stop time of observations
-        d = FPI.ReadIMG(sky_fns[0])
-        dtime = local.localize(d.info['LocalTime'])
-        startut = dtime.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
-        d = FPI.ReadIMG(sky_fns[-1])
-        dtime = local.localize(d.info['LocalTime'])
-        stoput = dtime.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
+        # Start and stop time of observations.
+        #d = FPI.ReadIMG(sky_fns[0])
+        #dtime = local.localize(d.info['LocalTime'])
+        #startut = dtime.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
+        #d = FPI.ReadIMG(sky_fns[-1])
+        #dtime = local.localize(d.info['LocalTime'])
+        #stoput = dtime.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
         # Open the database (see http://zetcode.com/databases/mysqlpythontutorial/ for help)
         # Read the user and password from a file.
 #        con = mdb.connect(host='webhost.engr.illinois.edu', db='airglowgroup_webdatabase', read_default_file="/home/airglow/.my.cnf")
 #        cur = con.cursor()
         # Send summary images to server
         for fn, db_id in zip(summary_fns, db_ids):
-            if use_npz and 'diagnostic' in fn: #upload diagnostics only if preexistent is found
-                if not os.path.exists(temp_plots_stub + fn):
-                    continue
             flag = subprocess.call(['scp', temp_plots_stub + fn, scp_user + ':' + web_images_stub + fn]) # send to airglow
             if flag != 0: # Sending png to airglow failed
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
                 notify_the_humans = True
             # If we are supposed to put this png in Madrigal, put it in the Madrigal database directory
-            if send_to_madrigal and instrument['send_to_madrigal'] and 'diagnostic' not in fn: # don't send diag fig
+            if send_to_madrigal and instrument['send_to_madrigal']:
                 shutil.copy(temp_plots_stub + fn ,madrigal_stub) # save the figure to the madrigal directory
             # update the database
-            # Send winds png. First find out if the entry is in there (i.e., we are just updating the png)
-            sql_cmd = 'SELECT id FROM DataSet WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (site_id, db_id, startut)
+            # Send png. First find out if the entry is in there (i.e., we are just updating the png)
+            sql_cmd = 'SELECT id FROM DataSet WHERE SummaryImage = \"%s\"' % (db_image_stub + fn)
+            #sql_cmd = 'SELECT id FROM DataSet WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (site_id, db_id, startut)
 	    rows = query(sql_cmd)
 #            cur.execute(sql_cmd)
 #            rows = cur.fetchall()
             log_fn = db_log_stub + instrsitedate + '_log.log'
             if len(rows) == 0: # Create the entry
-	    #if True:
+                # Start and stop time of observations
+                if use_npz:
+                    d0,dn=FPI_Results['sky_times'][0],FPI_Results['sky_times'][-1]
+                else:
+                    d=FPI.ReadIMG(sky_fns[0])
+                    d0 = local.localize(d.info['LocalTime'])
+                    d = FPI.ReadIMG(sky_fns[-1])
+                    dn = local.localize(d.info['LocalTime'])
+                
+                startut = d0.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
+                stoput = dn.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
+                
                 sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%d, %d, \"%s\", \"%s\", \"%s\", \"%s\")' % (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
 		logfile.write(sql_cmd + '\n')
 		query(sql_cmd)
 #                cur.execute(sql_cmd)
             else: # Entry exists. Update it.
-                sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + fn, log_fn, site_id, db_id, startut)
+                sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE id = %d' % (db_image_stub + fn, log_fn, rows[0][0])
+               # sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + fn, log_fn, site_id, db_id, startut)
 #                cur.execute(sql_cmd)
+		logfile.write(sql_cmd + '\n')
 		query(sql_cmd)
 
         # Send level 3 windfield gif to website, if we made one

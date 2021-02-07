@@ -1208,6 +1208,294 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
 
     return(Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph)
 
+def PlotDiagnosticDay(f, cloud_thresh = [-22.,-10.],\
+			sky_quality_thresh =[-np.inf,-np.inf],\
+			LASERPARAMINTERP = 'linear',\
+			):
+    '''
+    Function to plot a single night's diagnotic file
+    
+    INPUTS:
+       f                  - absolute path of the NPZ file.
+       cloud_thresh       - [float,float], K. The two cloud sensor readings that indicate 
+                             partially- and fully-cloudy. This affects the quality flag.
+                          - None. Extracts the cloud thresholds from log file.
+                             It must be located along with f within the same directory.
+       sky_quality_thresh - [float,float]. The two intensity thresholds that indicate 
+                             q1, q2 low sky intensity thresholds.
+                          - None. Extract the thresholds from the instrument dictionary
+                             saved within NPZ file.
+       LASERPARAMINTERP   - 'linear' or 'spline'  interpolation used for instrument parameters
+    
+    OUTPUTS:
+    
+    HISTORY:
+        5 Feb 2021, Compiled and tested by L. Navarro.
+        
+    '''
+    import re
+    # Read in the file
+    npzfile = np.load(f,allow_pickle=True)
+    FPI_Results = npzfile['FPI_Results']
+    FPI_Results = FPI_Results.reshape(-1)[0]
+    instrument = npzfile['instrument']
+    instrument = instrument.reshape(-1)[0]
+    site = npzfile['site']
+    site = site.reshape(-1)[0]
+    del npzfile.f # http://stackoverflow.com/questions/9244397/memory-overflow-when-using-numpy-load-in-a-loop
+    npzfile.close()
+    
+    instrsitedate=os.path.basename(f)
+    
+#     instr_name ,_,datestr=instrsitedate.split("_")[:3]
+#     nominal_dt=datetime.datetime.strptime(datestr[:8],'%Y%m%d')
+#     site_name = fpiinfo.get_site_of(instr_name, nominal_dt)
+#     site = fpiinfo.get_site_info(site_name, nominal_dt)
+    
+    #Reading all looking directions
+    valid_az = np.array([site['Directions'][direc]['az'] for direc in site['Directions']])
+    valid_ze = np.array([site['Directions'][direc]['ze'] for direc in site['Directions']])
+    
+    #Sky quality thresholds
+    if sky_quality_thresh is None:
+        sky_quality_thresh=instrument['skyI_quality_thresh']
+    
+    #Cloud cover thresholds
+    if cloud_thresh is None:
+        logname = os.path.dirname(f) +'/' + instrsitedate + '.log'
+        h=open(logname,'r')
+        lines=h.readlines()
+        h.close()
+        q1=-np.inf
+        q2=-np.inf
+        for line in lines:
+            q1s=re.findall(r">(.\d*): W1T1",line)
+            if len(q1s)>0:
+                q1=np.float(q1s[0])
+            q2s=re.findall(r">(.\d*): W2T1",line)
+            if len(q2s)>0:
+                q2=np.float(q2s[0])
+            if np.isfinite(q1) and np.isfinite(q2):
+                break
+        cloud_thresh=[q1,q2]
+    
+    #Read output results
+    sky_times=FPI_Results['sky_times']
+    sky_redchi=FPI_Results['sky_chisqr']
+    skyI=FPI_Results['skyI']
+    all_az=FPI_Results['az']
+    all_ze=FPI_Results['ze']
+    direction=FPI_Results['direction']
+    laser_times=FPI_Results['laser_times']
+    laser_redchi=FPI_Results['laser_chisqr']
+    laser_value=FPI_Results['laser_value']
+    laser_stderr=FPI_Results['laser_stderr']
+    reference=FPI_Results['reference']
+    center=FPI_Results['center_pixel']
+    
+    #use laser or not
+    uselaser='laser' in reference
+    
+    
+    
+    
+    
+    
+    fig = plt.figure(dpi=300, figsize=(10,7.5)) # Figure for diagnostics to be drawn to
+    
+    fontP = FontProperties()
+    fontP.set_size('small')
+    
+    ################ Plot center location ######################
+    # only plot this one if uselaser and centerfinding succeeded for > 1 point
+    if uselaser and center is not None and len(center)>0 and np.shape(center)!=(2,):
+        lt0 = laser_times[0]
+        tdiffvec = [laser_time - lt0 for laser_time in laser_times]
+        dt = np.array([tdiff.seconds + tdiff.days*86400. for tdiff in tdiffvec])
+        t = np.linspace(0, dt.max(), 500)
+        datet = [lt0 + datetime.timedelta(seconds=ts) for ts in t]
+        
+        dt_laser = [tdiff.seconds for tdiff in tdiffvec]
+        npoly = np.floor(len(dt_laser)/10) # use an adaptive degree polynomial to fit
+        # Limit the maximum degree, because of numerical sensitivity for large orders.
+        if npoly > 10:
+            npoly = 10 
+        pf_cx = np.polyfit(dt_laser,center[:,0],npoly)
+        cx = np.poly1d(pf_cx)
+        pf_cy = np.polyfit(dt_laser,center[:,1],npoly)
+        cy = np.poly1d(pf_cy)
+        
+        
+        
+        xdev = center[:,0] - center[0,0]
+        ydev = center[:,1] - center[0,1]
+        xdevi = cx(t) - center[0,0]
+        ydevi = cy(t) - center[0,1]
+
+        ax = fig.add_subplot(421)
+        ax.plot(datet, xdevi, 'b', label='x')
+        ax.plot(laser_times, xdev, 'b.')
+        ax.plot(datet, ydevi, 'r', label='y')
+        ax.plot(laser_times, ydev, 'r.')
+        ax.legend(loc='best', prop=fontP)
+        ax.set_xlim([sky_times[0] - datetime.timedelta(hours=0.5), sky_times[-1] + datetime.timedelta(hours=0.5)])
+        ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+        m = 0.5 # maximum deviation to show on plot
+        if all(xdev < m) and all(xdev > -m) and all(ydev < m) and all(ydev > -m): # Set the x and y lims at +/- m 
+            ax.set_ylim([-m, m])
+
+        ax.set_ylabel('Center deviation\n[pixels]')
+        #ax.set_xlabel('Universal Time, [hours]')
+        ax.set_title(site['Abbreviation'] + ':' + \
+            laser_times[0].strftime(' %d %b, %Y %H:%M LT') + ' - ' + laser_times[-1].strftime('%H:%M LT') )
+
+        ax.grid(True)
+
+    ####################### Laser Fit Chi^2 #######################
+    
+    if uselaser:
+        ax = fig.add_subplot(422)
+        ax.plot(laser_times, laser_redchi,'k.-')
+        ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+        ax.set_xlim([sky_times[0] - datetime.timedelta(hours=0.5), sky_times[-1] + datetime.timedelta(hours=0.5)])
+        ax.set_ylabel('Laser Fit\nReduced Chi^2')
+        ax.set_title(site['Abbreviation'] + ':' + \
+                laser_times[0].strftime(' %d %b, %Y %H:%M LT') + ' - ' + laser_times[-1].strftime('%H:%M LT') )
+        ax.grid(True)
+
+    ####################### Spline fit for I #######################
+    # Show the laser intensity halfway out in the spectrum
+    if uselaser:
+        r = 0.5 # r/rmax, where r is the radius of the radial bin at which to measure the intensity
+        I = laser_value['I']
+        a1 = laser_value['a1']
+        a2 = laser_value['a2']
+        Ir = I * ( 1 + a1*r + a2*r**2 )
+        # assume errorbar at r=rmax/2 is approximately equal to that at r=0
+        Ie = laser_stderr['I']
+        ax = fig.add_subplot(423)
+        ax.errorbar(laser_times,Ir,yerr=Ie,fmt='k.-')
+        ax.set_xlim([sky_times[0] - datetime.timedelta(hours=0.5), sky_times[-1] + datetime.timedelta(hours=0.5)])
+        ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+        ax.set_ylabel('Laser Intensity\n[counts]')
+        ax.grid(True)
+
+    ####################### Spline fit for t #######################
+    # Show the spline fit for a certain parameter
+    if uselaser:
+        p=laser_value['t']
+        w=laser_stderr['t']
+        s=len(w)
+        if LASERPARAMINTERP == 'spline':
+            laser_spfit = interpolate.UnivariateSpline(np.array(dt),p, w=w, s=s)
+        elif LASERPARAMINTERP == 'linear':
+            laser_spfit = interpolate.interp1d(np.array(dt), p)
+        
+        dt = []
+        for x in laser_times:
+            diff = (x - lt0)
+            dt.append(diff.seconds+diff.days*86400.)
+        
+        dt_vec = np.linspace(0, max(dt), 500)
+        p_vec = laser_spfit(dt_vec)
+        datet_vec = [laser_times[0] + datetime.timedelta(seconds=ts) for ts in dt_vec]
+
+        ax = fig.add_subplot(425)
+        ax.plot(datet_vec,p_vec,'k')
+        ax.errorbar(laser_times,p,yerr=w,fmt='k.')
+        ax.set_xlim([sky_times[0] - datetime.timedelta(hours=0.5), sky_times[-1] + datetime.timedelta(hours=0.5)])
+        ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+        ax.set_ylabel('Etalon Gap, [m]')
+        ax.grid(True)
+
+    
+    ##################### Look Direction Validation ####################### OUT
+
+    # Plot the look directions
+    all_ze = np.array(all_ze)
+    all_az = np.array(all_az)
+    valid_ze = np.array(valid_ze)
+    valid_az = np.array(valid_az)
+
+    # Flip az for negative ze angles
+    idx = all_ze < 0
+    all_ze[idx] = -all_ze[idx]
+    all_az[idx] = all_az[idx] + 180
+    idx = valid_ze < 0
+    valid_ze[idx] = -valid_ze[idx]
+    valid_az[idx] = valid_az[idx] + 180
+
+    az_rad = all_az * np.pi/180.0
+    valid_az_rad = valid_az * np.pi/180.0
+
+    ax = fig.add_subplot(428, projection='polar')
+    ax.plot(valid_az_rad, valid_ze, 'kx', label = 'valid')
+    valid_idx = [d is not 'Unknown' for d in direction]
+    invalid_idx = [not i for i in valid_idx]
+    ax.plot(az_rad[np.where(valid_idx)], all_ze[np.where(valid_idx)], 'k.', label = 'actual')
+    ax.plot(az_rad[np.where(invalid_idx)], all_ze[np.where(invalid_idx)], 'r.', label = 'unrecognized')
+    # Now make it look like a cardinal plot, not a math plot
+    ax.set_theta_direction(-1)
+    ax.set_theta_offset(np.pi/2)
+    ax.set_rmax(90.)
+    ax.set_rgrids([30,60])
+    ax.legend(bbox_to_anchor=(1.05,1),loc=2,borderaxespad=0.,numpoints=1,prop=fontP)
+    # Indicate any non-displayed points (zenith > 90)
+    nnshown = sum(abs(all_ze) > 90.)
+    if nnshown > 0:
+        ax.set_xlabel('%03i points not shown (|ze| > 90)' % nnshown)
+    
+    ##################### Sky Fit Chi^2 ####################### 
+    
+    ax = fig.add_subplot(424)
+    ax.plot(sky_times, sky_redchi,'k.-')
+    ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+    ax.set_xlim([sky_times[0] - datetime.timedelta(hours=0.5), sky_times[-1] + datetime.timedelta(hours=0.5)])
+    ax.set_ylabel('Sky Fit\nReduced Chi^2')
+    ax.grid(True)
+
+    ####################### Plot of skyI ####################### 
+    ax = fig.add_subplot(426)
+    for direc in list(set(direction)):
+        # account for different exposure times
+        I = np.array([si for (si,d) in zip(skyI, direction) if d == direc])
+        t = np.array([si for (si,d) in zip(sky_times, direction) if d == direc])
+        ax.semilogy(t, I, '.-', label=direc)
+    tp0 = sky_times[0] - datetime.timedelta(hours=0.5)
+    tp1 = sky_times[-1] + datetime.timedelta(hours=0.5)
+    ax.semilogy([tp0, tp1],[sky_quality_thresh[0], sky_quality_thresh[0]],'k--',lw=0.5,label='qual thresh (q=1)')
+    ax.semilogy([tp0, tp1],[sky_quality_thresh[1], sky_quality_thresh[1]],'k--',lw=0.5,label='qual thresh (q=2)')
+    
+    ax.set_xlim([tp0, tp1])
+    ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+    ax.set_ylabel('Line Intensity\n[arbitrary]')
+    ax.set_xlabel('Universal Time')
+    ax.legend(loc='best', prop={'size':6}, numpoints=1, ncol=5, framealpha=0.5)
+    ax.grid(True)
+    
+    ####################### Plot of cloud cover #######################
+    ax = fig.add_subplot(427)
+    
+    if FPI_Results['Clouds'] is not None:
+        ct = FPI_Results['sky_times']
+        cloud = FPI_Results['Clouds']['mean']
+        ax.plot(ct, cloud, 'k.-')
+        ax.plot([ct[0],ct[-1]], [cloud_thresh[0],cloud_thresh[0]], 'k--')
+        ax.plot([ct[0],ct[-1]], [cloud_thresh[1],cloud_thresh[1]], 'k--')
+        ax.set_xlim([ct[0] - datetime.timedelta(hours=0.5), ct[-1] + datetime.timedelta(hours=0.5)])
+        ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+        ax.set_ylim([-50,0])
+        ax.set_ylabel('Cloud indicator\n[degrees C]')
+        ax.grid(True)
+        ax.set_xlabel('Universal Time, [hours]')
+    
+    fig.tight_layout()
+    
+    return fig
+
+
+
+
 def CompareData(files, full_clear=-30, full_cloud=-20,
             Tmin=500, Tmax=1500, Dmin=-200, Dmax=200,
             reference='Laser',directions=None,displayhours=False,

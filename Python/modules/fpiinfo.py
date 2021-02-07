@@ -1003,16 +1003,8 @@ _instruments['minime03'] = {
                                'a2': -1.472e-01,
                                'b0': -1.197e-01,
                                'b1': -2.140e-01,
-<<<<<<< .mine
                                'b2': 9.668e-01,
                            'center':  (287.7,270.2),
-||||||| .r391
-                               'b2': 9.668e-01, 
-                           'center':  (283.71, 276.92),
-=======
-                               'b2': 9.668e-01,
-                           'center':  (283.71, 276.92),
->>>>>>> .r435
                           },
         'sql_winds_id'          : 99,           # ID for SQL database
         'sql_temperatures_id'   : 100,           # ID for SQL database
@@ -1021,13 +1013,7 @@ _instruments['minime03'] = {
         'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
-<<<<<<< .mine
         'skyI_quality_thresh'   : [0.2275, 0.1074], # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
-||||||| .r391
-        'skyI_quality_thresh'   : [-np.inf, -np.inf], # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
-=======
-        'skyI_quality_thresh'   : [0.04, 0.025], # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
->>>>>>> .r435
     }
 
 _instruments['minime04'] = {
