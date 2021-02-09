@@ -1712,6 +1712,10 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
         if dn >= datetime.datetime(2018,12,1):
             instrument['default_params']['center'] = (266.106, 263.65)
 
+        #Noticed laser center shifted
+        if dn>=datetime.datetime(2020,4,1):
+            instrument['default_params']['center'] = (270., 266.)
+
 
     # In mid-2017, the minime09 instrument was moved to KWJ, and new instrument parameters are needed.
     # I only trust these after Jan 1, 2018, however.

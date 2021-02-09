@@ -262,6 +262,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
         doy - int (i.e., Jan 1 is doy=1)
     OPTIONAL INPUTS:
         reference - str, 'laser' or 'zenith'. Passed on to FPI.ParameterFit(...)
+                    If None, reference inside NPZ file is used (use_npz=True only)
         use_npz - bool, if True, the call to FPI.ParameterFit(...) will be skipped,
                   and the previously-analyzed data in the saved npz file will be used
                   instead. Cloud and X300 data will be reloaded and added to the npz file.
@@ -404,6 +405,14 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
         logfile.close()
         raise Exception('No %s laser data found between %s and %s. Sky data found.\n' % (instr_name, str(start_dt), str(stop_dt)))
 
+    # More than 90% of sky images were taken under too hot conditions
+    if not use_npz and sky_fns:
+        temps=np.array(map(lambda fn:FPI.ReadIMG(fn).info['CCDTemperature'],sky_fns))
+        nbad=np.count_nonzero(temps>-10)
+        if nbad/temps.size>0.9:
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'About %i/%i sky images from %s had temperatures over -10C between %s and %s. <HOTCCD> \n' % (nbad, temps.size, instr_name, str(start_dt), str(stop_dt)))
+            logfile.close()
+            raise Exception('About %i/%i sky images from %s had temperatures over -10C between %s and %s. <HOTCCD> \n' % (nbad, temps.size, instr_name, str(start_dt), str(stop_dt)))
 
     npzname = results_stub + instrsitedate + '.npz' # the name of the npz file to save to
     Diagnostic_Fig = plt.figure(dpi=300, figsize=(10,7.5)) # Figure for diagnostics to be drawn to
@@ -415,6 +424,10 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
         npzfile.close()
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                 'Laser and sky image skipped. Loaded npz file: %s\n' % npzname.split('/')[-1])
+        if reference is None:
+            reference=FPI_Results['reference']
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
+                    'Using saved reference: %s\n' %reference)
     else:
         # Try to analyze the data
         try:
@@ -449,7 +462,6 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
 
     # Try to load the Boltwood and X300 data. This is inside a try block so that
     # the npz will still save if there is a problem.
-    print( np.any(np.isfinite(FPI_Results['Clouds']['mean'])) )
     if not use_npz:# Do not overwrite
         FPI_Results['Clouds'] = None # defaults
         FPI_Results['Dome']   = None
@@ -515,7 +527,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
                 Inside[count,:] = [np.nan,np.nan,np.nan]
 
             count = count+1
-        print(np.any(np.isfinite(Clouds['mean'])))
+
         if(np.size(bw_date) == 0):
             if not use_npz:#Do not overwrite
                 FPI_Results['Clouds'] = None
