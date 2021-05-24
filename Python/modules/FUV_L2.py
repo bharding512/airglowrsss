@@ -12,8 +12,8 @@ Todo:
 ####################################### VERSION CONTROL ############################################
 # These need to be manually changed, when necessary.
 # NOTE: When the major version is updated, you should change the History global attribute
-software_version_major = 1 # Should only be incremented on major changes
-software_version_minor = 14 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_major = 4 # Should only be incremented on major changes
+software_version_minor = 0 # [0-99], increment on ALL published changes, resetting when the major version changes
 software_version = float(software_version_major)+software_version_minor/1000.
 ####################################################################################################
 
@@ -1237,8 +1237,8 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
     ncfile.Data_Version =                   np.float32(data_version)
     ncfile.Data_VersionMajor =              np.ubyte(data_versionmajor)
     ncfile.Data_Revision =                  np.ushort(data_revision)
-    ncfile.Date_Stop =                      L25_dict['FUV_dn'][0].strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC' # single measurement: use midpoint
-    ncfile.Date_Start =                     L25_dict['FUV_dn'][-1].strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC' # single measurement: use midpoint
+    ncfile.Date_End =                       L25_dict['FUV_dn'][-1].strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC' # single measurement: use midpoint
+    ncfile.Date_Start =                     L25_dict['FUV_dn'][0].strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC' # single measurement: use midpoint
     ncfile.Description =                    'ICON FUV Nighttime O+ profiles (DP 2.5)'
     ncfile.Descriptor =                     'FUV > Intensified Far Ultraviolet Imager'
     ncfile.Discipline =                     'Space Physics > Ionospheric Science'
@@ -1246,9 +1246,9 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
     ncfile.File_Date =                      t_file.strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC'
     ncfile.Generated_By =                   'ICON SDC > ICON UIUC FUV L2.5 Processor v%.2f, J. J. Makela, D. Iliou' % software_version
     ncfile.Generation_Date =                t_file.strftime('%Y%m%d')
-    ncfile.setncattr_string('History',      ['FUV L2.5 Processor v1.014: Flag the data affected by conjugate photoelectrons and adjust the qualities accordingly. '
+    ncfile.setncattr_string('History',      ['FUV L2.5 Processor v4.00: Flag the data affected by conjugate photoelectrons and adjust the qualities accordingly. '
                                             'Add a new variable `ICON_L25_Sunlit_Conjugate_Raypath_Percentage` to indicate how much the data is affected by photoelectrons '
-                                            ', U. Kamaci, 20 Jan 2021 '
+                                            '. Fix the Date_Start-Date_End bug., U. Kamaci, 5 Feb 2021 '
                                             ])
     ncfile.HTTP_LINK =                      'http://icon.ssl.berkeley.edu/Instruments/FUV'
     ncfile.Instrument =                     'FUV'
