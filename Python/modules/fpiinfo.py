@@ -73,9 +73,21 @@ _dates['minime09']['kwj'] = { 'start': datetime.datetime(2018, 1, 1),
                               'stop' : None, }
 
 #DASI FPIs
+_dates['minime10'] ={}
+_dates['minime10']['uao'] = { 'start' : datetime.datetime(2021,4,5),
+			      'stop'  : datetime.datetime(2021,6,30), }
+
 _dates['minime11'] ={}
-_dates['minime11']['uao'] = { 'start':datetime.datetime(2020,10,20),
-			      'stop':None, }
+_dates['minime11']['uao'] = { 'start' : datetime.datetime(2020,10,20),
+			      'stop'  : datetime.datetime(2021,6,30) }
+_dates['minime11']['low'] = { 'start' : datetime.datetime(2021,8,12),
+			      'stop'  : None, }
+
+_dates['minime12'] ={}
+_dates['minime12']['uao'] = { 'start' : datetime.datetime(2021,4,28),
+			      'stop'  : datetime.datetime(2021,6,30), }
+_dates['minime12']['blo'] = { 'start' : datetime.datetime(2021,8,16),
+			      'stop'  : None, }
 
 # The minime9* instruments have "always" been at their sites. (TODO)
 _dates['minime90'] = {}
@@ -720,6 +732,64 @@ _sites['sjs'] = {
     }
 
 
+_sites['low'] = {
+        'Location':     (34.752, -111.423, 2308),
+        'Name':         'Lowell Observatory',
+        'Abbreviation': 'low',
+        'Timezone':     'US/Arizona',
+        'CloudThresh':  -25.0,
+        'BufferTime':   45,
+        'scpUser':      'MiniME',
+        'scpPort':      19999,
+        'Network':      'nation',
+        'sql_id':       33, # ID on the airglow SQL database
+        'share':        False, # whether or not to save a copy of the npz file in a separate folder
+        'borders':      True,
+        'Directions':   {
+                'Laser': {'ze': 180, 'az': 87, 'exptime': 30,
+		            'n_exp': 0, 'last_exp': None, 'delay': 600},
+	            'Zenith': {'ze': 0, 'az': 0, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':1500},
+	            'North': {'ze': 45, 'az': 0, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'South': {'ze': -45, 'az': 0, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'East': {'ze': 45, 'az': 90, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'West': {'ze': -45, 'az': 90, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+                },
+    }
+
+
+_sites['blo'] = {
+        'Location':     (41.94, -111.41, 1380),
+        'Name':         'Bear Lake Observatory',
+        'Abbreviation': 'blo',
+        'Timezone':     'US/Mountain',
+        'CloudThresh':  -25.0,
+        'BufferTime':   45,
+        'scpUser':      'MiniME',
+        'scpPort':      19999,
+        'Network':      'nation',
+        'sql_id':       34, # ID on the airglow SQL database
+        'share':        False, # whether or not to save a copy of the npz file in a separate folder
+        'borders':      True,
+        'Directions':   {
+                'Laser': {'ze': 180, 'az': 87, 'exptime': 30,
+		            'n_exp': 0, 'last_exp': None, 'delay': 600},
+	            'Zenith': {'ze': 0, 'az': 0, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':1500},
+	            'North': {'ze': 45, 'az': 0, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'South': {'ze': -45, 'az': 0, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'East': {'ze': 45, 'az': 90, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'West': {'ze': -45, 'az': 90, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+                },
+    }
 
 # TODO: If we ever end up controlling these peruvian sites, make sure
 # this stuff is correct.
@@ -1211,42 +1281,115 @@ _instruments['minime09'] = {
         'skyI_quality_thresh'   : [0.0708,-np.inf], # The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively)
     }
 
+_instruments['minime10'] = {
+        'name'          : 'minime10',
+        'N'             : 500,          # Number of annuli
+        'N0'            : 0,            # First annulus to use
+        'N1'            : 500,          # Last annulus to use
+        'focal_length'  : 30e-2,       # focal length of lens in m
+        'pix_size'      : 13e-6,        # pixel size on CCD in m
+        'lam_laser'     : 632.8e-9,     # laser wavelength in m
+        'lam0'          : 630.0e-9,     # nominal line center wavelength in m
+        'lam0_gl'       : 557.7e-9,     # nominal line center wavelength in m
+        'nominal_t'     : 1.2806e-2,       # approximate etalon gap in m
+        'default_params': {# instrument params to be used if the laser fails (i.e., zenith reference)
+                                'R': 0.77,
+                            'alpha': 8.65644e-5,
+                                'B': 0.0,
+                                'I': 1.0,
+                               'a1': -1.97e-2,
+                               'a2': -8.7e-3,
+                               'b0': 1.74,
+                               'b1': 5.7e-1,
+                               'b2': -4.2e-1,
+                           'center':  (255.84, 250.88),
+                          },
+        'sql_winds_id'          : 122,           # ID for SQL database
+        'sql_temperatures_id'   : 123,           # ID for SQL database
+        'sql_gl_winds_id'       : 131,           # ID for SQL database
+        'sql_gl_temperatures_id': 132,           # ID for SQL database
+        'sql_diagnostics_id'    : 124,           # ID for SQL database
+        'many_fringes'          : True,         # indicates whether radial falloff terms should be used
+        'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
+        'skyI_quality_thresh'   : [-np.inf,-np.inf],#[0.5439,0.3701], #The brightness [counts/sec] below which we raise the quality flag
+     }
+
 _instruments['minime11'] = {
         'name'          : 'minime11',
         'N'             : 500,          # Number of annuli
         'N0'            : 0,            # First annulus to use
         'N1'            : 500,          # Last annulus to use
-        'focal_length'  : 300e-3,       # focal length of lens in m
+        'focal_length'  : 30e-2,       # focal length of lens in m
         'pix_size'      : 13e-6,        # pixel size on CCD in m
         'lam_laser'     : 632.8e-9,     # laser wavelength in m
         'lam0'          : 630.0e-9,     # nominal line center wavelength in m
-        'nominal_t'     : 1.5e-2,       # approximate etalon gap in m
+        'lam0_gl'       : 557.7e-9,     # nominal line center wavelength in m
+        'nominal_t'     : 1.2806e-2,       # approximate etalon gap in m
         'default_params': {# instrument params to be used if the laser fails (i.e., zenith reference)
                                 'R': 0.77,
-                            'alpha': 7.7e-5,
-                                'I': 1.0,
+                            'alpha': 8.65418e-5,
                                 'B': 0.0,
-                               'a1': -8.6e-1,
-                               'a2': -4.0e-2,
-                               'b0': 1.3,
-                               'b1': 2.7e-1,
-                               'b2': -3.8e-2,
-                           'center':  (255.0, 255.),
+                                'I': 1.0,
+                               'a1': -4.18e-2,
+                               'a2': -1.71e-2,
+                               'b0': 1.69,
+                               'b1': 5.1e-1,
+                               'b2': -4.67e-1,
+                           'center':  (250.34, 256.83),
                           },
         'sql_winds_id'          : 117,           # ID for SQL database
         'sql_temperatures_id'   : 118,           # ID for SQL database
+        'sql_gl_winds_id'       : 133,           # ID for SQL database
+        'sql_gl_temperatures_id': 134,           # ID for SQL database
         'sql_diagnostics_id'    : 119,           # ID for SQL database
         'many_fringes'          : True,         # indicates whether radial falloff terms should be used
         'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
-        'skyI_quality_thresh'   : [0.5439,0.3701], #The brightness [counts/sec] below which we raise the quality flag
+        'skyI_quality_thresh'   : [-np.inf,-np.inf],#[0.5439,0.3701], #The brightness [counts/sec] below which we raise the quality flag
+    }
+
+_instruments['minime12'] = {
+        'name'          : 'minime12',
+        'N'             : 500,          # Number of annuli
+        'N0'            : 0,            # First annulus to use
+        'N1'            : 500,          # Last annulus to use
+        'focal_length'  : 30e-2,       # focal length of lens in m
+        'pix_size'      : 13e-6,        # pixel size on CCD in m
+        'lam_laser'     : 632.8e-9,     # laser wavelength in m
+        'lam0'          : 630.0e-9,     # nominal line center wavelength in m
+        'lam0_gl'       : 557.7e-9,     # nominal line center wavelength in m
+        'nominal_t'     : 1.2806e-2,       # approximate etalon gap in m
+        'default_params': {# instrument params to be used if the laser fails (i.e., zenith reference)
+                                'R': 0.77,
+                            'alpha': 8.65454e-5,
+                                'B': 0.0,
+                                'I': 1.0,
+                               'a1': -6.2e-2,
+                               'a2': 7.2e-4,
+                               'b0': 1.33,
+                               'b1': 4.5e-1,
+                               'b2': -1.88e-1,
+                           'center':  (257.02, 266.06),
+                          },
+        'sql_winds_id'          : 128,           # ID for SQL database
+        'sql_temperatures_id'   : 129,           # ID for SQL database
+        'sql_gl_winds_id'       : 135,           # ID for SQL database
+        'sql_gl_temperatures_id': 136,           # ID for SQL database
+        'sql_diagnostics_id'    : 130,           # ID for SQL database
+        'many_fringes'          : True,         # indicates whether radial falloff terms should be used
+        'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
+        'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
+        'skyI_quality_thresh'   : [-np.inf,-np.inf],#[0.5439,0.3701], #The brightness [counts/sec] below which we raise the quality flag
     }
 
 _instruments['minime80'] = { #Update this from a laser image or two!
         'name'          : 'minime80',
         'N'             : 500,          # Number of annuli
-        'N0'            : 0,            # First annulus to use
+        'N0'            : 20,            # First annulus to use
         'N1'            : 500,          # Last annulus to use
         'focal_length'  : 300e-3,       # focal length of lens in m
         'pix_size'      : 13e-6,        # pixel size on CCD in m
@@ -1668,7 +1811,21 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
                                    'b2': 7.130e-02,
                                'center': (283.7,276.9),
                               }
-
+	# The laser failed on 01/07/2021
+        # These are the instrument parameters from before that period:
+        elif dn < datetime.datetime(2021,1,7,0,0):
+            instrument['default_params'] = {# instrument params to be used if the laser fails (i.e., zenith reference)
+                                    'R': 5.52e-01,
+                                'alpha': 8.3755e-05,
+                                    'I': 1.0,
+                                    'B': 0.0,
+                                   'a1': -1.567e-01,
+                                   'a2': -1.893e-02,
+                                   'b0': 0.5,
+                                   'b1': 0,
+                                   'b2': 0,
+                               'center': (290.5,268.4),
+                               }
 
 
 
@@ -1715,6 +1872,11 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
         #Noticed laser center shifted
         if dn>=datetime.datetime(2020,4,1):
             instrument['default_params']['center'] = (270., 266.)
+            instrument['default_params']['a1'] = 1.31e-2
+            instrument['default_params']['a2'] = -1.91e-2
+            instrument['default_params']['b0'] = 1.75
+            instrument['default_params']['b1'] = 3.43e-1
+            instrument['default_params']['b2'] = -1.21e-2
 
 
     # In mid-2017, the minime09 instrument was moved to KWJ, and new instrument parameters are needed.

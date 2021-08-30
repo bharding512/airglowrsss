@@ -223,7 +223,7 @@ def get_all_laser_images(direc):
 
 
 
-def get_all_sky_images(direc):
+def get_all_sky_images(direc,sky_line_tag='X'):
     '''
     Return all sky (i.e., airglow) images in the specified directory, as a list of strings.
     Sky images are those of the following forms:
@@ -232,17 +232,21 @@ def get_all_sky_images(direc):
     UAO_X_20091103_210000_001.img
 
     Return empty list if none are found.
+
+    Optional:
+        color: str to define color tag used in images.
+
+    History:
+        Created by J. J. Makela's RSSS group
+        Added line tag to support other airglow lines. L. Navarro
     '''
-
-    fns_1 = glob.glob(direc + '/X[0-9]*.img')
-    fns_2 = glob.glob(direc + '/*_X_*.img')
-
+    fns_1 = glob.glob(direc + '/%s[0-9]*.img'%sky_line_tag)
+    fns_2 = glob.glob(direc + '/*_%s_*.img'%sky_line_tag)
     return fns_1 + fns_2
 
 
 
-
-def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
+def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', use_npz = False,
                   wind_err_thresh=100., temp_err_thresh=100., cloud_thresh = [-22.,-10.],
                   send_to_website=False, enable_share=False, send_to_madrigal=False,
                   enable_windfield_estimate=False,
@@ -262,7 +266,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
         doy - int (i.e., Jan 1 is doy=1)
     OPTIONAL INPUTS:
         reference - str, 'laser' or 'zenith'. Passed on to FPI.ParameterFit(...)
-                    If None, reference inside NPZ file is used (use_npz=True only)
+                    If None, reference inside NPZ file is used (works with use_npz=True only)
         use_npz - bool, if True, the call to FPI.ParameterFit(...) will be skipped,
                   and the previously-analyzed data in the saved npz file will be used
                   instead. Cloud and X300 data will be reloaded and added to the npz file.
@@ -292,6 +296,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
                        Set this to empty string ('') if no sensor exists
         results_stub - str. the directory where the results will be saved. A .npz file
                        and a .log file will be created.
+        sky_line_tag = str. tag used to search for specific source files i.e. X for red line images, XG for green, etc
 
     OUTPUTS:
         warnings - str - If this script believes a manual check of the data
@@ -332,12 +337,18 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
     datestr = nominal_dt.strftime('%Y%m%d')
     instrsitedate = instr_name + '_' + site_name + '_' + datestr
 
+    #Check sky line source (X or XG)
+    if not (sky_line_tag=='X'):
+        instrsitedate=instrsitedate+"_%s"%sky_line_tag.lower()
+
     # Construct the directories to the relevant data products
     data_stub      = fpi_dir + instr_name + '/' + site_name + '/'
     bw_dir_stub    = bw_dir + site_name + '/'
     bw_name_stub   = 'Cloud_' + site_name + '_'
     x300_dir_stub  = x300_dir + site_name + '/'
     x300_name_stub = 'TempL_' + site_name + '_'
+    x300_00_name_stub = 'TempL00_' + site_name + '_'
+    x300_01_name_stub = 'TempL01_' + site_name + '_'
 
     # Determine the times between which files will be accepted.
     # Define start and stop times as solar noon on doy, and on doy+1
@@ -372,7 +383,8 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
                 if dtime > start_dt and dtime < stop_dt:
                     laser_fns.append(fn)
             # Second, sky:
-            fns_all = get_all_sky_images(data_dir)
+            fns_all = get_all_sky_images(data_dir,sky_line_tag=sky_line_tag)
+
             for fn in fns_all:
                 d = FPI.ReadIMG(fn)
                 dtime = local.localize(d.info['LocalTime'])
@@ -380,7 +392,6 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
                     sky_fns.append(fn)
         laser_fns.sort()
         sky_fns.sort()
-
     # Uncomment these for rapid testing of new code
     #laser_fns = laser_fns[::6]
     #sky_fns = [sky_fns[20],sky_fns[78],sky_fns[119]]
@@ -432,9 +443,9 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
         # Try to analyze the data
         try:
             # Run the analysis
-            (FPI_Results, notify_the_humans) = FPI.ParameterFit(instrument, site, laser_fns, sky_fns, \
-                    direc_tol=direc_tol, N=instrument['N'], N0=instrument['N0'], N1=instrument['N1'], \
-                                logfile=logfile, diagnostic_fig=Diagnostic_Fig, reference=reference)
+            (FPI_Results, notify_the_humans) = FPI.ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag=sky_line_tag, \
+                                                direc_tol=direc_tol, N=instrument['N'], N0=instrument['N0'], N1=instrument['N1'], \
+                                                logfile=logfile, diagnostic_fig=Diagnostic_Fig, reference=reference)
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                 'Laser and sky image analysis complete.\n')
         except:
@@ -477,10 +488,19 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
                     x300_dir_stub + x300_name_stub + FPI_Results['sky_times'][0].strftime("%Y%m%d") + ".txt",
                     tz=site['Timezone']
                     )
+            x00_date, x00_etalon_in,_ = X300Sensor.ReadTempLog(
+                    x300_dir_stub + x300_00_name_stub + FPI_Results['sky_times'][0].strftime("%Y%m%d") + ".txt",
+                    tz=site['Timezone']
+                    )
+            x01_date, x01_etalon_out,_ = X300Sensor.ReadTempLog(
+                    x300_dir_stub + x300_01_name_stub + FPI_Results['sky_times'][0].strftime("%Y%m%d") + ".txt",
+                    tz=site['Timezone']
+                    )
         else:
             bw_date1, bw_sky1, bw_amb1 = BoltwoodSensor.ReadTempLog(
                     bw_dir_stub + bw_name_stub + FPI_Results['sky_times'][0].strftime("%Y%m%d") + ".txt",
-                    tz=site['Timezone'])
+                    tz=site['Timezone']
+                    )
             bw_date2, bw_sky2, bw_amb2 = BoltwoodSensor.ReadTempLog(
                     bw_dir_stub + bw_name_stub + FPI_Results['sky_times'][-1].strftime("%Y%m%d") + ".txt",
                     tz=site['Timezone']
@@ -501,10 +521,35 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
             x_dome = np.hstack((x_dome1,x_dome2))
             x_in = np.hstack((x_in1,x_in2))
 
+            x00_date1, x00_etalon_in1, _ = X300Sensor.ReadTempLog(
+                    x300_dir_stub + x300_00_name_stub + FPI_Results['sky_times'][0].strftime("%Y%m%d") + ".txt",
+                    tz=site['Timezone']
+                    )
+            x00_date2, x00_etalon_in2, _ = X300Sensor.ReadTempLog(
+                    x300_dir_stub + x300_00_name_stub + FPI_Results['sky_times'][-1].strftime("%Y%m%d") + ".txt",
+                    tz=site['Timezone']
+                    )
+            x00_date = np.hstack((x00_date1,x00_date2))
+            x00_etalon_in = np.hstack((x00_etalon_in1,x00_etalon_in2))
+
+            x01_date1, x01_etalon_out1, _ = X300Sensor.ReadTempLog(
+                    x300_dir_stub + x300_01_name_stub + FPI_Results['sky_times'][0].strftime("%Y%m%d") + ".txt",
+                    tz=site['Timezone']
+                    )
+            x01_date2, x01_etalon_out2, _ = X300Sensor.ReadTempLog(
+                    x300_dir_stub + x300_01_name_stub + FPI_Results['sky_times'][-1].strftime("%Y%m%d") + ".txt",
+                    tz=site['Timezone']
+                    )
+            x01_date = np.hstack((x01_date1,x01_date2))
+            x01_etalon_out = np.hstack((x01_etalon_out1,x01_etalon_out2))
+
         # Create a data structure containing the sensor temperatures
         Clouds = np.nan*np.zeros((np.size(FPI_Results['sky_times']),3))
         Dome = np.nan*np.zeros((np.size(FPI_Results['sky_times']),3))
         Inside = np.nan*np.zeros((np.size(FPI_Results['sky_times']),3))
+        EtalonInside = np.nan*np.zeros((np.size(FPI_Results['sky_times']),3))
+        EtalonOutside = np.nan*np.zeros((np.size(FPI_Results['sky_times']),3))
+
         count = 0
         for (t, dt) in zip(FPI_Results['sky_times'], FPI_Results['sky_intT']):
             # Start and stop time of image data
@@ -526,6 +571,18 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
                 Dome[count,:] = [np.nan,np.nan,np.nan]
                 Inside[count,:] = [np.nan,np.nan,np.nan]
 
+            i = ((x00_date >= t0) & (x00_date <= t1))
+            if i.any():
+                EtalonInside[count,:] = [x00_etalon_in[i].mean(), x00_etalon_in[i].max(), x00_etalon_in[i].max()]
+            else:
+                EtalonInside[count,:] = [np.nan,np.nan,np.nan]
+
+            i = ((x01_date >= t0) & (x01_date <= t1))
+            if i.any():
+                EtalonOutside[count,:] = [x01_etalon_out[i].mean(), x01_etalon_out[i].max(), x01_etalon_out[i].max()]
+            else:
+                EtalonOutside[count,:] = [np.nan,np.nan,np.nan]
+
             count = count+1
 
         if(np.size(bw_date) == 0):
@@ -542,6 +599,18 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
             FPI_Results['Dome'] = {'mean': Dome[:,0], 'max': Dome[:,1], 'min': Dome[:,2]}
             FPI_Results['Inside'] = {'mean': Inside[:,0], 'max': Inside[:,1], 'min': Inside[:,2]}
 
+        if(np.size(x00_date) == 0):
+            if not use_npz:#Do not overwrite
+                FPI_Results['EtalonInside'] = None
+        else:
+            FPI_Results['EtalonInside'] = {'mean': EtalonInside[:,0], 'max': EtalonInside[:,1], 'min': EtalonInside[:,2]}
+
+        if(np.size(x01_date) == 0):
+            if not use_npz:#Do not overwrite
+                FPI_Results['EtalonOutside'] = None
+        else:
+            FPI_Results['EtalonOutside'] = {'mean': EtalonOutside[:,0], 'max': EtalonOutside[:,1], 'min': EtalonOutside[:,2]}
+
         # Write things to the log
         if FPI_Results['Clouds'] is None: # if it wasn't found
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'No Boltwood cloud sensor data found.\n')
@@ -557,7 +626,21 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
             #notify_the_humans = True # No need to notify about X300's.
         else:
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Found and loaded X300 temperature sensor data.\n')
-    except: # There was an error in the Boltwood or X300 code. Write the log but continue.
+
+        if FPI_Results['EtalonInside'] is None:# if it wasn't found but should have been
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'No RPI temperature sensor data found.\n')
+            #notify_the_humans = True # No need to notify about X300's.
+        else:
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Found and loaded RPI temperature sensor data.\n')
+
+        if FPI_Results['EtalonOutside'] is None:# if it wasn't found but should have been
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'No Zigbee/HomeAssistant temperature sensor data found.\n')
+            #notify_the_humans = True # No need to notify about X300's.
+        else:
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Found and loaded Zigbee/HomeAssistant temperature sensor data.\n')
+
+    except Exception,e:# There was an error in the Boltwood or X300 code. Write the log but continue.
+        print str(e)
         c = np.nan*np.zeros(len(FPI_Results['LOSwind']))
         if not use_npz:#Do not overwrite
             FPI_Results['Clouds'] = {'mean': c, 'max': c, 'min': c}
@@ -672,7 +755,16 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
 
 
     # Save the results
-    np.savez(npzname, FPI_Results=FPI_Results, site=site, instrument=instrument)
+    # this transition is temporal. Deals with cloud filesystem. It will be erased in the future.
+    import os
+    tempnpzname="/home/airglow/rdata/airglow/fpi/results/"+os.path.basename(npzname)
+    np.savez(tempnpzname, FPI_Results=FPI_Results, site=site, instrument=instrument)
+    try:
+        os.system("cp %s %s"%( tempnpzname,os.path.dirname(npzname) ) )
+    except Exception as e:
+        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'IOError: using local filesystem.\n')
+        npzname=tempnpzname
+
     logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Results saved to %s\n' % npzname)
     if enable_share and site['share']: # save a copy of the npz file in a separate folder
         npznameshare = share_stub + site_name + '/' + instrsitedate + '.npz'
@@ -696,7 +788,8 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
     try:
         # Plot some quick-look single-station data (LOSwinds and Temps)
         if use_npz:
-            Diagnostic_Fig=FPIDisplay.PlotDiagnosticDay(npzname, cloud_thresh, instrument['skyI_quality_thresh'], LASERPARAMINTERP='linear')
+            Diagnostic_Fig=FPIDisplay.PlotDiagnosticDay(npzname, cloud_thresh, instrument['skyI_quality_thresh'], \
+                                                        LASERPARAMINTERP='linear',sky_line_tag=sky_line_tag)
         else:
             # Add Level 1 diagnostics to diagnostics fig
             ax = Diagnostic_Fig.add_subplot(427) # TODO: generalize diagnostic figure generation?
@@ -712,9 +805,64 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
                 ax.set_ylabel('Cloud indicator\n[degrees C]')
                 ax.grid(True)
                 ax.set_xlabel('Universal Time, [hours]')
-            Diagnostic_Fig.tight_layout()
 
-        (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, reference = reference)
+            # Add Level 1 diagnostics to diagnostics fig
+            if (FPI_Results['EtalonInside'] is not None) or (FPI_Results['EtalonOutside'] is not None):
+                
+                Diagnostic_Fig.axes[0].change_geometry(5,2,1)
+                Diagnostic_Fig.axes[1].change_geometry(5,2,2)
+                Diagnostic_Fig.axes[2].change_geometry(5,2,3)
+                Diagnostic_Fig.axes[5].change_geometry(5,2,4)
+                Diagnostic_Fig.axes[3].change_geometry(5,2,5)
+                Diagnostic_Fig.axes[6].change_geometry(5,2,6)
+                Diagnostic_Fig.axes[7].change_geometry(5,2,7)
+                Diagnostic_Fig.axes[4].change_geometry(5,2,8)
+                
+                Diagnostic_Fig.set_size_inches(12,9,forward=True)
+                Diagnostic_Fig.axes[7].set_label("")
+                ax = Diagnostic_Fig.add_subplot(5,2,9)
+
+            if FPI_Results['EtalonInside'] is not None:
+                ct = FPI_Results['sky_times']
+                ctemp = FPI_Results['EtalonInside']['mean']
+                ax.plot(ct, ctemp, marker='.',label='Inside Etalon')
+
+            if FPI_Results['EtalonOutside'] is not None:
+                ct = FPI_Results['sky_times']
+                ctemp = FPI_Results['EtalonOutside']['mean']
+                ax.plot(ct, ctemp, marker='.',label='Outside Etalon')
+
+            if (FPI_Results['EtalonInside'] is not None) or (FPI_Results['EtalonOutside'] is not None):
+                ax.set_xlim([ct[0] - datetime.timedelta(hours=0.5), ct[-1] + datetime.timedelta(hours=0.5)])
+                ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+                ax.set_ylabel('Temperature\n[degrees C]')
+                ax.grid(True)
+                ax.set_xlabel('Universal Time, [hours]')
+                ax.legend(frameon=False,loc='lower center',bbox_to_anchor=(0.5,1),ncol=2,prop={'size':9})
+
+
+            Diagnostic_Fig.tight_layout()
+        
+        #Adding diagnostics from other line sources if they exists (only one for now)
+        if sky_line_tag=='X':
+            _npzpath=results_stub + instrsitedate+'*.npz'
+        else:
+            _npzpath=results_stub + instrsitedate.replace("_%s"%(sky_line_tag.lower()),"*") + '.npz'
+        _npzpath=glob.glob(_npzpath)#look for all existing npz
+        _npzpath=[p for p in _npzpath if p not in npzname]#removed npz already displayed on this run
+        if len(_npzpath)==1:
+            ss='X' if 'G' in sky_line_tag else 'XG'
+            FPIDisplay.__add_skyline2diagnostic(Diagnostic_Fig,_npzpath[0],sky_line_tag=ss)
+        elif len(_npzpath)>1:
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Several npz files found for other line sources!: '+str(_npzpath)+'This was not added into the diagnostic plots and needs attention!!!!.\n' % (datestr))
+
+        #Generate Temperature and Wind plots
+        _kwargs={'reference':reference,'sky_line_tag':sky_line_tag}
+        if 'G' in sky_line_tag:
+            _kwargs['Tmin']=0
+            _kwargs['Tmax']=500
+        (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, **_kwargs)
+
     except:
         # Summary plots crashed. We still want to send the diagnostics and log to the
         # website, so continue on with dummy plots.
@@ -760,9 +908,16 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
     summary_fns = [instrsitedate + '_diagnostics.png',
                    instrsitedate + '_temperature.png', # e.g., 'minime05_uao_20130107_temperature.png'
                    instrsitedate + '_winds.png',]
+
     db_ids = [instrument['sql_diagnostics_id'],
               instrument['sql_temperatures_id'],
               instrument['sql_winds_id'], ]
+
+    if 'G' in sky_line_tag:
+        summary_fns[0] = summary_fns[0].replace("_%s"%sky_line_tag.lower(),'')
+        db_ids[1] = instrument['sql_gl_temperatures_id']
+        db_ids[2] = instrument['sql_gl_winds_id']
+
     #if use_npz: # don't update diagnostics fig
     #    summary_figs.pop(0)
     #    summary_fns.pop(0)
@@ -791,13 +946,19 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
 
         site_id = site['sql_id']
         utc = pytz.utc # Define timezones
+
         # Start and stop time of observations.
-        #d = FPI.ReadIMG(sky_fns[0])
-        #dtime = local.localize(d.info['LocalTime'])
-        #startut = dtime.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
-        #d = FPI.ReadIMG(sky_fns[-1])
-        #dtime = local.localize(d.info['LocalTime'])
-        #stoput = dtime.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
+        if use_npz:
+            d0,dn=FPI_Results['sky_times'][0],FPI_Results['sky_times'][-1]
+        else:
+            d=FPI.ReadIMG(sky_fns[0])
+            d0 = local.localize(d.info['LocalTime'])
+            d = FPI.ReadIMG(sky_fns[-1])
+            dn = local.localize(d.info['LocalTime'])
+
+        startut = d0.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
+        stoput = dn.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
+
         # Open the database (see http://zetcode.com/databases/mysqlpythontutorial/ for help)
         # Read the user and password from a file.
 #        con = mdb.connect(host='webhost.engr.illinois.edu', db='airglowgroup_webdatabase', read_default_file="/home/airglow/.my.cnf")
@@ -809,7 +970,7 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
                 notify_the_humans = True
             # If we are supposed to put this png in Madrigal, put it in the Madrigal database directory
-            if send_to_madrigal and instrument['send_to_madrigal']:
+            if send_to_madrigal and instrument['send_to_madrigal'] and 'diagnostic' not in fn:
                 shutil.copy(temp_plots_stub + fn ,madrigal_stub) # save the figure to the madrigal directory
             # update the database
             # Send png. First find out if the entry is in there (i.e., we are just updating the png)
@@ -820,18 +981,6 @@ def process_instr(instr_name ,year, doy, reference='laser', use_npz = False,
 #            rows = cur.fetchall()
             log_fn = db_log_stub + instrsitedate + '_log.log'
             if len(rows) == 0: # Create the entry
-                # Start and stop time of observations
-                if use_npz:
-                    d0,dn=FPI_Results['sky_times'][0],FPI_Results['sky_times'][-1]
-                else:
-                    d=FPI.ReadIMG(sky_fns[0])
-                    d0 = local.localize(d.info['LocalTime'])
-                    d = FPI.ReadIMG(sky_fns[-1])
-                    dn = local.localize(d.info['LocalTime'])
-                
-                startut = d0.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
-                stoput = dn.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
-                
                 sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%d, %d, \"%s\", \"%s\", \"%s\", \"%s\")' % (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
 		logfile.write(sql_cmd + '\n')
 		query(sql_cmd)
@@ -1731,7 +1880,7 @@ def find_unprocessed_days( years = range(2005,2020) , doys = range(1,367) ):
 
 
 
-def load_level0(instr_name, year, doy):
+def load_level0(instr_name, year, doy, sky_line_tag='X'):
     '''
     Return the contents of the npz file specified by the arguments.
     Access contents with, e.g.,
@@ -1749,6 +1898,8 @@ def load_level0(instr_name, year, doy):
         raise IOError('File Not Found for %s_%s_%03i' % (instr_name, year, doy))
     datestr = process_dn.strftime('%Y%m%d')
     instrsitedate = instr_name + '_' + site_name + '_' + datestr
+    if not (sky_line_tag=='X'):
+        instrsitedate=instrsitedate+'_%s'%sky_line_tag.lower()
     npzfn = fpi_results_dir + instrsitedate + '.npz'
     npzfile = np.load(npzfn,allow_pickle=True)
 

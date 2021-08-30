@@ -304,7 +304,7 @@ def DetermineFormat(file):
         if "FvrSkyTemAmbBlkHeaFlgC1sC1tC1aC1bC2sC2tC2aC2bC3sC3tC3aC3bTetAmtRqtSmtDitVctSeqChk" in line:
             _format="old BoltWood format"
             break
-        if ")" in line[:5]:
+        if ")" in line[:10]:
             _format="Sky Alert format"
             break
     fid.close()
@@ -321,7 +321,7 @@ def ReadTempLog(file,tz):
         with open(file) as f: pass
     except:
         return ([],[],[])
-	
+
     format=DetermineFormat(file)
     if "old" in format.lower():
         #print "old format"
