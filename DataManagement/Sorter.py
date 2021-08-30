@@ -11,6 +11,7 @@ Written by Daniel J. Fisher (dfisher2@illinois.edu)
 
 # Import required modules
 import os
+import shutil
 import sys
 import traceback
 import tarfile
@@ -41,7 +42,7 @@ def instrumentcode():
         code = instrumentcode()
         Is the dictionary of all full instruments names given the 3 letter abbreviation.
             Contains pointers for cloud & templ data.
-    
+
     Outputs:
         code =  dictionary of all full names from abbr
 
@@ -89,7 +90,7 @@ def sortinghat(dir_data,f):
     -------
         7/18/13 -- Written by DJF (dfisher2@illionis.edu)
     '''
-    
+
     result = 0
     code = instrumentcode()
     # Read info file
@@ -101,12 +102,13 @@ def sortinghat(dir_data,f):
     info.close()
 
     # Parse Name
-    site = f[6:9]
-    instr= f[0:3]
-    inum = f[3:5]
-    year = f[12:14]
-    mon  = f[14:16]
-    day  = f[16:18]
+    print f
+    instr_inum,site,dates=f.split('_')
+    instr= instr_inum[0:3]
+    inum = instr_inum[3:5]
+    year = dates[12:14]
+    mon  = dates[14:16]
+    day  = dates[16:18]
     emails = activeinstruments()[site][instr][inum]['email']
 
     # Check all parts present
@@ -136,14 +138,15 @@ def sortinghat(dir_data,f):
         oscar = glob(zelda+'*')
         oscar.sort()
         print "\n".join(str(x) for x in oscar)
-        os.system('cat ' + zelda + '* > temp.tar.gz')
-        os.system('chmod 770 temp.tar.gz')
+        tempfile="temp_%s.tar.gz"%(dt.datetime.now().strftime("%Y%m%d%H%M%S%f"))
+        os.system('cat ' + zelda + '* > '+tempfile)
+        os.system('chmod 770 '+tempfile)
         # Check that size is correct
-        statinfo = os.stat("temp.tar.gz")
+        statinfo = os.stat(tempfile)
         print 'Sizes:',statinfo.st_size,'/',tsize
         if statinfo.st_size == tsize:
-            # Untar the gunzip files 
-            tar = tarfile.open("temp.tar.gz","r:gz")
+            # Untar the gunzip files
+            tar = tarfile.open(tempfile,"r:gz")
             try:
                 result = tar.getnames()
                 tar.extractall(dir_data)
@@ -158,13 +161,16 @@ def sortinghat(dir_data,f):
             tar.close()
         else:
             print '!!! Waiting for complete parts...'
+
+        if os.path.exists(tempfile):
+            os.system('rm -f '+tempfile)
+
     ## Case 3 - all parts not yet sent
     else:
         print '!!! Waiting for parts...'
-    os.system('rm -f temp.tar.gz')
     return(result)
-    
-    
+
+
 def makeinfo(f):
     '''
     Summary
@@ -180,7 +186,7 @@ def makeinfo(f):
     -------
         2/13/14 -- Written by DJF (dfisher2@illinois.edu)
     '''
-    
+
     now = dt.datetime.utcnow()
     statinfo = os.stat(f)
     f = f.lower()
@@ -191,7 +197,7 @@ def makeinfo(f):
     check.write(f + '\n' + '1\n' + str(statinfo.st_size) +'\n' + str(now) + '\n999')
     check.close()
     return
-    
+
 
 def sorter(san,pgm):
     '''
@@ -210,13 +216,15 @@ def sorter(san,pgm):
         2/13/14 -- Written by DJF (dfisher2@illinois.edu)
         6/11/15 -- Modified for site-by-site multicore
     '''
-    
+
+    # Path location of files sent by stations
+    dir_rx_local = '/home/tx/rx/'
     # The location of programs (needed since running in crontab)
     dir_local = '/rdata/airglow/'
     #dir_script = '/usr/local/share/airglowrsss/Python/Programs/'
     #python = '/usr/local/python/'
     dir_share = '/rdata/airglow/share/'
-    
+
     # Close Program if already running (just in case...)
     pid = str(os.getpid())
     pidfile = "/tmp/Sorter_%s.pid"%pgm
@@ -228,7 +236,7 @@ def sorter(san,pgm):
         sys.exit()
     else:
         file(pidfile, 'w').write(pid)
-        
+
     # Start Write to Log File
     print "\n!!!!!!!!!!!!!!!!!!!!"
     print '!!! BEGIN TIMESTAMP:',dt.datetime.now()
@@ -238,12 +246,14 @@ def sorter(san,pgm):
     # Set order so bwc & x3t process first
     ids = ['Cloud','TempL']
     ids.extend(code.keys())
-   
-    
+
+
     # TRY YOUR HARDEST
     try:
         # Get Data in RX folder
-        os.chdir(dir_local+'rx/')
+        #os.chdir(dir_local+'rx/')
+        os.chdir(dir_rx_local)
+        print("Working directory: %s"%(os.getcwd()))
         #os.system('chmod 774 *') No longer have permissions, tx sends as 774.
         # Get info files for non-standard (Zip->Send->Sort) data
         rxfiles = ["fpi04_kaf","cas01_hka"]
@@ -257,30 +267,41 @@ def sorter(san,pgm):
                 search = '*.txt'
             else:
                 search = '*'+san+'*.txt'
+            print('Searching %s files for %s using %s'%(str(i),str(pgm),search))
             for f in glob(i + search):
+                #Searching for IIIII_san_YYYYMMDD/YYYYDOY.txt
                 # Get information for assembling & sos this unAmericarting file
-                name = f[0:18]              # name         = IIIII_SSS_YYYYMMDD
-                instrument = f[0:5].lower() # instrument   = IIIII
-                instr = f[0:3].lower()      # instrument   = III__
-                inum = f[3:5]               # instrument # = ___II
-                site = f[6:9].lower()       # site         = SSS
+                name=os.path.splitext(f)[0]
+                instrument,site,date=name.lower().split('_')
+                instrument=instrument[:5]
+                instr = f[0:3].lower()          # instrument   = III__
+                inum = f[3:5]                   # instrument # = ___II
+                try:
+                    dn=dt.datetime.strptime(date,"%Y%m%d")
+                except:
+                    dn=dt.datetime.strptime(date,"%Y%j")
+                year=dn.year
+                month=dn.month
+                day=dn.day
+                doy=dn.timetuple().tm_yday
+                dates=date[2:]
                 # FOR OLDER FILES THAT DID DOY, ELSE STANDARD DAY
-                if f[17] in ['.']:
-                    date = f[10:17]             # date         = YYYYDDD
-                    dates = f[12:17]            # dates        = YYDDD
-                    year = int(f[10:14])        # year         = YYYY
-                    doy = int(f[14:17])         # doy          = DDD
-                    dn = dt.datetime(year,1,1)+dt.timedelta(days = doy-1)
-                    month = dn.timetuple().tm_mon
-                    day = dn.timetuple().tm_mday
-                else:
-                    date = f[10:18]             # date         = YYYYMMDD
-                    dates = f[12:18]            # dates        = YYMMDD
-                    year = int(f[10:14])        # year         = YYYY
-                    month = int(f[14:16])       # month        = MM
-                    day = int(f[16:18])         # day          = DD
-                    dn = dt.datetime(year,month,day)
-                    doy = dn.timetuple().tm_yday
+                #if f[17] in ['.']:
+                #    date = f[10:17]             # date         = YYYYDDD
+                #    dates = f[12:17]            # dates        = YYDDD
+                #    year = int(f[10:14])        # year         = YYYY
+                #    doy = int(f[14:17])         # doy          = DDD
+                #    dn = dt.datetime(year,1,1)+dt.timedelta(days = doy-1)
+                #    month = dn.timetuple().tm_mon
+                #    day = dn.timetuple().tm_mday
+                #else:
+                #    date = f[10:18]             # date         = YYYYMMDD
+                #    dates = f[12:18]            # dates        = YYMMDD
+                #    year = int(f[10:14])        # year         = YYYY
+                #    month = int(f[14:16])       # month        = MM
+                #    day = int(f[16:18])         # day          = DD
+                #    dn = dt.datetime(year,month,day)
+                #    doy = dn.timetuple().tm_yday
                 print "\n!!! For", name
                 # Fix inum for Letters
                 if inum[1].isalpha():
@@ -300,11 +321,15 @@ def sorter(san,pgm):
                     os.rename(checkname,'tracking/'+checkname)
                     # Move data into directory
                     dir_data = dir_local + 'templogs/' + code[code[instrument]] + '/' + site + '/'
-                    os.rename(f, dir_data + f)
+                    if os.path.exists(dir_data + f):
+                        os.remove(dir_data + f)
+                    shutil.copy(f, dir_data + f)
+                    os.remove(f)
+                    #os.rename(f, dir_data + f) # does not work with rclone as it is different filesystem
                     os.system('chmod 744 ' + dir_data + f)
                     #os.system('chown airglow.airglow ' + dir_data + r)
                     print "!!! Success Sorting"
-                    
+
                 elif instr in ['bwc', 'x3t']:
                     ### Send Error if checkfile
                     print "!!! Begin Sorting..."
@@ -324,8 +349,8 @@ def sorter(san,pgm):
                         # Remove files from rx
                         os.system('rm -f ' + name + '*')
                         print "!!! Success Sorting"
-                        
-                    ### Part 2: Processing Data
+                        #continue
+                    ####Part 2: Processing Data
                         print "!!! Begin Processing..."
                         # Get correct doy from files
                         for r in result:
@@ -343,20 +368,44 @@ def sorter(san,pgm):
                                 year = dn0.year
                                 break
                         # Run processing script for site
+                        process_kwargs={'reference':'laser',\
+                                        'send_to_website':True,\
+                                        'enable_share':False,\
+                                        'send_to_madrigal':True,\
+                                        'sky_line_tag':'X',\
+                                        'fpi_dir':'/rdata/airglow/fpi/',\
+                                        'bw_dir':'/rdata/airglow/templogs/cloudsensor/',\
+                                        'x300_dir':'/rdata/airglow/templogs/x300/',\
+                                        'results_stub':'/rdata/airglow/fpi/results/'}
                         try:
-                            warning = FPIprocess.process_instr(code[instr] + inum,year,doy)
+                            warning = FPIprocess.process_instr(code[instr] + inum,year,doy,**process_kwargs)
                             if warning:
                                 subject = "!!! Manually inspect (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
                                 print subject
+                                print traceback.print_exc()
                                 Emailer.emailerror(emails, subject, warning)
                         except:
                             subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
                             print subject
+                            print traceback.print_exc()
                             Emailer.emailerror(emails, subject, traceback.format_exc())
-                        # Run CV processing for project
-                        # ?????
+
                         print "!!! End Processing"
 
+                        # Run green line if existing
+                        if len([r for r in result if 'XG' in os.path.basename(r)])>0:
+                            process_kwarg['sky_line_tag']='XG'
+                            try:
+                                warning = FPIprocess.process_instr(code[instr] + inum,year,doy,**process_kwargs)
+                                if warning:
+                                    subject = "!!! Manually inspect (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+                                    print subject
+                                    print traceback.print_exc()
+                                    Emailer.emailerror(emails, subject, warning)
+                            except:
+                                subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+                                print subject
+                                print traceback.print_exc()
 
                 ##### GPS CASE: #####
                 elif instr in ['tec','scn']:
@@ -380,7 +429,7 @@ def sorter(san,pgm):
                         os.system('rm -f ' + name + '*')
 
                         print "!!! Success Sorting"
-                        
+
                     ### Part 2: Processing Data
                         print "!!! Begin Processing..."
                         # Run processing script for site
@@ -417,9 +466,9 @@ def sorter(san,pgm):
                     except:
                         subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
                         print subject
-                        Emailer.emailerror(emails, subject, traceback.format_exc())                       
-                        
-                
+                        Emailer.emailerror(emails, subject, traceback.format_exc())
+
+
                 ##### IMAGER CASE: #####
                 elif instr in ['asi','nfi','pic','sky','swe']:
                     ### Part 1: Sorting Data
@@ -446,7 +495,7 @@ def sorter(san,pgm):
                         # Remove files from rx
                         os.system('rm -f ' + name + '*')
                         print "!!! Success Sorting"
-                        
+
                     ### Part 2: Processing Data
                         print "!!! Begin Processing..."
                         ## Get correct doy from files
@@ -466,27 +515,29 @@ def sorter(san,pgm):
                             print subject
                             Emailer.emailerror(emails, subject, msg)
                         print "!!! End Processing"
-                        
-                        
+
+
                 ##### BAD INSTR CATCH #####
                 else:
-                    emails = activeinstruments()['ADMIN']['email'] 
+                    emails = activeinstruments()['ADMIN']['email']
                     subject = "!!! Badly named files: " + name
                     print subject
                     Emailer.emailerror(emails, subject, 'Name is not real instrument...')
 
-    except:
-        emails = activeinstruments()['ADMIN']['email'] 
+    except Exception as e:
+        emails = activeinstruments()['ADMIN']['email']
         subject = "!!! Something is wrong..."
         print subject
+        print "Sending emails to Admin..."
+        print traceback.print_exc()
         Emailer.emailerror(emails, subject+f, traceback.format_exc())
-        
-    finally:
-        print "\n!!! Unpack Complete!"
-        os.unlink(pidfile)
-    
 
-        
+    finally:
+        print "\n!!! Script Complete!"
+        os.unlink(pidfile)
+
+
+
 if __name__=="__main__":
 
     # Parse the command line
@@ -505,18 +556,18 @@ if __name__=="__main__":
                 asiinfo.get_all_sites_info().keys() + \
                 gpsinfo.get_all_sites_info().keys()
         sites = np.unique(sites)
-    
+
     # CASE= if 'other' (not fpi sites)
     elif pgm == 'other':
         fpis  = fpiinfo.get_all_sites_info().keys()
         other = asiinfo.get_all_sites_info().keys() + \
                 gpsinfo.get_all_sites_info().keys()
         sites = [x for x in other if x not in fpis]
-        
+
     else:
         sites = [pgm]
-    
+
     # Sort by site!
     for san in sites:
         sorter(san,pgm)
-    
+
