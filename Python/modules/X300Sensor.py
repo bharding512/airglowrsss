@@ -7,6 +7,30 @@ from pytz import timezone
 #matplotlib.use('AGG')
 #import matplotlib.pyplot as plt 
 
+def getTempVals(d0,dn,tz,site,num=None):
+    import numpy as np
+    dts,temp1,temp2=None,None,None
+    idt=d0
+
+    while idt<=dn:
+        path='/rdata/airglow/templogs/x300/%s/TempL%02s_%s_%s.txt'%(site,num,site,idt.strftime("%Y%m%d"))
+        idts,itemp1,itemp2=ReadTempLog(path,tz)
+        if len(idts)==0:
+            idt=idt+timedelta(days=1)
+            continue
+        if dts is None:
+            dts=idts
+            temp1=itemp1
+            temp2=itemp2
+        else:
+            dts=np.concatenate((dts,idts))
+            temp1=np.concatenate((temp1,itemp1))
+            if temp2 is not None:
+                temp2=np.concatenate((temp2,itemp2))
+        idt=idt+timedelta(days=1)
+
+    return dts,temp1,temp2
+
 def ReadTempLog(file, tz):
 	"""
 	Function dns, sky_temp, amb_temp = ReadTempLog(file)
@@ -19,11 +43,12 @@ def ReadTempLog(file, tz):
 	OUTPUT:
 		dns : array of datetime object of the parsed file
 		temp1 : temp1
-		temp2 : temp2
+		temp2 : temp2 (None for rpi and hass)
 
 	History:
 		8/23/12 : Written by Timothy Duly (duly2@illinois.edu)
 		02/26/13: Added timezone localization (jmakela@illinois.edu)
+		08/26/21: Added formats rpi and hass (lnav@illinois.edu)
 	"""
 
 	# Get the local timezone
@@ -31,123 +56,104 @@ def ReadTempLog(file, tz):
 
         try:
             fid = open(file,'r')
+            data = fid.readlines()
+            fid.close()
         except IOError as e:
             print file, 'does not exist'
             return [],[],[]
-        
-	data = []
-	for line in fid:
-		single_line = line.split()
-		data.append(single_line)
-	fid.close()
 
 	if len(data) == 0:
 	    # No data
-       	    return [],[],[]
+	    return [],[],[]
 
 	# Check if this is a thermoHID
         print "[ReadTempLog]: file, tz = ",file,tz
-	if data[0][0] == '#Output':
+	if '#Output' in data[0]:
                 print file, 'is a thermoHID file'
                 return [], [], []
 
-	N = len(data) # number of lines in file
+        import numpy as np
+        #Parsing each line
+        def row2list(row,localtz=local):
+            words=row.split(',')
+            try:#hass/rpi format: dt is UT/LT
+                dn=datetime.strptime(words[0],"%Y/%m/%d %H:%M:%S")
+                dn=dn.replace(tzinfo=pytz.utc)
+            except:
+                try:#old format: dt is in local time
+                    dn=datetime.strptime(words[0],"%m/%d/%Y %H:%M:%S")
+                    dn=local.localize(dn)
+                except:
+                    dn=None
+            return [dn,]+[np.float(w) for w in words[1:]]
+        my_list=np.array(map(row2list,data))
 
-	dns = []
-	temp1 = []
-	temp2 = []
-
-	for k in range(N):
-		if 'x' not in data[k][0]: # check to make sure we don't have a bogus line
-
-			''' parse time ''' 
-			date = data[k][0].split('/')
-			month = int(date[0])
-			day = int(date[1])
-			year = int(date[2])
-
-			time = data[k][1].split(',')[0].split(':')
-			hour = int(time[0])
-			minute = int(time[1])
-			second = int(time[2])
-
-			total_seconds = hour*3600. + minute*60. + second
-
-			dn = local.localize(datetime(year,month,day) + timedelta(seconds=total_seconds))
-			dns.append(dn)
-
-			''' parse temp '''
-			temp1.append(float(data[k][1].split(',')[1]))
-			temp2.append(float(data[k][1].split(',')[2]))
-
-
-	# let's sort the data by dns. 
-	# First, create a tuple of data
-	N = len(dns)
-
-	my_list = []
-	for k in range(N):
-		my_list.append( (dns[k], temp1[k], temp2[k]) )
-	
 	# Next, sort
-	my_list_sorted = sorted(my_list, key=lambda datum: datum[0])
+	my_list_sorted = np.array(sorted(my_list.tolist()))
 
-	# Finally, place data back in list
-	dns = []; temp1 = []; temp2=[]
-	for k in range(N):
-		dns.append(my_list_sorted[k][0])
-		temp1.append(my_list_sorted[k][1])
-		temp2.append(my_list_sorted[k][2])
+        #Choosing format: dn,dome,inside
+        if my_list_sorted.shape[1]==3:
+            #old format
+            return my_list_sorted[:,0],my_list_sorted[:,1],my_list_sorted[:,2]
+        elif my_list_sorted.shape[1]==2:
+            #hass format
+            return my_list_sorted[:,0],my_list_sorted[:,1],None
+        elif my_list_sorted.shape[1]==5:
+            #rpi format
+            return my_list_sorted[:,0],my_list_sorted[:,3]-14.43,None
 
-	# make numpy arrays:
-	import numpy as np
-	dns = np.array(dns)
-	temp1 = np.array(temp1)
-	temp2 = np.array(temp2)
 
-	return np.array(dns), np.array(temp1), np.array(temp2)
-
-def WriteLogFromRaw(dn,read_path,write_path,site):
+def WriteLogFromRaw(dn,read_path,write_path,site,num=None,dtfmt="%m/%d/%Y"):
 	"""
 	Function WriteLogFromRaw(dn,read_path,write_path)
 	----------------------------------------------------
-	Creates a TempL_UAO_YYYYMMDD.txt file from the raw 
-	file
+        Creates a log file from the raw file (located in read_path/X300_temp_log.txt)
+        By default, the name of this file is write_path/TempL_uao_YYYYMMDD.txt
+        if num=="01", then name of this is write_path/TempL01_uao_YYYYMMDD.txt
 
-	INPUT:
-		dn : a datetime object for the day created
-
-	OUTPUT:
-		<none>, 
-		but a file is created in write_path
+        INPUT:
+            dn : a datetime object for the day created
+            read_path : a string indicating path folder where X300_temp_log.txt is located
+            write_path : a string indicating path folder where output file will be written
+            num (optional): a string indicating the number of sensing device. For example, 00 for rpi info 01 for zigbee's homeassistant
+            dtfmt (optional): a string date format used to read dates within the raw files.
 
 	History:
 		8/24/12 : Written by Timothy Duly (duly2@illinois.edu)
+		05/21 : Added number of sending device (lnav@illinois.edu)
 	"""
 	# open new file:
-	fname_new = "%s/TempL_%s_%04d%02d%02d.txt" % (write_path,site,dn.year,dn.month,dn.day)
-	fid_new = open(fname_new,'w')
+        if num is None:
+            fname_new = "%s/TempL_%s_%04d%02d%02d.txt" % (write_path,site,dn.year,dn.month,dn.day)
+        else:
+            fname_new = "%s/TempL%s_%s_%04d%02d%02d.txt" % (write_path,num,site,dn.year,dn.month,dn.day)
+        fid_new = open(fname_new,'w')
 
 	# Load in raw data:
-	fname = "%s/X300_temp_log.txt" % (read_path)
-	fid = open(fname,'r')
-	data = []
-	for line in fid:
-		(month, day, year)= line.split()[0].split("/")
-		if 'x' not in month: # healthy line
-			dn_line = datetime(int(year),int(month),int(day))
-			if dn == dn_line: # the day we want
-				fid_new.write(line)
+        fname = "%s/X300_temp_log.txt" % (read_path)
+        fid = open(fname,'r')
+        data = []
+        for line in fid:
+            try:
+                dn_line=datetime.strptime(line.split()[0],dtfmt)
+            except:
+                continue
+            if dn == dn_line: # the day we want
+                fid_new.write(line)
 
-	fid.close()
-	fid_new.close()
+        fid.close()
+        fid_new.close()
 	
 
 if __name__ == '__main__':
 	# ''' test out ReadTempLog '''
-	# test_file = '/Users/duly/data/FPIData/temps/TempL_UAO_20120808.txt'
-	# dns, temp1, temp2 = ReadTempLog(test_file)
-
+	#test_file = '/rdata/airglow/templogs/x300/uao/TempL_uao_20210523.txt'
+	#test_file = '/rdata/airglow/templogs/x300/low/TempL00_low_20210823.txt'
+        test_file = '/rdata/airglow/templogs/x300/low/TempL01_low_20210823.txt'
+	dns, temp1, temp2 = ReadTempLog(test_file,tz='US/Mountain')
+        print temp1
+        print temp2
+        print dns.shape
 	# fig = plt.figure(1); plt.clf()
 	# plt.plot(dns,temp1,'-',dns,temp2,'-')
 	# plt.title('Temperature Data')
@@ -159,10 +165,10 @@ if __name__ == '__main__':
 	# plt.draw(); plt.show()
 
 
-	''' test out WriteLogFromRaw '''
-	read_path = '/Users/duly/data/FPIData/temps/raw/'
-	write_path = '/Users/duly/data/FPIData/temps/'
-	dn = datetime(2012,8,12)
-	out = WriteLogFromRaw(dn,read_path,write_path)
+	#''' test out WriteLogFromRaw '''
+	#read_path = '/Users/duly/data/FPIData/temps/raw/'
+	#read_path = '/Users/duly/data/FPIData/temps/raw/'
+	#dn = datetime(2012,8,12)
+	#out = WriteLogFromRaw(dn,read_path,write_path)
 
 

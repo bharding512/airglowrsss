@@ -42,26 +42,45 @@ def email(recipient,subject,msg):
     email.sendmail(sender,recipient, headers + "\r\n\r\n" + msg)
     email.quit()
     print "!!! Email Sent"
-    
-    
-def emailerror(subject,msg):
+
+
+ def emailerror(recipients,subject,msg):
     '''
-    Summary
-    -------
-        emailerror(subject,msg)
-        emails Haardvark & Danimal a warning
+    Summary:
+        emailerror(subject,recipients,msg)
+        emails recipients a warning
 
-    Inputs
-    ------
-        subject = subject of email
-        msg = body text of email
+    Inputs:
+        recipients = list of email addresses
+        subject    = subject of email
+        msg        = body text of email
 
-    History
-    -------
+    History:
         7/17/13 -- Written by DJF (dfisher2@illionis.edu)
+        3/31/16 -- Added email list as input
     '''
-    # Append more addresses here for warnings    
-    recipient = ['bharding512@gmail.com', 'fishnchips1624+status@gmail.com']
-    for to in recipient:
+    # Append more addresses here for warnings
+    for to in recipients:
         email(to,subject,msg)
-    
+
+#def emailerror(subject,msg):
+#    '''
+#    Summary
+#    -------
+#        emailerror(subject,msg)
+#        emails Haardvark & Danimal a warning
+#
+#    Inputs
+#    ------
+#        subject = subject of email
+#        msg = body text of email
+#
+#    History
+#    -------
+#        7/17/13 -- Written by DJF (dfisher2@illionis.edu)
+#    '''
+#    # Append more addresses here for warnings
+#    recipient = ['bharding512@gmail.com', 'fishnchips1624+status@gmail.com']
+#    for to in recipient:
+#        email(to,subject,msg)
+

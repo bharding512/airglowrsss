@@ -1011,7 +1011,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
             Tmin=300, Tmax=1500, Dmin=-200, Dmax=200,
             reference='laser',directions=None,
 	    Temperature_Fig = None, Temperature_Graph = None, Doppler_Fig = None, Doppler_Graph = None,
-        cull=False):
+        cull=False,reference_statistic="mode",sky_line_tag="X"):
 #
 # Function to plot a single night's data for a single station
 #
@@ -1028,6 +1028,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
 #   Added color/format information here, because plot-specific
 #       information doesn't seem like it should belong to the instrument.
 #   Removed zenith_times argument (bjh)
+#   Added sky_line_tag (land)
 
     # Read in the file
     npzfile = np.load(f,allow_pickle=True)
@@ -1067,7 +1068,9 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
         fmt[direc] = {'Color': colors.pop(), 'Marker': mark} # vary the color, keep the marker
 
             
-    
+    _title=''
+    if 'G' in sky_line_tag:
+        _title="\n(Green Line)"
     
     if Temperature_Fig is None:
 	# Add Temperature figure
@@ -1079,7 +1082,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
         Doppler_Fig = plt.figure()
         Doppler_Graph = Doppler_Fig.add_subplot(111)
         
-    (ref_Dop, e_ref_Dop) = FPI.DopplerReference(FPI_Results,reference=reference)
+    (ref_Dop, e_ref_Dop) = FPI.DopplerReference(FPI_Results,reference=reference,statistic=reference_statistic)
 
     # Calculate the vertical wind and interpolate it
     ind = FPI.all_indices('Zenith',FPI_Results['direction'])
@@ -1170,7 +1173,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
     Temperature_Graph.set_xlim(FPI_Results['sky_times'][0],FPI_Results['sky_times'][-1])
     Temperature_Graph.legend(ncol=4, prop=fontP)
     Temperature_Graph.xaxis.set_major_formatter(dates.DateFormatter('%H'))
-    Temperature_Graph.set_ylabel('Neutral Temperature [K]', fontsize = fontsize)
+    Temperature_Graph.set_ylabel('Neutral Temperature [K]%s'%_title, fontsize = fontsize)
     Temperature_Graph.set_xlabel('Universal Time', fontsize = fontsize)
     Temperature_Graph.grid(True)
     #bjh: How do I control font size? This works on non-date axes,
@@ -1183,7 +1186,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
     Doppler_Graph.set_xlim(FPI_Results['sky_times'][0],FPI_Results['sky_times'][-1])
     Doppler_Graph.legend(ncol=4, prop=fontP)
     Doppler_Graph.xaxis.set_major_formatter(dates.DateFormatter('%H'))
-    Doppler_Graph.set_ylabel('Neutral Winds [m/s]', fontsize = fontsize)
+    Doppler_Graph.set_ylabel('Neutral Winds [m/s]%s'%_title, fontsize = fontsize)
     Doppler_Graph.set_xlabel('Universal Time', fontsize = fontsize)
     Doppler_Graph.plot([FPI_Results['sky_times'][0],FPI_Results['sky_times'][-1]],[0,0],'k--')
     Doppler_Graph.grid(True)
@@ -1211,6 +1214,7 @@ def PlotDay(f, full_clear=-30, full_cloud=-20,
 def PlotDiagnosticDay(f, cloud_thresh = [-22.,-10.],\
 			sky_quality_thresh =[-np.inf,-np.inf],\
 			LASERPARAMINTERP = 'linear',\
+                        sky_line_tag='X',\
 			):
     '''
     Function to plot a single night's diagnotic file
@@ -1301,6 +1305,7 @@ def PlotDiagnosticDay(f, cloud_thresh = [-22.,-10.],\
     
     
     
+
     fig = plt.figure(dpi=300, figsize=(10,7.5)) # Figure for diagnostics to be drawn to
     
     fontP = FontProperties()
@@ -1451,7 +1456,10 @@ def PlotDiagnosticDay(f, cloud_thresh = [-22.,-10.],\
     ax.plot(sky_times, sky_redchi,'k.-')
     ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
     ax.set_xlim([sky_times[0] - datetime.timedelta(hours=0.5), sky_times[-1] + datetime.timedelta(hours=0.5)])
-    ax.set_ylabel('Sky Fit\nReduced Chi^2')
+    if sky_line_tag=='X':
+        ax.set_ylabel('Sky Fit\nReduced Chi^2')
+    elif 'G' in sky_line_tag:
+        ax.set_ylabel('Sky Fit (Green Images)\nReduced Chi^2')
     ax.grid(True)
 
     ####################### Plot of skyI ####################### 
@@ -1468,9 +1476,12 @@ def PlotDiagnosticDay(f, cloud_thresh = [-22.,-10.],\
     
     ax.set_xlim([tp0, tp1])
     ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
-    ax.set_ylabel('Line Intensity\n[arbitrary]')
+    if sky_line_tag=='X':
+        ax.set_ylabel('Line Intensity\n[arbitrary]')
+    elif 'G' in sky_line_tag:
+        ax.set_ylabel('Green Line Intensity\n[arbitrary]')
     ax.set_xlabel('Universal Time')
-    ax.legend(loc='best', prop={'size':6}, numpoints=1, ncol=5, framealpha=0.5)
+    ax.legend(loc='lower center',bbox_to_anchor=(0.5,1), prop={'size':6}, numpoints=1, ncol=5, framealpha=0.5,)
     ax.grid(True)
     
     ####################### Plot of cloud cover #######################
@@ -1488,12 +1499,173 @@ def PlotDiagnosticDay(f, cloud_thresh = [-22.,-10.],\
         ax.set_ylabel('Cloud indicator\n[degrees C]')
         ax.grid(True)
         ax.set_xlabel('Universal Time, [hours]')
-    
+
+    ####################### Plot of temperature #######################
+    if (FPI_Results['EtalonInside'] is not None) or (FPI_Results['EtalonOutside'] is not None):
+        fig.axes[0].change_geometry(5,2,1)
+        fig.axes[1].change_geometry(5,2,2)
+        fig.axes[2].change_geometry(5,2,3)
+        fig.axes[5].change_geometry(5,2,4)
+        fig.axes[3].change_geometry(5,2,5)
+        fig.axes[6].change_geometry(5,2,6)
+        fig.axes[7].change_geometry(5,2,7)
+        fig.axes[4].change_geometry(5,2,8)
+
+        fig.set_size_inches(12,9,forward=True)
+        fig.axes[7].set_xlabel("")
+
+        ax = fig.add_subplot(5,2,9)
+
+    if FPI_Results['EtalonInside'] is not None:
+        ct = FPI_Results['sky_times']
+        ctemp = FPI_Results['EtalonInside']['mean']
+        ax.plot(ct, ctemp, marker='.',label='Inside Etalon')
+
+    if FPI_Results['EtalonOutside'] is not None:
+        ct = FPI_Results['sky_times']
+        ctemp = FPI_Results['EtalonOutside']['mean']
+        ax.plot(ct, ctemp, marker='.',label='Outside Etalon')
+
+    if (FPI_Results['EtalonInside'] is not None) or (FPI_Results['EtalonOutside'] is not None):
+        ax.set_xlim([ct[0] - datetime.timedelta(hours=0.5), ct[-1] + datetime.timedelta(hours=0.5)])
+        ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+        ax.set_ylabel('Temperature\n[degrees C]')
+        ax.grid(True)
+        ax.set_xlabel('Universal Time, [hours]')
+        ax.legend(frameon=False,loc='lower center',bbox_to_anchor=(0.5,1),ncol=2,prop={'size':9})
+
+
     fig.tight_layout()
     
     return fig
 
+def __add_skyline2diagnostic(fig,npzpath,sky_line_tag='X',sky_quality_thresh =[-np.inf,-np.inf]):
 
+    #Change geometry of original layout into new one
+    nrows=4 if len(fig.axes)==8 else 5
+
+    fig.axes[0].change_geometry(6,2,1)
+    fig.axes[1].change_geometry(6,2,2)
+    fig.axes[2].change_geometry(6,2,3)
+    fig.axes[5].change_geometry(6,2,4)
+    fig.axes[3].change_geometry(6,2,5)
+    fig.axes[6].change_geometry(6,2,6)
+    fig.axes[7].change_geometry(6,2,7)
+    fig.axes[4].change_geometry(6,2,11)
+    if nrows==5:
+        fig.axes[-1].change_geometry(6,2,9)
+
+    fig.set_size_inches(12.5,9.5,forward=True)
+
+    # Reading file
+    npzfile = np.load(npzpath,allow_pickle=True)
+    FPI_Results = npzfile['FPI_Results']
+    FPI_Results = FPI_Results.reshape(-1)[0]
+    instrument = npzfile['instrument']
+    instrument = instrument.reshape(-1)[0]
+    site = npzfile['site']
+    site = site.reshape(-1)[0]
+    del npzfile.f # http://stackoverflow.com/questions/9244397/memory-overflow-when-using-numpy-load-in-a-loop
+    npzfile.close()
+
+    valid_az = np.array([site['Directions'][direc]['az'] for direc in site['Directions']])
+    valid_ze = np.array([site['Directions'][direc]['ze'] for direc in site['Directions']])
+
+    #Read output results
+    sky_times=FPI_Results['sky_times']
+    sky_redchi=FPI_Results['sky_chisqr']
+    skyI=FPI_Results['skyI']
+    all_az=FPI_Results['az']
+    all_ze=FPI_Results['ze']
+    direction=FPI_Results['direction']
+    laser_times=FPI_Results['laser_times']
+    laser_redchi=FPI_Results['laser_chisqr']
+    laser_value=FPI_Results['laser_value']
+    laser_stderr=FPI_Results['laser_stderr']
+    reference=FPI_Results['reference']
+    center=FPI_Results['center_pixel']
+    
+    #use laser or not
+    uselaser='laser' in reference
+
+    fontP = FontProperties()
+    fontP.set_size('small')
+    
+    ##################### Look Direction Validation ####################### OUT
+
+    # Plot the look directions
+    all_ze = np.array(all_ze)
+    all_az = np.array(all_az)
+    valid_ze = np.array(valid_ze)
+    valid_az = np.array(valid_az)
+
+    # Flip az for negative ze angles
+    idx = all_ze < 0
+    all_ze[idx] = -all_ze[idx]
+    all_az[idx] = all_az[idx] + 180
+    idx = valid_ze < 0
+    valid_ze[idx] = -valid_ze[idx]
+    valid_az[idx] = valid_az[idx] + 180
+
+    az_rad = all_az * np.pi/180.0
+    valid_az_rad = valid_az * np.pi/180.0
+
+    ax = fig.add_subplot(6,2,12, projection='polar')
+    ax.plot(valid_az_rad, valid_ze, 'kx', label = 'valid')
+    valid_idx = [d is not 'Unknown' for d in direction]
+    invalid_idx = [not i for i in valid_idx]
+    ax.plot(az_rad[np.where(valid_idx)], all_ze[np.where(valid_idx)], 'k.', label = 'actual')
+    ax.plot(az_rad[np.where(invalid_idx)], all_ze[np.where(invalid_idx)], 'r.', label = 'unrecognized')
+    # Now make it look like a cardinal plot, not a math plot
+    ax.set_theta_direction(-1)
+    ax.set_theta_offset(np.pi/2)
+    ax.set_rmax(90.)
+    ax.set_rgrids([30,60])
+    if sky_line_tag=='X':
+        ax.legend(bbox_to_anchor=(1.05,1),loc=2,borderaxespad=0.,numpoints=1,prop=fontP,)
+    elif 'G' in sky_line_tag:
+        ax.legend(bbox_to_anchor=(1.05,1),loc=2,borderaxespad=0.,numpoints=1,prop=fontP,title='Green')
+    # Indicate any non-displayed points (zenith > 90)
+    nnshown = sum(abs(all_ze) > 90.)
+    if nnshown > 0:
+        ax.set_xlabel('%03i points not shown (|ze| > 90)' % nnshown)
+    
+    ##################### Sky Fit Chi^2 ####################### 
+    
+    ax = fig.add_subplot(6,2,8)
+    ax.plot(sky_times, sky_redchi,'k.-')
+    ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+    ax.set_xlim([sky_times[0] - datetime.timedelta(hours=0.5), sky_times[-1] + datetime.timedelta(hours=0.5)])
+    if sky_line_tag=='X':
+        ax.set_ylabel('Sky Fit\nReduced Chi^2')
+    elif 'G' in sky_line_tag:
+        ax.set_ylabel('Sky Fit (Green)\nReduced Chi^2')
+    ax.grid(True)
+
+    ####################### Plot of skyI ####################### 
+    ax = fig.add_subplot(6,2,10)
+    for direc in list(set(direction)):
+        # account for different exposure times
+        I = np.array([si for (si,d) in zip(skyI, direction) if d == direc])
+        t = np.array([si for (si,d) in zip(sky_times, direction) if d == direc])
+        ax.semilogy(t, I, '.-', label=direc)
+    tp0 = sky_times[0] - datetime.timedelta(hours=0.5)
+    tp1 = sky_times[-1] + datetime.timedelta(hours=0.5)
+    ax.semilogy([tp0, tp1],[sky_quality_thresh[0], sky_quality_thresh[0]],'k--',lw=0.5,label='qual thresh (q=1)')
+    ax.semilogy([tp0, tp1],[sky_quality_thresh[1], sky_quality_thresh[1]],'k--',lw=0.5,label='qual thresh (q=2)')
+    
+    ax.set_xlim([tp0, tp1])
+    ax.xaxis.set_major_formatter(dates.DateFormatter('%H'))
+    if sky_line_tag=='X':
+        ax.set_ylabel('Line Intensity\n[arbitrary]')
+    elif 'G' in sky_line_tag:
+        ax.set_ylabel('Green Line Int\n[arbitrary]')
+    ax.set_xlabel('Universal Time')
+    ax.legend(loc='lower center',bbox_to_anchor=(0.5,1), prop={'size':6}, numpoints=1, ncol=5, framealpha=0.5,)
+    ax.grid(True)
+
+
+    fig.tight_layout()
 
 
 def CompareData(files, full_clear=-30, full_cloud=-20,
@@ -1969,3 +2141,390 @@ def DisplayRaw(f, cmin=None, cmax=None):
         p.axes.get_yaxis().set_visible(False)
 
     return p
+
+
+def DailySpectraSummary(f):
+#
+# Function to display summary of the spectra for a single night.
+#
+# INPUTS:
+#   f - full path name to NPZ file
+#
+# OPTIONAL INPUTS:
+#
+# OUTPUT:
+#   p - a reference to the figure object created
+#
+# HISTORY:
+#   Written by L. Navarro, 18 Feb 2021
+
+    from matplotlib import pyplot as plt
+
+    # Read in the file
+    npzfile = np.load(f,allow_pickle=True)
+    FPI_Results = npzfile['FPI_Results']
+    FPI_Results = FPI_Results.reshape(-1)[0]
+    site = npzfile['site']
+    site = site.reshape(-1)[0]
+    del npzfile.f # http://stackoverflow.com/questions/9244397/memory-overflow-when-using-numpy-load-in-a-loop
+    npzfile.close()
+
+    from FPI import get_conv_matrix_1D,Sky_FringeModel
+    import lmfit,os
+    from scipy import signal
+
+    # Set up the forward model
+    L = 301
+    lam0=630.0e-9
+    sky_obj=FPI_Results['sky_value']
+
+    Z=np.zeros((FPI_Results['sky_fringes'][0].size,len(FPI_Results['sky_fringes'])))*np.nan
+
+    sky_params = lmfit.Parameters()
+
+    for ith in range(len(FPI_Results['sky_fringes'])):
+
+        _data_=FPI_Results['sky_fringes'][ith]
+        _annuli=FPI_Results['sky_annuli'][ith]
+
+        if ith==0:
+            for param in sky_obj.iterkeys():
+                sky_params.add(param, value = sky_obj[param][ith], vary = False)
+        else:
+            for param in sky_obj.iterkeys():
+                sky_params[param].set(value = sky_obj[param][ith], vary = False)
+
+        A_1D, lamvec = get_conv_matrix_1D(sky_params, _annuli, L, lam0)
+
+        _model_=Sky_FringeModel(sky_params, _annuli,lamvec,A_1D)
+
+        Z[:,ith]=_model_-_data_
+
+    ZZ=np.copy(Z)
+    for i in range(ZZ.shape[1]):
+     ZZ[:,i]=signal.savgol_filter(ZZ[:,i],9,4)
+
+    bins0=np.arange(0,ZZ.shape[0],10)
+    binsN=np.arange(0,ZZ.shape[0],10)+10
+
+    vals,stds=[],[]
+    for i,(b0,bn) in enumerate(zip(bins0,binsN)):
+     data=ZZ[b0:bn,:].flatten()
+     Q1=np.quantile(data,0.25)
+     Q3=np.quantile(data,0.75)
+     IQR=Q3-Q1
+     idx=np.logical_and(data>=(Q1-1.5*IQR),data<=(Q3+1.5*IQR))
+     val=np.nanmean(data[idx])
+     std=np.nanstd(data[idx])
+     vals.append(val)
+     stds.append(std)
+
+    data={'bins':(bins0+binsN)/2.,'vals':np.array(vals),'stds':np.array(stds),'Z':ZZ}
+
+    fig,axes=plt.subplots(1,1,figsize=(8,4),gridspec_kw={'right':0.95,'left':0.1})
+    for i in range(ZZ.shape[1]):
+     axes.plot(ZZ[:,i],color='black',alpha=0.5)
+
+    axes.set_ylim(-1,1)
+    axes.set_xlim(0,ZZ.shape[0])
+    axes.axhline(y=0,color='black',linewidth=0.5)
+    axes.errorbar((bins0+binsN)/2.,vals,yerr=stds,color='red',capsize=3,marker='o',elinewidth=2,markersize=4)
+    axes.set_ylabel("RESIDUALS (counts)",fontsize=12)
+    axes.set_xlabel("Annular Channel",fontsize=12)
+
+    time0=FPI_Results['laser_times'][0].strftime("%H:%M %d")
+    timeN=FPI_Results['laser_times'][-1].strftime("%H:%M %d %b %Y")
+    titulo="%s, %s-%s\n(%s)"%( site['Abbreviation'].upper(),time0,timeN, os.path.basename(f) )
+    axes.set_title(titulo)
+
+    return fig,data
+
+def DailyFittingMovie(f,output_dir="",output_format="mp4",keep_frames=False,img_type='both',ut_interval=None):
+#
+# Function to generate a MP4 video to display lasers and sky fitting information.
+# 
+#
+# INPUTS:
+#   f - full path name to image to display
+#
+# OPTIONAL INPUTS:
+#   output_dir - directory to save images. If empty, images and movie will be saved along with f
+#   keep_frames - boolean to keep or remove indivual PNG frames
+#   img_type - str to indicate which type of image to plot i.e. laser or sky or both [optional,default=both] 
+#   ut_interval - list of datetime object [optional, default=None] 
+# OUTPUT:
+#
+# HISTORY:
+#   Written by L. Navarro
+	
+	if len(output_dir)==0:
+		output_dir=os.path.dirname(f)
+	
+	tmpfolder=os.path.join(output_dir,datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+	if not os.path.exists(tmpfolder):
+		os.makedirs(tmpfolder)
+	
+	matplotlib.use('AGG')
+	from matplotlib import pyplot,ticker
+	from matplotlib.colors import LinearSegmentedColormap
+	import matplotlib.gridspec as gridspec
+	
+	n_bin=512
+	colors=[(0,0,0),(0,0,1),(0.95,0,0.63),(1,0,0),(1,1,0),(1,1,1)]
+	sherwood_cmap = LinearSegmentedColormap.from_list('sherwood', colors, N=n_bin)
+	
+	def get_template():
+		gs = gridspec.GridSpec(1,1)
+		gs.update(top=0.95, bottom=0.6,left=0.09,right=0.97,hspace=0.0,wspace=0.)
+		fig=pyplot.figure(figsize=(11.74,8.24), facecolor='w', edgecolor='k')
+		boxa=pyplot.subplot(gs[0,0], facecolor='#f6f6f6')
+		boxa.get_xaxis().set_tick_params(direction='in',which='major',top=True,right=True,length=8)
+		boxa.get_yaxis().set_tick_params(direction='in',which='major',top=True,right=True,length=8)
+		boxa.get_xaxis().set_tick_params(direction='in',which='minor',top=True,right=True,length=5)
+		boxa.get_yaxis().set_tick_params(direction='in',which='minor',top=True,right=True,length=5)
+		boxa.xaxis.set_major_locator(ticker.MultipleLocator(50))
+		boxa.xaxis.set_minor_locator(ticker.MultipleLocator(25))
+		pyplot.ticklabel_format(useOffset=False, style='plain')
+		boxa.set_ylabel('Signal',fontsize=14)
+		boxa.set_xlabel('Annular channel',fontsize=14)
+		_=[tick.label.set_fontsize(14) for tick in boxa.xaxis.get_major_ticks()]
+		_=[tick.label.set_fontsize(14) for tick in boxa.yaxis.get_major_ticks()]
+		gs1 = gridspec.GridSpec(1,1)
+		gs1.update(top=0.27, bottom=0.07,left=0.09,right=0.97,hspace=0.0,wspace=0.)
+		boxb=pyplot.subplot(gs1[0,0], facecolor='#f6f6f6')
+		boxb.get_xaxis().set_tick_params(direction='in',which='major',top=True,right=True,length=8)
+		boxb.get_yaxis().set_tick_params(direction='in',which='major',top=True,right=True,length=8)
+		boxb.get_xaxis().set_tick_params(direction='in',which='minor',top=True,right=True,length=5)
+		boxb.get_yaxis().set_tick_params(direction='in',which='minor',top=True,right=True,length=5)
+		boxb.xaxis.set_major_locator(ticker.MultipleLocator(50))
+		boxb.xaxis.set_minor_locator(ticker.MultipleLocator(25))
+		boxb.set_title('Fringe Residuals',fontsize=14)
+		boxb.set_ylabel('Counts',fontsize=14)
+		boxb.set_xlabel('Annular channel',fontsize=14)
+		boxb.axhline(y=0,color='black',linestyle=':')
+		_=[tick.label.set_fontsize(14) for tick in boxb.xaxis.get_major_ticks()]
+		_=[tick.label.set_fontsize(14) for tick in boxb.yaxis.get_major_ticks()]
+		inset2 = fig.add_axes([0.15, 0.285, .28, .28])
+		plt.setp(inset2, xticks=[], yticks=[])
+		return fig
+	
+	# Read in the file
+	npzfile = np.load(f,allow_pickle=True)
+	FPI_Results = npzfile['FPI_Results'].item()
+	instrument = npzfile['instrument'].item()
+	site = npzfile['site'].item()
+	del npzfile.f # http://stackoverflow.com/questions/9244397/memory-overflow-when-using-numpy-load-in-a-loop
+	npzfile.close()
+	
+	from FPI import get_conv_matrix_1D,Sky_FringeModel,Laser_FringeModel,ReadIMG,FindEqualAreas,AnnularSum
+	import lmfit
+	
+	for p in glob.glob(output_dir+"/"+5*"[0-9]"+".png"):
+		os.remove(p)
+	
+	ithpng=0
+	pngpaths=[]
+	N0,N1,N=instrument['N0'],instrument['N1'],instrument['N']
+        if 'L0' in instrument.keys():
+	    L0,L1=instrument['L0'],instrument['L1']
+        else:
+            L0,L1=N0,N1
+	
+	#same calculation as in FPI.py of center of sky images 
+	laser_times=FPI_Results['laser_times']
+	dt0=laser_times[0]
+	center=FPI_Results['center_pixel']
+	dt_laser = [(laser_time - dt0).total_seconds() for laser_time in laser_times]
+	npoly = np.floor(len(dt_laser)/10)
+	if npoly > 10:
+		npoly = 10 
+	pf_cx = np.polyfit(dt_laser,center[:,0],npoly)
+	cx_fn = np.poly1d(pf_cx)
+	pf_cy = np.polyfit(dt_laser,center[:,1],npoly)
+	cy_fn = np.poly1d(pf_cy)
+	#choosing image type: both, laser or sky
+	if img_type=='both':
+		paths=np.concatenate((FPI_Results['laser_fns'],\
+								FPI_Results['sky_fns'])).tolist()
+	else:
+		paths=FPI_Results['%s_fns'%img_type]
+	
+	for fn in paths:
+		
+		az,ze=None,None
+		
+		if fn in FPI_Results['laser_fns']:
+			lab='laser'
+		elif fn in FPI_Results['sky_fns']:
+			lab='sky'
+		
+		for i,ifn in enumerate(FPI_Results['%s_fns'%lab]):
+			if ifn in fn:
+				break
+		
+		dt_time=FPI_Results['%s_times'%lab][i]
+		
+		if ut_interval is not None:
+			_dt=dt_time.astimezone(pytz.utc).replace(tzinfo=None)
+			if not ( ut_interval[0]<=_dt and ut_interval[1]>=_dt ) :
+				continue
+		
+		cx=cx_fn((dt_time-dt0).total_seconds())
+		cy=cy_fn((dt_time-dt0).total_seconds())
+		
+		if lab=='sky':
+			az=FPI_Results['az'][i]
+			ze=FPI_Results['ze'][i]
+			direc_str=FPI_Results['direction'][i]
+		
+# 		fn='/Users/land/data/FPI/14-LEO/2021/20210513/'+os.path.basename(fn)
+		if os.path.exists(fn):
+			d = ReadIMG(fn)
+			img = np.asarray(d)
+			
+			_channels_=np.arange(0,N)
+			annuli = FindEqualAreas(img,cx,cy,N)
+			_annuli_=annuli['r']
+			_data_, _ = AnnularSum(img,annuli,0)
+			
+			if lab=='laser':
+				az, ze = fpiinfo.angle_correction(d.info['azAngle'], d.info['zeAngle'], instrument['name'], dt_time)
+				if ze < 0:
+					ze = abs(ze)
+					az = np.mod(az+180.0,360)
+			
+			xlims={'xmin':0,'xmax':N}
+				
+		else:
+			
+			if lab=='sky':
+				_channels_=np.arange(N0,N1)
+				xlims={'xmin':N0,'xmax':N1+1}
+			elif lab=='laser':
+				_channels_=np.arange(L0,L1)
+				xlims={'xmin':L0,'xmax':L1+1}
+				
+			_annuli_=FPI_Results['%s_annuli'%lab][i]
+			_data_=FPI_Results['%s_fringes'%lab][i]
+			
+			
+		
+		#collecting table information
+		vals={key:item[i] for key,item in FPI_Results['%s_value'%lab].iteritems()}
+		stds={key:item[i] for key,item in FPI_Results['%s_stderr'%lab].iteritems()}
+		
+		if lab=='laser':
+			keys2show=vals.keys()
+		elif lab=='sky':
+			keys2show=['skyI','skyB','ccdB','T','lamc']
+		
+		tabledata=[]
+		for key in keys2show:
+			value=vals[key]
+			stderr=stds[key]
+			if np.abs(value)<=1e-3:
+				stderr1="inf %"
+			else:
+				stderr1="%.2f"%(abs(stderr/value*100.))+"%"
+			stderr="{0:10.3}".format(stderr)
+			if isinstance(value,int):
+				value="{0:15}".format(value)
+			else:
+				if key=='lamc':
+					fmt="{0:15.10}" if lab=='sky' else "{0:18.10}"
+					value=fmt.format(value)
+				else:
+					fmt="{0:15.2}" if lab=='sky' else "{0:18.2}"
+					value=fmt.format(value)
+			fmt="{0:<20}" if lab=='sky' else "{0:<40}"
+			tabledata.append([fmt.format(key),value+r" $\pm$",stderr+"(%s)"%stderr1])
+		tabledata=np.array(tabledata)
+		
+		#calculating model
+		_params=[]
+		for key,val in vals.iteritems():
+			p=lmfit.Parameter(key,val)
+			p.stderr=stds[key]
+			_params.append(p)
+		
+		params = lmfit.Parameters()
+		params.add_many(*_params)
+		
+		if lab=='laser':
+			_model_=Laser_FringeModel(params, _annuli_)
+		elif lab=='sky':
+			L = 301
+			lam0=630.0e-9
+			A_1D, lamvec = get_conv_matrix_1D(params, _annuli_, L, lam0)
+			_model_=Sky_FringeModel(params, _annuli_,lamvec,A_1D)
+		
+		if lab=='sky':
+			_model_[:N0]=np.nan
+			_model_[N1:]=np.nan
+		elif lab=='laser':
+			_model_[:L0]=np.nan
+			_model_[L1:]=np.nan
+		
+		#making title
+		fname_str=os.path.basename(fn)
+		
+		_title=fname_str+"".join([" "]*(40-len(fname_str)))+dt_time.strftime('%d %b %Y %H:%M:%S')
+		
+		if az is not None and ze is not None:
+			if lab=='sky':
+				_title=_title+"	 "+"%s(%.1f,%.1f)"%(direc_str,az,ze)
+			elif lab=='laser':
+				_title=_title+"	 "+"(%.1f,%.1f)"%(az,ze)
+		
+		#populating graphics
+		fig=get_template()
+		axes=fig.axes
+		axes[0].set_title(_title,fontsize=16)
+		axes[0].plot(_channels_,_data_,color='black',rasterized=True)
+		axes[0].plot(_channels_,_model_,color='darkorange',rasterized=True)
+		axes[0].set_xlim(**xlims)
+		
+		axes[1].plot(_channels_,_data_-_model_,color='darkred',rasterized=True)
+		axes[1].set_xlim(**xlims)
+		
+		if os.path.exists(fn):
+			axes[2].imshow(img,cmap=sherwood_cmap,vmin=_data_.min(),vmax=_data_.max())
+			axes[2].axhline(y=cy,color='red',linewidth=1.5)
+			axes[2].axvline(x=cx,color='red',linewidth=1.5)
+			axes[2].text(0., 0., 'Center:\n(%.3f,%.3f)'%(cx,cy), horizontalalignment='right',\
+			verticalalignment='bottom', transform=axes[2].transAxes,fontsize=8)
+			
+		else:
+			axes[2].text(0.5, 0.5, 'IMG\nNOT FOUND', fontsize=16, horizontalalignment='center',\
+						verticalalignment='center', transform=axes[2].transAxes)
+		
+		tab=axes[0].table(cellText=tabledata[:,1:],rowLabels=tabledata[:,0],loc='bottom',fontsize=14,bbox=[0.65, -0.85, 0.28, 0.67])
+		_=[cell.set_linewidth(0) for key, cell in tab.get_celld().items()]
+		
+		#saving into png
+		ipng=tmpfolder+"/%05i.png"%ithpng
+		fig.savefig(ipng)
+		print ("Frame %s saved in %s"%(fname_str,ipng))
+		pyplot.close(fig)
+		ithpng=ithpng+1
+		pngpaths.append(ipng)
+	
+	if output_format=="mp4":
+		outpath=tmpfolder+"/"+os.path.basename(f)[:-4]+".mp4"
+		command='/usr/bin/ffmpeg -i '+output_dir+'/%05d.png -vcodec libx264 -r 8 -filter:v "setpts=20.0*PTS" -crf 25 -pix_fmt yuv420p '+outpath
+	elif output_format=="pdf":
+		outpath=tmpfolder+"/"+os.path.basename(f)[:-4]+".pdf"
+		command='/usr/bin/convert -density 100 '+" ".join(pngpaths) + " " + outpath
+	
+	os.system(command)
+	import shutil
+	potentialout=output_dir+'/'+os.path.basename(outpath)
+	if os.path.exists(potentialout):
+		os.remove(potentialout)
+	shutil.move(outpath,output_dir)
+	
+	if not keep_frames:
+		for p in pngpaths:
+			os.remove(p)
+		shutil.rmtree(tmpfolder)
+
