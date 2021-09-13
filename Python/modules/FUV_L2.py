@@ -13,7 +13,7 @@ Todo:
 # These need to be manually changed, when necessary.
 # NOTE: When the major version is updated, you should change the History global attribute
 software_version_major = 4 # Should only be incremented on major changes
-software_version_minor = 0 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 1 # [0-99], increment on ALL published changes, resetting when the major version changes
 software_version = float(software_version_major)+software_version_minor/1000.
 ####################################################################################################
 
@@ -1244,11 +1244,14 @@ def FUV_Level_2_OutputProduct_NetCDF(L25_full_fn, L25_dict):
     ncfile.Discipline =                     'Space Physics > Ionospheric Science'
     ncfile.File =                           L25_fn
     ncfile.File_Date =                      t_file.strftime('%a, %d %b %Y, %Y-%m-%dT%H:%M:%S.%f')[:-3] + ' UTC'
-    ncfile.Generated_By =                   'ICON SDC > ICON UIUC FUV L2.5 Processor v%.2f, J. J. Makela, D. Iliou' % software_version
+    ncfile.Generated_By =                   'ICON SDC > ICON UIUC FUV L2.5 Processor v%.3f, J. J. Makela, D. Iliou' % software_version
     ncfile.Generation_Date =                t_file.strftime('%Y%m%d')
-    ncfile.setncattr_string('History',      ['FUV L2.5 Processor v4.00: Flag the data affected by conjugate photoelectrons and adjust the qualities accordingly. '
+    ncfile.setncattr_string('History',      ['FUV L2.5 Processor v4.01: Enable retrievals from the data with non-zero turret angles. Update the quality determination '
+                                            'algorithm to be more strict on low SNR retrievals. Filter out the brightness profiles with dayside contribution, which are '
+                                            'labeled as nighttime. U. Kamaci, 23 Jul 2021. \n'
+                                            'FUV L2.5 Processor v4.00: Flag the data affected by conjugate photoelectrons and adjust the qualities accordingly. '
                                             'Add a new variable `ICON_L25_Sunlit_Conjugate_Raypath_Percentage` to indicate how much the data is affected by photoelectrons '
-                                            '. Fix the Date_Start-Date_End bug., U. Kamaci, 5 Feb 2021 '
+                                            '. Fix the Date_Start-Date_End bug., U. Kamaci, 5 Feb 2021. '
                                             ])
     ncfile.HTTP_LINK =                      'http://icon.ssl.berkeley.edu/Instruments/FUV'
     ncfile.Instrument =                     'FUV'
@@ -1802,11 +1805,13 @@ def Get_lvl2_5_product(file_input = None,
         # l1 quality flag - use if 0(LVLH) or 1(R-LVLH)
         l1_quality = data.variables['ICON_L1_FUVA_SWP_Quality_Flag'][:]
 
-        # FUV turret angle
-        turret_angle = data.variables['ICON_L1_FUV_Turret'][:]
-
         # Get science mode
         FUV_mode = data.variables['ICON_L1_FUV_Mode'][:]
+
+        # compute the SZA of Tanalt=300km (take the min SZA among 6 stripes)
+        ind = np.max(np.sum(FUV_TANGENT_ALTITUDES < 300, axis=1) - 1, 0)
+        xx, yy = np.meshgrid(np.arange(FUV_mode.shape[0]), np.arange(6), indexing='ij')
+        sza300 = np.min(FUV_TANGENT_SZA[xx,ind,yy], axis=1)
 
         if FUV_mode[FUV_mode==2].shape[0] == 0:
             print 'No nighttime data to process. Output file will not be produced.'
@@ -1865,9 +1870,9 @@ def Get_lvl2_5_product(file_input = None,
                     # We are in nighttime science mode, process the data
                     # Save the index of this measurement
                     night_ind.append(ind)
-                    if ((l1_qual!=0 and l1_qual!=1) or abs(turret_angle[ind])>1):
+                    if (l1_qual!=0 and l1_qual!=1) or sza300[ind]<95:
                         inv_quality, quality_flag = quality_check(
-                            l1_quality=l1_qual, turret_angle=turret_angle[ind])
+                            l1_quality=l1_qual, sza300=sza300[ind])
                         FUV_quality[ind,stripe] = inv_quality
                         FUV_quality_flag[ind,stripe] = quality_flag
                         continue
@@ -2189,7 +2194,7 @@ def nan_checker(arr):
         return np.arange(len(arr)) # if not, don't do any operation
 
 def quality_check(bright=None, Ne=None, hmF2=None, l1_quality=None, inv_error=0,
-                    turret_angle=0, sunlit_ratio=0):
+                    sunlit_ratio=0, sza300=999):
     '''
     Checks a couple of variables and outputs an inversion quality together
     with a quality code that describes quality conditions.
@@ -2198,7 +2203,6 @@ def quality_check(bright=None, Ne=None, hmF2=None, l1_quality=None, inv_error=0,
         Ne - retrieved O+ density profile
         inv_error - Inversion error (binary variable: 1/0)
         l1_quality - quality flag for level 1 brightness profiles
-        turret_angle - angle of the turret (float)
         sunlit_ratio - percentage of conjugate raypath in the sunlit [0 to 100]
     OUTPUTS:
         inv_quality - number that indicates the quality of inversion [0, 0.5, 1]
@@ -2219,7 +2223,7 @@ def quality_check(bright=None, Ne=None, hmF2=None, l1_quality=None, inv_error=0,
         if inv_error is 1:
             binary_code[0] = 1
         # Digit 1: Insufficient L1 quality
-        if ((l1_quality!=0 and l1_quality!=1) or abs(turret_angle)>1):
+        if (l1_quality!=0 and l1_quality!=1) or sza300<95:
             binary_code[1] = 1
         # Digit 2: Very low input signal level
         if (bright is not None) and (np.size(bright)>10):
@@ -2228,6 +2232,7 @@ def quality_check(bright=None, Ne=None, hmF2=None, l1_quality=None, inv_error=0,
             mi = max(min(np.nanargmax(br_lp),len(br_lp)-20), 20)
             sigmean = np.nanmean(br_lp[mi-20:mi+20])
             noisestd = np.nanstd(br_hp)
+            noisestd = max(5, noisestd)
             if (sigmean < 2 * noisestd) or (sigmean < 1):
                 binary_code[2] = 1
         # Digit 3: Low input signal level
