@@ -477,6 +477,10 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         FPI_Results['Clouds'] = None # defaults
         FPI_Results['Dome']   = None
         FPI_Results['Inside'] = None
+    if 'EtalonInside' not in FPI_Results.keys():
+        FPI_Results['EtalonInside'] = None
+    if 'EtalonOutside' not in FPI_Results.keys():
+        FPI_Results['EtalonOutside'] = None
     try:
         # call modules from BoltWood for the two days required and combine the data
         if (FPI_Results['sky_times'][0].strftime("%Y%m%d") == FPI_Results['sky_times'][-1].strftime("%Y%m%d")):
@@ -783,7 +787,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
     site = site.reshape(-1)[0]
     del npzfile.f # http://stackoverflow.com/questions/9244397/memory-overflow-when-using-numpy-load-in-a-loop
     npzfile.close()
-
+    
     # Try to make plots
     try:
         # Plot some quick-look single-station data (LOSwinds and Temps)

@@ -10,7 +10,7 @@
 
 import datetime
 import numpy as np
-
+import ephem
 
 # Define the start and stop dates of the instruments at each site.
 # (Dates are inclusive, meaning that the instrument is at the site
@@ -74,8 +74,10 @@ _dates['minime09']['kwj'] = { 'start': datetime.datetime(2018, 1, 1),
 
 #DASI FPIs
 _dates['minime10'] ={}
-_dates['minime10']['uao'] = { 'start' : datetime.datetime(2021,4,5),
+_dates['minime10']['uao'] = { 'start' : datetime.datetime(2021,4,28),
 			      'stop'  : datetime.datetime(2021,6,30), }
+_dates['minime10']['cvo'] = { 'start' : datetime.datetime(2021,11,22),
+			      'stop'  : None, }
 
 _dates['minime11'] ={}
 _dates['minime11']['uao'] = { 'start' : datetime.datetime(2020,10,20),
@@ -84,7 +86,7 @@ _dates['minime11']['low'] = { 'start' : datetime.datetime(2021,8,12),
 			      'stop'  : None, }
 
 _dates['minime12'] ={}
-_dates['minime12']['uao'] = { 'start' : datetime.datetime(2021,4,28),
+_dates['minime12']['uao'] = { 'start' : datetime.datetime(2021,4,5),
 			      'stop'  : datetime.datetime(2021,6,30), }
 _dates['minime12']['blo'] = { 'start' : datetime.datetime(2021,8,16),
 			      'stop'  : None, }
@@ -791,6 +793,38 @@ _sites['blo'] = {
                 },
     }
 
+
+_sites['cvo'] = {
+        'Location':     (43.27, -120.36, 1000),
+        'Name':         'Christmas Valley, Oregon',
+        'Abbreviation': 'cvo',
+        'Timezone':     'US/Pacific',
+        'CloudThresh':  -25.0,
+        'BufferTime':   45,
+        'scpUser':      'MiniME',
+        'scpPort':      19999,
+        'Network':      'nation',
+        'sql_id':       35, # ID on the airglow SQL database
+        'share':        False, # whether or not to save a copy of the npz file in a separate folder
+        'borders':      True,
+        'Directions':   {
+                'Laser': {'ze': 180, 'az': 87, 'exptime': 30,
+		            'n_exp': 0, 'last_exp': None, 'delay': 600},
+	            'Zenith': {'ze': 0, 'az': 0, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':1500},
+	            'North': {'ze': 45, 'az': 0, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'South': {'ze': -45, 'az': 0, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'East': {'ze': 45, 'az': 90, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+	            'West': {'ze': -45, 'az': 90, 'exptime': 180,
+		            'n_exp': 0, 'last_exp': None, 'delay':0},
+                },
+    }
+
+# TODO: If we ever end up controlling these peruvian sites, make sure
+# this stuff is correct.
 # TODO: If we ever end up controlling these peruvian sites, make sure
 # this stuff is correct.
 _sites['mrh'] = {
@@ -1288,7 +1322,7 @@ _instruments['minime10'] = {
         'N1'            : 500,          # Last annulus to use
         'focal_length'  : 30e-2,       # focal length of lens in m
         'pix_size'      : 13e-6,        # pixel size on CCD in m
-        'lam_laser'     : 632.8e-9,     # laser wavelength in m
+        'lam_laser'     : 633.e-9,     # laser wavelength in m
         'lam0'          : 630.0e-9,     # nominal line center wavelength in m
         'lam0_gl'       : 557.7e-9,     # nominal line center wavelength in m
         'nominal_t'     : 1.2806e-2,       # approximate etalon gap in m
@@ -1903,6 +1937,25 @@ def get_all_instr_names():
     '''
     return _instruments.keys()
 
+def __get_moonphase(dt):
+    """Returns a floating-point number from 0-1. where 0=new, 0.5=full, 1=new"""
+    #Ephem stores its date numbers as floating points, which the following uses
+    #to conveniently extract the percent time between one new moon and the next
+    #This corresponds (somewhat roughly) to the phase of the moon.
+
+    #Use Year, Month, Day as arguments
+    date=ephem.Date(dt)
+
+    nnm = ephem.next_new_moon    (date)
+    pnm = ephem.previous_new_moon(date)
+
+    lunation=(date-pnm)/(nnm-pnm)
+
+    #Note that there is a ephem.Moon().phase() command, but this returns the
+    #percentage of the moon which is illuminated. This is not really what we want.
+
+    return lunation
+
 def get_bad_data_flags(instr_name, dn = datetime.datetime.now()):
     '''
     Return flags indicating if the wind and/or temperature
@@ -1929,6 +1982,16 @@ def get_bad_data_flags(instr_name, dn = datetime.datetime.now()):
     for (start,stop,flag) in tempstartstops:
         if start <= dn and (stop is None or dn <= stop):
             bad_temp_flag = flag
+    
+    #DASI instruments flagged bad for moonphase >=0.75 
+    if instr_name in ['minime10','minime11','minime12']:
+        phase=__get_moonphase(dn)
+        if phase>=0.25 and phase<=0.75:
+            bad_wind_flag=2
+            bad_temp_flag=2
+
+
+
 
     return [bad_wind_flag, bad_temp_flag]
 

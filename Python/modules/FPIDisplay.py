@@ -2142,6 +2142,152 @@ def DisplayRaw(f, cmin=None, cmax=None):
 
     return p
 
+def DisplayRawMovie(path,output,fmt='*img',keep_frames=False):
+#
+# Function to display information about a raw FPI image and plot
+# the ring pattern.
+#
+# INPUTS:
+#   path - full path directory with IMG files to display
+#   output - full path directory where frames and video will be saved
+#
+# HISTORY:
+#   Written by L. Navarro on 13 Sep 2021
+
+    #matplotlib.use('AGG')
+    from matplotlib import pyplot,ticker
+    from matplotlib.colors import LinearSegmentedColormap
+    import matplotlib.gridspec as gridspec
+    
+    n_bin=512
+    colors=[(0,0,0),(0,0,1),(0.95,0,0.63),(1,0,0),(1,1,0),(1,1,1)]
+    sherwood_cmap = LinearSegmentedColormap.from_list('sherwood', colors, N=n_bin)
+    
+    def get_one_frame(f):
+        d = FPI.ReadIMG(f)
+        img = np.asarray(d)
+        exptime = d.info['ExposureTime']
+        ccdtemp = d.info['CCDTemperature']
+        localdt = d.info['LocalTime']
+        site=os.path.basename(f)[:3].lower()
+        instrument=fpiinfo.get_instr_at(site,localdt)[0]
+        az, ze = fpiinfo.angle_correction(d.info['azAngle'], d.info['zeAngle'], instrument, localdt)
+        if ze < 0:
+            ze = abs(ze)
+            az = np.mod(az+180.0,360)
+    
+        fig,axes=plt.subplots(1,1,figsize=(2.85,3.47),dpi=100,gridspec_kw={'left':0,'right':1,'bottom':0,'top':0.85})
+    
+        #sidetext='%s\n%s at %s\n(%.1f,%.1f), %.2fsecs, %iC'%(localdt.strftime("%Y-%m-%d %H:%M:%S LT"),instrument,site,az,ze,exptime,ccdtemp)
+        sidetext='%s\n%s\n(%.1f,%.1f), %.2fsecs, %iC'%(localdt.strftime("%Y-%m-%d %H:%M:%S LT"),os.path.basename(f),az,ze,exptime,ccdtemp)
+        vmin=np.quantile(img,0.2)
+        vmax=np.quantile(img,0.8)
+        im=axes.imshow(img,cmap=sherwood_cmap,vmin=vmin,vmax=vmax,aspect='auto')
+        axes.xaxis.set_major_locator(ticker.NullLocator())
+        axes.yaxis.set_major_locator(ticker.NullLocator())
+        axes.set_title(sidetext,fontsize=9,y=0.98)
+        axes.margins(0,0)
+        return fig
+    
+    tmpfolder=os.path.join(output,datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
+    if not os.path.exists(tmpfolder):
+        os.makedirs(tmpfolder)
+    
+    paths=sorted(glob.glob(path+"/"+fmt))
+    
+    pngpaths=[]
+    for ithpng,img in enumerate(paths):
+        fig=get_one_frame(img)
+        sss=np.array(fig.get_size_inches())
+        #saving into png
+        ipng=tmpfolder+"/%05i.png"%ithpng
+        fig.savefig(ipng)
+        print ("Frame %s saved in %s"%(os.path.basename(ipng),ipng))
+        pyplot.close(fig)
+        pngpaths.append(ipng)
+    
+    if len(pngpaths)==0:
+        return ""
+
+    outpath=output+"/raw_"+os.path.basename(tmpfolder)+".mp4"
+    command='/usr/bin/ffmpeg -i '+tmpfolder+'/%05d.png -vcodec libx264 -r 8 -filter:v "setpts=20.0*PTS" -crf 25 -pix_fmt yuv420p '+outpath
+    os.system(command)
+
+    import shutil
+    
+    if not keep_frames:
+        for p in pngpaths:
+            os.remove(p)
+        shutil.rmtree(tmpfolder)
+
+    return outpath 
+
+def DisplayRawKeogram(path,fmt='*img',center=None,direction=None):
+#
+# Function to display information about a raw FPI image and plot
+# the ring pattern.
+#
+# INPUTS:
+#   path - full path directory with IMG files
+#
+# OUTPUT:
+#   return figure matplotlib object
+#
+# HISTORY:
+#   Written by L. Navarro on 13 Sep 2021
+
+    matplotlib.use('AGG')
+    from matplotlib import pyplot,ticker
+    from matplotlib.colors import LinearSegmentedColormap
+    import matplotlib.gridspec as gridspec
+    
+    n_bin=512
+    colors=[(0,0,0),(0,0,1),(0.95,0,0.63),(1,0,0),(1,1,0),(1,1,1)]
+    sherwood_cmap = LinearSegmentedColormap.from_list('sherwood', colors, N=n_bin)
+    
+    def get_one_frame(f):
+        d = FPI.ReadIMG(f)
+        img = np.asarray(d)
+        localdt = d.info['LocalTime']
+        site=os.path.basename(f)[:3].lower()
+        instrument=fpiinfo.get_instr_at(site,localdt)[0]
+        az, ze = fpiinfo.angle_correction(d.info['azAngle'], d.info['zeAngle'], instrument, localdt)
+        if ze < 0:
+            ze = abs(ze)
+            az = np.mod(az+180.0,360)
+        return img,az,ze,localdt
+    
+    
+    paths=sorted(glob.glob(path+"/"+fmt))
+     
+    keo=[]
+    dts=[]
+    for imgpath in paths:
+        img,az,ze,localdt=get_one_frame(imgpath)
+        
+        if direction is not None:
+            #not implemented yet
+            pass
+        
+        if center is None:
+            center=img.shape[1]/2
+        
+        keo.append(img[center,:])
+        dts.append(localdt)
+    keo=np.array(keo).T
+    dts=np.array(dts)
+    
+    vmin=np.quantile(keo,0.2)
+    vmax=np.quantile(keo,0.85)
+    
+    fig,axes=plt.subplots(1,1,dpi=100,)
+    im=axes.imshow(keo,cmap=sherwood_cmap,vmin=vmin,vmax=vmax,aspect='auto')
+    fn=lambda x,_: dts[int(x)].strftime("%H:%S") if x>=0 and x<keo.shape[1] else ""
+    axes.xaxis.set_major_formatter(ticker.FuncFormatter(fn))
+    axes.set_title("%s-%s"%(dts[0].strftime("%d"),dts[-1].strftime("%d %b %Y")))
+
+    return fig
+
 
 def DailySpectraSummary(f):
 #
@@ -2250,7 +2396,7 @@ def DailyFittingMovie(f,output_dir="",output_format="mp4",keep_frames=False,img_
 # OPTIONAL INPUTS:
 #   output_dir - directory to save images. If empty, images and movie will be saved along with f
 #   keep_frames - boolean to keep or remove indivual PNG frames
-#   img_type - str to indicate which type of image to plot i.e. laser or sky or both [optional,default=both] 
+#   img_type - str to indicate which type of image to plot i.e. laser, sky, sky_green, both for laser and sky including green [optional,default=both] 
 #   ut_interval - list of datetime object [optional, default=None] 
 # OUTPUT:
 #
@@ -2356,13 +2502,15 @@ def DailyFittingMovie(f,output_dir="",output_format="mp4",keep_frames=False,img_
 		if fn in FPI_Results['laser_fns']:
 			lab='laser'
 		elif fn in FPI_Results['sky_fns']:
-			lab='sky'
+			lab='sky_green' if '_XG_' in fn else 'sky'
 		
-		for i,ifn in enumerate(FPI_Results['%s_fns'%lab]):
+                _lab=lab.replace("_green","")
+
+		for i,ifn in enumerate(FPI_Results['%s_fns'%_lab]):
 			if ifn in fn:
 				break
 		
-		dt_time=FPI_Results['%s_times'%lab][i]
+		dt_time=FPI_Results['%s_times'%_lab][i]
 		
 		if ut_interval is not None:
 			_dt=dt_time.astimezone(pytz.utc).replace(tzinfo=None)
@@ -2372,16 +2520,18 @@ def DailyFittingMovie(f,output_dir="",output_format="mp4",keep_frames=False,img_
 		cx=cx_fn((dt_time-dt0).total_seconds())
 		cy=cy_fn((dt_time-dt0).total_seconds())
 		
-		if lab=='sky':
+		if 'sky' in lab:
 			az=FPI_Results['az'][i]
 			ze=FPI_Results['ze'][i]
 			direc_str=FPI_Results['direction'][i]
 		
-# 		fn='/Users/land/data/FPI/14-LEO/2021/20210513/'+os.path.basename(fn)
 		if os.path.exists(fn):
 			d = ReadIMG(fn)
 			img = np.asarray(d)
 			
+                        exptime = d.info['ExposureTime']
+                        ccdtemp = d.info['CCDTemperature']
+
 			_channels_=np.arange(0,N)
 			annuli = FindEqualAreas(img,cx,cy,N)
 			_annuli_=annuli['r']
@@ -2396,26 +2546,25 @@ def DailyFittingMovie(f,output_dir="",output_format="mp4",keep_frames=False,img_
 			xlims={'xmin':0,'xmax':N}
 				
 		else:
-			
-			if lab=='sky':
+			if 'sky' in lab:
 				_channels_=np.arange(N0,N1)
 				xlims={'xmin':N0,'xmax':N1+1}
 			elif lab=='laser':
 				_channels_=np.arange(L0,L1)
 				xlims={'xmin':L0,'xmax':L1+1}
 				
-			_annuli_=FPI_Results['%s_annuli'%lab][i]
-			_data_=FPI_Results['%s_fringes'%lab][i]
+			_annuli_=FPI_Results['%s_annuli'%_lab][i]
+			_data_=FPI_Results['%s_fringes'%_lab][i]
 			
 			
 		
 		#collecting table information
-		vals={key:item[i] for key,item in FPI_Results['%s_value'%lab].iteritems()}
-		stds={key:item[i] for key,item in FPI_Results['%s_stderr'%lab].iteritems()}
+		vals={key:item[i] for key,item in FPI_Results['%s_value'%_lab].iteritems()}
+		stds={key:item[i] for key,item in FPI_Results['%s_stderr'%_lab].iteritems()}
 		
 		if lab=='laser':
 			keys2show=vals.keys()
-		elif lab=='sky':
+		elif 'sky' in lab:
 			keys2show=['skyI','skyB','ccdB','T','lamc']
 		
 		tabledata=[]
@@ -2452,13 +2601,13 @@ def DailyFittingMovie(f,output_dir="",output_format="mp4",keep_frames=False,img_
 		
 		if lab=='laser':
 			_model_=Laser_FringeModel(params, _annuli_)
-		elif lab=='sky':
+		elif 'sky' in lab:
 			L = 301
-			lam0=630.0e-9
+			lam0=557.7e-9 if 'green' in lab else 630.0e-9
 			A_1D, lamvec = get_conv_matrix_1D(params, _annuli_, L, lam0)
 			_model_=Sky_FringeModel(params, _annuli_,lamvec,A_1D)
 		
-		if lab=='sky':
+		if 'sky' in lab:
 			_model_[:N0]=np.nan
 			_model_[N1:]=np.nan
 		elif lab=='laser':
@@ -2471,7 +2620,7 @@ def DailyFittingMovie(f,output_dir="",output_format="mp4",keep_frames=False,img_
 		_title=fname_str+"".join([" "]*(40-len(fname_str)))+dt_time.strftime('%d %b %Y %H:%M:%S')
 		
 		if az is not None and ze is not None:
-			if lab=='sky':
+			if 'sky' in lab:
 				_title=_title+"	 "+"%s(%.1f,%.1f)"%(direc_str,az,ze)
 			elif lab=='laser':
 				_title=_title+"	 "+"(%.1f,%.1f)"%(az,ze)
@@ -2488,10 +2637,11 @@ def DailyFittingMovie(f,output_dir="",output_format="mp4",keep_frames=False,img_
 		axes[1].set_xlim(**xlims)
 		
 		if os.path.exists(fn):
+                        sidetext='Exposure:\n%.2fsecs\nCCD Temp:\n%.2fC\nCenter:\n(%.3f,%.3f)'%(exptime,ccdtemp,cx,cy,)
 			axes[2].imshow(img,cmap=sherwood_cmap,vmin=_data_.min(),vmax=_data_.max())
 			axes[2].axhline(y=cy,color='red',linewidth=1.5)
 			axes[2].axvline(x=cx,color='red',linewidth=1.5)
-			axes[2].text(0., 0., 'Center:\n(%.3f,%.3f)'%(cx,cy), horizontalalignment='right',\
+			axes[2].text(0., 0., sidetext, horizontalalignment='right',\
 			verticalalignment='bottom', transform=axes[2].transAxes,fontsize=8)
 			
 		else:
@@ -2527,4 +2677,4 @@ def DailyFittingMovie(f,output_dir="",output_format="mp4",keep_frames=False,img_
 		for p in pngpaths:
 			os.remove(p)
 		shutil.rmtree(tmpfolder)
-
+        return outpath
