@@ -56,7 +56,7 @@ def activeinstruments():
     # 2. for remote2 server for emailing person of interest.
 
     # Email list
-    UIemail = ['lnav@illinois.edu','jmakela@illinois.edu']
+    UIemail = ['lnav@illinois.edu','jmakela@illinois.edu','bharding@ssl.berkeley.edu']
     BZemail = ['rburiti.ufcg@gmail.com']
     AKemail = []
     MOemail = ['zouhair@uca.ac.ma']
@@ -179,7 +179,7 @@ def activeinstruments():
     code['blo']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
 
     # Last index is for remote2 admin related issues (not site based)
-    code['ADMIN']={'email':['jmakela@illinois.edu','lnav@illinois.edu']}
+    code['ADMIN']={'email':['jmakela@illinois.edu','lnav@illinois.edu','bharding@ssl.berkeley.edu']}
 
     return(code)
 
