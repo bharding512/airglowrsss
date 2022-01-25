@@ -5,6 +5,7 @@ Run program to unzip and sort data onto airglow's remote2 server
 History: 25 Aug 2011 - initial script written (PERL)
          16 Jul 2013 - rewritten to PYTHON
          12 Feb 2014 - Updated to v3.0 - txtcheck
+         08 Nov 2021 - Added alert if no FPI data is found for two consecutive nights by L. Navarro
 
 Written by Daniel J. Fisher (dfisher2@illinois.edu)
 '''
@@ -197,6 +198,63 @@ def makeinfo(f):
     check.write(f + '\n' + '1\n' + str(statinfo.st_size) +'\n' + str(now) + '\n999')
     check.close()
     return
+
+def custom_alert_fpi(site,repo_dir,dn):
+    '''
+    Summary
+    -------
+        function to send alert if data was not taken
+
+    History
+    -------
+        11/8/21 -- Written by L. Navarro
+    '''
+    #Check n-days before
+    ndays=3
+
+    # Load instrument dictionary
+    code = instrumentcode()
+
+    #get all instruments for this site name
+    instr_names=fpiinfo.get_instr_at(site,dn)
+
+    #check flags for each instrument
+    for instr in instr_names:
+
+        message=""
+        flags=[]
+
+        for iday in range(-ndays+1,1):
+
+            idn=dn+dt.timedelta(days=iday)
+
+            #today folder
+            dir_data = repo_dir + '/fpi/%s/%s/%i/%s/'%( instr, site, idn.year, idn.strftime("%Y%m%d") )
+
+            #check if exists or if empty
+            flag1=not os.path.exists(dir_data)
+            nimgs=len(glob(dir_data+"*img"))
+            flag2=nimgs<100
+            flag3=nimgs==0
+
+            if flag1 or flag2:
+                flags.append(idn)
+
+            if flag1 or flag3:
+                message=message+"No data found for %s at %s in %s\n"%(instr,site,idn.strftime("%Y%m%d"))
+            elif flag2:
+                message=message+"Too few (%i) IMG files found for %s at %s in %s\n"%(nimgs,instr,site,idn.strftime("%Y%m%d"))
+
+        inum=instr[-2:]
+
+        subject = "!!! No data error (\'fpi" +inum+'\','+str(dn.year)+','+str(dn.timetuple().tm_yday)+') @ ' + site
+
+        emails = activeinstruments()[site]['fpi'][inum]['email']
+
+        if len(flags)>=round(ndays/2.):
+            Emailer.emailerror(emails, subject, message)
+
+
 
 
 def sorter(san,pgm):
@@ -394,7 +452,7 @@ def sorter(san,pgm):
 
                         # Run green line if existing
                         if len([r for r in result if 'XG' in os.path.basename(r)])>0:
-                            process_kwarg['sky_line_tag']='XG'
+                            process_kwargs['sky_line_tag']='XG'
                             try:
                                 warning = FPIprocess.process_instr(code[instr] + inum,year,doy,**process_kwargs)
                                 if warning:
@@ -523,6 +581,10 @@ def sorter(san,pgm):
                     subject = "!!! Badly named files: " + name
                     print subject
                     Emailer.emailerror(emails, subject, 'Name is not real instrument...')
+
+        #####CHECK CUSTOM ALERTS
+#        if san in ['blo','low','uao','leo']:
+#            custom_alert_fpi(san,dir_local,dt.datetime.now()-dt.timedelta(days=1))
 
     except Exception as e:
         emails = activeinstruments()['ADMIN']['email']
