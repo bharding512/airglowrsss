@@ -56,7 +56,7 @@ def activeinstruments():
     # 2. for remote2 server for emailing person of interest.
 
     # Email list
-    UIemail = ['lnav@illinois.edu','jmakela@illinois.edu','bharding@ssl.berkeley.edu']
+    UIemail = ['lnav@illinois.edu','jmakela@illinois.edu']
     BZemail = ['rburiti.ufcg@gmail.com']
     AKemail = []
     MOemail = ['zouhair@uca.ac.ma']
@@ -163,23 +163,26 @@ def activeinstruments():
     code['leo']['fpi']['80'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
     code['leo']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'Z:/','email':UIemail}
 
-    # DASI FPIs tested at UAO.
-    code['uao']['fpi']['10'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
-
     # DASI FPI at Lowell Observatory, Arizona starting from 12 Aug 2021
     code['low']['fpi']['11'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
     code['low']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/DASI03/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
-    code['low']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberrypi.local/log.txt','email':UIemail}
-    code['low']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://192.168.1.148:8123/api/history/period','email':UIemail}
+    code['low']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberryfpi.local/log.txt','email':UIemail}
+    code['low']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
 
     # DASI FPI at Bear Lake Observatory, Utah starting from 19 Aug 2021
     code['blo']['fpi']['12'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
     code['blo']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/dasi02/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
-    code['blo']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberrypi.local/log.txt','email':UIemail}
+    code['blo']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberryfpi.local/log.txt','email':UIemail}
     code['blo']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
 
+    # DASI FPI at Christmas Valley, Oregon starting from 18? Nov 2021
+    code['cvo']['fpi']['10'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
+    code['cvo']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/dasi01/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
+    code['cvo']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberryfpi.local/log.txt','email':UIemail}
+    code['cvo']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
+
     # Last index is for remote2 admin related issues (not site based)
-    code['ADMIN']={'email':['jmakela@illinois.edu','lnav@illinois.edu','bharding@ssl.berkeley.edu']}
+    code['ADMIN']={'email':['jmakela@illinois.edu','lnav@illinois.edu']}
 
     return(code)
 
@@ -255,6 +258,14 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
         if 'fpi' == instr:
             # Grab all files made within 24 hour period
             name = [f for f in glob(os.path.join('*','*.img')) if (dt.datetime(int(year),int(month),int(day),12) < dt.datetime.fromtimestamp(os.path.getmtime(f)) and dt.datetime.fromtimestamp(os.path.getmtime(f)) < (dt.datetime(int(year),int(month),int(day),12)+dt.timedelta(1)))]
+            #for printing purposes only
+            _f=[]
+            for nn in name:
+                if os.path.dirname(nn) not in _f:
+                    _f.append(os.path.dirname(nn))
+            for __i in _f:
+                print "Zipping from %s/%s"%( code[site][instr][num]['local_dir'], __i )
+            #
             zipper(name,filename)
             splitter(site,instr,num,code,filename,checkname,mfs)
             os.remove(code[site][instr][num]['local_dir']+filename)
