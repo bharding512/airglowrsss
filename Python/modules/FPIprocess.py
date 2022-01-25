@@ -1882,18 +1882,18 @@ def find_unprocessed_days( years = range(2005,2020) , doys = range(1,367) ):
     return unproc
 
 
-
-
-def load_level0(instr_name, year, doy, sky_line_tag='X'):
+def load_level0(instr_name, year, doy, sky_line_tag='X', fpi_results_dir =  '/rdata/airglow/fpi/results/'):
     '''
     Return the contents of the npz file specified by the arguments.
     Access contents with, e.g.,
         output['FPI_Results']
         output['instrument']
         output['site']
+        
+    sky_line_tag == 'X'  --> red line
+                 == 'XG' --> green line
     '''
     # Load FPI_Results
-    fpi_results_dir =  '/rdata/airglow/fpi/results/'
     process_dn = datetime.datetime(year,1,1) + datetime.timedelta(days = doy-1)
     site_name = fpiinfo.get_site_of(instr_name, process_dn)
     # If instrument not at a site at this time, return IOError, file not found, for consistency
