@@ -1624,7 +1624,7 @@ _instruments['noto01'] = {} # TODO (if we need to)
 _instruments['noto02'] = {} # TODO (if we need to)
 
 # Add "Abbreviation" key to the instrument dictionary
-for instr_name in _instruments.iterkeys():
+for instr_name in _instruments.keys():
     _instruments[instr_name]['Abbreviation'] = instr_name
 
 

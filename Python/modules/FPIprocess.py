@@ -643,8 +643,8 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         else:
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Found and loaded Zigbee/HomeAssistant temperature sensor data.\n')
 
-    except Exception,e:# There was an error in the Boltwood or X300 code. Write the log but continue.
-        print str(e)
+    except Exception as e:# There was an error in the Boltwood or X300 code. Write the log but continue.
+        print(str(e))
         c = np.nan*np.zeros(len(FPI_Results['LOSwind']))
         if not use_npz:#Do not overwrite
             FPI_Results['Clouds'] = {'mean': c, 'max': c, 'min': c}
@@ -933,20 +933,20 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
 
     if send_to_website:
         import MySQLdb as mdb
-	from sshtunnel import SSHTunnelForwarder
+        from sshtunnel import SSHTunnelForwarder
 
-	def query(sql_cmd):
-        	with SSHTunnelForwarder(
-                	('webhost.engr.illinois.edu', 22),
-                	ssh_username='airglowgroup',
-                	ssh_private_key='/home/airglow/.ssh/id_rsa',
-                	remote_bind_address=('127.0.0.1', 3306)
-        	) as server:
-                	con = mdb.connect(host='127.0.0.1', db='airglowgroup_webdatabase', port=server.local_bind_port, read_default_file="/home/airglow/.my.cnf")
-                	cur = con.cursor()
-                	cur.execute(sql_cmd)
-	                rows = cur.fetchall()
-        	        return rows
+        def query(sql_cmd):
+            with SSHTunnelForwarder(
+                    ('webhost.engr.illinois.edu', 22),
+                    ssh_username='airglowgroup',
+                    ssh_private_key='/home/airglow/.ssh/id_rsa',
+                    remote_bind_address=('127.0.0.1', 3306)
+            ) as server:
+                    con = mdb.connect(host='127.0.0.1', db='airglowgroup_webdatabase', port=server.local_bind_port, read_default_file="/home/airglow/.my.cnf")
+                    cur = con.cursor()
+                    cur.execute(sql_cmd)
+                    rows = cur.fetchall()
+                    return rows
 
         site_id = site['sql_id']
         utc = pytz.utc # Define timezones
@@ -980,21 +980,21 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             # Send png. First find out if the entry is in there (i.e., we are just updating the png)
             sql_cmd = 'SELECT id FROM DataSet WHERE SummaryImage = \"%s\"' % (db_image_stub + fn)
             #sql_cmd = 'SELECT id FROM DataSet WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (site_id, db_id, startut)
-	    rows = query(sql_cmd)
+            rows = query(sql_cmd)
 #            cur.execute(sql_cmd)
 #            rows = cur.fetchall()
-            log_fn = db_log_stub + instrsitedate + '_log.log'
-            if len(rows) == 0: # Create the entry
-                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%d, %d, \"%s\", \"%s\", \"%s\", \"%s\")' % (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
-		logfile.write(sql_cmd + '\n')
-		query(sql_cmd)
+        log_fn = db_log_stub + instrsitedate + '_log.log'
+        if len(rows) == 0: # Create the entry
+            sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%d, %d, \"%s\", \"%s\", \"%s\", \"%s\")' % (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
+            logfile.write(sql_cmd + '\n')
+            query(sql_cmd)
 #                cur.execute(sql_cmd)
-            else: # Entry exists. Update it.
-                sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE id = %d' % (db_image_stub + fn, log_fn, rows[0][0])
-               # sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + fn, log_fn, site_id, db_id, startut)
+        else: # Entry exists. Update it.
+            sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE id = %d' % (db_image_stub + fn, log_fn, rows[0][0])
+           # sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + fn, log_fn, site_id, db_id, startut)
 #                cur.execute(sql_cmd)
-		logfile.write(sql_cmd + '\n')
-		query(sql_cmd)
+            logfile.write(sql_cmd + '\n')
+            query(sql_cmd)
 
         # Send level 3 windfield gif to website, if we made one
         if gif_fn is not None:
@@ -1018,16 +1018,16 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             sql_cmd = 'SELECT id FROM DataSet WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (network_id, gif_id, startut)
 #            cur.execute(sql_cmd)
 #            rows = cur.fetchall()
-	    row = query(sql_cmd)
+            row = query(sql_cmd)
             if len(rows) == 0: # Create the entry
-	    #if True:
+        #if True:
                 sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage) VALUES(%d, %d, \"%s\", \"%s\", \"%s\")' % (network_id, gif_id, startut, stoput, db_image_stub + gif_fn.split('/')[-1])
-		logfile.write(sql_cmd + '\n')
-		query(sql_cmd)
+                logfile.write(sql_cmd + '\n')
+                query(sql_cmd)
 #                cur.execute(sql_cmd)
             else: # Entry exists. Update it.
                 sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + gif_fn.split('/')[-1], network_id, gif_id, startut)
-		query(sql_cmd)
+                query(sql_cmd)
 #                cur.execute(sql_cmd)
 
 
@@ -1068,7 +1068,7 @@ def process_site(site_name, year, doy, reference='laser'):
     if len(instr_names) == 0:
         raise Exception('No instruments found at site "%s" on %s' % (site_name, process_dn))
     for instr_name in instr_names:
-        print 'Starting (%s, %s, %s, %s, reference=%s)' % (instr_name, site_name, year, doy, reference)
+        print('Starting (%s, %s, %s, %s, reference=%s)' % (instr_name, site_name, year, doy, reference))
         process_instr(instr_name, year, doy, reference)
 
 
@@ -1435,7 +1435,7 @@ def multiprocess_instr(arg_list, num_processes=16):
         if len(threads) < num_processes and arg_list:
             # Grab the argument list to operate on
             args = arg_list.pop()
-            print 'Starting %s' % str(args)
+            print('Starting %s' % str(args))
             kwargs={}
             i_argdict=[i for i,arg in enumerate(args) if isinstance(arg,dict)]
             if len(i_argdict)>0:
@@ -1613,7 +1613,7 @@ def process_zenith_ref(num_processes=16):
 
 
     # Re-run the analysis for each (instr_name, year, doy) using reference='zenith'
-    print 'Found %i days to re-process.' % len(arg_list)
+    print('Found %i days to re-process.' % len(arg_list))
     multiprocess_instr(arg_list, num_processes)
 
 def process_zenith_ref_no_multi():
@@ -1762,7 +1762,7 @@ def process_zenith_ref_no_multi():
         with open(log) as f:
             count += 1
             if np.mod(count,100)==0:
-                print '%i/%i' % (count,len(logfiles))
+                print('%i/%i' % (count,len(logfiles)))
             if key in f.read():
                 logfiles_to_rerun.append(log)
     logfiles_to_rerun.sort()
@@ -1782,14 +1782,14 @@ def process_zenith_ref_no_multi():
 
 
     # Re-run the analysis for each (instr_name, year, doy) using reference='zenith'
-    print 'Found %i days to re-process.' % len(arg_list)
+    print('Found %i days to re-process.' % len(arg_list))
 
     for arg in arg_list:
-        print 'Starting %s_%i_%i' % (arg[0], arg[1], arg[2])
+        print('Starting %s_%i_%i' % (arg[0], arg[1], arg[2]))
         try:
             process_instr(arg[0], arg[1], arg[2], arg[3])
         except Exception as e:
-            print 'Failed: %s' % e
+            print('Failed: %s' % e)
 
 
 def show_error_logs():
@@ -1835,14 +1835,14 @@ def show_error_logs():
                         break
                 if show:
                     print('===============================================')
-                    print log + '\n'
+                    print(log + '\n')
                     M = np.min([N, len(loglines)])
                     for line in loglines[-M:]:
-                        print line[:-1] # Don't print newline
+                        print(line[:-1]) # Don't print newline
                     print('===============================================')
                     argstr += '[\'%s\', %04s, %03s, \'zenith\'],\n' % (instr_name, year, doy)
     argstr += ']'
-    print argstr
+    print(argstr)
     return argstr
 
 def find_unprocessed_days( years = range(2005,2020) , doys = range(1,367) ):
@@ -1878,7 +1878,7 @@ def find_unprocessed_days( years = range(2005,2020) , doys = range(1,367) ):
                         if not exists:
                             unproc.append((instr_name, procyear, procdoy, path, files[0]))
                         #print site_name,year,datestr,exists
-    print unproc
+    print(unproc)
     return unproc
 
 

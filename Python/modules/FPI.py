@@ -222,24 +222,24 @@ def FindCenter(img,  circle_fit_method = 'geometric', thresh=None, max_r=None):
     return cx,cy
 
 def ReadIMG(fname):
-	# Function to read in an FPI IMG file.  Converts the data from I;16L to I so that the
-	# data can easily be plotted and manipulated.
-	#
-	# INPUT:
-	#	fname - the filename to be read
-	#
-	# OUTPUT:
-	#	im - the image read in.  This structure also includes the header information
-	#
-	# HISTORY:
-	#	16 May 2012 - written by Jonathan J. Makela (jmakela@illinois.edu) based on MATLAB code
+    # Function to read in an FPI IMG file.  Converts the data from I;16L to I so that the
+    # data can easily be plotted and manipulated.
+    #
+    # INPUT:
+    #	fname - the filename to be read
+    #
+    # OUTPUT:
+    #	im - the image read in.  This structure also includes the header information
+    #
+    # HISTORY:
+    #	16 May 2012 - written by Jonathan J. Makela (jmakela@illinois.edu) based on MATLAB code
 
-	# Load the image in
-	im = Image.open(fname)
+    # Load the image in
+    im = Image.open(fname)
 
-	# Convert the image from I;16L to I
-	im = im.convert('I')
-	return im
+    # Convert the image from I;16L to I
+    im = im.convert('I')
+    return im
 
 def FindEqualAreas(img,cx,cy,N):
         # Function to find the equal area annular regions required for annular summation
@@ -311,85 +311,85 @@ def FindEqualAreas(img,cx,cy,N):
         return annuli
 
 def AnnularSum(img,annuli,bg = None):
-	# Function to perform the annular summation of a 2D FPI interferogram.
-	#
-	# INPUT:
-	#	img - the image to work with.  This is a 2D array
-	#	annuli - a dictionary containing information on the annular regions.  This is returned by
-	#			FPI.FindEqualAreas
-	#	bg - a constant background value to remove from the image data.  If not supplied, the mean
-	#		value of the image is used
-	#
-	# OUTPUT:
-	#	spectra - the summed and normalized 1D spectra
-	#
-	# HISTORY:
-	#	17 May 2012 - written by Jonathan J. Makela (jmakela@illinois.edu) based on MATLAB code
-	#   29 Jun 2012 - added None default parameter for bg
+    # Function to perform the annular summation of a 2D FPI interferogram.
+    #
+    # INPUT:
+    #	img - the image to work with.  This is a 2D array
+    #	annuli - a dictionary containing information on the annular regions.  This is returned by
+    #			FPI.FindEqualAreas
+    #	bg - a constant background value to remove from the image data.  If not supplied, the mean
+    #		value of the image is used
+    #
+    # OUTPUT:
+    #	spectra - the summed and normalized 1D spectra
+    #
+    # HISTORY:
+    #	17 May 2012 - written by Jonathan J. Makela (jmakela@illinois.edu) based on MATLAB code
+    #   29 Jun 2012 - added None default parameter for bg
 
-	# Get the size of the image we are working with
-	(sx,sy) = np.shape(img)
-	data = img.ravel()
+    # Get the size of the image we are working with
+    (sx,sy) = np.shape(img)
+    data = img.ravel()
 
 
-	# Check if a background value was provided.
-	if bg is None:
-		# No, it wasn't.  Use the mean value of the image
-		bg = data.mean()
+    # Check if a background value was provided.
+    if bg is None:
+        # No, it wasn't.  Use the mean value of the image
+        bg = data.mean()
 
-	data = data - bg
+    data = data - bg
 
-	# Loop through each annular region
-	N = int(annuli['inner'].size)
-	spectra = np.zeros(N)
-	sigma = np.zeros(N)
-	for i in range(0,N):
-		# The indicies to work with
-		ind = annuli['ind'][int(annuli['inner'][i]):int(annuli['outer'][i]+1)]
+    # Loop through each annular region
+    N = int(annuli['inner'].size)
+    spectra = np.zeros(N)
+    sigma = np.zeros(N)
+    for i in range(0,N):
+        # The indicies to work with
+        ind = annuli['ind'][int(annuli['inner'][i]):int(annuli['outer'][i]+1)]
 
-		# The indicies of pixels that are within 3 std of the mean of the annular region
-		ind2 = (abs(data[ind] - data[ind].mean()) < (3*data[ind].std())).nonzero()
+        # The indicies of pixels that are within 3 std of the mean of the annular region
+        ind2 = (abs(data[ind] - data[ind].mean()) < (3*data[ind].std())).nonzero()
 
-		# Check if we have any values to remove and remove them.
-		while(np.not_equal(np.size(ind), np.size(ind2))):
-			# swap the indecies
-			ind = ind[ind2]
+        # Check if we have any values to remove and remove them.
+        while(np.not_equal(np.size(ind), np.size(ind2))):
+            # swap the indecies
+            ind = ind[ind2]
 
-			# The indecies of pixels that are within 3 std of the mean of the annular region
-			ind2 = (abs(data[ind] - data[ind].mean()) < (3*data[ind].std())).nonzero()
+            # The indecies of pixels that are within 3 std of the mean of the annular region
+            ind2 = (abs(data[ind] - data[ind].mean()) < (3*data[ind].std())).nonzero()
 
-		# swap the indecies
-		ind = ind[ind2]
+        # swap the indecies
+        ind = ind[ind2]
 
-		# Perform the summation
-		spectra[i] = data[ind].mean()
+        # Perform the summation
+        spectra[i] = data[ind].mean()
 
-		# Calculate the uncertanty in the estimate which is the std divided by the
-		# sqrt of the number of pixels used
-		sigma[i] = data[ind].std()/np.sqrt(len(ind))
+        # Calculate the uncertanty in the estimate which is the std divided by the
+        # sqrt of the number of pixels used
+        sigma[i] = data[ind].std()/np.sqrt(len(ind))
 
-	# return the summed spectra
-	return spectra, sigma
+    # return the summed spectra
+    return spectra, sigma
 
 
 def weighted_avg_and_std(values, weights):
-	"""
-	Returns the weighted average and standard deviation.
+    """
+    Returns the weighted average and standard deviation.
 
-	values, weights -- Numpy ndarrays with the same shape.
+    values, weights -- Numpy ndarrays with the same shape.
 
-	from http://stackoverflow.com/questions/2413522/weighted-standard-deviation-in-numpy
-	"""
-	ind = (np.isfinite(values).nonzero() and np.isfinite(weights).nonzero())[0]
+    from http://stackoverflow.com/questions/2413522/weighted-standard-deviation-in-numpy
+    """
+    ind = (np.isfinite(values).nonzero() and np.isfinite(weights).nonzero())[0]
 
-	if len(ind) > 0 and sum(weights[ind]) != 0.:
-        	average = np.average(values[ind], weights=weights[ind])
-        	variance = np.dot(weights[ind], (values[ind]-average)**2)/weights[ind].sum()  # Fast and numerically precise
-        else:
-                average = np.nan
-                variance = np.nan
+    if len(ind) > 0 and sum(weights[ind]) != 0.:
+        average = np.average(values[ind], weights=weights[ind])
+        variance = np.dot(weights[ind], (values[ind]-average)**2)/weights[ind].sum()  # Fast and numerically precise
+    else:
+        average = np.nan
+        variance = np.nan
 
-	return (average, sqrt(variance))
+    return (average, sqrt(variance))
 
 def all_indices(value, qlist):
 # Function to return all of the indicies in a list that match a requested value
@@ -493,9 +493,9 @@ def Laser_Residual(pars, x, sigma=None, data=None):
 
     # If no data was passed, just return the model (e.g., use to simulate a fringe)
     if data is None:
-	return model
+        return model
     if sigma is None:
-	return (model-data)
+        return (model-data)
 
     return (model - data) / sigma
 
@@ -540,7 +540,7 @@ def Sky_FringeModel(params, r, lamvec, A):
     # TODO: something about this
     if T < 0.0:
         T = 0.1
-        print 'Zero T!'
+        print('Zero T!')
 
     # Adjust scaling of I and B
     intA = np.mean(np.sum(A,1))
@@ -584,9 +584,9 @@ def Sky_Residual(pars, x, lamvec, A, sigma=None, data=None):
 
     # If no data was passed, just return the model (e.g., use to simulate a fringe)
     if data is None:
-	return model
+        return model
     if sigma is None:
-	return (model-data)
+        return (model-data)
 
     return (model - data) / sigma
 
@@ -1937,30 +1937,30 @@ def average_data(files, bins=np.arange(17,32,0.25),
         # Create empty arrays
         st_u = []
         st_v = []
-	st_u2 = []
-	st_v2 = []
+        st_u2 = []
+        st_v2 = []
         st_T = []
         all_T = []
         all_eT = []
         u_dop = []
         eu_dop = []
-	u2_dop = []
-	eu2_dop = []
+        u2_dop = []
+        eu2_dop = []
         v_dop = []
         ev_dop = []
-	v2_dop = []
-	ev2_dop = []
+        v2_dop = []
+        ev2_dop = []
         center_time = []
         bin_T = []
         bin_eT = []
         bin_U = []
         bin_eU = []
-	bin_U2 = []
-	bin_eU2 = []
+        bin_U2 = []
+        bin_eU2 = []
         bin_V = []
         bin_eV = []
-	bin_V2 = []
-	bin_eV2 = []
+        bin_V2 = []
+        bin_eV2 = []
 
         # Load in each file
         for f in files:
@@ -2183,7 +2183,7 @@ def average_data(files, bins=np.arange(17,32,0.25),
                             ev2_dop = np.hstack((ev2_dop,edop))
 
             except:
-                print f + 'does not exist'
+                print(f + 'does not exist')
 
 
         center_time = (bins[0:-1]+bins[1:])/2.
