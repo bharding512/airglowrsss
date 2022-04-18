@@ -1983,12 +1983,13 @@ def get_bad_data_flags(instr_name, dn = datetime.datetime.now()):
         if start <= dn and (stop is None or dn <= stop):
             bad_temp_flag = flag
     
-    #DASI instruments flagged bad for moonphase >=0.75 
-    if instr_name in ['minime10','minime11','minime12']:
-        phase=__get_moonphase(dn)
-        if phase>=0.25 and phase<=0.75:
-            bad_wind_flag=2
-            bad_temp_flag=2
+    #Luis: DASI instruments flagged bad for moonphase >=0.75
+    # BJH 2022 Apr 18: Keep data when moon is up. This was removing too much.
+#    if instr_name in ['minime10','minime11','minime12']:
+#        phase=__get_moonphase(dn)
+#        if phase>=0.25 and phase<=0.75:
+#            bad_wind_flag=2
+#            bad_temp_flag=2
 
 
 

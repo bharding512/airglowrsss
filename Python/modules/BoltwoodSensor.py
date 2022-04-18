@@ -30,6 +30,7 @@ def SkyAlertLog_format(file, tz):
             sky_temp[sky_temp == -999] = float('nan') # replace bad values with nan
     History:
         8/30/20 : Written by Luis Navarro (lnav@illinois.edu)
+        4/18/22 : If in F, convert to C, Brian Harding (bharding@ssl.berkeley.edu)
     """
 
     # Get the local timezone
@@ -45,6 +46,11 @@ def SkyAlertLog_format(file, tz):
         dt = local.localize(dt)
         SkyTemp=np.float(words[5])
         AmbientTemp=np.float(words[6])
+        C_or_F = words[3] # 'C' or 'F'
+        assert C_or_F in ['C','F'], "Units not recognized: '%s' should be 'C' or 'F'" % C_or_F
+        if C_or_F == 'F':
+            SkyTemp = (SkyTemp - 32.) * 5./9.
+            AmbientTemp = (AmbientTemp - 32.) * 5./9.
         SkyTemp_BoltWood=SkyTemp-AmbientTemp
         return [dt,SkyTemp_BoltWood,AmbientTemp]
     
@@ -380,7 +386,7 @@ if __name__ == '__main__':
     #data = ReadRawTempLog(file1,'US/Eastern')
     
     
-    file1 = "/Users/land/Desktop/08-29-2020.txt"
+    file1 = "/Users/bharding/Downloads/Cloud_low_20220417.txt"
     dns2, sky_temp2, amb_temp2 = ReadTempLog(file1,'US/Eastern')
     print dns2
     print sky_temp2
