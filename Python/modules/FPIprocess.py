@@ -394,6 +394,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         sky_fns.sort()
     # Uncomment these for rapid testing of new code
     #laser_fns = laser_fns[::6]
+    #sky_fns   = sky_fns[::10]
     #sky_fns = [sky_fns[20],sky_fns[78],sky_fns[119]]
 
     if not laser_fns and not sky_fns and not use_npz:
@@ -861,7 +862,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Several npz files found for other line sources!: '+str(_npzpath)+'This was not added into the diagnostic plots and needs attention!!!!.\n' % (datestr))
 
         #Generate Temperature and Wind plots
-        _kwargs={'reference':reference,'sky_line_tag':sky_line_tag}
+        _kwargs={'reference':instrument['plot_ref'], 'sky_line_tag':sky_line_tag}
         if 'G' in sky_line_tag:
             _kwargs['Tmin']=0
             _kwargs['Tmax']=500
@@ -983,18 +984,18 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             rows = query(sql_cmd)
 #            cur.execute(sql_cmd)
 #            rows = cur.fetchall()
-        log_fn = db_log_stub + instrsitedate + '_log.log'
-        if len(rows) == 0: # Create the entry
-            sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%d, %d, \"%s\", \"%s\", \"%s\", \"%s\")' % (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
-            logfile.write(sql_cmd + '\n')
-            query(sql_cmd)
+            log_fn = db_log_stub + instrsitedate + '_log.log'
+            if len(rows) == 0: # Create the entry
+                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%d, %d, \"%s\", \"%s\", \"%s\", \"%s\")' % (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
+                logfile.write(sql_cmd + '\n')
+                query(sql_cmd)
 #                cur.execute(sql_cmd)
-        else: # Entry exists. Update it.
-            sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE id = %d' % (db_image_stub + fn, log_fn, rows[0][0])
-           # sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + fn, log_fn, site_id, db_id, startut)
+            else: # Entry exists. Update it.
+                sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE id = %d' % (db_image_stub + fn, log_fn, rows[0][0])
+                # sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + fn, log_fn, site_id, db_id, startut)
 #                cur.execute(sql_cmd)
-            logfile.write(sql_cmd + '\n')
-            query(sql_cmd)
+                logfile.write(sql_cmd + '\n')
+                query(sql_cmd)
 
         # Send level 3 windfield gif to website, if we made one
         if gif_fn is not None:
@@ -1129,6 +1130,7 @@ def process_directory(data_direc, results_direc, instrument, site, reference='la
     local = pytz.timezone(site['Timezone'])
     laser_fns.sort()
     sky_fns.sort()
+
 
 
     if not laser_fns and not sky_fns:
