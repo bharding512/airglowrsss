@@ -704,11 +704,16 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         w_flag = 0 # default
         # The order here is important. It goes from least concerning to most
         # concerning.
-        if (FPI_Results['skyI'][ii] < instrument['skyI_quality_thresh'][0]):
-            # The sky brightness is low enough that OH may be an issue.
+        if (sky_line_tag == 'X') and (FPI_Results['skyI'][ii] < instrument['skyI_quality_thresh'][0]):
+            # The sky brightness is low enough that OH may be an issue. This only applies to red line.
             t_flag = 1
             w_flag = 1
             logfile.write('[skyI low W1T1] ')
+        if (FPI_Results['skyB'][ii] > instrument['skyB_quality_thresh']):
+            # The spectral background is high enough that errors might be incurred
+            t_flag = 1
+            w_flag = 1
+            logfile.write('[skyB high W1T1] ')
         if (reference == 'zenith'): # Zenith Processing
             t_flag = 1
             w_flag = 1
@@ -733,8 +738,8 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             t_flag = 1
             w_flag = 2
             logfile.write('[cloud>%.0f: W2T1] '%cloud_thresh[1])
-        if (FPI_Results['skyI'][ii] < instrument['skyI_quality_thresh'][1]):
-            # The sky brightness is low enough that OH is almost certainly issue.
+        if (sky_line_tag == 'X') and (FPI_Results['skyI'][ii] < instrument['skyI_quality_thresh'][1]):
+            # The sky brightness is low enough that OH is almost certainly issue. This only applies to red line.
             t_flag = 2
             w_flag = 2
             logfile.write('[skyI low W2T2] ')

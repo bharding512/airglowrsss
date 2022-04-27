@@ -1539,7 +1539,8 @@ def PlotDiagnosticDay(f, cloud_thresh = [-22.,-10.],\
     
     return fig
 
-def __add_skyline2diagnostic(fig,npzpath,sky_line_tag='X',sky_quality_thresh =[-np.inf,-np.inf]):
+def __add_skyline2diagnostic(fig,npzpath,sky_line_tag='X',sky_quality_thresh = None):
+
 
     #Change geometry of original layout into new one
     nrows=4 if len(fig.axes)==8 else 5
@@ -1570,6 +1571,10 @@ def __add_skyline2diagnostic(fig,npzpath,sky_line_tag='X',sky_quality_thresh =[-
 
     valid_az = np.array([site['Directions'][direc]['az'] for direc in site['Directions']])
     valid_ze = np.array([site['Directions'][direc]['ze'] for direc in site['Directions']])
+
+    #Sky quality thresholds
+    if sky_quality_thresh is None:
+        sky_quality_thresh=instrument['skyI_quality_thresh']
 
     #Read output results
     sky_times=FPI_Results['sky_times']
