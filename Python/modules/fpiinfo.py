@@ -1364,7 +1364,7 @@ _instruments['minime10'] = {
         'many_fringes'          : True,         # indicates whether radial falloff terms should be used
         'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
-        'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
+        'send_to_madrigal'      : True, # whether or not we should send this instrument's data to Madrigal
         'skyI_quality_thresh'   : [0.4180, 0.1330], #The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively). Red only.
         'skyB_quality_thresh'   : 0.2,             # Label with q=1 for data with skyB > this number. Red and green.
         'plot_ref'              : 'zenith',           # 'laser' or 'zenith'. How to generate quicklook plots (This doesn't affect what's in npz file)
@@ -1401,7 +1401,7 @@ _instruments['minime11'] = {
         'many_fringes'          : True,         # indicates whether radial falloff terms should be used
         'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
-        'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
+        'send_to_madrigal'      : True, # whether or not we should send this instrument's data to Madrigal
         'skyI_quality_thresh'   : [0.6410, 0.2720],  #The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively). Red only.
         'skyB_quality_thresh'   : 0.2,            # Label with q=1 for data with skyB > this number. Red and green.
         'plot_ref'              : 'zenith',           # 'laser' or 'zenith'. How to generate quicklook plots (This doesn't affect what's in npz file)
@@ -1438,7 +1438,7 @@ _instruments['minime12'] = {
         'many_fringes'          : True,         # indicates whether radial falloff terms should be used
         'bad_wind_dates'        : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
         'bad_temperature_dates' : [],   # Each entry is a tuple (start_date, stop_date, flag), between which data are bad. flag is a number, indicating the severity.
-        'send_to_madrigal'      : False, # whether or not we should send this instrument's data to Madrigal
+        'send_to_madrigal'      : True, # whether or not we should send this instrument's data to Madrigal
         'skyI_quality_thresh'   : [0.5560, 0.1770],  #The brightness [counts/sec] below which we raise the quality flag (for q=1 and q=2, respectively). Red only.
         'skyB_quality_thresh'   : 0.2,            # Label with q=1 for data with skyB > this number. Red and green.
         'plot_ref'              : 'zenith',           # 'laser' or 'zenith'. How to generate quicklook plots (This doesn't affect what's in npz file)
