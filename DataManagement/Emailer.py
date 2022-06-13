@@ -27,7 +27,9 @@ def email(recipient,subject,msg):
     '''
     # Email Sender
     sender = 'airglow.monitor@gmail.com'
-    sender_pass = 'sB6vhcDH'
+ #   sender_pass = 'sB6vhcDH'
+    sender_pass = 'jzulfihldynzemnr' # Changed to "App Password" technique (2021 Jun 13 BJH) due to new Google security restrictions
+                                     # https://stackoverflow.com/questions/37201250/sending-email-via-gmail-python/71627039#71627039
     # Send the email
     headers = ["From: " + sender,  "Subject: " + subject, "To: " + recipient, "MIME-Version: 1.0", "Content-Type: text/plain"]  # NO HTML so /n works
     headers = "\r\n".join(headers)
