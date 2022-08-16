@@ -1,5 +1,6 @@
-# A module for the conversion of MIGHTI Level 1 files to Level 2.1 and 2.2 files.
+# A module for the conversion of MIGHTI Level 1 files to Level 1.5, 2.1, and 2.2 files.
 # Level 1 files - Calibrated MIGHTI interferograms
+# Level 1.5 files - Consolidated MIGHTI phases
 # Level 2.1 files - Line-of-sight wind profiles (this is where the onion-peeling inversion happens)
 # Level 2.2 files - Vector wind profiles (this is where the A/B matchup happens)
 # Altitudes and distances are expressed in km everywhere in the code
@@ -10,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 5 # Should only be incremented on major changes
-software_version_minor = 2 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 3 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -92,8 +93,8 @@ global_params['green'] = { # See above for descriptions
     'count_thresh_night'  : 5,
 }
 
-global_params['verbose'] = False # TODO TEMPORARY: for debugging memory issues in the SDC.
-                                 # Set to True if this is called as a script
+global_params['verbose'] = False # For debugging memory issues in the SDC.
+                                 # Set to True for detailed logging.
 
 
 #####################################################################################################
@@ -3507,7 +3508,7 @@ def level1_to_level15_without_info_file(L1_fns, emission_color, L15_path, vers, 
 
     assert (L15['sensor'] == L15['sensor'][0]).all(), "All files need to come from the same sensor (A or B)"
     dates = L15['time'].dt.floor(freq='1d')
-    assert (dates == dates[0]).all(), "All files need to come from the same date"
+#     assert (dates == dates[0]).all(), "All files need to come from the same date" # Commented 16 Aug 2022 because sometimes 1-2 files from prev date
     assert (L15['color'] == L15['color'][0]).all(), "Samples from different colors are mixed (this should never happen)"
     
     # Add parent files
@@ -3523,11 +3524,13 @@ def level1_to_level15_without_info_file(L1_fns, emission_color, L15_path, vers, 
         else:
             parent += '?'
     L15 = L15.assign_attrs(Parents=parent)
-
-    tstr = pd.to_datetime(dates[0].item()).strftime('%Y-%m-%d')
+    
+    # Grab date string from middle file 
+    N = len(dates)
+    tstr = pd.to_datetime(dates[N//2].item()).strftime('%Y-%m-%d') # Changed 16 Aug 2022 to use middle time
     sens = L15['sensor'][0].item()
     L15_fn = '%s/ICON_L1-5_MIGHTI-%s_Consolidated-Phase-%s_%s_v%02ir%03i.NC' % (L15_path, sens, emission_color.capitalize(), tstr, vers, data_revision)
-
+    
     L15.to_netcdf(L15_fn)
     return L15_fn
     
