@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 5 # Should only be incremented on major changes
-software_version_minor = 3 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 4 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -1988,7 +1988,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
       *  zero_wind_ref       DEPRECATED
       *  corr_notch_drift    DEPRECATED   
       *  zero_wind_phase     -- TYPE:array(ny), UNITS:rad. The zero wind phase to remove from the L1 data before processing. In operational use,
-                                                           this will be informed by the Zero-Phase-Striation file. If None, then zero will be used.
+                                                           this will be informed by the Zero-Phase file. If None, then zero will be used.
       *  err_striation       -- TYPE:array(ny), UNITS:rad. An estimate of the error introduced by daily calibrations, which are correlated for an 
                                                            entire 24-hour period (00:00 - 23:59 UT).
       *  err_zero_phase      -- TYPE:array(ny), UNITS:rad. An estimate of the error introduced by the zero-wind phase correction, which is correlated
@@ -2582,7 +2582,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                                                                    'v2.0: First run of on-orbit data, using external zero wind reference and smooth daily-averaged profiles, B. J. Harding, 01 May 2020',
                                                                    'v3.0: Correction for long-term mechanical drift, B. J. Harding, 04 Jun 2020',
                                                                    'v4.0: Updated correction for long-term mechanical drift to handle settling after ~May 2020 and precession cycle variation. LoS winds have changed by a bulk offset of up to 30 m/s. Studies using only perturbations from the mean (e.g., non-migrating tidal retrievals) are unlikely to be affected. B. J. Harding, 21 Oct 2020',
-                                                                   'v5.0: The ad-hoc, HWM-based correction for the zero wind phase has been replaced with a self-calibration based on comparing data from the ascending and descending orbits (see the notes for the wind variables below for details). Long-term trends in the zero wind phase degraded the accuracy of version 4 over time, and the accuracy of version 4 data was tied to the accuracy of HWM. In version 5, errors on these long time scales (>100-150 days) are now accounted for, improving the accuracy to 10-25 m/s (see the "Accuracy" variable for more details) and removing the dependence on external models. For errors on precession-cycle time scales (48 days), the previous correction using red-vs-green comparisons has been replaced with a first-principles analysis of the fiducial notch positions (see Marr et al., 2020 and subsequent publications). Thus, the red and green channels are now analyzed independently and can be compared where they overlap (~160-200 km altitude during the day) as a sanity check. The fiducial notch analysis is also used to correct mechanical drifts on an orbital time scale (97 minutes, or 24 hours of local time), which could affect migrating tide estimates. The RMS difference due to this effect is estimated at 5-10 m/s (root mean square). Analysis of waves with periods that do not coincide with these new corrections are not likely to be different than in version 4 (e.g., nonmigrating tides, planetary waves, and gravity waves). New variables related to error (i.e., uncertainty) estimates from various sources are now included, whereas version 4 error estimates only included the effects of shot, read, and dark noise. MIGHTI-A and MIGHTI-B variables related to emission brightness are now cross-calibrated, though not absolutely calibrated. Exposures affected by solar and lunar stray light are now flagged. The data from the second row in the green channel (~91 km) is now released when the signal strength permits a wind estimate. An error in the local time calculation has been corrected, which changes the local time by up to 20 min. A new algorithm to identify cosmic ray spikes has been implemented, improving precision. Finally, a preliminary algorithm has been implemented to to correct a wind bias associated with low signal levels, and associated uncertainties are estimated (see the "Precision_Low_Signal_Effect" variable for more details). B. J. Harding 25 Jul 2022'
+                                                                   'v5.0: The ad-hoc, HWM-based correction for the zero wind phase has been replaced with a self-calibration based on comparing data from the ascending and descending orbits (see the notes for the wind variables below for details). Long-term trends in the zero wind phase degraded the accuracy of version 4 over time, and the accuracy of version 4 data was tied to the accuracy of HWM. In version 5, errors on these long time scales (>100-150 days) are now accounted for, improving the accuracy to 10-25 m/s (see the "Accuracy" variable for more details) and removing the dependence on external models. A long window of data is required to implement this self-calibration, so v05 data are processed at least 100 days behind real time. For errors on precession-cycle time scales (48 days), the previous ad-hoc correction using initial red-vs-green comparisons has been replaced with a more comprehensive red-green cross-calibration (165-185 km altitude during the day) that accounts for the time-dependence of mechanical drifts of the optics. This result is consistent with a first-principles analysis of the fiducial notch positions (see Marr et al., 2020 and subsequent publications). A mission-average fiducial notch analysis is also used to correct mechanical drifts on an orbital time scale (97 minutes, or 24 hours of local time), which could affect migrating tide estimates. The RMS difference due to this effect is estimated at 5-10 m/s (root mean square). Analysis of waves with periods that do not coincide with these new corrections are not likely to be different than in version 4 (e.g., nonmigrating tides, planetary waves, and gravity waves). New variables related to error (i.e., uncertainty) estimates from various sources are now included, whereas version 4 error estimates only included the effects of shot, read, and dark noise. MIGHTI-A and MIGHTI-B variables related to emission brightness are now cross-calibrated, though not absolutely calibrated. Exposures affected by solar and lunar stray light are now flagged. Some data during periods in May and July 2020 when the sun approached the MIGHTI field of view was marked as unavailable in v04, but is now available in v05 with the exception of a few days. The data from the second row in the green channel (~91 km) is now available when the signal strength permits a wind estimate. An error in the local time calculation has been corrected, which changes the local time by up to 20 min. A new algorithm to identify cosmic ray spikes has been implemented, improving precision. A preliminary algorithm has been implemented to to correct a wind bias associated with low signal levels, and associated uncertainties are estimated (see the "Precision_Low_Signal_Effect" variable for more details). Finally, various quality control parameters have been optimized. More description is provided in the notes below. A full history of software changes can be found on Github: https://github.com/bharding512/airglowrsss/commits/master/Python/modules/MIGHTI_L2.py  B. J. Harding 08 Sep 2022'
                                                                   ])
         ncfile.setncattr_string('HTTP_LINK',                      'http://icon.ssl.berkeley.edu/Instruments/MIGHTI')
         ncfile.setncattr_string('Instrument',                     'MIGHTI-%s' % sensor)
@@ -2618,7 +2618,9 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                     "interferogram phase, then (optionally) the data are binned from their native altitude sampling (~2.5 km) to improve statistics. "
                     "An onion-peeling inversion is performed to remove the effect of the line-of-sight integration. After the inversion, each row (i.e., altitude) "
                     "is analyzed to extract the phase, and thus the line-of-sight wind. Level 2.1 files from MIGHTI-A and MIGHTI-B are combined during the Level 2.2 "
-                    "processing (not discussed here). See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for more details of the inversion algorithm. ",
+                    "processing (not discussed here). See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for more details of the inversion algorithm. "
+                    "Further discussion of the calibration and performance of MIGHTI after launch can be found in a forthcoming paper in Space Science "
+                    "Reviews [Englert et al., 2022, in preparation].",
                     
                      "Known issues with the v05 data release are listed below. Work is in progress to resolve or mitigate these issues in future data releases. ",
 
@@ -2631,17 +2633,36 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                      "pending further investigation. <br/>"
                      " * Airglow brightness observations are not a required mission product, and no effort was yet made to absolutely calibrate "
                      "the brightness observations for MIGHTI-A and MIGHTI-B, and thus the Relative_VER "
-                     "variable should be treated with caution. In v05, MIGHTI-A and B are cross-calibrated using a conversion factor derived from on-orbit data. <br/>"
-                     " * During the one orbit per day when the calibration lamp is on, the wind data are noisier and a slight bias is evident. For this release, these "
-                     "orbits have been labeled with quality=0.5 (i.e., caution). Work is underway to remove this restriction.<br/>"
+                     "variable should be treated with caution. In v05, MIGHTI-A and B are cross-calibrated using a conversion factor derived from on-orbit data. "
+                     "However, there are some indications that this cross-calibration may be changing with time, which is not accounted for in v05. <br/>"
+                     
+                     " * As discussed in the variable notes below, a new zero wind phase determination has been implemented in v05. However, during the period "
+                     "from 2021 Apr 26 to Aug 14, data gaps and one period of southward (\"Reverse LVLH\") pointing cause errors in this determination. The "
+                     "accuracy is estimated to be degraded by a factor of two. See the *_Accuracy variable. <br/>"
+                     " * During the one orbit per day when the calibration lamp is on, the wind data can be noisier and have a slight bias. Although this issue is "
+                     "much improved since v04, for the sake of conservatism, these orbits are still labeled with quality=0.5 (i.e., caution). <br/>"
+                     " * Some data gaps appear on days when the sun passes near MIGHTI's field of view. Most of these gaps are located near the terminator, "
+                     "but some are longer lasting.<br/>"
+                     " * In some cases, there are indications that the *_Precision_1_Sample variables are underestimating the true sample-to-sample noise, "
+                     "suggesting that, in addition to shot noise, there is a second source of noise. It is recommend that any quantitative use of the reported "
+                     "error estimates (i.e., precision and accuracy) should treat those estimates as uncertain. It is believed that most error estimates are "
+                     "correct to within a factor of 2. The largest problems with error reporting occur where the airglow signal is weakest. <br/>"
+                     
+                     " * Imperfect daily calibration data lead to small discontinuities in the zero wind phase at the boundaries between days (i.e., "
+                     " between 23:59:59 and 00:00:00 UT), which are not accounted for by the reported error variables. This was estimated to be a 2-5 "
+                     "m/s (root-mean-square) error early in the mission, but is growing over time, possibly reaching 5-10 m/s by mid-2022.<br/>"
                      " * A signal-dependent phase shift is seen in atmospheric and calibration lamp fringes, possibly caused by "
                      "a charge trapping effect in the CCD. This is the subject of ongoing investigation, but a first-order correction "
                      "is implemented in the v05 dataset. The correction increases linearly with time to match the effect seen in on-orbit calibration data. "
                      "The variable *_Precision_Low_Signal_Effect is an estimate of the remaining uncertainty due to an imperfect "
                      "correction. Where this uncertainty is large, caution is recommended. "
-                     "For example, for winds in the core science region (90-105 km altitude), the magnitude of the correction is small or zero, but data in the red "
+                     "For example, for winds in the core science region (90-105 km altitude, away from the terminator), the magnitude of the correction "
+                     "is small or zero, but data in the red "
                      "channel during the night and twilight are subject to a large correction (many tens of m/s) and the uncertainty is correspondingly large. "
-                     "A goal for future releases is to characterize and correct this effect more accurately. "
+                     "A goal for future releases is to characterize and correct this effect more accurately. <br/>"
+                     " * Data near the solar terminators are subject to a variety of errors, including those described above and others related to the rapidly "
+                     "varying illumination. Not all errors near the terminator are accounted for by the reported error. Users are encouraged to "
+                     "use extra caution with these data.<br/>"
                      "See the documentation below for more information.<br/>"
                     ]
 
@@ -2716,26 +2737,30 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                   "an average over many hundreds of kilometers horizontally, and 2.5-30 kilometers vertically (depending on the binning). "
                   "See Harding et al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."]
 
-        varnotes.append("Knowledge of the \"zero wind phase\" is needed for any instrument using Doppler shifts to determine winds. "
+
+        varnotes.extend(["Knowledge of the \"zero wind phase\" is needed for any instrument using Doppler shifts to determine winds. "
                          "The zero wind phase is defined as the measured interference fringe phase that corresponds to the rest "
                          "wavelength of the emission. For the v05 data release, the zero wind phase has been determined by considering a window of LoS wind data "
                          "spanning two precession cycles (96 days). Assuming that on average the real zonal and meridional winds do not depend on the aspect "
-                         "angle with which MIGHTI observes the atmosphere (which is significantly different on the ascending and descending portions of the orbit), "
+                         "angle with which MIGHTI observes the atmosphere (an angle which is significantly different between the ascending and descending portions of the orbit), "
                          "a matrix equation can be constructed which combines data from both MIGHTI-A and "
                          "MIGHTI-B and both the ascending and descending orbits. This equation is solved for the average zonal and meridional wind, and the "
                          "zero wind phase for MIGHTI-A and MIGHTI-B. This window is moved in time to determine the appropriate zero wind phase for each date. "
                          "The value of the zero wind phase depends on emission color (red or green), aperture mode (day or night), calibration lamp status "
                          "(on or off) and row (i.e., altitude). "
-                         "An additional zero-mean signal is added to this result to remove spurious signals introduced by noise spikes in the "
-                         "daily dark and calibration images, under the assumption that the 24-hour averaged wind is smooth in altitude (as "
-                         "implemented by a median filter). "
-                         "The results of this approach are consistent with the results of ICON's \"zero wind maneuver.\" "
+                         "An additional zero-mean signal is added to this result to ensure that 48-day (i.e., 1 precession cycle) average winds are smooth "
+                         "in altitude. Adjustments are smaller than the reported accuracy, so this adjustment is not "
+                         "expected to change any scientific conclusions, although it does ensure more realistic wind profiles. "
+                         "This is a less restrictive assumption than the smoothness criterion used in v04, which "
+                         "relied on the Horizontal Wind Model 2014 and also enforced smoothness on 1-day averages. It is thus expected that the amplitude of tidal structures "
+                         "in the lower thermosphere are subject to less suppression in v05+ than in v04. "
+#                          "The results of this approach are consistent with the results of ICON's \"zero wind maneuver.\" " # 2022 Sep 9: We don't know if this is true yet.
                          "This version of the MIGHTI zero wind phase is independent of any external data or models (such as "
-                         "the Horizontal Wind Model 2014, which was used in earlier versions). "
+                         "the Horizontal Wind Model 2014, which was used in v04 and earlier versions). "
                          "The zero wind phase used for each wind sample is saved in the _Zero_Wind_Phase variable below. "
                          "The 1-sigma uncertainty in the winds incurred by the inaccuracy in the zero wind phase "
-                         "is estimated in the *_Wind_Accuracy variable below."
-                        )    
+                         "is estimated and reported in the *_Wind_Accuracy variable below."])
+                        
         var = _create_variable(ncfile, '%s_Line_of_Sight_Wind'%prefix, L21_dict['los_wind'], 
                               dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Line-of-sight horizontal wind profile. A positive wind is towards MIGHTI.', 
@@ -2773,9 +2798,9 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                               units='m/s', valid_min=0.0, valid_max=4000., var_type='data', chunk_sizes=[nt,ny],
                               notes=[err_prefix[0],
                                      "The \"1 Day\" error variable quantifies the error introduced by daily calibrations, which is correlated "
-                                     "for an entire 24-hour period (00:00 - 23:59 UT). This is estimated in part from the magnitude of "
-                                     "fluctuations in the daily calibration lamp observations. Errors are moderately correlated across small "
-                                     "altitude gaps. Errors in day mode and night mode are nearly uncorrelated. For studies pertaining to "
+                                     "for an entire 24-hour period (00:00 - 23:59 UT). This is estimated from the magnitude of fluctuations "
+                                     "in the daily-averaged phase, propagated through the inversion. Errors in day mode and night mode are "
+                                     "nearly uncorrelated. For studies pertaining to "
                                      "atmospheric tidal modes that combine data from many days, this error can be treated as uncorrelated "
                                      "across time."]
                               )        
@@ -2792,7 +2817,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                                      "the phase of the fringes is biased at very low signal levels. This is under investigation but could "
                                      "be caused by a charge trapping effect in the CCD. A "
                                      "correction has been implemented based upon the empirical relationship between measured phase "
-                                     "and signal level for the first ~27 months of the mission. However, especially for cases with low signal levels, "
+                                     "and signal level of the calibration lamps for the first ~30 months of the mission. However, especially for "
+                                     "cases with low signal levels, "
                                      "this correction is uncertain. The uncertainty in the resulting winds is estimated from the signal level "
                                      "and reported in this variable. It is likely to be correlated across samples nearby in time and space, but "
                                      "the correlation between different channels (red and green), sensors (MIGHTI-A and MIGHTI-B), and operating "
@@ -2814,9 +2840,10 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                                      "The \"Accuracy\" variable quantifies the error introduced by the zero-wind phase estimate. It is "
                                      "strongly correlated across time lags of days to weeks and becomes increasingly decorrelated for time "
                                      "lags longer than 2 precession cycles (96 days). This error is estimated from the discrepancy between "
-                                     "various techniques of determining the zero-wind phase. This error source is irrelevant for users "
+                                     "various techniques of determining the zero-wind phase. This error source is irrelevant for most users "
                                      "studying perturbations from the mean (e.g., tides, waves), but may be important for studies of "
-                                     "zonal mean winds or point comparisons with other data sets. Errors are moderately correlated across "
+                                     "zonal mean winds, point comparisons with other data sets, and seasonal/long-term trends thereof. Errors are "
+                                     "moderately correlated across "
                                      "small altitude gaps. Errors in day mode and night mode are nearly uncorrelated, implying there could "
                                      "be different offsets for day mode and night mode. This could be important for error propagation of "
                                      "odd-numbered migrating tides (e.g., DW1)."]
@@ -3568,7 +3595,9 @@ def zero_wind_phase_from_L1(dsz, L1_dict):
     try:
         dszt = dsz.sel(time = tstr)
     except KeyError:
-        raise KeyError('"%s" is not found in the zero wind phase file' % tstr)
+        raise KeyError('"%s" is not even a timestamp in the zero wind phase file' % tstr)
+        
+    
     
     # Load the rest of the dimensions
     sensor = L1_dict['sensor']
@@ -3582,48 +3611,58 @@ def zero_wind_phase_from_L1(dsz, L1_dict):
     #### Zero wind 
     z = dszt.sel(sensor=sensor, color=color, mode=mode, cal_lamp=cal_lamp, row=rows)
     
-    if z.zero_phase.isnull().all():
+    if z.zero_phase_with_notch.isnull().all():
         raise ValueError('Zero wind phase is NaN for all rows for this case: (time=%s, sensor=%s, color=%s, mode=%s, cal_lamp=%i)' % \
                          (tstr, sensor, color, mode, cal_lamp))
-    if z.striation.isnull().all():
-        raise ValueError('Striation phase is NaN for all rows for this case: (time=%s, sensor=%s, color=%s, mode=%s, cal_lamp=%i)' % \
-                         (tstr, sensor, color, mode, cal_lamp))
-    z0 = (z.zero_phase + z.striation).values
+    z0 = z.zero_phase_with_notch.values
     
     #### Zero wind and striation uncertainty estimate
         
-    # Error in the zero wind. This came from polynomial fits to the difference between 1-prec cycle and 2-prec cycle fits
+    # Error in the zero wind. This was computed from the results of a (zero-accurate) HWM-based simulation, as 
+    # well as estimated errors from the choice of window size and of gap matching.
     # See "zero_wind_quicklook.ipynb" for the full computation.
     zero_err_all = {
-    ('A','Day','green',0):  + (-1.34753515e-07 * rows**3) + (1.26288626e-05 * rows**2) + (-2.06893144e-04 * rows**1) + (2.73829468e-02 * rows**0) , 
-    ('B','Day','green',0):  + (4.09766544e-08 * rows**3) + (-1.04820561e-06 * rows**2) + (1.19489560e-05 * rows**1) + (2.41577364e-02 * rows**0) , 
-    ('A','Night','green',0):  + (4.11450135e-04 * rows**3) + (-4.14080584e-03 * rows**2) + (9.99319198e-03 * rows**1) + (3.08021806e-02 * rows**0) , 
-    ('B','Night','green',0):  + (3.84633841e-04 * rows**3) + (-3.76390039e-03 * rows**2) + (9.02967421e-03 * rows**1) + (2.89097068e-02 * rows**0) , 
-    ('A','Day','green',1):  + (2.80817383e-06 * rows**3) + (-1.57471098e-04 * rows**2) + (2.26235443e-03 * rows**1) + (3.30964456e-02 * rows**0) , 
-    ('B','Day','green',1):  + (-7.89359789e-07 * rows**3) + (7.50124032e-05 * rows**2) + (-8.33355754e-04 * rows**1) + (3.71694092e-02 * rows**0) , 
-    ('A','Night','green',1):  + (4.75999099e-05 * rows**3) + (1.23917044e-03 * rows**2) + (-7.84204540e-03 * rows**1) + (5.32806293e-02 * rows**0) , 
-    ('B','Night','green',1):  + (1.56651644e-04 * rows**3) + (-3.10296113e-04 * rows**2) + (-2.56593825e-03 * rows**1) + (4.24046428e-02 * rows**0) , 
-    ('A','Day','red',0):  + (1.00141766e-07 * rows**3) + (-3.30505360e-06 * rows**2) + (3.74616357e-05 * rows**1) + (1.72927943e-02 * rows**0) , 
-    ('B','Day','red',0):  + (4.03665343e-08 * rows**3) + (4.06806137e-06 * rows**2) + (-1.37839798e-04 * rows**1) + (2.02404449e-02 * rows**0) , 
-    ('A','Night','red',0):  + (-2.33681258e-07 * rows**3) + (2.93163675e-05 * rows**2) + (-9.40159577e-04 * rows**1) + (4.39749476e-02 * rows**0) , 
-    ('B','Night','red',0):  + (-9.15344832e-08 * rows**3) + (1.40736237e-05 * rows**2) + (-5.93865799e-04 * rows**1) + (3.77488666e-02 * rows**0) , 
-    ('A','Day','red',1):  + (4.10572193e-07 * rows**3) + (1.21698250e-06 * rows**2) + (-3.31394412e-04 * rows**1) + (2.86844941e-02 * rows**0) , 
-    ('B','Day','red',1):  + (-7.98144279e-09 * rows**3) + (3.45618496e-05 * rows**2) + (-5.12121661e-04 * rows**1) + (2.29705343e-02 * rows**0) , 
-    ('A','Night','red',1):  + (1.01478957e-06 * rows**3) + (-6.29557460e-05 * rows**2) + (1.41666477e-03 * rows**1) + (5.69546452e-02 * rows**0) , 
-    ('B','Night','red',1):  + (-1.36261746e-06 * rows**3) + (1.67792008e-04 * rows**2) + (-6.37592233e-03 * rows**1) + (1.38193940e-01 * rows**0) , 
+    ('A','Day','green',0):  + (5.93000830e-08 * rows**4) + (-5.72614662e-06 * rows**3) + (2.12845532e-04 * rows**2) + (-2.98831057e-03 * rows**1) + (3.27268781e-02 * rows**0) , 
+    ('B','Day','green',0):  + (2.57960085e-07 * rows**4) + (-2.10005975e-05 * rows**3) + (5.15652876e-04 * rows**2) + (-3.38634469e-03 * rows**1) + (2.93805092e-02 * rows**0) , 
+    ('A','Night','green',0):  + (-7.21343700e-05 * rows**4) + (1.91364270e-03 * rows**3) + (-1.41907358e-02 * rows**2) + (3.39027228e-02 * rows**1) + (5.04453365e-03 * rows**0) , 
+    ('B','Night','green',0):  + (3.78402405e-05 * rows**4) + (-4.18706725e-04 * rows**3) + (1.43559276e-03 * rows**2) + (-5.41962320e-04 * rows**1) + (1.56490337e-02 * rows**0) , 
+    ('A','Day','green',1):  + (2.67738566e-08 * rows**4) + (-1.79203323e-06 * rows**3) + (4.44976330e-05 * rows**2) + (-3.31112254e-04 * rows**1) + (2.89893278e-02 * rows**0) , 
+    ('B','Day','green',1):  + (2.95518174e-07 * rows**4) + (-2.44738229e-05 * rows**3) + (6.11868032e-04 * rows**2) + (-4.19663948e-03 * rows**1) + (3.07019680e-02 * rows**0) , 
+    ('A','Night','green',1):  + (1.46847963e-04 * rows**4) + (-2.17862878e-03 * rows**3) + (1.07264115e-02 * rows**2) + (-2.18593127e-02 * rows**1) + (4.63102603e-02 * rows**0) , 
+    ('B','Night','green',1):  + (2.56661735e-05 * rows**4) + (-1.67666172e-05 * rows**3) + (-2.20354449e-03 * rows**2) + (8.48224029e-03 * rows**1) + (1.89545016e-02 * rows**0) , 
+    ('A','Day','red',0):  + (-9.76674545e-09 * rows**4) + (1.30500921e-06 * rows**3) + (-4.75048443e-05 * rows**2) + (6.62966021e-04 * rows**1) + (1.95195345e-02 * rows**0) , 
+    ('B','Day','red',0):  + (2.97802180e-08 * rows**4) + (-3.21995706e-06 * rows**3) + (1.28014677e-04 * rows**2) + (-1.94112095e-03 * rows**1) + (3.16355624e-02 * rows**0) , 
+    ('A','Night','red',0):  + (-5.98222589e-09 * rows**4) + (3.57720281e-07 * rows**3) + (2.04770593e-05 * rows**2) + (-1.52638212e-03 * rows**1) + (4.72305507e-02 * rows**0) , 
+    ('B','Night','red',0):  + (-1.26352938e-07 * rows**4) + (1.85948309e-05 * rows**3) + (-9.80868502e-04 * rows**2) + (2.22889169e-02 * rows**1) + (-1.47603371e-01 * rows**0) , 
+    ('A','Day','red',1):  + (-2.18675583e-09 * rows**4) + (3.69517192e-07 * rows**3) + (-1.60967941e-05 * rows**2) + (3.07153953e-04 * rows**1) + (1.66545383e-02 * rows**0) , 
+    ('B','Day','red',1):  + (2.70159995e-08 * rows**4) + (-3.09243693e-06 * rows**3) + (1.24646005e-04 * rows**2) + (-1.87330570e-03 * rows**1) + (3.14155971e-02 * rows**0) , 
+    ('A','Night','red',1):  + (-3.91129461e-08 * rows**4) + (4.58251674e-06 * rows**3) + (-1.57623342e-04 * rows**2) + (1.35875707e-03 * rows**1) + (3.50490539e-02 * rows**0) , 
+    ('B','Night','red',1):  + (-2.00259817e-09 * rows**4) + (2.65047803e-07 * rows**3) + (-5.26592996e-06 * rows**2) + (-3.22778413e-06 * rows**1) + (2.65827182e-02 * rows**0) , 
     }
     z0_err_zero_phase = zero_err_all[(sensor, mode, color, cal_lamp)]
+    # Manually degrade the accuracy estimate for Green Night rows 8-9 (2022 Sep 8, based on preliminary run of v05 compared to HWM)
+    if (mode=='Night') and (color=='green'):
+        z0_err_zero_phase[8:10] *= 2
     
-    # Error in striations
-    # Method 1: Assume constant with altitude
-#     q = (z.striation.quantile(0.84, dim='row') - z.striation.quantile(0.16, dim='row'))/2. # For a Gaussian this equals the stddev on average, but is more resistant to outliers
-#     z0_err_striation = q.item()/np.sqrt(5) * np.ones_like(z0) # Because the window is of size 5, the striations are reduced by sqrt(5) via averaging, approximately.
-#                                                               # Reshape into a vector, in case we want to make this row dependent in the future.
-    # Method 2: Varies with altitude
-    sy = z.striation.to_series()
-    q = sy.rolling(5, min_periods=4, center=True).std().fillna(method='ffill').fillna(method='bfill') # rolling stddev with extrapolation
-    z0_err_striation = q.values / np.sqrt(5) # Because the window is of size 5, the striations are reduced by sqrt(5) via averaging, approximately.
-    Ncorr_striation = 7 # Determined by Monte Carlo simulation. If the way striations are handled in zero_wind.py changes, then this should also change.
+    # If we are in a "bad zero phase" period (as defined in zero_wind.py) then degrade the accuracy.
+    bad_zero_phase_periods = [ # (start, stop)
+        (pd.to_datetime('2021-04-26'), pd.to_datetime('2021-08-14')), # Windows that touch the June 2021 outage/rLVLH
+    ]
+    bad = False
+    t = pd.to_datetime(tstr)
+    for tstart, tstop in bad_zero_phase_periods:
+        if (t>=tstart) & (t<=tstop):
+            bad=True
+    if bad:
+        z0_err_zero_phase *= 2
+    
+    # Estimate striation error from fluctuations in daily-averaged phase
+    p = z.phase # Doesn't matter if we use phase or phase_with_notch here
+    phpf = p - p.rolling(row=5, center=True, min_periods=1).median() # High-pass median filtered version
+    q = phpf.to_series().rolling(3, min_periods=2, center=True).std().fillna(method='ffill').fillna(method='bfill') # rolling stddev with extrapolation
+    q = q.to_xarray().where(~p.isnull()) # Only evaluate where the data actually exist
+    z0_err_striation = q.values
+    Ncorr_striation = 1 # Unlike in preliminary v05 runs, the striation-correction bandaid is no longer used, and thus they are uncorrelated with other rows.
     
     return z0, z0_err_striation, z0_err_zero_phase, Ncorr_striation
     
@@ -3690,8 +3729,8 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
       *  chi2_thresh_caution -- TYPE:float, UNITS:rad^2.  If the mean-square residual of phase within a row is larger than this,
                                                           the sample should be treated with caution but is used in the inversion. This
                                                           affects the quality control only.
-      *  zero_wind_file      -- TYPE:str,                 Full path to a "Zero-Phase-Striation" file, which contains the variables
-                                                          "zero_phase" and "striation" which will be used to apply the zero wind
+      *  zero_wind_file      -- TYPE:str,                 Full path to a "Zero-Phase" file, which contains the variables
+                                                          "zero_phase" and "zero_phase_with_notch" which will be used to apply the zero wind
                                                           phase correction.
                                                           
                                            
@@ -4028,11 +4067,12 @@ def level1_to_level21(info_fn):
             f107a = gpi['f107d'][:]
         gpi.close()
         
-    # Make sure zero wind phase file is there
-    if 'Zero_Phase' not in info.keys():
-        raise KeyError('"Zero_Phase" line not found in Information.TXT file')
-    zero_wind_file = info['Zero_Phase']
-    
+    # Read zero wind phase file from Calibrations/ directory
+    fnzs = glob.glob('Calibrations/*')
+    assert len(fnzs)<2, "More than one file found in Calibrations/ directory. Not sure how to proceed"
+    assert len(fnzs)>0, "No files found in Calibrations/ directory."
+    zero_wind_file = fnzs[0]
+    assert "Zero-Phase-Notch" in zero_wind_file, "Calibration file not recognized (%s). A 'Zero-Phase-Notch' file is required" % zero_wind_file
     
     # Loop and call the lower-level function which does all the real work.
     # Split files into A and B sets, and run red and green for each set.
@@ -5568,7 +5608,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                                                    'v2.0: First run of on-orbit data, using external zero wind reference and smooth daily-averaged profiles, B. J. Harding, 01 May 2020',
                                                                    'v3.0: Correction for long-term mechanical drift, B. J. Harding, 04 Jun 2020',
                                                                    'v4.0: Updated correction for long-term mechanical drift to handle settling after ~May 2020 and precession cycle variation. LoS winds have changed by a bulk offset of up to 30 m/s. Studies using only perturbations from the mean (e.g., non-migrating tidal retrievals) are unlikely to be affected. B. J. Harding 21 Oct 2020',
-                                                                   'v5.0: The ad-hoc, HWM-based correction for the zero wind phase has been replaced with a self-calibration based on comparing data from the ascending and descending orbits (see the notes for the wind variables below for details). Long-term trends in the zero wind phase degraded the accuracy of version 4 over time, and the accuracy of version 4 data was tied to the accuracy of HWM. In version 5, errors on these long time scales (>100-150 days) are now accounted for, improving the accuracy to 10-25 m/s (see the "Accuracy" variable for more details) and removing the dependence on external models. For errors on precession-cycle time scales (48 days), the previous correction using red-vs-green comparisons has been replaced with a first-principles analysis of the fiducial notch positions (see Marr et al., 2020 and subsequent publications). Thus, the red and green channels are now analyzed independently and can be compared where they overlap (~160-200 km altitude during the day) as a sanity check. The fiducial notch analysis is also used to correct mechanical drifts on an orbital time scale (97 minutes, or 24 hours of local time), which could affect migrating tide estimates. The RMS difference due to this effect is estimated at 5-10 m/s (root mean square). Analysis of waves with periods that do not coincide with these new corrections are not likely to be different than in version 4 (e.g., nonmigrating tides, planetary waves, and gravity waves). New variables related to error (i.e., uncertainty) estimates from various sources are now included, whereas version 4 error estimates only included the effects of shot, read, and dark noise. MIGHTI-A and MIGHTI-B variables related to emission brightness are now cross-calibrated, though not absolutely calibrated. Exposures affected by solar and lunar stray light are now flagged. The data from the second row in the green channel (~91 km) is now released when the signal strength permits a wind estimate. An error in the local time calculation has been corrected, which changes the local time by up to 20 min. A new algorithm to identify cosmic ray spikes has been implemented, improving precision. Finally, a preliminary algorithm has been implemented to to correct a wind bias associated with low signal levels, and associated uncertainties are estimated (see the "Precision_Low_Signal_Effect" variable for more details). B. J. Harding 25 Jul 2022'
+                                                                   'v5.0: The ad-hoc, HWM-based correction for the zero wind phase has been replaced with a self-calibration based on comparing data from the ascending and descending orbits (see the notes for the wind variables below for details). Long-term trends in the zero wind phase degraded the accuracy of version 4 over time, and the accuracy of version 4 data was tied to the accuracy of HWM. In version 5, errors on these long time scales (>100-150 days) are now accounted for, improving the accuracy to 10-25 m/s (see the "Accuracy" variable for more details) and removing the dependence on external models. A long window of data is required to implement this self-calibration, so v05 data are processed at least 100 days behind real time. For errors on precession-cycle time scales (48 days), the previous ad-hoc correction using initial red-vs-green comparisons has been replaced with a more comprehensive red-green cross-calibration (165-185 km altitude during the day) that accounts for the time-dependence of mechanical drifts of the optics. This result is consistent with a first-principles analysis of the fiducial notch positions (see Marr et al., 2020 and subsequent publications). A mission-average fiducial notch analysis is also used to correct mechanical drifts on an orbital time scale (97 minutes, or 24 hours of local time), which could affect migrating tide estimates. The RMS difference due to this effect is estimated at 5-10 m/s (root mean square). Analysis of waves with periods that do not coincide with these new corrections are not likely to be different than in version 4 (e.g., nonmigrating tides, planetary waves, and gravity waves). New variables related to error (i.e., uncertainty) estimates from various sources are now included, whereas version 4 error estimates only included the effects of shot, read, and dark noise. MIGHTI-A and MIGHTI-B variables related to emission brightness are now cross-calibrated, though not absolutely calibrated. Exposures affected by solar and lunar stray light are now flagged. Some data during periods in May and July 2020 when the sun approached the MIGHTI field of view was marked as unavailable in v04, but is now available in v05 with the exception of a few days. The data from the second row in the green channel (~91 km) is now available when the signal strength permits a wind estimate. An error in the local time calculation has been corrected, which changes the local time by up to 20 min. A new algorithm to identify cosmic ray spikes has been implemented, improving precision. A preliminary algorithm has been implemented to to correct a wind bias associated with low signal levels, and associated uncertainties are estimated (see the "Precision_Low_Signal_Effect" variable for more details). Finally, various quality control parameters have been optimized. More description is provided in the notes below. A full history of software changes can be found on Github: https://github.com/bharding512/airglowrsss/commits/master/Python/modules/MIGHTI_L2.py  B. J. Harding 08 Sep 2022'
                                                                   ])
         ncfile.setncattr_string('HTTP_LINK',                      'http://icon.ssl.berkeley.edu/Instruments/MIGHTI')
         ncfile.setncattr_string('Instrument',                     'MIGHTI')
@@ -5605,31 +5645,52 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         'components to obtain the northward and eastward components reported in this file. The assumption is that the thermospheric wind has not changed '+
         'during this time interval. Because the Level 2.1 data are naturally on an irregular grid, '+
         'they are first interpolated to a regular, pre-defined grid of longitude and altitude before the coordinate rotation is performed. See Harding et al. [2017, '+
-        'doi:10.1007/s11214-017-0359-3] for more details of the Level 2.2 algorithm.',
+        'doi:10.1007/s11214-017-0359-3] for more details of the Level 2.2 algorithm. ' +
+        'Further discussion of the calibration and performance of MIGHTI after launch can be found in a forthcoming paper in Space Science ' +
+        'Reviews [Englert et al., 2022, in preparation].',
 
              "Known issues with the v05 data release are listed below. Work is in progress to resolve or mitigate these issues in future data releases. ",
 
-             "Known issues with v05:<br/>"
-             " * When ICON is in the South Atlantic Anomaly (SAA), radiation effects on the detector cause poor data quality. The quality control algorithm "
-             "adequately flags and masks most of the affected samples, but some outliers remain, especially near the edge of the SAA. Other uncaught outliers "
-             "are rare but can occur due to cosmic rays, stars in the field of view, moonlight, etc. <br/>"
-             " * The bottom row of data (corresponding to an altitude of ~88 km) is masked out as the signal is rarely strong enough to permit a wind "
-             "estimate, and calibrations have large uncertainties. It is unlikely but possible that this altitude will be reported in future releases, "
-             "pending further investigation. <br/>"
-             " * Airglow brightness observations are not a required mission product, and no effort was yet made to absolutely calibrate "
-             "the brightness observations for MIGHTI-A and MIGHTI-B, and thus the Relative_VER "
-             "variable should be treated with caution. In v05, MIGHTI-A and B are cross-calibrated using a conversion factor derived from on-orbit data. <br/>"
-             " * During the one orbit per day when the calibration lamp is on, the wind data are noisier and a slight bias is evident. For this release, these "
-             "orbits have been labeled with quality=0.5 (i.e., caution). Work is underway to remove this restriction.<br/>"
-             " * A signal-dependent phase shift is seen in atmospheric and calibration lamp fringes, possibly caused by "
-             "a charge trapping effect in the CCD. This is the subject of ongoing investigation, but a first-order correction "
-             "is implemented in the v05 dataset. The correction increases linearly with time to match the effect seen in on-orbit calibration data. "
-             "The variable *_Precision_Low_Signal_Effect is an estimate of the remaining uncertainty due to an imperfect "
-             "correction. Where this uncertainty is large, caution is recommended. "
-             "For example, for winds in the core science region (90-105 km altitude), the magnitude of the correction is small or zero, but data in the red "
-             "channel during the night and twilight are subject to a large correction (many tens of m/s) and the uncertainty is correspondingly large. "
-             "A goal for future releases is to characterize and correct this effect more accurately. "
-             "See the documentation below for more information.<br/>"
+                     "Known issues with v05:<br/>"
+                     " * When ICON is in the South Atlantic Anomaly (SAA), radiation effects on the detector cause poor data quality. The quality control algorithm "
+                     "adequately flags and masks most of the affected samples, but some outliers remain, especially near the edge of the SAA. Other uncaught outliers "
+                     "are rare but can occur due to cosmic rays, stars in the field of view, moonlight, etc. <br/>"
+                     " * The bottom row of data (corresponding to an altitude of ~88 km) is masked out as the signal is rarely strong enough to permit a wind "
+                     "estimate, and calibrations have large uncertainties. It is unlikely but possible that this altitude will be reported in future releases, "
+                     "pending further investigation. <br/>"
+                     " * Airglow brightness observations are not a required mission product, and no effort was yet made to absolutely calibrate "
+                     "the brightness observations for MIGHTI-A and MIGHTI-B, and thus the Relative_VER "
+                     "variable should be treated with caution. In v05, MIGHTI-A and B are cross-calibrated using a conversion factor derived from on-orbit data. "
+                     "However, there are some indications that this cross-calibration may be changing with time, which is not accounted for in v05. <br/>"
+                     
+                     " * As discussed in the variable notes below, a new zero wind phase determination has been implemented in v05. However, during the period "
+                     "from 2021 Apr 26 to Aug 14, data gaps and one period of southward (\"Reverse LVLH\") pointing cause errors in this determination. The "
+                     "accuracy is estimated to be degraded by a factor of two. See the *_Accuracy variable. <br/>"
+                     " * During the one orbit per day when the calibration lamp is on, the wind data can be noisier and have a slight bias. Although this issue is "
+                     "much improved since v04, for the sake of conservatism, these orbits are still labeled with quality=0.5 (i.e., caution). <br/>"
+                     " * Some data gaps appear on days when the sun passes near MIGHTI's field of view. Most of these gaps are located near the terminator, "
+                     "but some are longer lasting.<br/>"
+                     " * In some cases, there are indications that the *_Precision_1_Sample variables are underestimating the true sample-to-sample noise, "
+                     "suggesting that, in addition to shot noise, there is a second source of noise. It is recommend that any quantitative use of the reported "
+                     "error estimates (i.e., precision and accuracy) should treat those estimates as uncertain. It is believed that most error estimates are "
+                     "correct to within a factor of 2. The largest problems with error reporting occur where the airglow signal is weakest. <br/>"
+                     
+                     " * Imperfect daily calibration data lead to small discontinuities in the zero wind phase at the boundaries between days (i.e., "
+                     " between 23:59:59 and 00:00:00 UT), which are not accounted for by the reported error variables. This was estimated to be a 2-5 "
+                     "m/s (root-mean-square) error early in the mission, but is growing over time, possibly reaching 5-10 m/s by mid-2022.<br/>"
+                     " * A signal-dependent phase shift is seen in atmospheric and calibration lamp fringes, possibly caused by "
+                     "a charge trapping effect in the CCD. This is the subject of ongoing investigation, but a first-order correction "
+                     "is implemented in the v05 dataset. The correction increases linearly with time to match the effect seen in on-orbit calibration data. "
+                     "The variable *_Precision_Low_Signal_Effect is an estimate of the remaining uncertainty due to an imperfect "
+                     "correction. Where this uncertainty is large, caution is recommended. "
+                     "For example, for winds in the core science region (90-105 km altitude, away from the terminator), the magnitude of the correction "
+                     "is small or zero, but data in the red "
+                     "channel during the night and twilight are subject to a large correction (many tens of m/s) and the uncertainty is correspondingly large. "
+                     "A goal for future releases is to characterize and correct this effect more accurately. <br/>"
+                     " * Data near the solar terminators are subject to a variety of errors, including those described above and others related to the rapidly "
+                     "varying illumination. Not all errors near the terminator are accounted for by the reported error. Users are encouraged to "
+                     "use extra caution with these data.<br/>"
+                     "See the documentation below for more information.<br/>"
                     
         ])
         ncfile.setncattr_string('Time_Resolution',                '30 - 60 seconds')
@@ -5746,26 +5807,28 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                   "horizontally and 2.5-30 kilometers vertically (depending on the binning). It also assumes stationarity "
                   "over the 5-8 minutes between the MIGHTI-A and B measurements used for each point. See Harding et "
                   "al. [2017, doi:10.1007/s11214-017-0359-3] for a more complete discussion of the inversion algorithm."]
-        varnotes.append("Knowledge of the \"zero wind phase\" is needed for any instrument using Doppler shifts to determine winds. "
+        varnotes.extend(["Knowledge of the \"zero wind phase\" is needed for any instrument using Doppler shifts to determine winds. "
                          "The zero wind phase is defined as the measured interference fringe phase that corresponds to the rest "
                          "wavelength of the emission. For the v05 data release, the zero wind phase has been determined by considering a window of LoS wind data "
                          "spanning two precession cycles (96 days). Assuming that on average the real zonal and meridional winds do not depend on the aspect "
-                         "angle with which MIGHTI observes the atmosphere (which is significantly different on the ascending and descending portions of the orbit), "
+                         "angle with which MIGHTI observes the atmosphere (an angle which is significantly different between the ascending and descending portions of the orbit), "
                          "a matrix equation can be constructed which combines data from both MIGHTI-A and "
                          "MIGHTI-B and both the ascending and descending orbits. This equation is solved for the average zonal and meridional wind, and the "
                          "zero wind phase for MIGHTI-A and MIGHTI-B. This window is moved in time to determine the appropriate zero wind phase for each date. "
                          "The value of the zero wind phase depends on emission color (red or green), aperture mode (day or night), calibration lamp status "
                          "(on or off) and row (i.e., altitude). "
-                         "An additional zero-mean signal is added to this result to remove spurious signals introduced by noise spikes in the "
-                         "daily dark and calibration images, under the assumption that the 24-hour averaged wind is smooth in altitude (as "
-                         "implemented by a median filter). "
-                         "The results of this approach are consistent with the results of ICON's \"zero wind maneuver.\" "
+                         "An additional zero-mean signal is added to this result to ensure that 48-day (i.e., 1 precession cycle) average winds are smooth "
+                         "in altitude. Adjustments are smaller than the reported accuracy, so this adjustment is not "
+                         "expected to change any scientific conclusions, although it does ensure more realistic wind profiles. "
+                         "This is a less restrictive assumption than the smoothness criterion used in v04, which "
+                         "relied on the Horizontal Wind Model 2014 and also enforced smoothness on 1-day averages. It is thus expected that the amplitude of tidal structures "
+                         "in the lower thermosphere are subject to less suppression in v05+ than in v04. "
+#                          "The results of this approach are consistent with the results of ICON's \"zero wind maneuver.\" " # 2022 Sep 9: We don't know if this is true yet.
                          "This version of the MIGHTI zero wind phase is independent of any external data or models (such as "
-                         "the Horizontal Wind Model 2014, which was used in earlier versions). "
+                         "the Horizontal Wind Model 2014, which was used in v04 and earlier versions). "
                          "The zero wind phase used for each wind sample is saved in the _Zero_Wind_Phase variable below. "
                          "The 1-sigma uncertainty in the winds incurred by the inaccuracy in the zero wind phase "
-                         "is estimated in the *_Wind_Accuracy variable below."
-                        )    
+                         "is estimated and reported in the *_Wind_Accuracy variable below."])
         
         # Zonal Wind
         var = _create_variable(ncfile, '%s_Zonal_Wind'%prefix, L22_dict['u'].T, 
@@ -5812,9 +5875,9 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               units='m/s', valid_min=0.0, valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
                               notes=[err_prefix[0],
                                      "The \"1 Day\" error variable quantifies the error introduced by daily calibrations, which is correlated "
-                                     "for an entire 24-hour period (00:00 - 23:59 UT). This is estimated in part from the magnitude of "
-                                     "fluctuations in the daily calibration lamp observations. Errors are moderately correlated across small "
-                                     "altitude gaps. Errors in day mode and night mode are nearly uncorrelated. For studies pertaining to "
+                                     "for an entire 24-hour period (00:00 - 23:59 UT). This is estimated from the magnitude of fluctuations "
+                                     "in the daily-averaged phase, propagated through the inversion. Errors in day mode and night mode are "
+                                     "nearly uncorrelated. For studies pertaining to "
                                      "atmospheric tidal modes that combine data from many days, this error can be treated as uncorrelated "
                                      "across time."]
                               )
@@ -5830,7 +5893,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                      "the phase of the fringes is biased at very low signal levels. This is under investigation but could "
                                      "be caused by a charge trapping effect in the CCD. A "
                                      "correction has been implemented based upon the empirical relationship between measured phase "
-                                     "and signal level for the first ~27 months of the mission. However, especially for cases with low signal levels, "
+                                     "and signal level of the calibration lamps for the first ~30 months of the mission. However, especially for "
+                                     "cases with low signal levels, "
                                      "this correction is uncertain. The uncertainty in the resulting winds is estimated from the signal level "
                                      "and reported in this variable. It is likely to be correlated across samples nearby in time and space, but "
                                      "the correlation between different channels (red and green), sensors (MIGHTI-A and MIGHTI-B), and operating "
@@ -5851,9 +5915,10 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                      "The \"Accuracy\" variable quantifies the error introduced by the zero-wind phase estimate. It is "
                                      "strongly correlated across time lags of days to weeks and becomes increasingly decorrelated for time "
                                      "lags longer than 2 precession cycles (96 days). This error is estimated from the discrepancy between "
-                                     "various techniques of determining the zero-wind phase. This error source is irrelevant for users "
+                                     "various techniques of determining the zero-wind phase. This error source is irrelevant for most users "
                                      "studying perturbations from the mean (e.g., tides, waves), but may be important for studies of "
-                                     "zonal mean winds or point comparisons with other data sets. Errors are moderately correlated across "
+                                     "zonal mean winds, point comparisons with other data sets, and seasonal/long-term trends thereof. Errors are "
+                                     "moderately correlated across "
                                      "small altitude gaps. Errors in day mode and night mode are nearly uncorrelated, implying there could "
                                      "be different offsets for day mode and night mode. This could be important for error propagation of "
                                      "odd-numbered migrating tides (e.g., DW1)."]
@@ -5896,9 +5961,9 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                               units='m/s', valid_min=0.0, valid_max=4000., var_type='data', chunk_sizes=[nx,ny],
                               notes=[err_prefix[0],
                                      "The \"1 Day\" error variable quantifies the error introduced by daily calibrations, which is correlated "
-                                     "for an entire 24-hour period (00:00 - 23:59 UT). This is estimated in part from the magnitude of "
-                                     "fluctuations in the daily calibration lamp observations. Errors are moderately correlated across small "
-                                     "altitude gaps. Errors in day mode and night mode are nearly uncorrelated. For studies pertaining to "
+                                     "for an entire 24-hour period (00:00 - 23:59 UT). This is estimated from the magnitude of fluctuations "
+                                     "in the daily-averaged phase, propagated through the inversion. Errors in day mode and night mode are "
+                                     "nearly uncorrelated. For studies pertaining to "
                                      "atmospheric tidal modes that combine data from many days, this error can be treated as uncorrelated "
                                      "across time."]
                               )        
@@ -5914,7 +5979,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                      "the phase of the fringes is biased at very low signal levels. This is under investigation but could "
                                      "be caused by a charge trapping effect in the CCD. A "
                                      "correction has been implemented based upon the empirical relationship between measured phase "
-                                     "and signal level for the first ~27 months of the mission. However, especially for cases with low signal levels, "
+                                     "and signal level of the calibration lamps for the first ~30 months of the mission. However, especially for "
+                                     "cases with low signal levels, "
                                      "this correction is uncertain. The uncertainty in the resulting winds is estimated from the signal level "
                                      "and reported in this variable. It is likely to be correlated across samples nearby in time and space, but "
                                      "the correlation between different channels (red and green), sensors (MIGHTI-A and MIGHTI-B), and operating "
@@ -5935,9 +6001,10 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                      "The \"Accuracy\" variable quantifies the error introduced by the zero-wind phase estimate. It is "
                                      "strongly correlated across time lags of days to weeks and becomes increasingly decorrelated for time "
                                      "lags longer than 2 precession cycles (96 days). This error is estimated from the discrepancy between "
-                                     "various techniques of determining the zero-wind phase. This error source is irrelevant for users "
+                                     "various techniques of determining the zero-wind phase. This error source is irrelevant for most users "
                                      "studying perturbations from the mean (e.g., tides, waves), but may be important for studies of "
-                                     "zonal mean winds or point comparisons with other data sets. Errors are moderately correlated across "
+                                     "zonal mean winds, point comparisons with other data sets, and seasonal/long-term trends thereof. Errors are "
+                                     "moderately correlated across "
                                      "small altitude gaps. Errors in day mode and night mode are nearly uncorrelated, implying there could "
                                      "be different offsets for day mode and night mode. This could be important for error propagation of "
                                      "odd-numbered migrating tides (e.g., DW1)."]
