@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 5 # Should only be incremented on major changes
-software_version_minor = 4 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 5 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -2498,7 +2498,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                                    saved in the same file, but all should come from the same channel (red or green) of the same 
                                    sensor (A or B), and have times during the same date.
                                    The variables in this dictionary should match those described in the documentation for 
-                                   level1_dict_to_level21_dict(...) but should have an extra dimension (on axis 0) for time.
+                                   level1_dict_to_level21_dict(...) but should have an extra dimension (on axis 0) for time,
+                                   and optionally includes the "zero_wind_file" key to be saved in the "Calibration_File" attribute.
                                    Variables which do not change in time (e.g., emission color) should not have this extra 
                                    dimension. In v1.31 release, 2 extra keys are possible: ph0_day and ph0_night. If these
                                    are included, they will be saved to the file as global attributes.
@@ -2549,6 +2550,10 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         pre = '.'.join(s[:-1])
         post = s[-1].upper()
         parents.append('%s > %s' % (post, pre))
+    ### Calibration files
+    calibration_file = ''
+    if 'zero_wind_file' in L21_dict:
+        calibration_file = L21_dict['zero_wind_file']
 
 
     L21_fn = 'ICON_L2-1_MIGHTI-%s_LOS-Wind-%s_%s_v%02ir%03i.NC' % (sensor,L21_dict['emission_color'].capitalize(),
@@ -2561,7 +2566,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ########################## Global Attributes #################################
         ncfile.setncattr_string('Acknowledgement',                L21_dict['acknowledgement'])
         ncfile.setncattr_string('ADID_Ref',                       'NASA Contract > NNG12FA45C')
-        ncfile.setncattr_string('Calibration_File',               '')
+        ncfile.setncattr_string('Calibration_File',               calibration_file)
         ncfile.setncattr_string('Conventions',                    'SPDF ISTP/IACG Modified for NetCDF')
         ncfile.setncattr_string('Data_Level',                     'L2.1')
         ncfile.setncattr_string('Data_Type',                      'DP21 > Data Product 2.1: Line-of-sight Wind Profiles')
@@ -3729,7 +3734,7 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
       *  chi2_thresh_caution -- TYPE:float, UNITS:rad^2.  If the mean-square residual of phase within a row is larger than this,
                                                           the sample should be treated with caution but is used in the inversion. This
                                                           affects the quality control only.
-      *  zero_wind_file      -- TYPE:str,                 Full path to a "Zero-Phase" file, which contains the variables
+      *  zero_wind_file      -- TYPE:str,                 Full path to a "Zero-Phase-Notch" file, which contains the variables
                                                           "zero_phase" and "zero_phase_with_notch" which will be used to apply the zero wind
                                                           phase correction.
                                                           
@@ -3823,6 +3828,10 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
         import sys
         sys.stdout.flush()
     L21_dict = combine_level21(L21_dicts)
+    # Add the zero wind file if it exists
+    L21_dict['zero_wind_file'] = ''
+    if zero_wind_file is not None:
+        L21_dict['zero_wind_file'] = zero_wind_file.split('/')[-1]
     
     
     ########## Compute quality flag corrections that require a time sequence

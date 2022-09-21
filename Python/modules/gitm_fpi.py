@@ -4,7 +4,6 @@
 import pytz
 from pyglow import pyglow
 from datetime import datetime, timedelta
-import FPIprocess
 import fpiinfo
 import numpy as np
 from numpy import array, zeros, ones, arange, sqrt, mean, median, nan, pi, sum, random
@@ -12,18 +11,60 @@ import pandas as pd
 import glob
 
 
+# BJH 2022 Jan 27: This function was copied from FPIprocess and updated to Python3.
+def load_level0(instr_name, year, doy, sky_line_tag='X', fpi_results_dir =  '/rdata/airglow/fpi/results/'):
+    '''
+    Return the contents of the npz file specified by the arguments. Only load the 'FPI_Results' dict.
+    sky_line_tag == 'X'  --> red line
+                 == 'XG' --> green line
+    '''
+    # Load FPI_Results
+    process_dn = datetime(year,1,1) + timedelta(days = doy-1)
+    site_name = fpiinfo.get_site_of(instr_name, process_dn)
+    # If instrument not at a site at this time, return IOError, file not found, for consistency
+    # with the error that occurs if the instrument didn't take data on that night
+    if site_name is None:
+        raise IOError('File Not Found for %s_%s_%03i' % (instr_name, year, doy))
+    datestr = process_dn.strftime('%Y%m%d')
+    instrsitedate = instr_name + '_' + site_name + '_' + datestr
+    if not (sky_line_tag=='X'):
+        instrsitedate=instrsitedate+'_%s'%sky_line_tag.lower()
+    npzfn = fpi_results_dir + instrsitedate + '.npz'
+    npzfile = np.load(npzfn, fix_imports=True, allow_pickle=True, encoding='bytes')
+    r = npzfile['FPI_Results'].item()
+    
+    # Annoying decoding to read Python2-saved-npzs in Python3
+    npzdict = {k.decode(): r[k] for k in r.keys()}
+    # Now do all sub-dicts
+    for k0 in npzdict.keys():
+        if type(npzdict[k0]) == dict:
+            npzdict[k0] = {k1.decode(): npzdict[k0][k1] for k1 in npzdict[k0].keys()}
+
+    del npzfile.f
+    npzfile.close()
+    return npzdict
+
+
+
+
 def get_max_kp(t, prevhrs = 24.):
     kp = []
     for h in arange(-prevhrs, 1., 3.):
         ti = t + timedelta(hours=h)
-        pt = pyglow.Point(ti, 0, 0, 250)
-        kp.append(pt.kp)
+        try:
+            pt = pyglow.Point(ti, 0, 0, 250)
+            kp.append(pt.kp)
+        except IndexError: # This is most likely because Kp is no longer updating in pyglow
+            kp.append(np.nan)
+            
     return max(kp)
 
 
     
-def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLOUD_THRESH = np.inf, DROP_NO_CLOUD = True,
-                SKYI_THRESH = None, SKYB_THRESH = np.inf, T_THRESH = 150., verbose = True):
+def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLOUD_THRESH = np.inf, 
+                DROP_NO_CLOUD = True, NO_CLOUD_FILL = -999.,
+                SKYI_THRESH = None, SKYB_THRESH = np.inf, T_THRESH = 150., verbose = True, 
+                fpi_results_dir =  '/rdata/airglow/fpi/results/', sky_line_tag = 'X'):
     '''
     Load raw line-of-sight FPI data and perform quality control.
     Return a pandas DataFrame with all trustworthy samples. 
@@ -42,16 +83,24 @@ def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLO
     CLOUD_THRESH    - [C] threshold for filtering LOS samples based on cloud indicator. Can be
                       filtered in this step or during the cardinalization step.
     DROP_NO_CLOUD   - If False, keep data with no cloud sensor reading. If True, drop it.
+    NO_CLOUD_FILL   - What to fill in missing cloud data with. (Note that if the above is true, this has no effect)
+                      Defaults to -999 so that missing data can be treated as clear (so that sites without a cloud sensor still pass).
+                      Note that if you use np.nan here, it will drop this entire timestamp.
     SKYI_THRESH     - [cnt/s] threshold for filtering LOS samples based on brightness (if None, 
                       use default value from fpiinfo [the lower of the two])
     SKYB_THRESH     - [cnt/s] threshold for filtering LOS samples based on spectral background
     T_THRESH        - [K] temperatures smaller than this are indicative of a bad fit
     verbose         - whether to print quality control information
+    fpi_results_dir - the base directory where the FPI data is stored (default for remote2)
+    sky_line_tag    - 'X' for red line, 'XG' for green line
     
     OUTPUTS:
     
     df   - pandas DataFrame
     '''
+    
+    if sky_line_tag == 'XG': # Change the T_THRESH to something more reasonable
+        T_THRESH = 20.
     
     t0 = datetime(year, 1, 1) + timedelta(days=doy_start-1)
 
@@ -70,7 +119,7 @@ def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLO
     for doyoff in range(-2, doy_stop-doy_start+2): # That should be wide enough to handle any time zone
         t = pd.to_datetime(t0 + timedelta(days=doyoff))
         try:
-            r = FPIprocess.load_level0(instr_name, t.year, t.dayofyear)['FPI_Results']
+            r = load_level0(instr_name, t.year, t.dayofyear, fpi_results_dir =  fpi_results_dir, sky_line_tag = sky_line_tag)
         except IOError: # No data
             continue
 
@@ -79,17 +128,28 @@ def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLO
         d['t'] = pd.to_datetime(r['sky_times']).tz_convert(pytz.utc)
         # Variables to pass through directly
         v = ['skyI', 'sigma_skyI', 'LOSwind', 'sigma_LOSwind', 'sky_intT', 'T', 'sigma_T',\
-             'sigma_fit_LOSwind', 'sigma_cal_LOSwind','az','ze','skyB','direction','sky_ccd_temperature']
+             'sigma_fit_LOSwind', 'sigma_cal_LOSwind','az','ze','skyB','direction','sky_ccd_temperature', 'wind_quality_flag']
         for key in v:
             d[key] = r[key]
         # Note using max instead of mean. If it's cloudy at all during the exposure, it's bad.
-        d['Clouds'] = r['Clouds']['max'] 
+        d['Clouds'] = r['Clouds']['max']
 
         df = pd.DataFrame(d)
+        
+        # Deal with annoying Python 2 vs 3 compatibility with strings
+        for col in df.columns:
+            try:
+                df[col] = df[col].apply(lambda x: x.decode())
+            except:
+                pass
+        # Also fix the handling of timestamps
+        df['t'] = pd.to_datetime(df.t.values)
+        
         dfs.append(df)
 
     # if no data, return None
     if len(dfs)==0:
+        print('No data found')
         return None
         
     # Make one big DataFrame for all the FPI data
@@ -99,7 +159,7 @@ def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLO
 
     #################### Quality control on samples #######################
     bmiss  = dfraw['Clouds'].isnull()
-    dfraw.loc[bmiss,'Clouds'] = -999. # Treat as clear
+    dfraw.loc[bmiss,'Clouds'] = NO_CLOUD_FILL
     bcloud = dfraw['Clouds'] > CLOUD_THRESH
     bsigma = (dfraw['sigma_LOSwind'] > SIGMA_THRESH) | (dfraw['sigma_T'] > SIGMA_THRESH)
     bskyI  = dfraw['skyI'] < SKYI_THRESH
@@ -112,7 +172,7 @@ def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLO
         dfraw[bmiss] = np.nan
 
     if verbose:
-        print ''
+        print('')
         if DROP_NO_CLOUD:
             print('%.2f%% samples dropped for missing cloud sensor' % (100.*sum(bmiss)/len(bmiss)))
         print('%.2f%% samples cloudy' % (100.*sum(bcloud)/len(bcloud)))
@@ -128,6 +188,10 @@ def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLO
     
     ################### Append metadata #######################
     #dfraw.instr_name = instr_name
+        
+    # Add some useful variables
+    dfraw['date'] = dfraw.t.dt.floor('1d')
+    dfraw['uthr'] = (dfraw.t - dfraw.date).dt.total_seconds()/3600.
     
     return dfraw
     
@@ -142,7 +206,8 @@ def cardinal_fpi(dfraw, year, doy_start, doy_stop, dtb=1.0, KP_THRESH = 3., DISA
     a constant time cadence. Time binning is performed simultaneously
     with cardinalization. This works for a single site. Assume that
     vertical wind is zero and use zenith reference as a function
-    of time.
+    of time. Note that this ignores the quality flag from the lower level,
+    instead doing its own determination.
     
     Return a pandas DataFrame at the specified time cadence.
     
@@ -203,19 +268,23 @@ def cardinal_fpi(dfraw, year, doy_start, doy_stop, dtb=1.0, KP_THRESH = 3., DISA
         A[:,1] = np.cos(g['az']*pi/180)*np.sin(g['ze']*pi/180) # meridional contribution
         A[:,2] = ones(len(g)) # Doppler reference contribution
         
-        if len(g) >= NBIN_THRESH and np.linalg.matrix_rank(A) >= 3:
+        # Convert to weighted least squares and solve
+        Ap = np.diag(1/g['sigma_LOSwind']).dot(A)
+        ApTAp = Ap.T.dot(Ap)
+        yp = g['LOSwind']/g['sigma_LOSwind']
         
-            # Convert to weighted least squares and solve
-            Ap = np.diag(1/g['sigma_LOSwind']).dot(A)
-            yp = g['LOSwind']/g['sigma_LOSwind']
-            M = np.linalg.inv(Ap.T.dot(Ap)).dot(Ap.T) # least squares matrix, explicitly
+#         print(np.linalg.matrix_rank(ApTAp))
+        
+        if len(g) >= NBIN_THRESH and np.linalg.matrix_rank(ApTAp) >= 3:
+        
+            M = np.linalg.inv(ApTAp).dot(Ap.T) # least squares matrix, explicitly
             uvd = M.dot(yp)
             sigma_uvd = sqrt(np.diag(M.dot(M.T)))
             resid = g['LOSwind'] - A.dot(uvd)
             if any(np.isnan(resid)):
-                print g['LOSwind']
-                print A
-                print uvd
+                print(g['LOSwind'])
+                print(A)
+                print(uvd)
                 raise Exception()
             rms_resid = sqrt(mean(resid**2))
             
@@ -229,8 +298,12 @@ def cardinal_fpi(dfraw, year, doy_start, doy_stop, dtb=1.0, KP_THRESH = 3., DISA
             sigma_cal_uvd = sqrt(np.diag(M.dot(M.T)))      
             
             # Compute airglow gradient (variability within bin, normalized by mean)
-            Ivert = g['skyI']/np.cos(g['ze']*np.pi/180.) # converted from slant to vertical
-            Ivariab = Ivert.std()/Ivert.mean()
+            # Also save the mean airglow
+            Ivert = g['skyI']*np.cos(g['ze']*np.pi/180.) # converted from slant to vertical
+            Imean = Ivert.mean()
+            Ivariab = Ivert.std()/Imean
+            
+            
             
             # Compute cloud threshold for this day
             if callable(CLOUD_THRESH): # It's a function of doy
@@ -262,6 +335,7 @@ def cardinal_fpi(dfraw, year, doy_start, doy_stop, dtb=1.0, KP_THRESH = 3., DISA
                            g['Clouds'].max(), # max cloud indicator
                            cthresh, # cloud threshold for this day
                            g['sky_ccd_temperature'].mean(), # mean CCD temperature
+                           Imean, # Mean (vertical) brightness in each bin
                            Ivariab, # Fractional variability with each bin (proxy for airglow gradient)
                           ]
                          )
@@ -274,7 +348,7 @@ def cardinal_fpi(dfraw, year, doy_start, doy_stop, dtb=1.0, KP_THRESH = 3., DISA
                       columns = ['u','v','doppref','T','variab_T', 'sigma_u','sigma_v','sigma_doppref',\
                                  'sigma_fit_u', 'sigma_fit_v', 'sigma_fit_doppref',
                                  'sigma_cal_u', 'sigma_cal_v', 'sigma_cal_doppref',
-                                 'residrms','Nsamp','cond','cloud','cloud_thresh', 'ccdtemp','variab_I'])
+                                 'residrms','Nsamp','cond','cloud','cloud_thresh', 'ccdtemp','I_mean', 'I_variab'])
 
     # Fill in "previous 24 hour's max kp"
     kp = []
@@ -300,15 +374,15 @@ def cardinal_fpi(dfraw, year, doy_start, doy_stop, dtb=1.0, KP_THRESH = 3., DISA
         # print how many bins are being removed for too few samples
         Ndata = np.sum(grouped.size() > 0) # how many bins started off with some data
         if Ndata==0:
-            print 'No data'
+            print('No data')
         else:
             small = (grouped.size() < NBIN_THRESH) & (grouped.size() > 0)
-            print '%.2f%% of bins filtered (<%i samples per bin or not enough variety)' % (100.*sum(small)/Ndata, NBIN_THRESH)
-            print '%.2f%% of bins filtered (prev 24 hrs Kp > %.2f)' % (100.*sum(bkp)/Ndata, KP_THRESH)
-            print '%.2f%% of wind bins filtered (condition number > %.1f)' % (100.*sum(bcond)/Ndata, COND_THRESH)
-            print '%.2f%% of wind bins filtered (cardinal residual > %.2f m/s)' % (100.*sum(bresid)/Ndata, DISAGREE_THRESH)
-            print '%.2f%% of wind bins filtered (propagated uncertainty > %.2f m/s)' % (100.*sum(bsigma)/Ndata, SIGMA_W_THRESH)
-            print '%.2f%% of wind bins filtered (cloud indicator > threshold)' % (100.*sum(bcloud)/Ndata)
+            print('%.2f%% of bins filtered (<%i samples per bin or not enough variety)' % (100.*sum(small)/Ndata, NBIN_THRESH))
+            print('%.2f%% of bins filtered (prev 24 hrs Kp > %.2f)' % (100.*sum(bkp)/Ndata, KP_THRESH))
+            print('%.2f%% of wind bins filtered (condition number > %.1f)' % (100.*sum(bcond)/Ndata, COND_THRESH))
+            print('%.2f%% of wind bins filtered (cardinal residual > %.2f m/s)' % (100.*sum(bresid)/Ndata, DISAGREE_THRESH))
+            print('%.2f%% of wind bins filtered (propagated uncertainty > %.2f m/s)' % (100.*sum(bsigma)/Ndata, SIGMA_W_THRESH))
+            print('%.2f%% of wind bins filtered (cloud indicator > threshold)' % (100.*sum(bcloud)/Ndata))
 
     # Metadata
     #df.instr_name = dfraw.instr_name
@@ -420,7 +494,7 @@ def subtract_running_mean(p, pe=None,w=30, nthresh=4, extrap=True, verbose=False
     dfd[n < nthresh] = np.nan
     if verbose:
         idx = (n < nthresh) & (n > 0)
-        print '%i/%i entries removed (running mean < %i entries)' % (idx.sum().sum(), (n>0).sum().sum(), nthresh)
+        print('%i/%i entries removed (running mean < %i entries)' % (idx.sum().sum(), (n>0).sum().sum(), nthresh))
         
     # Void sigma where value doesn't exist
     dfdsigma[dfd.isnull()] = np.nan
@@ -454,7 +528,7 @@ def remove_outliers(df, stddevs=3, verbose=False):
         df.loc[i,col] = np.nan
     ii = pd.concat(idx)
     if verbose:
-        print '%i/%i outliers removed' % (sum(ii),df.notnull().sum().sum())    
+        print('%i/%i outliers removed' % (sum(ii),df.notnull().sum().sum()))
     return df
 
 
@@ -469,7 +543,7 @@ def remove_partial_days(df, samples=5, verbose=False):
     idx1 = (~idx0) & (fill < samples)
     idx = idx0 | idx1
     if verbose:
-        print '%i/%i days removed (%i are empty and %i have <%i samples)' % (sum(idx), len(idx), sum(idx0), sum(idx1), samples)
+        print('%i/%i days removed (%i are empty and %i have <%i samples)' % (sum(idx), len(idx), sum(idx0), sum(idx1), samples))
     df.loc[:,idx] = np.nan
     df2 = df.dropna(axis=1, how='all')
     return df2
@@ -807,7 +881,7 @@ def load_gitm(instr_name, month=None, new=False, hires=False):
     
     if len(months)>1:
         # Fix up indexing issues
-        print 'Manually fixing month overlaps...'
+        print('Manually fixing month overlaps...')
         df = df[~df.index.duplicated(keep='first')]
         df = df.reindex(pd.date_range('2013-01-01 00:00','2013-12-31 23:59', freq='0.5H'))
         
