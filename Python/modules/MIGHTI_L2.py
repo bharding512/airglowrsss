@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 5 # Should only be incremented on major changes
-software_version_minor = 5 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 6 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -1475,6 +1475,9 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     except Exception as e:
         print('VER_Correction_Phase_Uncertainties variable not found. Setting to 0.0. Error = "%s"' % e)
         L1_dict['I_phase_signal_uncertainty'] = np.zeros_like(L1_dict['I_phase_uncertainty'])
+        
+    # Patch for bug in L1 code regarding the uncertainty. Peg it at 40% for all of the v05 run
+    L1_dict['I_phase_signal_uncertainty'] = 0.4 * abs(L1_dict['I_phase_signal_correction'])
     
 
     # Quality factors and flags
@@ -2681,6 +2684,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         ncfile.setncattr_string('Smooth_Profile_Day',             'DEPRECATED') # deprecated as of v05, may be removed in future
         # Added in v2.03, but may be removed in future once notch drift is accounted for at Level 1
         ncfile.setncattr_string('Corr_Notch_Drift',               'DEPRECATED') # deprecated as of v05, may be removed in future
+        ncfile.setncattr_string('Low_Signal_Patch',               'Automatic') # Indicating this file was created after the low-signal bug was identified/fixed, but was not manually patched.
 
 
         ################################## Dimensions ########################################
@@ -5706,6 +5710,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         ncfile.setncattr_string('Title',                          'ICON MIGHTI Cardinal Vector Winds (DP 2.2)')
         ncfile.setncattr_string('Zero_Wind_Ref',                  'DEPRECATED')
         ncfile.setncattr_string('Corr_Notch_Drift',               'DEPRECATED')
+        ncfile.setncattr_string('Low_Signal_Patch',               'Automatic') # Indicating this file was created after the low-signal bug was identified/fixed, but was not manually patched.
 
 
 
