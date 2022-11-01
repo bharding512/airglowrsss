@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 5 # Should only be incremented on major changes
-software_version_minor = 6 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 7 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -4132,7 +4132,7 @@ def level1_to_level21(info_fn):
 
     
     
-def level21_to_dict(L21_fn, skip_att=[], keep_att=[], tstartstop = None):
+def level21_to_dict(L21_fn, skip_att=[], keep_att=[], tstartstop = None, skip_bad_alts=False):
     ''' 
     Load a Level 2.1 file, which contains wind profiles:
         * from a single sensor (A or B)
@@ -4163,6 +4163,10 @@ def level21_to_dict(L21_fn, skip_att=[], keep_att=[], tstartstop = None):
                                          of the exposure time is between tstart and tstop, inclusive.
                                          Specify zero or one of the inputs: skip_att, keep_att, or tstartstop.
                                          Default: None
+      * skip_bad_alts -- TYPE: bool.     If True, skip samples where the altitudes are outliers, which can occur
+                                         for cases where there are slews labeled as science data. Thresholds are
+                                         defined in the code below.
+                                
                                          
       
     OUTPUTS:
@@ -4273,8 +4277,19 @@ def level21_to_dict(L21_fn, skip_att=[], keep_att=[], tstartstop = None):
         for i in range(N):
             if (tstart <= time[i]) and (time[i] <= tstop):
                 idx_good[i] = True
+    if skip_bad_alts:
+        alt = read('%s_Altitude' % prefix)[:,0]
+        # The following thresholds were based off of an analysis of 2 years of data and exclude <0.01% of the data. 
+        # In spot checks of excluded points, they all occurred during recoveries from slews, when data are labeled
+        # as science data too early (BJH 28 Oct 2022).
+        if color == 'Red':
+            altmin, altmax = 157, 163 
+        elif color == 'Green':
+            altmin, altmax = 87, 89.5
+        alt_good = (alt > altmin) & (alt < altmax)
+        idx_good = idx_good & alt_good
         
-
+    
     assert idx_good.any(), "All samples have attitude status bits in the disallowed list: %s" % skip_att   
     
     # Load variables
@@ -4679,7 +4694,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                                                                            * 26: MIGHTI-A did not sample this altitude
                                                                            * 27: MIGHTI-B did not sample this altitude
                                                                            * 28: Spherical asymmetry: A&B VER estimates disagree
-                                                                           * 29: Unused
+                                                                           * 29: Mixing Normal and Reverse LVLH
                                                                            * 30: Unused
                                                                            * 31: Unused
                                                                            * 32: Unused
@@ -4761,8 +4776,8 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
         t_diff_AB = params['t_diff_AB']
 
     assert L21_A_dict['emission_color'] == L21_B_dict['emission_color'], "Files for A and B are for different emissions"
-    assert L21_A_dict['zero_wind_ref'] == L21_B_dict['zero_wind_ref'], "Files for A and B use different zero wind references"
-    assert L21_A_dict['corr_notch_drift'] == L21_B_dict['corr_notch_drift'], "Files for A and B use different corr_notch_drift"
+#     assert L21_A_dict['zero_wind_ref'] == L21_B_dict['zero_wind_ref'], "Files for A and B use different zero wind references"
+#     assert L21_A_dict['corr_notch_drift'] == L21_B_dict['corr_notch_drift'], "Files for A and B use different corr_notch_drift"
     # Make sure a LVLH Normal/Reverse maneuver doesn't happen in the middle of the dataset.
     # 2021 Sep 14 BJH: This is commented out because it didn't actually cause a problem with the geometry
     #for d in [L21_A_dict, L21_B_dict]:
@@ -4892,7 +4907,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
         lon0 = icon_lon_A[0]
         # Helper function to vectorize timedelta.total_seconds()
         total_seconds = np.vectorize(lambda x: x.total_seconds())
-        # Li
+        # Linear approx
         lon = lon0 + dlon_dt * total_seconds(t-t0)
         return lon
 
@@ -4964,11 +4979,15 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
         if dlon <= 0.0: # This is a problem
             print('WARNING: invalid value longitude delta definition (dlon=%s)'%dlon)
             # Should this crash, or should we let it fly? I think we have to crash here since the longitude grid doesn't make sense.
-            raise Exception('WARNING: invalid value longitude delta definition (dlon=%s)'%dlon) 
+            # UPDATE 2022 Nov 1: Let it fly but use the last lon gap. This only happened 3 times in 2 years: with rLVLH transitions
+            # and on a mislabeled slew which is now caught.
+#             raise Exception('WARNING: invalid value longitude delta definition (dlon=%s)'%dlon) 
+            dlon = dlon_last
         if dlon > dlon_max: # if there are really large gaps (e.g., EUV calibration), then use a reasonable cadence
             dlon = dlon_last
         loni += dlon
         lon_vec.append(loni)
+#         dlon_last = dlon # TODO: Enable this in v06 (It was a mistake to omit it, but it only slightly changes the grid.)
     lon_vec = np.array(lon_vec)
     
     assert np.std(lon_vec) > 0, "Contact MIGHTI Team - longitude grid not changing"
@@ -5110,7 +5129,12 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
                 if alt_pt > altmax_B or alt_pt < altmin_B:
                     qflags[i,k,27] = 1
                 continue
-
+                
+            # Make sure not to mix Normal and Reverse LVLH
+            if L21_A_dict['att_lvlh_normal'][kA0] + L21_A_dict['att_lvlh_normal'][kA1] + \
+               L21_B_dict['att_lvlh_normal'][kB0] + L21_B_dict['att_lvlh_normal'][kB1] not in [0,4]:
+                qflags[i,k,29] = 1
+                continue
 
 
             ######################## Interpolating ############################
@@ -6406,7 +6430,7 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                        "* 26: MIGHTI-A did not sample this altitude",
                                        "* 27: MIGHTI-B did not sample this altitude",
                                        "* 28: Spherical asymmetry: A&B VER estimates disagree",
-                                       "* 29: Unused",
+                                       "* 29: Mixing Normal and Reverse LVLH",
                                        "* 30: Unused",
                                        "* 31: Unused",
                                        "* 32: Unused",
@@ -6477,8 +6501,9 @@ def level21_to_level22_without_info_file(A_curr_fn, B_curr_fn, A_prev_fn, B_prev
     
     ################## Load data and combine into one dictionary for A and one for B ##########################
     # Load entire current day and do sanity checks
-    L21_A_curr = level21_to_dict(A_curr_fn, skip_att = skip_att)
-    L21_B_curr = level21_to_dict(B_curr_fn, skip_att = skip_att)
+    # BJH 28 Oct 2022: Setting skip_bad_alts=True
+    L21_A_curr = level21_to_dict(A_curr_fn, skip_att = skip_att, skip_bad_alts=True)
+    L21_B_curr = level21_to_dict(B_curr_fn, skip_att = skip_att, skip_bad_alts=True)
     assert len(L21_A_curr['time'])>0, "No MIGHTI-A samples in %s" % A_curr_fn
     assert len(L21_B_curr['time'])>0, "No MIGHTI-B samples in %s" % B_curr_fn
 
@@ -6528,21 +6553,22 @@ def level21_to_level22_without_info_file(A_curr_fn, B_curr_fn, A_prev_fn, B_prev
     tstart = datetime(t0.year, t0.month, t0.day) - timedelta(hours=0.5)
     tstop  = tstart + timedelta(hours=25.)
 
-    # Combine curr, prev, and next data, if they exist
+    # Combine curr, prev, and next data, if they exist.
+    # BJH 28 Oct 2022: Setting skip_bad_alts=True
     if A_prev_fn:
-        L21_A_prev = level21_to_dict(A_prev_fn, skip_att = skip_att)
+        L21_A_prev = level21_to_dict(A_prev_fn, skip_att = skip_att, skip_bad_alts=True)
         assert L21_A_prev['time'][-1] < L21_A_curr['time'][0], "Files in reverse time order"
         L21_A_curr = combine(L21_A_prev, L21_A_curr, tstart, tstop)
     if B_prev_fn:
-        L21_B_prev = level21_to_dict(B_prev_fn, skip_att = skip_att)
+        L21_B_prev = level21_to_dict(B_prev_fn, skip_att = skip_att, skip_bad_alts=True)
         assert L21_B_prev['time'][-1] < L21_B_curr['time'][0], "Files in reverse time order"
         L21_B_curr = combine(L21_B_prev, L21_B_curr, tstart, tstop)
     if A_next_fn:
-        L21_A_next = level21_to_dict(A_next_fn, skip_att = skip_att)
+        L21_A_next = level21_to_dict(A_next_fn, skip_att = skip_att, skip_bad_alts=True)
         assert L21_A_curr['time'][-1] < L21_A_next['time'][0], "Files in reverse time order"
         L21_A_curr = combine(L21_A_curr, L21_A_next, tstart, tstop)
     if B_next_fn:
-        L21_B_next = level21_to_dict(B_next_fn, skip_att = skip_att)
+        L21_B_next = level21_to_dict(B_next_fn, skip_att = skip_att, skip_bad_alts=True)
         assert L21_B_curr['time'][-1] < L21_B_next['time'][0], "Files in reverse time order"
         L21_B_curr = combine(L21_B_curr, L21_B_next, tstart, tstop)
 
@@ -7683,110 +7709,120 @@ def plot_level22_summary(L22_fng, L22_fnr, pngpath, val, vmax = 150., close=Fals
       *  L22_png      --TYPE:str,  Full path to the saved png file
       
     '''
-    
-    assert val in ['u','v'], 'Input "val" is "%s" but must be "u" or "v"' % val
-    zon_mer = 'Zonal'
-    if val=='v':
-        zon_mer = 'Meridional'
+    try:
+        assert val in ['u','v'], 'Input "val" is "%s" but must be "u" or "v"' % val
+        zon_mer = 'Zonal'
+        if val=='v':
+            zon_mer = 'Meridional'
 
-    dg = level22_to_dict(L22_fng)
-    dr = level22_to_dict(L22_fnr)
+        dg = level22_to_dict(L22_fng)
+        dr = level22_to_dict(L22_fnr)
 
-    # Quality control and other things
-    for d in [dr, dg]:
-        idx = d['wind_quality'] < 0.5
-        d['u'].mask[idx] = True
-        d['v'].mask[idx] = True
-    
-    ### Process dr and dg to add new SLT-based orbit number
-    for d in [dr, dg]:
+        # Quality control and other things
+        for d in [dr, dg]:
+            idx = d['wind_quality'] < 0.5
+            d['u'].mask[idx] = True
+            d['v'].mask[idx] = True
 
-        # Which indices to plot -- recalculate approximate SLT here so there are no gaps
-        Nt = len(d['epoch'])
-        lonu = d['lon_unwrapped'][0,:]
-        t0 = pd.to_datetime(d['epoch'][-1]).date()
-        thr = (pd.to_datetime(d['epoch']) - pd.to_datetime(t0)).total_seconds()/3600.
-        sltu = thr + 24./360.*lonu
-        slt = np.mod(sltu, 24.)
-        jump = np.diff(slt) < 0.0
-        ijump = np.where(jump)[0] # all negative jumps
-        # stop index (exclusive) is one past each negative jump, plus the end
-        istop = np.concatenate((ijump+1, [Nt]))
-        # start index (inclusive) is the same as above, including 0 but not the end
-        istart = np.concatenate(([0], ijump+1))
-        d['istart'] = istart
-        d['istop'] = istop
-        d['Norbs'] = len(istart)
-        d['slt_new'] = slt
-        orbit_num_new = np.cumsum(jump) # this needs one more entry
-        d['orbit_number_new'] = np.concatenate((orbit_num_new, [orbit_num_new[-1]]))
-    assert dg['Norbs'] == dr['Norbs'], 'Problem with aligning red and green orbits'
-    Norbs = dg['Norbs']
+        # 2022 Oct 31: Check if red and green orbits are out of sync. This is very rare and only happens if the UT switch happens 
+        # when ICON is crossing lon = 0.
+        if dr['lon_unwrapped'][0,0] - dg['lon_unwrapped'][0,0] > 180.:
+            dr['lon_unwrapped'] -= 360.
+        elif dr['lon_unwrapped'][0,0] - dg['lon_unwrapped'][0,0] < -180.:
+            dr['lon_unwrapped'] += 360.
 
-    # Put in jmin and jmax here
-    dr['jmin'] = 1
-    dr['jmax'] = 16
-    dg['jmin'] = 0
-    dg['jmax'] = 39
-    
-    
-    from matplotlib.ticker import NullFormatter # https://github.com/matplotlib/matplotlib/issues/8027/
-    from matplotlib.ticker import FixedLocator, FixedFormatter # https://brohrer.github.io/matplotlib_ticks.html
-    
-    nx = 25 # Number of grids wide
-    
-    fig = plt.figure(figsize=(6,10), dpi = 120)
-    
-    for n in range(Norbs):
-        
-        plt.subplot2grid((Norbs+1,nx), (n,0), rowspan=1, colspan=nx-1)
+        ### Process dr and dg to add new SLT-based orbit number
+        for d in [dr, dg]:
+
+            # Which indices to plot -- recalculate approximate SLT here so there are no gaps
+            Nt = len(d['epoch'])
+            lonu = d['lon_unwrapped'][0,:]
+            t0 = pd.to_datetime(d['epoch'][-1]).date()
+            thr = (pd.to_datetime(d['epoch']) - pd.to_datetime(t0)).total_seconds()/3600.
+            sltu = thr + 24./360.*lonu
+            orb_num_new = np.int32(np.floor(sltu/24.))
+            slt = np.mod(sltu, 24.)
+            d['Norbs'] = max(orb_num_new)
+            d['slt_new'] = slt
+            d['orbit_number_new'] = orb_num_new
+        # 2022 Oct 31: Handle the very rare case where one sample is different in the red and green
+        # resulting in different number of orbits. Use the maximum to be able to plot all the data.
+        # This only happened a couple times in 3 years.
+        Norbs = max(dg['Norbs'],dr['Norbs'])
+
+        # Put in jmin and jmax here
+        dr['jmin'] = 1
+        dr['jmax'] = 16
+        dg['jmin'] = 0
+        dg['jmax'] = 39
+
+
+        from matplotlib.ticker import NullFormatter # https://github.com/matplotlib/matplotlib/issues/8027/
+        from matplotlib.ticker import FixedLocator, FixedFormatter # https://brohrer.github.io/matplotlib_ticks.html
+
+        nx = 25 # Number of grids wide
+
+        fig = plt.figure(figsize=(6,10), dpi = 120)
+
+        for n in range(Norbs):
+
+            plt.subplot2grid((Norbs+1,nx), (n,0), rowspan=1, colspan=nx-1)
+            ax = plt.gca()
+
+            for d in [dg, dr]:
+                jmin = d['jmin']
+                jmax = d['jmax']
+                slt = d['slt_new']
+                im = d['orbit_number_new'] == n
+                if im.any(): # Don't try to plot something if there is no data (It's very rare to have this check fail)
+                    m = ax.pcolormesh(slt[im], d['alt'][jmin:jmax], d[val][jmin:jmax,im], cmap='RdBu_r', vmin=-vmax, vmax=vmax)
+
+
+            plt.subplots_adjust(hspace = .000)
+            ax.set_ylim((90,350))
+            ax.set_yscale('log')
+            y_formatter = FixedFormatter(["90", "150", "300"])
+            y_locator = FixedLocator([90, 150, 300])
+            ax.yaxis.set_major_formatter(y_formatter)
+            ax.yaxis.set_major_locator(y_locator)
+            ax.yaxis.set_minor_formatter(NullFormatter())
+            if n==0:
+                plt.title('%s\n%s Wind'%(t0.strftime('%Y-%m-%d'), zon_mer))
+                ax.set_ylabel('Height\n[km]')  
+            else:
+                ax.set_yticks([])
+
+            ax.set_xlim((0, 24))
+            ax.set_facecolor('gray')
+            ax.set_xticks([])
+
+        ##### Colorbar
+        plt.subplot2grid((Norbs+1,nx), (0,nx-1), rowspan=Norbs, colspan=1)
+        cax = plt.gca()
+        cb = plt.colorbar(mappable=m, cax=cax, ax=None)
+        cb.set_label('m/s', labelpad=-8, rotation=-90)
+
+        ##### Latitude
+        plt.subplot2grid((Norbs+1,nx), (Norbs,0), rowspan=1, colspan=nx-1)
         ax = plt.gca()
-
-        for d in [dg, dr]:
-            jmin = d['jmin']
-            jmax = d['jmax']
-            istart = d['istart'][n]
-            istop = d['istop'][n]
-            slt = d['slt_new']
-            im = np.arange(istart, istop)
-            m = ax.pcolormesh(slt[im], d['alt'][jmin:jmax], d[val][jmin:jmax, im], cmap='RdBu_r', vmin=-vmax, vmax=vmax)
-
-
-        plt.subplots_adjust(hspace = .000)
-        ax.set_ylim((90,350))
-        ax.set_yscale('log')
-        y_formatter = FixedFormatter(["90", "150", "300"])
-        y_locator = FixedLocator([90, 150, 300])
-        ax.yaxis.set_major_formatter(y_formatter)
-        ax.yaxis.set_major_locator(y_locator)
-        ax.yaxis.set_minor_formatter(NullFormatter())
-        if n==0:
-            plt.title('%s\n%s Wind'%(t0.strftime('%Y-%m-%d'), zon_mer))
-            ax.set_ylabel('Height\n[km]')  
-        else:
-            ax.set_yticks([])
-            
+        plt.plot(d['slt_new'], d['lat'].T, 'k.', ms=1)
+        plt.ylim((-18,48))
+        plt.yticks([-15,0,15,30,45])
+        ax.set_ylabel('Latitude\n[deg]')
+        ax.set_xticks([0,6,12,18,24])
         ax.set_xlim((0, 24))
-        ax.set_facecolor('gray')
-        ax.set_xticks([])
-
-    ##### Colorbar
-    plt.subplot2grid((Norbs+1,nx), (0,nx-1), rowspan=Norbs, colspan=1)
-    cax = plt.gca()
-    cb = plt.colorbar(mappable=m, cax=cax, ax=None)
-    cb.set_label('m/s', labelpad=-8, rotation=-90)
-    
-    ##### Latitude
-    plt.subplot2grid((Norbs+1,nx), (Norbs,0), rowspan=1, colspan=nx-1)
-    ax = plt.gca()
-    plt.plot(d['slt_new'], d['lat'].T, 'k.', ms=1)
-    plt.ylim((-18,48))
-    plt.yticks([-15,0,15,30,45])
-    ax.set_ylabel('Latitude\n[deg]')
-    ax.set_xticks([0,6,12,18,24])
-    ax.set_xlim((0, 24))
-    ax.set_xlabel('Local Solar Time [hr]')
-    
+        ax.set_xlabel('Local Solar Time [hr]')    
+        
+        # Be extra careful for memory leaks
+        del d, dr, dg
+        
+    except Exception as e:
+        fig = plt.figure(figsize=(6,10), dpi = 120)
+        plt.text(0.5, 0.5, 'Summary plots failed, but the\nunderlying .NC files\nmight be okay.\nContact MIGHTI Team\nbefore approving', va='center',ha='center', fontsize=16)
+        plt.ylim((0,1))
+        plt.xlim((0,1))
+        
+        
     #### Save
     pngfn = None
     if pngpath is not None:
@@ -7800,8 +7836,7 @@ def plot_level22_summary(L22_fng, L22_fnr, pngpath, val, vmax = 150., close=Fals
         fig.clf()
         plt.close(fig)
         plt.close('all')
-    # Be extra careful for memory leaks
-    del d, dr, dg
+
     
     return pngfn
 
