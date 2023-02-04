@@ -205,8 +205,8 @@ class TifImageMetadata(ImageFile.ImageFile):
                      'CenterEl': CenterEl[0], 'ProjectionAltitude': ProjectionAltitude[0],
                      'ProjectionLon': ProjectionLon[0]}
 
-	print self.info
-	return self.info
+        print (self.info)
+        return self.info
 
 
 Image.register_open("TIF", TifImageFile)

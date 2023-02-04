@@ -13,13 +13,13 @@ except:
 import matplotlib as mpl
 from math import pi, floor, sqrt
 import numpy as np
-from lmfit import Minimizer, Parameters, Parameter, report_errors, minimize
+from lmfit import Minimizer, Parameters, Parameter, minimize
 import scipy
 from scipy import interpolate
 import glob as glob
 import time
 import matplotlib.pyplot as pyplot
-from matplotlib.mlab import prctile
+#from matplotlib.mlab import prctile
 import matplotlib.dates as dates
 from scipy import ndimage
 import mahotas
@@ -36,7 +36,7 @@ import fpiinfo
 # but it's the easiest way to deal with the chain-vs-direct drive issue in Peru.
 # Is there a better way?
 import ImgImagePlugin
-
+import h5py
 
 def sort_look_directions(valid_az, valid_ze, az, ze, tol):
     '''
@@ -234,11 +234,31 @@ def ReadIMG(fname):
     # HISTORY:
     #	16 May 2012 - written by Jonathan J. Makela (jmakela@illinois.edu) based on MATLAB code
 
-    # Load the image in
-    im = Image.open(fname)
+    if fname.split('.')[-1] == 'img':
+        # Load the image in
+        im = Image.open(fname)
 
-    # Convert the image from I;16L to I
-    im = im.convert('I')
+        # Convert the image from I;16L to I
+        im = im.convert('I')
+    elif fname.split('.')[-1] == 'hdf5':
+        # New HDF5 image formate
+        temp = h5py.File(fname,'r')
+
+        # Convert to im structure
+        im = temp['image']
+        im.info = {'ExposureTime': temp['image'].attrs['ExposureTime'],
+                   'zeAngle': temp['image'].attrs['zeAngle'],
+                   'azAngle': temp['image'].attrs['azAngle'],
+                   'XBinning': 2, ### JJM NEED TO CHANGE!
+                   'YBinning': 2,
+                   'CCDTemperature': temp['image'].attrs['CCDTemperature'],
+                   'Pressure': temp['image'].attrs['Pressure (Pa)'],
+                   'OutsideTemperature': temp['image'].attrs['OutsideTemperature (C)'],
+                   'LocalTime': datetime.datetime.strptime(temp['image'].attrs['LocalTime'],'%Y-%m-%d %H:%M:%S.%f'),}
+
+    else:
+        im = None
+
     return im
 
 def FindEqualAreas(img,cx,cy,N):

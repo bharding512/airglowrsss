@@ -212,14 +212,16 @@ def get_all_laser_images(direc):
 
     L20091103001.img
     UAO_L_20091103_210000_001.img
+    UAO_L_20221129_074314.hdf5
 
     Return empty list if none are found.
     '''
 
     fns_1 = glob.glob(direc + '/L[0-9]*.img')
     fns_2 = glob.glob(direc + '/*_L_*.img')
+    fns_3 = glob.glob(direc + '/*_L_*.hdf5')
 
-    return fns_1 + fns_2
+    return fns_1 + fns_2 + fns_3
 
 
 
@@ -230,6 +232,7 @@ def get_all_sky_images(direc,sky_line_tag='X'):
 
     X20091103001.img
     UAO_X_20091103_210000_001.img
+    UAO_XR_20221129_121336.hdf5
 
     Return empty list if none are found.
 
@@ -239,10 +242,13 @@ def get_all_sky_images(direc,sky_line_tag='X'):
     History:
         Created by J. J. Makela's RSSS group
         Added line tag to support other airglow lines. L. Navarro
+	Added hdf5 support
     '''
     fns_1 = glob.glob(direc + '/%s[0-9]*.img'%sky_line_tag)
     fns_2 = glob.glob(direc + '/*_%s_*.img'%sky_line_tag)
-    return fns_1 + fns_2
+    fns_3 = glob.glob(direc + '/*_%s_*.hdf5'%sky_line_tag)
+
+    return fns_1 + fns_2 + fns_3
 
 
 
@@ -393,8 +399,8 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         laser_fns.sort()
         sky_fns.sort()
     # Uncomment these for rapid testing of new code
-    #laser_fns = laser_fns[::6]
-    #sky_fns   = sky_fns[::10]
+    # laser_fns = laser_fns[::6]
+    # sky_fns   = sky_fns[::10]
     #sky_fns = [sky_fns[20],sky_fns[78],sky_fns[119]]
 
     if not laser_fns and not sky_fns and not use_npz:
@@ -408,6 +414,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         logfile = open(logname,'a') # overwrite previous log
         logfile.write('\n' + datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Rerunning processing to obtain new cloud and temperature data, and updating plots.\n')
     else: # create a new log file
+        print(logname)
         logfile = open(logname,'w') # overwrite previous log
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Logfile Created\n')
 
