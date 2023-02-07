@@ -43,7 +43,7 @@ def SkyAlertLog_format(file, tz):
 
     def parser(row):
         words=row.split()
-        print(words)
+#        print(words)
         dt=datetime.strptime(words[1]+"-"+words[2][:-3],"%Y-%m-%d-%H:%M:%S")
         dt = local.localize(dt)
         SkyTemp=float(words[5])
