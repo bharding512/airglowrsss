@@ -5,6 +5,63 @@ from datetime import datetime, timedelta
 import pytz,os
 from pytz import timezone
 
+def SkyAlertLog_formatE(file, tz):
+    """
+    Parser for SkyAlert Cloud Sensors log files. This is the 'Ethernet' format that matches the doccumentation at
+    
+
+    INPUT:
+        file : the name of the file to be parsed
+
+    OUTPUT:
+        dns : array of datetime object of the parsed file
+        sky_temp : array of sky temperatures
+        amb_temp : array of ambient temperatures
+
+    Notes:
+        Example:
+        "36)  2020-08-29 20:41:41.00 C K -9.1   21.2  21      0      59  12.6   000 0 0 00020 044072.86229 1 1 1 1 0 0   "
+
+        BoltWood Sensor provides with SkyT=Sky-Ambient Temperature (https://diffractionlimited.com/wp-content/uploads/2016/04/Cloud-SensorII-Users-Manual.pdf)
+        so we do the same here.
+
+        Still not sure if these conditions are also reached on this sensor, not mentioned on literature so probably not
+            sky_temp[sky_temp == -998] = 0 # replace wet values with 0 (cloudy)
+            sky_temp[sky_temp == -999] = float('nan') # replace bad values with nan
+    History:
+        2/09/23 : Written based on SkyAlertLog_format
+    """
+
+    # Get the local timezone
+    local = pytz.timezone(tz)
+
+    if not os.path.exists(file):
+        print (file, 'does not exist')
+        return [],[],[]
+
+    def parser(row):
+        words=row.split()
+#        print(words)
+#        if len(words) != 11:
+#            return np.nan, np.nan, np.nan
+        dt=datetime.strptime(words[0].replace('\x00','')+"-"+words[1],"%Y-%m-%d-%H:%M:%S")
+        dt = local.localize(dt)
+        SkyTemp=float(words[4])
+        AmbientTemp=float(words[3])
+##        C_or_F = words[3] # 'C' or 'F'
+##        assert C_or_F in ['C','F'], "Units not recognized: '%s' should be 'C' or 'F'" % C_or_F
+##        if C_or_F == 'F':
+##            SkyTemp = (SkyTemp - 32.) * 5./9.
+##            AmbientTemp = (AmbientTemp - 32.) * 5./9.
+        SkyTemp_BoltWood=SkyTemp-AmbientTemp
+        return [dt,SkyTemp_BoltWood,AmbientTemp]
+
+    print(file)
+    lines=open(file,'r').readlines()
+    data=np.array(list(map(parser,lines)))
+
+    return data[:,0],data[:,1],data[:,2]
+
 def SkyAlertLog_format(file, tz):
     """
     Parser for SkyAlert Cloud Sensors log files
@@ -315,6 +372,10 @@ def DetermineFormat(file):
         if ")" in line[:10]:
             _format="Sky Alert format"
             break
+        w = line.split()
+        if w[2][-2] == 'E':
+            _format='SA Ethernet format'
+            break
     fid.close()
 
     return _format
@@ -331,6 +392,7 @@ def ReadTempLog(file,tz):
         return ([],[],[])
 
     format=DetermineFormat(file)
+    print(format)
     if "old" in format.lower():
         #print "old format"
         dns, sky_temp, amb_temp = ReadTempLog_oldformat(file,tz)
@@ -339,6 +401,8 @@ def ReadTempLog(file,tz):
         dns, sky_temp, amb_temp = ReadTempLog_newformat(file,tz)
     elif "sky" in format.lower():
         dns, sky_temp, amb_temp = SkyAlertLog_format(file,tz)
+    elif "ethernet" in format.lower():
+        dns, sky_temp, amb_temp = SkyAlertLog_formatE(file,tz)
     return dns, sky_temp, amb_temp
 
 
