@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 
 import bu_process
 
-NUM_PROCESSORS = 8#16
+NUM_PROCESSORS = 16
 
 #repo_ASI = "/Users/jonathanmakela/Data/MANGO_Data/ALLSKY/"
 #daily_dir="/Users/jonathanmakela/Documents/GitHub/Analysis/"
@@ -655,6 +655,7 @@ use_full      = None
 def project_data(frameNo):
 
 #    print(".", end = '')
+#    print(frameNo)
 
     global IM3Dfilt
     global IM3Dfull
@@ -822,21 +823,22 @@ def remap_airglow_uniform(IM3Dfiltarg, lat, lon, emissionHeight, observation_poi
     data_frames  = []
     nans         = np.where(np.isnan(east))
 
-    for frame in frames:
-       print (frame)
-       data_mf         = IM3Dfilt[:,:,frame]
-       data_mf_nonans  = data_mf[nonans]
+## THESE LINES SERIALIZE AND CAN BE COMMENTED IF USING MULTICORE
+##    for frame in frames:
+##       print (frame)
+##       data_mf         = IM3Dfilt[:,:,frame]
+##       data_mf_nonans  = data_mf[nonans]
+##
+##       DATA_REGULAR_MF = interpolate.griddata((np.ravel(east_nonans), np.ravel(north_nonans)), np.ravel(data_mf_nonans),\
+##                          (np.ravel(EAST_REGULAR), np.ravel(NORTH_REGULAR)), method='linear')
+##       DATA_REGULAR_MF = np.reshape(DATA_REGULAR_MF, EAST_REGULAR.shape)
+##
+##       data_frames.append(DATA_REGULAR_MF)
 
-       DATA_REGULAR_MF = interpolate.griddata((np.ravel(east_nonans), np.ravel(north_nonans)), np.ravel(data_mf_nonans),\
-                          (np.ravel(EAST_REGULAR), np.ravel(NORTH_REGULAR)), method='linear')
-       DATA_REGULAR_MF = np.reshape(DATA_REGULAR_MF, EAST_REGULAR.shape)
-
-       data_frames.append(DATA_REGULAR_MF)
-
-##    pool = mp.Pool(processes = NUM_PROCESSORS)
-##    data_frames = pool.map(project_data, frames)
-##    pool.close()
-##    pool.join()
+    pool = mp.Pool(processes = NUM_PROCESSORS)
+    data_frames = pool.map(project_data, frames)
+    pool.close()
+    pool.join()
 
     if returnReg is True and IM3DFullarg is not None:
         print("\nRemapping unfiltered grid...")

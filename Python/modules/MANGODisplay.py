@@ -17,6 +17,7 @@ from os.path import exists
 import shutil
 import matplotlib.pyplot as plt
 from optparse import OptionParser
+import BoltwoodSensor
 
 outfolder = "/home/airglow/scratch_data/DASI_Data/"
 fpi_repo = "/rdata/airglow/fpi/results/"
@@ -137,6 +138,9 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
     lat = {}
     lon = {}
     times = {}
+    dns = {}
+    amb_temp = {}
+    sky_temp = {}
 
     for instr_name in sites_asi:
         # Code to set up and run the temporal filter
@@ -146,6 +150,19 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
             continue
         b = prepare_agimages.initialize_airglow_filter(ntaps,Tlo,Thi,times[instr_name])
         IM3Dfilt[instr_name] = prepare_agimages.filter_airglow(IM3D, b, ntaps)
+
+        # Load cloud sensor data, if it exists. Only works for ['cvo','low','blo']
+        if instr_name in ['cvo','low','blo']:
+            my_site = fpiinfo.get_site_info(instr_name,dt)
+
+            # Because of timezones and how the cloud senor data files are broken up, 
+            # read on day earlier and later just to be sure we capture the data needed
+            dns0, sky_temp0, amb_temp0 = BoltwoodSensor.ReadTempLog('/rdata/airglow/templogs/cloudsensor/%s/Cloud_%s_%s.txt' % (instr_name, instr_name, (dt-timedelta(days=1)).strftime('%Y%m%d')),my_site['Timezone'])
+            dns1, sky_temp1, amb_temp1 = BoltwoodSensor.ReadTempLog('/rdata/airglow/templogs/cloudsensor/%s/Cloud_%s_%s.txt' % (instr_name, instr_name, dt.strftime('%Y%m%d')),my_site['Timezone'])
+            dns2, sky_temp2, amb_temp2 = BoltwoodSensor.ReadTempLog('/rdata/airglow/templogs/cloudsensor/%s/Cloud_%s_%s.txt' % (instr_name, instr_name, (dt+timedelta(days=1)).strftime('%Y%m%d')),my_site['Timezone'])
+            dns[instr_name] = np.concatenate((dns0,dns1,dns2))
+            sky_temp[instr_name] = np.concatenate((sky_temp0, sky_temp1, sky_temp2))
+            amb_temp[instr_name] = np.concatenate((amb_temp0, amb_temp1, amb_temp2))
 
     # Process FPI Data
     FPI_ut = {}
@@ -227,7 +244,23 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
         for instr_name in times.keys():
             i = np.argwhere(np.array(times[instr_name]) == t)
             if len(i) == 1:
-                pc = axes00.pcolormesh(lon[instr_name],lat[instr_name],IM3Dfilt[instr_name][:,:,i[0][0]],transform=crs.PlateCarree(),vmin=cbar_min,vmax=cbar_max,cmap='gray')
+                # We have an image, see if we also have cloud data
+                my_alpha = 1
+                if instr_name in dns.keys():
+                    if len(dns[instr_name]) > 0:
+                        closest_cloud_dt = min(dns[instr_name],key = lambda x: abs(x - t.astimezone(pytz.utc)))
+                        cloud_i = np.where(dns[instr_name] == closest_cloud_dt)
+                        xx1 = -20.
+                        yy1 = 1.
+                        xx2 = -10.
+                        yy2 = 0.2
+
+                        my_a = (yy1-yy2)/(xx1-xx2)
+                        my_b = yy1 - xx1*(yy1-yy2)/(xx1-xx2)
+
+                        my_alpha = np.clip(my_a*sky_temp[instr_name][cloud_i]+my_b,yy2,yy1)[0]
+                        print(t,instr_name,my_alpha)
+                pc = axes00.pcolor(lon[instr_name],lat[instr_name],IM3Dfilt[instr_name][:,:,i[0][0]],transform=crs.PlateCarree(),vmin=cbar_min,vmax=cbar_max,cmap='gray',alpha=my_alpha)
 
         # Set the title and limits of the map
         axes00.set_title(t)
@@ -321,6 +354,7 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
         cax00.xaxis.tick_top()
 
         savename = folderpngs + 'MANGO_%s.png' % t.strftime('%Y%m%d_%H%M%S')
+        print(savename)
         plt.savefig(savename,dpi=150)
         print(t)
 
