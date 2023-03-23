@@ -18,6 +18,7 @@ import shutil
 import matplotlib.pyplot as plt
 from optparse import OptionParser
 import BoltwoodSensor
+import subprocess
 
 outfolder = "/home/airglow/scratch_data/DASI_Data/"
 fpi_repo = "/rdata/airglow/fpi/results/"
@@ -101,6 +102,20 @@ def Process_FPI(FPI_Results, desired_dir, reference='zenith'):
 def toTimestamp(d):
   return calendar.timegm(d.timetuple())
 
+def runcmd(cmd, verbose = False, *args, **kwargs):
+# From https://www.scrapingbee.com/blog/python-wget/
+    process = subprocess.Popen(
+        cmd,
+        stdout = subprocess.PIPE,
+        stderr = subprocess.PIPE,
+        text = True,
+        shell = True
+    )
+    std_out, std_err = process.communicate()
+    if verbose:
+        print(std_out.strip(), std_err)
+    pass
+
 def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cfs'], sites_fpi = ['cvo','low','blo'], ntaps = 13, Tlo   = 2, Thi   = 20, download_data = True, outfolder = "/home/airglow/scratch_data/DASI_Data/", fpi_repo = "/rdata/airglow/fpi/results/", repo_ASI = "/home/airglow/scratch_data/MANGO_Data"):
 
     try:
@@ -123,7 +138,8 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
                 elif sky_line_tag == 'X':
                     cmd = '/usr/bin/wget -r -nH --cut-dirs=8 --no-parent -P %s/%s/%s https://data.mangonetwork.org/data/transport/mango/archive/%s/redline/raw/%s/%s/' % (repo_ASI, site, dt.strftime('%Y'), site, dt.strftime('%Y'), dt.strftime('%j'))
                 print(cmd)
-                os.system(cmd)
+#                os.system(cmd)
+                runcmd(cmd)
     except:
         print('!!!! FAILURE DOWNLOADING DATA %s' % dt)
 
@@ -260,7 +276,7 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
 
                         my_alpha = np.clip(my_a*sky_temp[instr_name][cloud_i]+my_b,yy2,yy1)[0]
                         print(t,instr_name,my_alpha)
-                pc = axes00.pcolor(lon[instr_name],lat[instr_name],IM3Dfilt[instr_name][:,:,i[0][0]],transform=crs.PlateCarree(),vmin=cbar_min,vmax=cbar_max,cmap='gray',alpha=my_alpha)
+                pc = axes00.pcolormesh(lon[instr_name],lat[instr_name],IM3Dfilt[instr_name][:,:,i[0][0]],transform=crs.PlateCarree(),vmin=cbar_min,vmax=cbar_max,cmap='gray',alpha=my_alpha)
 
         # Set the title and limits of the map
         axes00.set_title(t)
