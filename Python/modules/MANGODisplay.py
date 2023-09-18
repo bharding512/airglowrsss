@@ -19,6 +19,8 @@ import matplotlib.pyplot as plt
 from optparse import OptionParser
 import BoltwoodSensor
 import subprocess
+import asiinfo
+import ephem
 
 outfolder = "/home/airglow/scratch_data/DASI_Data/"
 fpi_repo = "/rdata/airglow/fpi/results/"
@@ -116,7 +118,7 @@ def runcmd(cmd, verbose = False, *args, **kwargs):
         print(std_out.strip(), std_err)
     pass
 
-def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cfs'], sites_fpi = ['cvo','low','blo'], ntaps = 13, Tlo   = 2, Thi   = 20, download_data = True, outfolder = "/home/airglow/scratch_data/DASI_Data/", fpi_repo = "/rdata/airglow/fpi/results/", repo_ASI = "/home/airglow/scratch_data/MANGO_Data"):
+def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cfs','mro','bdr'], sites_fpi = ['cvo','low','blo'], ntaps = 13, Tlo   = 2, Thi   = 20, download_data = True, outfolder = "/home/airglow/scratch_data/DASI_Data/", fpi_repo = "/rdata/airglow/fpi/results/", repo_ASI = "/home/airglow/scratch_data/MANGO_Data"):
 
     try:
         # Date to run
@@ -132,10 +134,10 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
 
         # Download ASI data
         if download_data:
-            for site in ['cvo', 'cfs', 'low', 'blo']:
+            for site in sites_asi:
                 if sky_line_tag == 'XG':
                     cmd = '/usr/bin/wget -r -nH --cut-dirs=8 --no-parent -P %s/%s/%s https://data.mangonetwork.org/data/transport/mango/archive/%s/greenline/raw/%s/%s/' % (repo_ASI, site, dt.strftime('%Y'), site, dt.strftime('%Y'), dt.strftime('%j'))
-                elif sky_line_tag == 'X':
+                elif sky_line_tag == 'XR':
                     cmd = '/usr/bin/wget -r -nH --cut-dirs=8 --no-parent -P %s/%s/%s https://data.mangonetwork.org/data/transport/mango/archive/%s/redline/raw/%s/%s/' % (repo_ASI, site, dt.strftime('%Y'), site, dt.strftime('%Y'), dt.strftime('%j'))
                 print(cmd)
 #                os.system(cmd)
@@ -147,6 +149,10 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
     if sky_line_tag == 'XG':
         height = 95
         emission = '5577'
+        el_cutoff = 20.
+    elif sky_line_tag == 'XR':
+        height = 250
+        emission = '6300'
         el_cutoff = 20.
 
     # Define dictionaries
@@ -160,8 +166,11 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
 
     for instr_name in sites_asi:
         # Code to set up and run the temporal filter
-        IM3D, lat[instr_name], lon[instr_name], times[instr_name], emissionHeight, observation_point, success = prepare_agimages.prepare_airglow_dasi(instr_name, year, doy, emission, el_cutoff)
-        if success == False:
+        IM3D, lat[instr_name], lon[instr_name], times[instr_name], emissionHeight, observation_point, success = prepare_agimages.prepare_airglow_dasi(instr_name, year, doy, emission, el_cutoff, coord_nan=False)
+  #      print(success)
+  #      print(len(times[instr_name]))
+  #      print(np.size(IM3D))
+        if success == False or len(times[instr_name]) == 0:
             times.pop(instr_name)
             continue
         b = prepare_agimages.initialize_airglow_filter(ntaps,Tlo,Thi,times[instr_name])
@@ -193,6 +202,9 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
 
     for fpi in sites_fpi:
         fname = fpi_repo + fpiinfo.get_instr_at(fpi,fpi_dt)[0] + '_' + fpi + '_' + fpi_dt.strftime('%Y%m%d') + '_' + sky_line_tag.lower() + '.npz'
+        if (exists(fname) == False) and (sky_line_tag == 'XR'):
+            # Some of the older npz files for redline don't have a tag
+            fname = fpi_repo + fpiinfo.get_instr_at(fpi,fpi_dt)[0] + '_' + fpi + '_' + fpi_dt.strftime('%Y%m%d') + '.npz'
 
         if exists(fname):
             FPI_ut[fpi], FPI_wind[fpi], FPI_error[fpi], FPI_cloud[fpi], FPI_wq[fpi] = read_FPI(fname)
@@ -221,33 +233,78 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
 
     all_fpi_times.sort()
 
+    if sky_line_tag == 'XR':
+        # Normalize images
+        for s in IM3Dfilt.keys():
+#            n98 = np.nanpercentile(IM3Dfilt[s],98)
+#            n2 = np.nanpercentile(IM3Dfilt[s],2)
+#            temp = (IM3Dfilt[s]-n2)/n98
+#            IM3Dfilt[s] = temp    
+            for i, t in enumerate(times[s]):
+#                print(np.shape(IM3Dfilt[s]))
+#                print(i,t)
+                im = IM3Dfilt[s][:,:,i]
+                n98 = np.nanpercentile(im,98)
+                n2 = np.nanpercentile(im,2)
+                IM3Dfilt[s][:,:,i] = (im-n2)/n98
+
     # Values for the colorbar
     p98 = []
     p2 = []
 
     for s in IM3Dfilt.keys():
-        print(s)
-        p98.append(np.nanpercentile(IM3Dfilt[s],98))
-        p2.append(np.nanpercentile(IM3Dfilt[s],2))
+        # Find the index of images with moon down and use those to find autocontrast settings
+        s_info = asiinfo.get_site_info(s)
+        moon = ephem.Moon
+        obs = ephem.Observer()
+        obs.lat = str(s_info['Location'][0])
+        obs.lon = str(s_info['Location'][1])
+        
+        moon_down = []
+        for t in times[s]:
+            obs.date = t
+            moon = ephem.Moon(obs)
+            moon_down.append(moon.alt.real < (el_cutoff)*np.pi/180.)
 
-    cbar_min = np.min(p2)
-    cbar_max = np.max(p98)
+        # if all times are moon up (False) use all data
+        if np.sum(moon_down) == 0:
+            moon_down = np.full(np.size(moon_down), True)
+
+        print(s)
+        p98.append(np.nanpercentile(IM3Dfilt[s][:,:,moon_down],98))
+        p2.append(np.nanpercentile(IM3Dfilt[s][:,:,moon_down],2))
+
+    cbar_min = np.max([np.median(p2),0]) # Was Min # Force a 0 floor
+    cbar_max = np.median(p98) # Was Max
 
     # Plotting
     fig = plt.figure(figsize=(8,4))
     fig.patch.set_facecolor('white')
-    spec=gridspec.GridSpec(ncols=2,nrows=2,figure=fig,
-                            left=0.04,right=0.94,bottom=0.1,top=0.90,
-                            wspace=0.05,hspace=0.25,
-                            width_ratios=[1.5,2,])
+    if sky_line_tag == 'XG':
+        spec=gridspec.GridSpec(ncols=2,nrows=2,figure=fig,
+                                left=0.04,right=0.94,bottom=0.1,top=0.90,
+                                wspace=0.05,hspace=0.25,
+                                width_ratios=[2.,2,])
+    elif sky_line_tag == 'XR':
+        spec=gridspec.GridSpec(ncols=2,nrows=2,figure=fig,
+                                left=0.04,right=0.94,bottom=0.1,top=0.90,
+                                wspace=0.05,hspace=0.25,
+                                width_ratios=[1.5,2,])
 
     # The lon, lat range to plot in the map
-    extent=[-125,-107,30,48]
+    if sky_line_tag == 'XG':
+        if 'bdr' in sites_asi:
+            extent=[-122,-95,25,48]
+        else:
+            extent=[-124,-102,30,48]
+    elif sky_line_tag == 'XR':
+        extent=[-125, -80, 25, 55]
 
     my_colors = {}
     my_colors['cvo'] = '#1f77b4'
     my_colors['blo'] = '#ff7f0e'
     my_colors['low'] = '#9467bd'
+    my_colors['uao'] = '#8c564b'
 
     for t in np.unique(all_times):
         fig.clf()
@@ -276,7 +333,8 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
 
                         my_alpha = np.clip(my_a*sky_temp[instr_name][cloud_i]+my_b,yy2,yy1)[0]
                         print(t,instr_name,my_alpha)
-                pc = axes00.pcolormesh(lon[instr_name],lat[instr_name],IM3Dfilt[instr_name][:,:,i[0][0]],transform=crs.PlateCarree(),vmin=cbar_min,vmax=cbar_max,cmap='gray',alpha=my_alpha)
+#                pc = axes00.pcolormesh(lon[instr_name],lat[instr_name],IM3Dfilt[instr_name][:,:,i[0][0]],transform=crs.PlateCarree(),vmin=cbar_min,vmax=cbar_max,cmap='gray',alpha=my_alpha)
+                pc = axes00.pcolormesh(lon[instr_name],lat[instr_name],IM3Dfilt[instr_name][:,:,i[0][0]],transform=crs.PlateCarree(),vmin=cbar_min,vmax=cbar_max,cmap='gray')
 
         # Set the title and limits of the map
         axes00.set_title(t)
@@ -287,13 +345,23 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
         axes02 = fig.add_subplot(spec[1,1])
 
         for fpi in FPI_ut.keys():
-            axes01.plot(FPI_ut[fpi]['North'],FPI_wind[fpi]['North'], alpha=0.3,color=my_colors[fpi], label='_nolegend_')
-            axes01.scatter(FPI_ut[fpi]['North'],FPI_wind[fpi]['North'], alpha=FPI_walpha[fpi]['North'],ec=None, color=my_colors[fpi],label=fpi)
-            axes02.plot(FPI_ut[fpi]['West'],FPI_wind[fpi]['West'], alpha=0.3,color=my_colors[fpi], label='_nolegend_')
-            axes02.scatter(FPI_ut[fpi]['West'],FPI_wind[fpi]['West'], alpha=FPI_walpha[fpi]['West'],ec=None, color=my_colors[fpi],label=fpi)
+#            axes01.plot(FPI_ut[fpi]['North'],FPI_wind[fpi]['North'], alpha=0.3,color=my_colors[fpi], label='_nolegend_')
+#            axes01.scatter(FPI_ut[fpi]['North'],FPI_wind[fpi]['North'], alpha=FPI_walpha[fpi]['North'],ec=None, color=my_colors[fpi],label=fpi)
+#            axes02.plot(FPI_ut[fpi]['West'],FPI_wind[fpi]['West'], alpha=0.3,color=my_colors[fpi], label='_nolegend_')
+#            axes02.scatter(FPI_ut[fpi]['West'],FPI_wind[fpi]['West'], alpha=FPI_walpha[fpi]['West'],ec=None, color=my_colors[fpi],label=fpi)
+            axes01.plot(FPI_ut[fpi]['North'],FPI_wind[fpi]['North'],color=my_colors[fpi], label='_nolegend_')
+            axes01.scatter(FPI_ut[fpi]['North'],FPI_wind[fpi]['North'],ec=None, color=my_colors[fpi],label=fpi)
+            axes02.plot(FPI_ut[fpi]['West'],FPI_wind[fpi]['West'],color=my_colors[fpi], label='_nolegend_')
+            axes02.scatter(FPI_ut[fpi]['West'],FPI_wind[fpi]['West'],ec=None, color=my_colors[fpi],label=fpi)
 
+        if sky_line_tag == 'XR':
+            ymin = -300
+            ymax = 300
+        elif sky_line_tag == 'XG':
+            ymin = -200
+            ymax = 200
 
-        axes01.set_ylim([-200,200])
+        axes01.set_ylim([ymin,ymax])
         axes01.axhline(y=0, color='k',linewidth=1)
         axes01.axvline(x=t, color='r',linewidth=1)
         axes01.xaxis.set_major_locator(dates.HourLocator(interval = 2))
@@ -301,14 +369,16 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
         axes01.xaxis.set_major_formatter(dates.DateFormatter('%H'))
         if sky_line_tag == 'XG':
             axes01.set_title('Green Line Winds')
+        elif sky_line_tag == 'XR':
+            axes01.set_title('Red Line Winds')
         axes01.tick_params(axis='both',which='major',size=6,direction='in',right=True,top=True,labelright=True,labelleft=False)
         axes01.tick_params(axis='both',which='minor',size=3,direction='in',right=True,top=True,labelright=True,labelleft=False)
         axes01.set_ylabel('Northward Winds [m/s]')
-        axes01.legend(loc='upper right',ncol=2)
+        axes01.legend(loc='upper right',ncol=2, fontsize=8)
         if len(all_fpi_times) > 0:
             axes01.set_xlim([np.unique(all_fpi_times)[0],np.unique(all_fpi_times)[-1]])
 
-        axes02.set_ylim([-200,200])    
+        axes02.set_ylim([ymin,ymax])    
         axes02.axhline(y=0, color='k',linewidth=1)
         axes02.axvline(x=t, color='r',linewidth=1)
         axes02.xaxis.set_major_locator(dates.HourLocator(interval = 2))
@@ -325,7 +395,11 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
 
         # Plot quiver
         # Scaling factor
-        scale=25.
+        if sky_line_tag == 'XG':
+            scale=25.
+        elif sky_line_tag == 'XR':
+            scale=100.
+
         xoff,yoff=8e4, -1.3e5
         width=0.015
         headwidth = 4
@@ -346,7 +420,8 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
                 # Get interpolated u, v
                 u = np.interp(toTimestamp(t),FPI_tt[fpi]['West'],FPI_wind[fpi]['West'])*sc
                 v = np.interp(toTimestamp(t),FPI_tt[fpi]['North'],FPI_wind[fpi]['North'])*sc
-                a = np.interp(toTimestamp(t),FPI_tt[fpi]['North'],FPI_walpha[fpi]['North'])
+#                a = np.interp(toTimestamp(t),FPI_tt[fpi]['North'],FPI_walpha[fpi]['North'])
+                a = 1
 
                 glat,glon, x = fpiinfo.get_site_info(fpi)['Location']
 
@@ -357,7 +432,7 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
 
         x0,x1,y0,y1=axes00.get_extent()
         if obj is not None:
-            quiverobj1=axes00.quiverkey(obj, x0+xoff, y0+yoff, sc*scale, r'$%i\,\frac{m}{s}$'%scale,labelsep=0,color="black", coordinates='data',labelpos='N', transform=crs.PlateCarree(),)
+            quiverobj1=axes00.quiverkey(obj, x0+xoff, y0+yoff, sc*scale, r'$%i\,\frac{m}{s}$'%scale,labelsep=0,color="black", coordinates='data',labelpos='N', transform=crs.PlateCarree(),fontproperties={'size': 8})
 
         # Plot the colorbar
         cax00 = inset_axes(
@@ -368,14 +443,18 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
         )
         fig.colorbar(pc, cax=cax00, orientation="horizontal", ticks=[cbar_min,(cbar_min+cbar_max)/2., cbar_max])
         cax00.xaxis.tick_top()
+        cax00.xaxis.tick_top()
+        cax00.set_xticklabels(cax00.get_xticklabels(),fontsize=8)
+
+        spec.tight_layout(fig)
 
         savename = folderpngs + 'MANGO_%s.png' % t.strftime('%Y%m%d_%H%M%S')
         print(savename)
-        plt.savefig(savename,dpi=150)
+        plt.savefig(savename,dpi=300)
         print(t)
 
     # Generating video from PNG frames
-    linetag="red" if sky_line_tag=='X' else "green"
+    linetag="red" if sky_line_tag=='XR' else "green"
     mp4file='%s/DASI_%s_%s.mp4'%(outfolder, dt.strftime('%Y%m%d'),linetag)
     cmd = '/usr/bin/ffmpeg -framerate 15 -pattern_type glob -i \"%s*.png\" -c:v mpeg4 -q:v 1 -y %s'%(folderpngs, mp4file)
     os.system(cmd)
@@ -389,11 +468,13 @@ if __name__=="__main__":
     parser.add_option("-y", "--year", dest="year", help="Year to be run", metavar="YEAR", type="int", default=0)
     parser.add_option("-d", "--doy", dest="doy", help="Day of year to be run", metavar="DOY", type="int", default=0)
     parser.add_option("-t", "--tag", dest="sky_line_tag", help="XG for greenline, X or XR for redline", metavar="TAG", type="str", default="XG")
+    parser.add_option("-l", "--download", dest="download", help="Download data, False to not download", metavar="DOWNLOAD", type="str", default="True")
 
     (options, args) = parser.parse_args()
     year = options.year
     doy = options.doy
     sky_line_tag = options.sky_line_tag
+    download = options.download
 
     # Defaults if no date is given
     if (doy == 0) or (year == 0):
@@ -401,6 +482,17 @@ if __name__=="__main__":
         # DOY offset 2 days in the past to allow for data transfer latency
         doy = int(dt.strftime("%j")) - 2
         year = int(dt.strftime("%Y"))
+        download_data = True
+
+    if download == "False":
+        download_data = False
+    else:
+        download_data = True
 
     # Run the code
-    MakeSummaryMovies(year, doy, sky_line_tag, download_data = True)
+    try:
+        MakeSummaryMovies(year, doy, sky_line_tag, download_data = download_data)
+    except:
+        print("Error %d %d %s" % (doy, year, sky_line_tag))
+#    MakeSummaryMovies(year, doy, sky_line_tag, download_data = False, sites_asi = ['mro'])
+#    MakeSummaryMovies(year, doy, sky_line_tag, download_data = False)

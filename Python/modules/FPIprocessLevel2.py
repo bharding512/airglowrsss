@@ -29,7 +29,7 @@ def synctiming():
 def dn2utc(dn):
     import pytz
     return dn.astimezone(pytz.timezone('UTC'))
-            
+
 def dn2lt(dn):
     import pytz
     return dn.astimezone(pytz.timezone('UTC')) + dn.utcoffset()
@@ -38,7 +38,7 @@ def azel2lla(el,az,alt,lla0,horizon=10.):
     '''
     Summary:
         Script to calcuate assumed lla point of airglow origin.
-    
+
     Inputs:
         el - elevation angle in degrees
         az - azimuth angle in degrees
@@ -49,22 +49,22 @@ def azel2lla(el,az,alt,lla0,horizon=10.):
     Outputs:
         lat - latitude
         lon - longitude
-        
+
     History:
         3/30/14 - Written by Daniel J. Fisher (dfisher2@illionis.edu)
     '''
     # Constants
     Ea = 6378137.     # semi-major axis of the earth [m]
-    Eb = 6356752.3145    # semi-minor axis of the earth [m]  
-      
+    Eb = 6356752.3145    # semi-minor axis of the earth [m]
+
     # Set variables
     zm = alt*1E3   # transform into m
     Re = Ea**2/np.sqrt(Ea**2*cosd(lla0[0])**2+Eb**2*sind(lla0[0])**2)
-    
+
     # Calculate differencial angles
     B = np.arcsin((Re+lla0[2])*sind(el+90.)/(Re+zm))*180./np.pi
     A = 180.-(90+el+B)
-    
+
     # Transfrom to lat,lon
     lat = np.arcsin(sind(lla0[0])*cosd(A) + cosd(lla0[0])*sind(A)*cosd(az))*180./np.pi
     lon = lla0[1] + np.arctan2(sind(az)*sind(A)*cosd(lla0[0]),cosd(A)-sind(lla0[0])*sind(lat))*180./np.pi
@@ -89,14 +89,14 @@ def GetLocation(SITE,DIRECTION,ALT=250.):
     '''
     Summary:
         Script to calcuate assumed lla point of airglow origin (250km).
-    
+
     Inputs:
         SITE - site of origin e.g.='uao'
         DIRECTION - direction keyword e.g.='CV_EKU_UAO_1'
 
     Outputs:
         latlonalt - (latitude, longitude, altitude)
-        
+
     History:
         5/20/14 - Written by Daniel J. Fisher (dfisher2@illionis.edu)
     '''
@@ -108,11 +108,12 @@ def GetLocation(SITE,DIRECTION,ALT=250.):
         el = 90-fpiinfo.get_site_info(SITE)['Directions'][DIRECTION[4:]]['ze']
     lla = fpiinfo.get_site_info(SITE)['Location']
     latlonalt = azel2lla(el,az,ALT,lla)
-    
+
     return latlonalt
 
 def GetLevel1(instr_name, dn):
-    stub = '/rdata/airglow/fpi/results'
+#    stub = '/rdata/airglow/fpi/results'
+    stub = './'
     site_name = fpiinfo.get_site_of(instr_name, dn)
     f = '%s/%s_%s_%4i%02d%02d.npz' \
             % (stub, instr_name, site_name.lower(), dn.year, dn.month, dn.day)
@@ -123,7 +124,7 @@ class Level1:
         import FPI
         import numpy as np
         import ephem
-        
+
         self.f = f
         self.site = site
         self.dn = dn
@@ -143,7 +144,7 @@ class Level1:
 
         # make sure we have data to work with:
         try:
-            npzfile = np.load(self.f,allow_pickle=True)
+            npzfile = np.load(self.f, allow_pickle=True, encoding='latin1')
             self.r = npzfile['FPI_Results'].ravel()[0]
             del npzfile.f
             npzfile.close() # Brian's fix.
@@ -159,7 +160,7 @@ class Level1:
                     + "  => can't load %s\n" %f.split('/')[-1]
             return
 
-        
+
         # initialize variables:
         self.los_wind = {}
         self.los_sigma = {}
@@ -263,34 +264,34 @@ class Level1:
             self.be       [direction] = np.array(self.be       [direction])
             self.flag_wind[direction] = np.array(self.flag_wind[direction])
             self.flag_T   [direction] = np.array(self.flag_T   [direction])
-            
+
 
         # call some functions:
         self._interpolate_w()
         self._cleanup()
-        
-        # clean L0 to fix memory issue? 
+
+        # clean L0 to fix memory issue?
         #del self.r # http://stackoverflow.com/questions/9244397/memory-overflow-when-using-numpy-load-in-a-loop
         #self.r.close()
 
         self.log += "%-24s" % "" \
                 + "  => after cleaning, has %03d data\n" % len(self.allt)
 
-            
+
     def _cleanup(self):
         # remove bad indices corresponding to sigma > 50 or los > 1000.
         for direction in self.directions:
             bad_ind = np.where(\
-                    self.los_sigma[direction] > errorbarlimit           
+                    self.los_sigma[direction] > errorbarlimit()
                     #(self.los_fit[direction] > errorbarlimit) \
                     #| (self.los_cal[direction] > errorbarlimit) \
                     #| (np.abs(self.los_wind[direction]) > 1e3) \
-                    )  
+                    )
 
             # log bad indices:
             if len(bad_ind[0]) > 0:
                 self.log += "%-24s" % "[Level 1, cleanup]" + "deleted %03d 'bad' indices (los_fit > 50.) for %s\n" \
-                % (len(bad_ind[0]), direction) 
+                % (len(bad_ind[0]), direction)
 
             self.los_sigma[direction] = np.delete( self.los_sigma[direction], bad_ind)
             self.los_wind [direction] = np.delete( self.los_wind [direction], bad_ind)
@@ -317,14 +318,14 @@ class Level1:
         from numpy import array as arr
 
         dointerp = True
-        all_times = [time.mktime(dn.timetuple()) for dn in  self.allt] 
-        
+        all_times = [time.mktime(dn.timetuple()) for dn in  self.allt]
+
         # good indices for interpolating are not cloudy and have small los_fita
         # and reasonable los velocity
-        if self.los_wind.has_key('Zenith'): 
+        if 'Zenith' in self.los_wind:
             good_ind = np.where(\
-                    (arr(self.flag_wind['Zenith']) <= cloudthreshold) \
-                    * (self.los_sigma['Zenith'] <= errorbarlimit)\
+                    (arr(self.flag_wind['Zenith']) <= cloudthreshold()) \
+                    * (self.los_sigma['Zenith'] <= errorbarlimit())\
                     * (np.abs(self.los_wind['Zenith']) < 1e3)\
                     )
         else:
@@ -358,7 +359,7 @@ class Level1:
                     sfit = interpolate.UnivariateSpline(times, self.w[good_ind], w=1/self.we[good_ind]) #, s=s
                     iw = sfit(all_times)
                 except: # Try linear.
-                    print 'BAD NEWS BEARS'
+                    print('BAD NEWS BEARS')
                     tck = interpolate.splrep(arr(times),self.w[good_ind])
                     iw = interpolate.splev(all_times, tck)
 
@@ -366,14 +367,14 @@ class Level1:
                 f = interpolate.interp1d( times, self.we[good_ind], \
                     bounds_error=False, fill_value=0.0)
                 iwe = f(all_times)
-                    
+
                 # Fix all Cloudy times with 0m/s vertical wind since we cannot trust cloudy velocities
                 # Find bad times (cloudy points only)
-                cld_ind = np.where((np.array(self.allc) >= cloudthreshold) | (np.abs(iwe) > errorbarlimit))
+                cld_ind = np.where((np.array(self.allc) >= cloudthreshold()) | (np.abs(iwe) > errorbarlimit()))
                     # * (self.los_fit['Zenith'] < 50.)* (np.abs(self.los_wind['Zenith']) < 1e3))
                 iw[cld_ind] = 0.0
                 #iwe[cld_ind] = 0.0
-                
+
             # apply to object:
             self.alliw  = iw
             self.alliwe = iwe
@@ -403,11 +404,11 @@ class Level1:
         '''
         import copy
         import sys
-        
+
         # make sure we're adding Level 1 objects that have the same site
         # doesn't make sense to do this otherwise:
         if self.site != other.site:
-            print "error: cannot combine %s with %s" % (out.site, other.site)
+            print("error: cannot combine %s with %s" % (out.site, other.site))
             sys.exit(-1)
 
         # if one or the other object has an error,
@@ -424,7 +425,7 @@ class Level1:
 
         '''
         Here are the items we need to sew together:
-         1. 
+         1.
          2. ind
          3. iw
          4. iwe
@@ -439,37 +440,37 @@ class Level1:
 
         # TODO: is there a cleaner/better way to do this?
         for direction in out.directions:
-            if other.ind.has_key(direction):
+            if direction in other.ind:
                 out.ind      [direction] = np.append( out.ind[direction], other.ind[direction] )
-            if other.iw.has_key(direction):
+            if direction in other.iw:
                 out.iw       [direction] = np.append( out.iw[direction], other.iw[direction] )
-            if other.iwe.has_key(direction):
+            if direction in other.iwe:
                 out.iwe      [direction] = np.append( out.iwe[direction], other.iwe[direction] )
-            if other.los_wind.has_key(direction):
+            if direction in other.los_wind:
                 out.los_wind [direction] = np.append( out.los_wind[direction], other.los_wind[direction] )
-            if other.los_sigma.has_key(direction):
+            if direction in other.los_sigma:
                 out.los_sigma[direction] = np.append( out.los_sigma[direction], other.los_sigma[direction] )
-            if other.t.has_key(direction):
+            if direction in other.t:
                 out.t        [direction] = np.append( out.t[direction], other.t[direction] )
-            if other.T.has_key(direction):
+            if direction in other.T:
                 out.T        [direction] = np.append( out.T[direction], other.T[direction] )
-            if other.Te.has_key(direction):
+            if direction in other.Te:
                 out.Te       [direction] = np.append( out.Te[direction], other.Te[direction] )
-            if other.i.has_key(direction):
+            if direction in other.i:
                 out.i        [direction] = np.append( out.i[direction], other.i[direction] )
-            if other.ie.has_key(direction):
+            if direction in other.ie:
                 out.ie       [direction] = np.append( out.ie[direction], other.ie[direction] )
-            if other.b.has_key(direction):
+            if direction in other.b:
                 out.b        [direction] = np.append( out.b[direction], other.b[direction] )
-            if other.Te.has_key(direction):
+            if direction in other.Te:
                 out.be       [direction] = np.append( out.be[direction], other.be[direction] )
-            if other.zenith.has_key(direction):
+            if direction in other.zenith:
                 out.zenith   [direction] = np.append( out.zenith[direction], other.zenith[direction] )
-            if other.azimuth.has_key(direction):
+            if direction in other.azimuth:
                 out.azimuth  [direction] = np.append( out.azimuth[direction], other.azimuth[direction] )
-            if other.flag_wind.has_key(direction):
+            if direction in other.flag_wind:
                 out.flag_wind[direction] = np.append( out.flag_wind[direction], other.flag_wind[direction] )
-            if other.flag_T.has_key(direction):
+            if direction in other.flag_T:
                 out.flag_T   [direction] = np.append( out.flag_T[direction], other.flag_T[direction] )
 
         # if by chance there is a direction in 'other' but not 'self':
@@ -494,7 +495,7 @@ class Level1:
 
                 out.directions.append(direction)
 
-        # these variables don't have a dictionary of directions, 
+        # these variables don't have a dictionary of directions,
         # so it's simple to sew together:
         out.alliw   = np.append( out.alliw,  other.alliw  )
         out.alliwe  = np.append( out.alliwe, other.alliwe )
@@ -505,7 +506,7 @@ class Level1:
         out.f += "\n" + other.f
         out.error = out.error and other.error
 
-        # for safety, 
+        # for safety,
         # it doesn't make much sense to add the original
         # data product
         out.r = None
@@ -520,13 +521,13 @@ class Level1:
         # Temporary note 22 Jul 2013:
         # Brian removed wind plot, in light of FPIDisplay.PlotDay().
         # What is the ultimate plan for plotting single-station data?
-        
+
 
         if ax is None:
             fig = figure(1); clf()
             ax = fig.add_subplot(111)
-        
-        fontP = mpl.font_manager.FontProperties() 
+
+        fontP = mpl.font_manager.FontProperties()
         fontP.set_size(6)
 
         w = -self.los_wind['Zenith'] # los is towards observer
@@ -556,19 +557,19 @@ class Level1:
         #print self.log
         if ax is None: draw(); show()
 
-        
 
-# Note iw,iwe,iwef,iwec are never used in L2       
+
+# Note iw,iwe,iwef,iwec are never used in L2
 class Level2:
     def __init__(self, dn):
         import numpy as np
         import ephem
-        
+
         self.dn = dn
         self.key = ""
         self.lla = np.array([])
         self.f = ""
-        self.u  = np.array([]) 
+        self.u  = np.array([])
         self.ue = np.array([])
         self.v  = np.array([])
         self.ve = np.array([])
@@ -576,7 +577,7 @@ class Level2:
         self.we = np.array([])
         self.wi = np.array([])
         self.wie= np.array([])
-        
+
         self.i  = np.array([])
         self.ie = np.array([])
         self.b  = np.array([])
@@ -643,7 +644,7 @@ class Level2:
             inds = np.where( (t1 > dn1) * (t1 < dn2) )
 
         self.length = len(inds)
-        
+
         # cut them:
         '''
         if len(self.it) > 0:
@@ -688,7 +689,7 @@ class Level2:
 
         if len(self.wi) > 0:
             self.wi = self.wi[inds]
-            
+
         if len(self.wie) > 0:
             self.wie = self.wie[inds]
 
@@ -697,7 +698,7 @@ class Level2:
 
         if len(self.ie) > 0:
             self.ie = self.ie[inds]
-            
+
         if len(self.b) > 0:
             self.b = self.b[inds]
 
@@ -743,13 +744,13 @@ class Level2:
             return None
 
         if switch_onefig:
-            fig = plt.figure(1); 
+            fig = plt.figure(1);
         else:
             fig = plt.figure();
         plt.clf()
 
         ax = fig.add_axes((.1,.2,.8,.7)) # left, bottom, width, height
-        
+
         if switch_plot_u:
             plt.errorbar(self.t1, self.u, yerr=self.ue, \
                     color='b', marker='o', label='u')
@@ -765,7 +766,7 @@ class Level2:
                 color='k', label='iw')
 
         dnp1 = self.dn + timedelta(days=1)
-        plt.ylim([-200.,200.]) 
+        plt.ylim([-200.,200.])
         ax.xaxis.set_major_formatter(md.DateFormatter('%H:%M'))
         fig.autofmt_xdate()
         plt.legend()
@@ -775,7 +776,7 @@ class Level2:
         fig.text(.1,.92,"%12s, %10s" % (self.key, datestr))
         plt.xlim( [datetime(self.dn.year, self.dn.month, self.dn.day, 20), datetime(dnp1.year, dnp1.month, dnp1.day, 12)] )
 
-        plt.plot([datetime(self.dn.year, self.dn.month, self.dn.day, 20), datetime(dnp1.year, dnp1.month, dnp1.day, 12)],[0,0],'k--') 
+        plt.plot([datetime(self.dn.year, self.dn.month, self.dn.day, 20), datetime(dnp1.year, dnp1.month, dnp1.day, 12)],[0,0],'k--')
 
 
         fig.text(.7,.030, self.log)
@@ -798,14 +799,14 @@ def convert2dict(obj):
 
     History:
         6/9/16 -- Written by DJF (dfisher2@illionis.edu)
-    '''        
+    '''
     if not obj:
         return([])
     # Setup dictionary
     d = _defaultdict(dict)
     # Convert L1 to Dictionary
     if isinstance(obj,Level1):
-        for l1key in self.t.keys():
+        for l1key in list(self.t.keys()):
             d[l1key]['t']           = obj.t        [l1key]
             d[l1key]['los_wind']    = obj.los_wind [l1key]
             d[l1key]['los_sigma']   = obj.los_sigma[l1key]
@@ -891,7 +892,7 @@ def CardFinder(dn, instr1, w_is_0=False):
 
     # log the parent Level 1 object:
     d.parent = [l1]
-    
+
     # check to see if we have some vertical wind measurements
     # as we need them to back out u and v for Card measurements
     if len(l1.w)==0:
@@ -904,15 +905,15 @@ def CardFinder(dn, instr1, w_is_0=False):
 
     # keep cardinal looks only and make it unique:
     dirs = ['Zenith', 'North', 'East', 'West', 'South']
-    looks = list(set([l for x in dirs for l in l1.directions if x in l])) 
+    looks = list(set([l for x in dirs for l in l1.directions if x in l]))
 
     # ------------------------------------------------
     # loop thru for different cardinal directions
     # ------------------------------------------------
     ds = []
     for look in looks:
-        
-        # copy the data instance with 
+
+        # copy the data instance with
         # information we have so far:
         d_loop = copy.deepcopy(d)
 
@@ -923,14 +924,14 @@ def CardFinder(dn, instr1, w_is_0=False):
         #wi= np.array([]); wie= np.array([])
 
         ind1 = l1.ind[look]
-        
+
         # Record look times
         t1 = l1.t[look]
 
         # get temperatures
         d_loop.T  = l1.T [look]
         d_loop.Te = l1.Te[look]
-        
+
         # get intensity and background
         d_loop.i  = l1.i [look]
         d_loop.ie = l1.ie[look]
@@ -949,7 +950,7 @@ def CardFinder(dn, instr1, w_is_0=False):
         # fill in cloud information
         d_loop.flag_wind = l1.flag_wind[look]
         d_loop.flag_T    = l1.flag_T   [look]
-    
+
         # Calculations using w
         if not(w_is_0):
             if 'Zenith' in look:
@@ -958,7 +959,7 @@ def CardFinder(dn, instr1, w_is_0=False):
                 # ------------------
                 w = l1.w
                 we = l1.we
-                d_loop.notes += 'Vertical wind is measurement\n'           
+                d_loop.notes += 'Vertical wind is measurement\n'
 
             elif 'East' in look:
                 # ------------------
@@ -980,7 +981,7 @@ def CardFinder(dn, instr1, w_is_0=False):
                 ue = np.sqrt( l1.los_sigma[look]**2+l1.iwe[look]**2*cosd(l1.zenith[look])**2)/ \
                         sind(l1.zenith[look])
                 d_loop.notes += 'Vertical wind is interpolated\n'
-                
+
             elif 'North' in look:
                 # ----------------------
                 # North Meridional measurement
@@ -1002,7 +1003,7 @@ def CardFinder(dn, instr1, w_is_0=False):
                 d_loop.notes += 'Vertical wind is interpolated\n'
 
             else:
-                print "very bad ERROR"
+                print("very bad ERROR")
                 sys.exit(0)
 
         # Calculations for  w=0 case:
@@ -1013,9 +1014,9 @@ def CardFinder(dn, instr1, w_is_0=False):
                 # ------------------
                 w = l1.w
                 we = l1.we
-                d_loop.notes += 'w is measurement\n'           
+                d_loop.notes += 'w is measurement\n'
                 wi = wi*0
-                
+
             elif 'East' in look:
                 # ------------------
                 # Eastern Zonal measurement
@@ -1031,7 +1032,7 @@ def CardFinder(dn, instr1, w_is_0=False):
                 u = l1.los_wind[look] / -sind(l1.zenith[look])
                 ue = l1.los_sigma[look] / sind(l1.zenith[look])
                 d_loop.notes += 'Assumed w = 0\n'
-                
+
             elif 'North' in look:
                 # ----------------------
                 # North Meridional measurement
@@ -1049,7 +1050,7 @@ def CardFinder(dn, instr1, w_is_0=False):
                 d_loop.notes += 'Assumed w = 0\n'
 
             else:
-                print "very bad ERROR"
+                print("very bad ERROR")
                 sys.exit(0)
 
 
@@ -1067,7 +1068,7 @@ def CardFinder(dn, instr1, w_is_0=False):
         d_loop.v = v
         d_loop.ve = ve
         d_loop.w = w
-        d_loop.wi = wi 
+        d_loop.wi = wi
         d_loop.wie = wie
         d_loop.we = we
         d_loop.t1 = t1
@@ -1099,7 +1100,7 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
                         & TMD (duly2@illinois.edu)
     '''
     #print "dn=",dn,'site1=',site1,'site2=',site2
-    import os, sys 
+    import os, sys
     import copy
     import FPI
     from datetime import timedelta
@@ -1150,7 +1151,7 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
         #d.log += l1_1.log
         # just use l1_2 temps then:
         dirs = ['CV_', 'IN_']
-        common_pair = list(set([l for x in dirs for l in l1_2.directions if x in l and site1 in l])) 
+        common_pair = list(set([l for x in dirs for l in l1_2.directions if x in l and site1 in l]))
         ds = []
         for cv in common_pair:
             d_loop = copy.deepcopy(d)
@@ -1178,10 +1179,10 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
         #d.log += l1_2.log
         # just use l1_1 temps then:# just use l1_2 temps then:
         dirs = ['CV_', 'IN_']
-        common_pair = list(set([l for x in dirs for l in l1_1.directions if x in l and site2 in l])) 
+        common_pair = list(set([l for x in dirs for l in l1_1.directions if x in l and site2 in l]))
         ds = []
         for cv in common_pair:
-	    d_loop = copy.deepcopy(d)
+            d_loop = copy.deepcopy(d)
             d_loop.t1 = l1_1.t[cv]
             d_loop.T  = l1_1.T[cv]
             d_loop.Te = l1_1.Te[cv]
@@ -1213,7 +1214,7 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
         d.error = True
         d.errorT = True
         return [d]
-    
+
     # get common value locations between the 2 sites:
     common_pair = [val for val in l1_1.directions if val in l1_2.directions]
     # Keep CV and make unique pairs
@@ -1221,7 +1222,7 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
     common_pair = list(set([l for x in dirs for l in common_pair if x in l]))
     #print "CV =", common_pair
 
-    # check to make sure we have some common pairs. 
+    # check to make sure we have some common pairs.
     # if not, exit
     if len(common_pair) == 0:
         d.log += "%-24s" % "[CVFinder]" + "no common pairs found, exiting with error flag \n"
@@ -1236,10 +1237,10 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
     for cv in common_pair:
         #print cv
 
-        # copy the data instance with 
+        # copy the data instance with
         # information we have so far:
         d_loop = copy.deepcopy(d)
-        
+
         # reset output:
         u = np.array([]); ue = np.array([]); uef = np.array([]); uec = np.array([])
         v = np.array([]); ve = np.array([]); vef = np.array([]); vec = np.array([])
@@ -1247,7 +1248,7 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
         iw= np.array([]); iwe= np.array([])
 
         # -----------------------------------------------------
-        # this section of code gets rid of times that do 
+        # this section of code gets rid of times that do
         # not match their partner CV times
         t1_list = l1_1.t[cv]
         t2_list = l1_2.t[cv]
@@ -1327,7 +1328,7 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
         sbe = np.average(np.vstack((be1, be2)), \
                 axis=0, \
                 weights=1./np.vstack((be1,be2)))
-                
+
         d_loop.flag_wind = np.maximum(flag_wind1,flag_wind2)
         d_loop.flag_T    = np.maximum(flag_T1,flag_T2)
 
@@ -1335,7 +1336,7 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
             # ------------------
             # INline measurement
             # ------------------
-    
+
             # FIX cos[ze] is from look direction, not at the point in the sky where they are equal...
             w = (los_wind1 + los_wind2) / \
                     (cosd(ze1) + cosd(ze2))
@@ -1343,12 +1344,12 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
                     (cosd(ze1) + cosd(ze2))
             den=np.sqrt( (cosd(ze1) + cosd(ze2))**2)
             d_loop.notes += 'Vertical wind is inline measurement\n'
-            
+
         elif 'CV' in cv[:2]:
             # ------------------
             # CV measurement
             # ------------------
-            
+
             # Calculated Average vertical wind at cv points
             iw = np.average(np.vstack((iw1,iw2)), \
                     axis=0, \
@@ -1360,19 +1361,19 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
             if not(w_is_0):
                 # interpolated winds used.
                 d_loop.notes += 'Vertical wind is interpolated\n'
-                
+
                 # FIX cos[ze] is from look direction, not at the point in the sky where they are equal...
                 # vh = velocity horizontal
                 vh1 = (los_wind1+iw*cosd(ze1)) / \
                         sind(ze1)
                 vh2 = (los_wind2+iw*cosd(ze2)) / \
                         sind(ze2)
-                
+
                 vh1e = np.sqrt( los_sigma1**2+(iwe*cosd(ze1))**2) / \
                         sind(ze1)
                 vh2e = np.sqrt( los_sigma2**2+(iwe*cosd(ze2))**2) / \
                         sind(ze2)
-            
+
             # Case with w=0
             else:
                 # Don't use iw
@@ -1383,21 +1384,21 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
                 # vh = velocity horizontal
                 vh1 = los_wind1 / sind(ze1)
                 vh2 = los_wind2 / sind(ze2)
-                
+
                 vh1e = los_sigma1 / sind(ze1)
                 vh2e = los_sigma2 / sind(ze2)
 
 
             # Calculate winds
             #M = np.array([[sind(az1),cosd(az1)],[sind(az2),cosd(az2)]])
-            u = [] ; ue = [] 
+            u = [] ; ue = []
             v = [] ; ve = []
             for kk, (myt, a) in enumerate(zip(t1,vh1)):
                 M = np.array([[sind(az1[kk]),cosd(az1[kk])],[sind(az2[kk]),cosd(az2[kk])]])
                 M = np.matrix(M)# important to make into matrix
 
                 # value calculation:
-                i = min(range(len(t2)), key=lambda i: abs(t2[i]-myt))
+                i = min(list(range(len(t2))), key=lambda i: abs(t2[i]-myt))
                 b = vh2[i]
 
                 temp = np.linalg.solve(M,np.array([[a],[b]]))
@@ -1409,7 +1410,7 @@ def CVFinder(dn, instr1, instr2, w_is_0=False):
                 S[0,0] = vh1e[kk]**2
                 S[1,1] = vh2e[i ]**2
                 S = np.matrix(S) # important to make into matrix
-                temp = np.array(M*S*M.T) # be sure that M and S are matricies, 
+                temp = np.array(M*S*M.T) # be sure that M and S are matricies,
                                          # or else it won't multiply properly!
                 ue.append(np.sqrt(temp[0][0]))
                 ve.append(np.sqrt(temp[1][1]))
@@ -1450,7 +1451,7 @@ def TempFinder(dn, instr1):
     -------
 
     data = TempFinder(dn, instr1)
-    
+
     Returns temp data for non-card/CV mode points,
 
     Inputs
@@ -1504,19 +1505,19 @@ def TempFinder(dn, instr1):
     # ------------------------------------------------
     ds = []
     for look in looks:
-        
-        # copy the data instance with 
+
+        # copy the data instance with
         # information we have so far:
         d_loop = copy.deepcopy(d)
 
-        
+
         # Record look times
         t1 = l1.t[look]
 
         # get temperatures
         d_loop.T  = l1.T [look]
         d_loop.Te = l1.Te[look]
-        
+
         # get intensity and background
         d_loop.i  = l1.i [look]
         d_loop.ie = l1.ie[look]
@@ -1534,7 +1535,7 @@ def TempFinder(dn, instr1):
         # fill in cloud information
         d_loop.flag_wind = l1.flag_wind[look]
         d_loop.flag_T    = l1.flag_T   [look]
-    
+
         d_loop.notes += 'TEMPS ONLY'
 
         # Save information
@@ -1542,7 +1543,7 @@ def TempFinder(dn, instr1):
         d_loop.instr = instr1
         d_loop.lla = GetLocation(d_loop.parent[0].site,d_loop.key)
 
-        d_loop.wi = wi 
+        d_loop.wi = wi
         d_loop.wie = wie
         d_loop.t1 = t1
         d_loop.length = len(t1)
@@ -1556,9 +1557,9 @@ def TempFinder(dn, instr1):
 
 '''
 def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
-   
+
     #input: a list of level 2 objects
-    
+
     from scipy.interpolate import interp2d
     from scipy.interpolate import LinearNDInterpolator
     figure(1, figsize=(18,10.5)); clf()
@@ -1571,7 +1572,7 @@ def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
 
     # OK FOR NOW!
     project = 'nation'
-    
+
 
     ALPHA_VALUE = 0.3
 
@@ -1587,7 +1588,7 @@ def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
         if 'CV' == cv.key[:2] and cv.error is False:
             (lat,lon,alt) = GetLocation(cv.parent[0].site,cv.key)
             slt = [dn2utc(a)+timedelta(hours=lon/15.) for a in cv.t1]
-            times = matplotlib.dates.date2num(slt) 
+            times = matplotlib.dates.date2num(slt)
             for t, u, v, cloudy in zip(times, cv.u, cv.v, cv.cloudy):
                 Q = quiver(t, lat, u, v, \
                         scale=qscale, \
@@ -1601,7 +1602,7 @@ def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
                 if plot_text.has_key(cv.key) is False:
                     plot_text[cv.key] = (dn1 + timedelta(hours=.1), lat, cv.key)
             dns += list(cv.t1)
-            
+
         # Card measurment, use North/East and South/West combos
         elif cv.key[:3] in [a.upper() for a in fpiinfo.get_network_info(project).keys()] and cv.error is False:
             # card points
@@ -1609,7 +1610,7 @@ def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
             lat = SiteLocations[cv.key]['lat']
             lon = SiteLocations[cv.key]['lon']
             slt = [dn2utc(a)+timedelta(hours=lon/15.) for a in cv.t1]
-            times = matplotlib.dates.date2num(slt) 
+            times = matplotlib.dates.date2num(slt)
             site = cv.key.split("_")[0]
             first_loc = cv.key.split("_")[1]
             if first_loc in ['East','West',]:
@@ -1620,8 +1621,8 @@ def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
                             }
                 matching_key = site + "_" + Matches[first_loc]
                 print matching_key
-                lat = SiteLocations[matching_key]['lat'] 
-                lon = SiteLocations[matching_key]['lon'] 
+                lat = SiteLocations[matching_key]['lat']
+                lon = SiteLocations[matching_key]['lon']
                 cv_match = None
                 for a_cv in cvs:
                     if matching_key == a_cv.key:
@@ -1634,7 +1635,7 @@ def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
                         if len(times) > 0:
                             kk = np.argmin( np.array(times))
                             t1_slt = dn2utc(t1)+timedelta(hours=lon/15.)
-    
+
                             diff = abs(cv_match.t1[kk]-t1)
                             if diff.seconds < 30*60. and diff.days==0 \
                                     and abs(u) < 500. and abs(cv_match.v[kk]) < 500.:
@@ -1642,7 +1643,7 @@ def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
                                 print "matching times:",\
                                         t1.strftime("%H:%M"), cv_match.t1[kk].strftime("%H:%M")
                                 print u, cv_match.v[kk]
-                    
+
                                 t1_match = cv_match.t1[kk]
                                 time = matplotlib.dates.date2num(t1_slt)
                                 Q = quiver(time, lat, u, cv_match.v[kk], \
@@ -1659,7 +1660,7 @@ def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
             dns += list(cv.t1)
 
 
-        
+
     # put monthly averages down, using Dan's routine:
     # -----------------------------------------------
     for site in ['PAR', 'ANN', 'UAO', 'EKU']:
@@ -1671,10 +1672,10 @@ def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
         t2 = [ datetime(dn2.year, dn2.month, dn2.day, dn.hour, dn.minute, dn.second, tzinfo= pytz.utc) for dn in o.t1]
         lat = SiteLocations[site+"_Zenith"]['lat']
         lon = SiteLocations[site+"_Zenith"]['lon']
-        # copy and paste data for both dn1 and dn2, ensuring that when 
+        # copy and paste data for both dn1 and dn2, ensuring that when
         # plotted, the information is visible:
-        t1_slt = [dn2utc(a) + timedelta(hours=lon/15.) for a in t1] 
-        t2_slt = [dn2utc(a) + timedelta(hours=lon/15.) for a in t2] 
+        t1_slt = [dn2utc(a) + timedelta(hours=lon/15.) for a in t1]
+        t2_slt = [dn2utc(a) + timedelta(hours=lon/15.) for a in t2]
         for ttt1, ttt2, u, v in zip(t1_slt, t2_slt, o.u, o.v):
             nan = float('nan')
             if (not np.isnan(u)) and (not np.isnan(v))\
@@ -1722,7 +1723,7 @@ def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
             dn1.strftime("%Y-%m-%d") \
               )
     ax = gca()
-    # taken from 
+    # taken from
     #  http://stackoverflow.com/questions/13950053/quiver-or-barb-with-a-date-axis
     ax.get_xaxis().set_major_formatter(matplotlib.dates.DateFormatter('%H'))
     xlim([dn1, dn2])
@@ -1741,7 +1742,7 @@ def PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False ):
     grid()
     # (end) quiver plot
     # -----------------
-    
+
 
     ## T pcolor plot
     ## -----------------
@@ -1822,12 +1823,12 @@ def GetLevel2(project,dn,dnstart='noon',dnend='noon',w_is_0=False):
 
     # look up the sites for project:
     try:
-        sites = fpiinfo.get_network_info(project).keys()
+        sites = list(fpiinfo.get_network_info(project).keys())
         psites = sites
         editlist = False
     except:
         sites = [project]
-        psites = fpiinfo.get_network_info(fpiinfo.get_site_info(project)['Network']).keys()
+        psites = list(fpiinfo.get_network_info(fpiinfo.get_site_info(project)['Network']).keys())
         editlist = True
 
     #print editlist
@@ -1852,21 +1853,21 @@ def GetLevel2(project,dn,dnstart='noon',dnend='noon',w_is_0=False):
             if combo not in pairs:
                 cvs += CVFinder(dn, instr, combo, w_is_0)
         cvs += TempFinder(dn,instr)
-        
+
     # remove error parts in cvs:
     #cvs = []
     if editlist:
         cvs = [x for x in cvs if project in x.key.lower()]
-    
+
     if dnstart == 'noon':
         dnstart = dn.replace(hour=12)
     if dnend == 'noon':
         dnend = (dn + timedelta(days=1)).replace(hour=12)
-        
+
     # cut so that we only have data between dnstart and dnend
     for kk, cv in enumerate(cvs):
         cv.cut(dnstart, dnend)
-    
+
     return cvs
 
 
@@ -1900,8 +1901,8 @@ def PlotLevel2(site,dn,ut=True,w_is_0=False):
     else:
         tunit = 'SLT'
         tlim = [dn+timedelta(hours=18),dn+timedelta(hours=30)]
-    D = GetLevel2(project,dn,w_is_0) 
-    
+    D = GetLevel2(project,dn,w_is_0)
+
     # Set colors for different flags
     lalpha = 0.1
     ascale = 2.3
@@ -1920,7 +1921,7 @@ def PlotLevel2(site,dn,ut=True,w_is_0=False):
             else:
                 alpha = 1
                 line = ''
-                
+
             # Time Travel Math
             timew = [x.astimezone(utc).replace(tzinfo=None) for x in d.t1[indw]-timedelta(hours=slt_shift)]
             timet = [x.astimezone(utc).replace(tzinfo=None) for x in d.t1[indt]-timedelta(hours=slt_shift)]
@@ -1986,7 +1987,7 @@ def PlotLevel2(site,dn,ut=True,w_is_0=False):
                     ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='k.'+line,alpha=alpha,label=d.key)
                 else:
                     ax[3].errorbar(timet,d.T[indt],yerr=d.Te[indt],fmt='k.'+line,alpha=alpha)
-    
+
     for k in range(3):
         ax[k].plot([dn,dn+timedelta(hours=48)],[0,0],'k--')
         ax[k].grid()
@@ -2017,27 +2018,27 @@ def FindKey(cvs, key):
 
 
 def PrintLevel2Summary(cvs, print_log=False):
-    print "----------------------------------------------------------------------"
-    print "index |","%-15s|" % ("key"), " error |", "len(t1)|"
-    print "----------------------------------------------------------------------"
+    print("----------------------------------------------------------------------")
+    print("index |","%-15s|" % ("key"), " error |", "len(t1)|")
+    print("----------------------------------------------------------------------")
     for kk, cv in enumerate(cvs):
-        print "%-6i|" % (kk), "%-15s| " % cv.key, "%5s | " % cv.error, "%-5i | " % len(cv.t1)
+        print("%-6i|" % (kk), "%-15s| " % cv.key, "%5s | " % cv.error, "%-5i | " % len(cv.t1))
 
     if print_log:
         # prints the log for the indidual Level 2 instances.
-        print "\n\n\n----------------"
-        print "  log files  "
-        print "----------------\n\n\n"
+        print("\n\n\n----------------")
+        print("  log files  ")
+        print("----------------\n\n\n")
         for kk, cv in enumerate(cvs):
-            print kk, cv.key
-            print "===================================================================="
-            print cv.log
-            print "\n\n"
+            print(kk, cv.key)
+            print("====================================================================")
+            print(cv.log)
+            print("\n\n")
 
 def FindClosestTime(t, t_list):
     '''
-    this simple function finds the index and absolute minutes 
-    difference of searching (the time-zone aware) t through 
+    this simple function finds the index and absolute minutes
+    difference of searching (the time-zone aware) t through
     the list t_list
 
     ind, minutes_different = FindClosestTime(t, t_list)
@@ -2117,9 +2118,9 @@ if __name__=="__main__":
 #        #project = "RENOIR"
 #        project = "NATION"
 #        reference = 'Laser'
-#    
+#
 #        Sites = MasterDictionary()
-#    
+#
 #        # Get Data for a Day:
 #        # get data for every site location:
 #        # -----------------------------------
@@ -2130,19 +2131,19 @@ if __name__=="__main__":
 #            for combo in Sites[project][site1]['Combos']:
 #                if combo not in pairs:
 #                    cvs += CVFinder(dn, site1, combo, project, reference)
-#    
+#
 #        # remove error parts in cvs:
 #        cvs = [cv for cv in cvs if cv.errorT is False]
-#    
+#
 #        #dn1 = datetime(2013,4,25,14)
 #        dn1 = dn.replace(hour=14)
 #        dn2 = (dn + timedelta(days=1)).replace(hour=8)
 #        #datetime(2013,4,26,8)
-#        
+#
 #        for kk, cv in enumerate(cvs):
 #            cv.cut(dn1, dn2)
 #            if cv.error is False and len(cv.t1)==0: cv.error=True
-#    
+#
 #        # plot lat vs slt:
 #        # -------------------------------------
 #        PlotLatSLT(cvs, dn1, dn2, switch_interpolate_T=False)
@@ -2265,7 +2266,7 @@ if __name__=="__main__":
                            'urcrnrlat': 2,\
                            }\
                 }
-                    
+
         for kk, t in enumerate(plot_times):
             print "%04d of %04d" % (kk, len(plot_times))
             fig = figure(1); clf()
@@ -2329,7 +2330,7 @@ if __name__=="__main__":
 
             tec_grid = np.zeros((Nlat, Nlon, 50,)) * float('nan')
             counter = np.zeros((Nlat,Nlon))
-            
+
             from ParseGPS import gps_data, gps_dns
             min_list = [abs(dn - t.astimezone(utc)).seconds for dn in gps_dns]
             jj = np.argmin(min_list)
@@ -2386,14 +2387,14 @@ if __name__=="__main__":
                     diff = abs(t-ts[jj])
                     if diff.seconds < 20.*60 and diff.days==0:
                         cloud = match_cv.allcloud[jj]
-                        if cloud < cloudthreshold:
+                        if cloud < cloudthreshold():
                             c = 'bo'
                         else:
                             c = 'ro'
                         if cloud < -998: c = 'yo'
                     else:
                         c = 'ko'
-                    
+
                     m.plot(mlon,mlat,c)
                     lon = SiteLocations[match_cv.key]['lon'] +0.2
                     lat = SiteLocations[match_cv.key]['lat'] +0.2
@@ -2545,7 +2546,7 @@ if __name__=="__main__":
                                     )
                             Qbogus.set_visible(False) # just to make sure...
                     title("%s Thermospheric Winds and Temperatures\n" % (project.upper(),) +
-                            t.strftime('%Y-%m-%d') + 
+                            t.strftime('%Y-%m-%d') +
                             " UTC " + t.strftime('%H:%M'))
             #m.scatter(m(0,0)[0],m(0,0)[0],c=0,s=0,vmin=vmin,vmax=vmax) # only to get a colorbar each and every plot...
             m.scatter(m(0,0)[0],m(0,0)[0],c=0,s=0,vmin=0.0,vmax=1.8) # only to get a colorbar each and every plot...
@@ -2573,10 +2574,10 @@ if __name__=="__main__":
         t2 = [ datetime(dn2.year, dn2.month, dn2.day, dn.hour, dn.minute, dn.second, tzinfo= pytz.utc) for dn in o.t1]
         lat = SiteLocations[site+"_Zenith"]['lat']
         lon = SiteLocations[site+"_Zenith"]['lon']
-        # copy and paste data for both dn1 and dn2, ensuring that when 
+        # copy and paste data for both dn1 and dn2, ensuring that when
         # plotted, the information is visible:
-        t1_slt = [dn2utc(a) + timedelta(hours=lon/15.) for a in t1] 
-        t2_slt = [dn2utc(a) + timedelta(hours=lon/15.) for a in t2] 
+        t1_slt = [dn2utc(a) + timedelta(hours=lon/15.) for a in t1]
+        t2_slt = [dn2utc(a) + timedelta(hours=lon/15.) for a in t2]
         for ttt1, ttt2, u, v in zip(t1_slt, t2_slt, o.u, o.v):
             nan = float('nan')
             if (not np.isnan(u)) and (not np.isnan(v))\

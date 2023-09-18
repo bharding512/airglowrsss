@@ -101,17 +101,20 @@ def SkyAlertLog_format(file, tz):
     def parser(row):
         words=row.split()
 #        print(words)
-        dt=datetime.strptime(words[1]+"-"+words[2][:-3],"%Y-%m-%d-%H:%M:%S")
-        dt = local.localize(dt)
-        SkyTemp=float(words[5])
-        AmbientTemp=float(words[6])
-        C_or_F = words[3] # 'C' or 'F'
-        assert C_or_F in ['C','F'], "Units not recognized: '%s' should be 'C' or 'F'" % C_or_F
-        if C_or_F == 'F':
-            SkyTemp = (SkyTemp - 32.) * 5./9.
-            AmbientTemp = (AmbientTemp - 32.) * 5./9.
-        SkyTemp_BoltWood=SkyTemp-AmbientTemp
-        return [dt,SkyTemp_BoltWood,AmbientTemp]
+        try:
+            dt=datetime.strptime(words[1]+"-"+words[2][:-3],"%Y-%m-%d-%H:%M:%S")
+            dt = local.localize(dt)
+            SkyTemp=float(words[5])
+            AmbientTemp=float(words[6])
+            C_or_F = words[3] # 'C' or 'F'
+            assert C_or_F in ['C','F'], "Units not recognized: '%s' should be 'C' or 'F'" % C_or_F
+            if C_or_F == 'F':
+                SkyTemp = (SkyTemp - 32.) * 5./9.
+                AmbientTemp = (AmbientTemp - 32.) * 5./9.
+            SkyTemp_BoltWood=SkyTemp-AmbientTemp
+            return [dt,SkyTemp_BoltWood,AmbientTemp]
+        except:
+            return [np.nan, np.nan, np.nan]
 
     print(file)
     lines=open(file,'r').readlines()
@@ -403,7 +406,11 @@ def ReadTempLog(file,tz):
         dns, sky_temp, amb_temp = SkyAlertLog_format(file,tz)
     elif "ethernet" in format.lower():
         dns, sky_temp, amb_temp = SkyAlertLog_formatE(file,tz)
-    return dns, sky_temp, amb_temp
+
+    # remove nan rows
+    ind = np.where(~np.isnan(sky_temp.astype(float)))
+
+    return dns[ind], sky_temp[ind], amb_temp[ind]
 
 
 def BoltwoodReduce(file,dn):

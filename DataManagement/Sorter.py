@@ -435,20 +435,20 @@ def sorter(san,pgm):
                                         'bw_dir':'/rdata/airglow/templogs/cloudsensor/',\
                                         'x300_dir':'/rdata/airglow/templogs/x300/',\
                                         'results_stub':'/rdata/airglow/fpi/results/'}
-                        try:
-                            warning = FPIprocess.process_instr(code[instr] + inum,year,doy,**process_kwargs)
-                            if warning:
-                                subject = "!!! Manually inspect (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
-                                print subject
-                                print traceback.print_exc()
-                                Emailer.emailerror(emails, subject, warning)
-                        except:
-                            subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
-                            print subject
-                            print traceback.print_exc()
-                            Emailer.emailerror(emails, subject, traceback.format_exc())
-
-                        print "!!! End Processing"
+#                        try:
+#                            warning = FPIprocess.process_instr(code[instr] + inum,year,doy,**process_kwargs)
+#                            if warning:
+#                                subject = "!!! Manually inspect (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+#                                print subject
+#                                print traceback.print_exc()
+#                                Emailer.emailerror(emails, subject, warning)
+#                        except:
+#                            subject = "!!! Processing error X (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+#                            print subject
+#                            print traceback.print_exc()
+#                            Emailer.emailerror(emails, subject, traceback.format_exc())
+#
+#                        print "!!! End Processing"
 
                         # Run green line if existing
                         if len([r for r in result if 'XG' in os.path.basename(r)])>0:
@@ -461,9 +461,40 @@ def sorter(san,pgm):
                                     print traceback.print_exc()
                                     Emailer.emailerror(emails, subject, warning)
                             except:
-                                subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+                                subject = "!!! Processing error XG (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
                                 print subject
                                 print traceback.print_exc()
+
+                        # Run red line with XR tag if existing
+                        if len([r for r in result if 'XR' in os.path.basename(r)])>0:
+                            process_kwargs['sky_line_tag']='XR'
+                            try:
+                                warning = FPIprocess.process_instr(code[instr] + inum,year,doy,**process_kwargs)
+                                if warning:
+                                    subject = "!!! Manually inspect XR (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+                                    print subject
+                                    print traceback.print_exc()
+                                    Emailer.emailerror(emails, subject, warning)
+                            except:
+                                subject = "!!! Processing error XR (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+                                print subject
+                                print traceback.print_exc()
+
+                        # Run red line with X tag if existing
+                        elif len([r for r in result if 'X' in os.path.basename(r)])>0:
+                            process_kwargs['sky_line_tag']='X'
+                            try:
+                                warning = FPIprocess.process_instr(code[instr] + inum,year,doy,**process_kwargs)
+                                if warning:
+                                    subject = "!!! Manually inspect X (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+                                    print subject
+                                    print traceback.print_exc()
+                                    Emailer.emailerror(emails, subject, warning)
+                            except:
+                                subject = "!!! Processing error X (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+                                print subject
+                                print traceback.print_exc()
+
 
                 ##### GPS CASE: #####
                 elif instr in ['tec','scn']:

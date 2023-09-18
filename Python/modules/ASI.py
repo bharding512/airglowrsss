@@ -404,14 +404,14 @@ def ConvertAzEl2LatLon(az,el,ht,rx_lat,rx_lon, horizon=-1.):
     # NaN out values below the horizon
     # Need to check if value is a scalar or a list/array/whatever.
     # Why is there not a cleaner way of checking this?
-    import collections
-    if isinstance(lat, collections.Iterable): # it's an array/list
-        lat[el < horizon] = np.nan
-        lon[el < horizon] = np.nan
-    else: # it's a scalar
-        if el < horizon:
-            lat = np.nan
-            lon = np.nan
+#    import collections
+#    if isinstance(lat, collections.abc.Iterable): # it's an array/list
+#        lat[el < horizon] = np.nan
+#        lon[el < horizon] = np.nan
+#    else: # it's a scalar
+#        if el < horizon:
+#            lat = np.nan
+#            lon = np.nan
 
 
     return lat, lon

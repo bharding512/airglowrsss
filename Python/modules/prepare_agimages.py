@@ -558,9 +558,15 @@ def prepare_airglow_bu(station, year, doy, height, el_cutoff):
 
     return IM3D, lat, lon, times, height, latlon_imager, success
 
-def prepare_airglow_dasi(instr_name, year, doy, emission, el_cutoff,cobermax=300, daily_dir="/home/airglow/scratch_data/", repo_ASI="/home/airglow/scratch_data/MANGO_Data"):
+def prepare_airglow_dasi(instr_name, year, doy, emission, el_cutoff,cobermax=300, daily_dir="/home/airglow/scratch_data/", repo_ASI="/home/airglow/scratch_data/MANGO_Data",coord_nan=True):
 
     success = True
+
+    # Check if we need to use the other prepare_airglow_dasi function because the 
+    # calibration npz file is different
+    if instr_name in ['mro','eio','cvo','low','blo','cfs','bdr']:
+        return prepare_airglow_dasi2(instr_name, year, doy, emission, el_cutoff, daily_dir=daily_dir, repo_ASI=repo_ASI,coord_nan=coord_nan)
+
     # Obtain datetime object for the imaging data
     # doy-1 so that the datetime starts at the BEGINNING of the day
     dn = datetime.datetime(year, 1, 1, 0, 0, 0) + datetime.timedelta(days=doy-1)
@@ -568,9 +574,11 @@ def prepare_airglow_dasi(instr_name, year, doy, emission, el_cutoff,cobermax=300
     if emission == '5577':
         tag = 'greenline'
         ht = 95.
+        cobermax=300
     elif emission == '6300':
         tag = 'redline'
         ht = 250.
+        cobermax=1250
 
     if instr_name == 'low':
         observation_point = [34.752,-111.423]
@@ -606,7 +614,7 @@ def prepare_airglow_dasi(instr_name, year, doy, emission, el_cutoff,cobermax=300
     print('projection height: %0.2f km' % ht)
 
     # All of the files
-    files = glob.glob('%s/%s/%s/*/*greenline*.hdf5'%(repo_ASI,instr_name,dn.strftime('%Y/%j')))
+    files = glob.glob('%s/%s/%s/*/*%s*.hdf5'%(repo_ASI,instr_name,dn.strftime('%Y/%j'),tag))
     files.sort()
 #    print('%s/%s/%s/*/*greenline*.hdf5'%(repo_ASI,instr_name,dn.strftime('%Y/%j')))
 
@@ -625,17 +633,72 @@ def prepare_airglow_dasi(instr_name, year, doy, emission, el_cutoff,cobermax=300
     print("Processing images..")
 
     times = []
-    N = 600 # size of image (Need to understand why this is 600!!)
+    N = 2*cobermax #600 # size of image (Need to understand why this is 600!!)
     IM3D = np.zeros((N, N, len(files)))
 
     for i, f in enumerate(files):
 #        print(i)
-        img, dt = process_image_dasi(f, calibration_params)
+        img, dt = process_image_dasi(f, calibration_params, cobermax=cobermax)
         times.append(dt)
         # Apply horizon
         ind = np.where(img.geoelev < el_cutoff)
         img.data[ind] = np.nan
         IM3D[:,:,i] = img.data
+
+    print("Processing finished.")
+    return IM3D, lat, lon, times, ht, observation_point, success
+
+def prepare_airglow_dasi2(instr_name,year,doy,emission,el_cutoff,
+                          daily_dir="/home/airglow/scratch_data/", repo_ASI="/home/airglow/scratch_data/MANGO_Data",coord_nan=True):
+    
+    success = True
+    # Obtain datetime object for the imaging data
+    # doy-1 so that the datetime starts at the BEGINNING of the day
+    dn = datetime.datetime(year, 1, 1, 0, 0, 0) + datetime.timedelta(days=doy-1)
+
+    if emission == '5577':
+        tag = 'greenline'
+    elif emission == '6300':
+        tag = 'redline'
+        
+    # Load the calibration file
+    calibration_path=daily_dir+'calibration_%s_%s_*.npz'%(instr_name, tag,)
+    calibration_path=glob.glob(calibration_path)[0]
+    npzfile = np.load(calibration_path,allow_pickle='False',encoding='latin1')
+    lat = npzfile['lat']
+    lon = npzfile['lon']
+    observation_point = npzfile['observation_point']
+    ht = npzfile['ht']
+    el = npzfile['el']
+    az = npzfile['az']
+    npzfile.close()
+    
+    # All of the files
+    files = glob.glob('%s/%s/%s/*/*%s*.hdf5'%(repo_ASI,instr_name,dn.strftime('%Y/%j'),tag))
+    files.sort()
+#    print('%s/%s/%s/*/*greenline*.hdf5'%(repo_ASI,instr_name,dn.strftime('%Y/%j')))
+
+    print("Processing images..")
+    
+    times = []
+    IM3D = np.zeros((lat.shape[0],lat.shape[1],len(files)))
+    
+    for i, f in enumerate(files):
+        dt,lat0,lon0,currentdata=readfile(f,data=True)
+        times.append(dt)
+        
+        #apply 7x7 median filter
+        from scipy import signal
+        img=signal.medfilt2d(currentdata, kernel_size=7).astype(float)
+        
+        # Apply horizon
+        ind = np.where(el < el_cutoff)
+        
+        img[ind] = np.nan
+        if coord_nan:
+            lat[ind] = np.nan
+            lon[ind] = np.nan
+        IM3D[:,:,i] = img
 
     print("Processing finished.")
     return IM3D, lat, lon, times, ht, observation_point, success
@@ -670,6 +733,8 @@ def project_data(frameNo):
         data_mf         = IM3Dfull[:,:,frameNo]
     else:
         data_mf         = IM3Dfilt[:,:,frameNo]
+    
+#     print('data_mf size', data_mf.shape)
 
     data_mf_nonans          = np.zeros(data_mf.shape)
     data_mf_nonans[nonans]  = data_mf[nonans]
@@ -683,7 +748,7 @@ def project_data(frameNo):
 
 
 def remap_airglow_uniform(IM3Dfiltarg, lat, lon, emissionHeight, observation_point, returnReg = False, IM3DFullarg = None):
-
+#     print('IM3Dfiltarg shape', IM3Dfiltarg.shape)
     global east_nonans
     global north_nonans
     global EAST_REGULAR
@@ -699,6 +764,8 @@ def remap_airglow_uniform(IM3Dfiltarg, lat, lon, emissionHeight, observation_poi
     IM3Dfull = IM3DFullarg
 
     x,y,z = latlon2xyz(lat,lon, emissionHeight)
+    
+#     print('IM3Dfilt shape', IM3Dfilt.shape)
 
     # Take the sampling rate as the average 'dr' spacing between pixels.
 
@@ -737,7 +804,7 @@ def remap_airglow_uniform(IM3Dfiltarg, lat, lon, emissionHeight, observation_poi
     print('drmin: ', drmin, 'm')
     print('drmax: ', drmax, 'm')
 
-    n_lat             = lon.shape[1]; n_lon = lon.shape[1]
+    n_lat             = lon.shape[0]; n_lon = lon.shape[1]
     RANGE_VECTORS_ENU = np.zeros([n_lat, n_lon, 3])
 
     # ECEF, VEN matrix (rotation matrix) of observation point
@@ -764,10 +831,13 @@ def remap_airglow_uniform(IM3Dfiltarg, lat, lon, emissionHeight, observation_poi
         for j in range(0, n_lon):
             RANGE_VECTORS_ENU[i,j,:] = RANGE_VECTORS_ENU_LIST[k]
             k = k + 1
-
+    
+    
     east  = RANGE_VECTORS_ENU[:,:,0]/1000. # km
     north = RANGE_VECTORS_ENU[:,:,1]/1000. # km
     up    = RANGE_VECTORS_ENU[:,:,2]/1000. # km
+    
+#     print('east shape', east.shape)
 
     # remove nans
     nonans = np.where(~np.isnan(east))
@@ -887,31 +957,31 @@ def initialize_airglow_filter(ntaps, Tlo, Thi, times, t_irregular = 3, raise_irr
     h_dB    = 20*np.log10(np.abs(h)); frequencies = w/(2*np.pi)*fs*1000
     h_Phase = np.unwrap(np.arctan2(np.imag(h),np.real(h)))
 
-    plt.subplot(211)
-    plt.plot(frequencies, 20*np.log10(abs(h)))
-    locs, labels = plt.xticks()
-    ticks_min = 1/(locs[1:]/1000)/60.
-
-    for i,f in enumerate(ticks_min):
-         ticks_min[i] = '%.2f' % ticks_min[i]
-
-    labels[1:] = ticks_min; labels[0] = '$\infty$'; plt.xticks(locs, labels)
-    plt.xlim(0, frequencies[-1])
-    plt.ylabel('Magnitude (db)')
-    plt.title(r'Frequency response')
-    plt.ylim(-20, 20)
-    plt.grid()
-
-    plt.subplot(212)
-    plt.plot(frequencies, h_Phase)
-    plt.xticks(locs, labels)
-    plt.xlim(0, frequencies[-1])
-    plt.ylabel('Phase (radians)')
-    plt.xlabel(r'Period (min)')
-    plt.title(r'Phase response')
-    plt.grid(); plt.tight_layout()
-    plt.savefig('AGFilterResponse.png')
-    plt.close()
+#    plt.subplot(211)
+#    plt.plot(frequencies, 20*np.log10(abs(h)))
+#    locs, labels = plt.xticks()
+#    ticks_min = 1/(locs[1:]/1000)/60.
+#
+#    for i,f in enumerate(ticks_min):
+#         ticks_min[i] = '%.2f' % ticks_min[i]
+#
+#    labels[1:] = ticks_min; labels[0] = '$\infty$'; plt.xticks(locs, labels)
+#    plt.xlim(0, frequencies[-1])
+#    plt.ylabel('Magnitude (db)')
+#    plt.title(r'Frequency response')
+#    plt.ylim(-20, 20)
+#    plt.grid()
+#
+#    plt.subplot(212)
+#    plt.plot(frequencies, h_Phase)
+#    plt.xticks(locs, labels)
+#    plt.xlim(0, frequencies[-1])
+#    plt.ylabel('Phase (radians)')
+#    plt.xlabel(r'Period (min)')
+#    plt.title(r'Phase response')
+#    plt.grid(); plt.tight_layout()
+#    plt.savefig('AGFilterResponse.png')
+#    plt.close()
 
     return b
 

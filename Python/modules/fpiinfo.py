@@ -1382,16 +1382,17 @@ _instruments['minime11'] = {
         'lam0_gl'       : 557.7e-9,     # nominal line center wavelength in m
         'nominal_t'     : 1.2806e-2,       # approximate etalon gap in m
         'default_params': {# instrument params to be used if the laser fails (i.e., zenith reference)
-                                'R': 0.77,
-                            'alpha': 8.65418e-5,
+                           # BJH updated Sep 2023
+                                'R': 0.674,
+                            'alpha': 8.65962e-5,
                                 'B': 0.0,
                                 'I': 1.0,
-                               'a1': -4.18e-2,
-                               'a2': -1.71e-2,
-                               'b0': 1.69,
-                               'b1': 5.1e-1,
-                               'b2': -4.67e-1,
-                           'center':  (250.34, 256.83),
+                               'a1': 8.94e-3,
+                               'a2': -3.12e-2,
+                               'b0': 0.5,
+                               'b1': 0.0, # Recall this site is set manually to estimate_blur=False
+                               'b2': 0.0,
+                           'center':  (255.5, 253.4),
                           },
         'sql_winds_id'          : 117,           # ID for SQL database
         'sql_temperatures_id'   : 118,           # ID for SQL database
@@ -1965,6 +1966,9 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
                        'center':  (254.13,270.78),
                        }
 
+    if (instr_name == 'minime11') and (dn > datetime.datetime(2023, 6, 13)):
+        instrument['default_params']['center'] = (255.5, 258.3) # Presumably got bumped when Jonathan visited
+
     return instrument
 
 def get_all_instr_names():
@@ -2018,7 +2022,7 @@ def get_bad_data_flags(instr_name, dn = datetime.datetime.now()):
     for (start,stop,flag) in tempstartstops:
         if start <= dn and (stop is None or dn <= stop):
             bad_temp_flag = flag
-    
+
     #Luis: DASI instruments flagged bad for moonphase >=0.75
     # BJH 2022 Apr 18: Keep data when moon is up. This was removing too much.
 #    if instr_name in ['minime10','minime11','minime12']:

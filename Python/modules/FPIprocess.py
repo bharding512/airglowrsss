@@ -800,7 +800,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
     site = site.reshape(-1)[0]
     del npzfile.f # http://stackoverflow.com/questions/9244397/memory-overflow-when-using-numpy-load-in-a-loop
     npzfile.close()
-    
+
     # Try to make plots
     try:
         # Plot some quick-look single-station data (LOSwinds and Temps)
@@ -824,8 +824,8 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                 ax.set_xlabel('Universal Time, [hours]')
 
             # Add Level 1 diagnostics to diagnostics fig
-            if (FPI_Results['EtalonInside'] is not None) or (FPI_Results['EtalonOutside'] is not None):
-                
+            if ((FPI_Results['EtalonInside'] is not None) or (FPI_Results['EtalonOutside'] is not None)) and (len(Diagnostic_Fig.axes)>=8):
+
                 Diagnostic_Fig.axes[0].change_geometry(5,2,1)
                 Diagnostic_Fig.axes[1].change_geometry(5,2,2)
                 Diagnostic_Fig.axes[2].change_geometry(5,2,3)
@@ -834,7 +834,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                 Diagnostic_Fig.axes[6].change_geometry(5,2,6)
                 Diagnostic_Fig.axes[7].change_geometry(5,2,7)
                 Diagnostic_Fig.axes[4].change_geometry(5,2,8)
-                
+
                 Diagnostic_Fig.set_size_inches(12,9,forward=True)
                 Diagnostic_Fig.axes[7].set_label("")
                 ax = Diagnostic_Fig.add_subplot(5,2,9)
@@ -859,7 +859,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
 
 
             Diagnostic_Fig.tight_layout()
-        
+
         #Adding diagnostics from other line sources if they exists (only one for now)
         if sky_line_tag=='X':
             _npzpath=results_stub + instrsitedate+'*.npz'
@@ -1903,7 +1903,7 @@ def load_level0(instr_name, year, doy, sky_line_tag='X', fpi_results_dir =  '/rd
         output['FPI_Results']
         output['instrument']
         output['site']
-        
+
     sky_line_tag == 'X'  --> red line
                  == 'XG' --> green line
     '''
