@@ -561,10 +561,11 @@ def prepare_airglow_bu(station, year, doy, height, el_cutoff):
 def prepare_airglow_dasi(instr_name, year, doy, emission, el_cutoff,cobermax=300, daily_dir="/home/airglow/scratch_data/", repo_ASI="/home/airglow/scratch_data/MANGO_Data",coord_nan=True):
 
     success = True
+    print(instr_name)
 
     # Check if we need to use the other prepare_airglow_dasi function because the 
     # calibration npz file is different
-    if instr_name in ['mro','eio','cvo','low','blo','cfs','bdr']:
+    if instr_name in ['mro','eio','cvo','low','blo','cfs','bdr','mto','par','mro','mdk']:
         return prepare_airglow_dasi2(instr_name, year, doy, emission, el_cutoff, daily_dir=daily_dir, repo_ASI=repo_ASI,coord_nan=coord_nan)
 
     # Obtain datetime object for the imaging data

@@ -669,7 +669,7 @@ def DataSummary(files, times, bin_time = np.arange(17,32,0.5),
     # Work with the data from the files provided
     for f in files:
         # Load the file
-        npzfile = np.load(f,allow_pickle=True)
+        npzfile = np.load(f,allow_pickle=True, encoding='latin1')
 
         # Save data to FPI_Results and site dictionaries
         FPI_Results = npzfile['FPI_Results']
@@ -892,7 +892,7 @@ def DataSummary(files, times, bin_time = np.arange(17,32,0.5),
     masked_U = ma.masked_where((np.isnan(all_U)) | (all_eU > 25) | (all_U > Dmax*2), all_U)
 
     # Plot the data
-    mappable_U = Zonal_Ax.pcolormesh(times,center_time,masked_U,vmin=Dmin,vmax=Dmax)
+    mappable_U = Zonal_Ax.pcolormesh(times,center_time,masked_U,vmin=Dmin,vmax=Dmax, cmap='bwr')
 
     # Fix y-axis labels
     Zonal_Ax.set_ylim(center_time[0],center_time[-1])
@@ -922,7 +922,7 @@ def DataSummary(files, times, bin_time = np.arange(17,32,0.5),
     masked_V = ma.masked_where((np.isnan(all_V)) | (all_eV > 25) | (all_V > Dmax*2), all_V)
 
     # Plot the data
-    mappable_V = Meridional_Ax.pcolormesh(times,center_time,masked_V,vmin=Dmin,vmax=Dmax)
+    mappable_V = Meridional_Ax.pcolormesh(times,center_time,masked_V,vmin=Dmin,vmax=Dmax, cmap='bwr')
 
     # Fix y-axis labels
     Meridional_Ax.set_ylim(center_time[0],center_time[-1])

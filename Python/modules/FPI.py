@@ -923,12 +923,12 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                 cx = np.poly1d(pf_cx)
                 pf_cy = np.polyfit(dt_laser,center[:,1],npoly)
                 cy = np.poly1d(pf_cy)
-                
+
                 #uncomment for linear interpolation
                 #from scipy import interpolate as sinterpolate
                 #cx=sinterpolate.interp1d(dt_laser,center[:,0],kind='linear',fill_value='extrapolate')
                 #cy=sinterpolate.interp1d(dt_laser,center[:,1],kind='linear',fill_value='extrapolate')
-               
+
                 if len(dt_laser) < 6:
                     logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                                 'WARNING: Very few (%i) laser images for center trending. Consider using Zenith reference. <BADLASER>\n' % len(dt_laser))
@@ -973,7 +973,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
             # Calculate the annuli to use for this time
             dt = (local.localize(d.info['LocalTime'])-lt0).seconds
             annuli = FindEqualAreas(img,cx(dt),cy(dt),N)
-            
+
             # Perform annular summation
             laser_spectra, laser_sigma = AnnularSum(img,annuli,0)
 
@@ -986,7 +986,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                 # Intensity and background by looking at fringes
                 I = laser_spectra.max() - laser_spectra.min()
                 B = laser_spectra.min()
-                
+
                 laser_params = Parameters()
                 laser_params.add('n',     value = 1.0,       vary = False)
                 laser_params.add('t',     value = None,      vary = False) # We will search for this
@@ -1000,7 +1000,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                 laser_params.add('b0',    value = 0.5,       vary = False)
                 laser_params.add('b1',    value = 0.0,       vary = False)
                 laser_params.add('b2',    value = 0.0,       vary = False)
-                
+
                 # To find a good initial guess for "t", we'll need to do a grid search.  Search
                 # over 1 FSR around the last solved-for value (or the nominal value, if this is first trial).
                 # TODO: make this grid search a separate general function.

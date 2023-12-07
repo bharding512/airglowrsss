@@ -118,7 +118,7 @@ def runcmd(cmd, verbose = False, *args, **kwargs):
         print(std_out.strip(), std_err)
     pass
 
-def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cfs','mro','bdr'], sites_fpi = ['cvo','low','blo'], ntaps = 13, Tlo   = 2, Thi   = 20, download_data = True, outfolder = "/home/airglow/scratch_data/DASI_Data/", fpi_repo = "/rdata/airglow/fpi/results/", repo_ASI = "/home/airglow/scratch_data/MANGO_Data"):
+def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cfs','mro','bdr'], sites_fpi = ['cvo','low','blo'], ntaps = 13, Tlo   = None, Thi   = None, download_data = True, outfolder = "/home/airglow/scratch_data/DASI_Data/", fpi_repo = "/rdata/airglow/fpi/results/", repo_ASI = "/home/airglow/scratch_data/MANGO_Data"):
 
     try:
         # Date to run
@@ -150,10 +150,19 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
         height = 95
         emission = '5577'
         el_cutoff = 20.
+        if Tlo == None:
+            Tlo = 2
+        if Thi == None:
+            Thi = 20
     elif sky_line_tag == 'XR':
         height = 250
         emission = '6300'
         el_cutoff = 20.
+        if Tlo == None:
+            Tlo = 8
+        if Thi == None:
+            Thi = 30
+
 
     # Define dictionaries
     IM3Dfilt = {}
@@ -277,6 +286,14 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
     cbar_min = np.max([np.median(p2),0]) # Was Min # Force a 0 floor
     cbar_max = np.median(p98) # Was Max
 
+    # Remove values from alltimes that are too close in time (e.g., if one imager is a couple of seconds out of sync)
+    all_unique_times = np.sort(np.unique(all_times))
+
+    unique_times = [all_unique_times[0]]
+    for i in range(1,len(all_unique_times)):
+        if all_unique_times[i] - all_unique_times[i-1] > timedelta(seconds = 10):
+            unique_times.append(all_unique_times[i])
+
     # Plotting
     fig = plt.figure(figsize=(8,4))
     fig.patch.set_facecolor('white')
@@ -306,7 +323,8 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
     my_colors['low'] = '#9467bd'
     my_colors['uao'] = '#8c564b'
 
-    for t in np.unique(all_times):
+#    for t in np.unique(all_times):
+    for t in unique_times:
         fig.clf()
 
         # Plot images on the map
@@ -315,7 +333,9 @@ def MakeSummaryMovies(year, doy, sky_line_tag,sites_asi = ['cvo','low','blo','cf
         axes00.add_feature(feature.STATES,alpha=0.2,zorder=1)
 
         for instr_name in times.keys():
-            i = np.argwhere(np.array(times[instr_name]) == t)
+#            i = np.argwhere(np.array(times[instr_name]) == t)
+            # Find images within 20 seconds of the target time
+            i = np.argwhere(np.abs([td.total_seconds() for td in np.array(times[instr_name])-t]) < 20)
             if len(i) == 1:
                 # We have an image, see if we also have cloud data
                 my_alpha = 1
@@ -491,7 +511,10 @@ if __name__=="__main__":
 
     # Run the code
     try:
-        MakeSummaryMovies(year, doy, sky_line_tag, download_data = download_data)
+        if sky_line_tag == 'XG':
+            MakeSummaryMovies(year, doy, sky_line_tag, download_data = download_data)
+        elif sky_line_tag == 'XR':
+            MakeSummaryMovies(year, doy, sky_line_tag, download_data = download_data, sites_asi = ['cfs','cvo','eio','mdk','mto','par'], sites_fpi = ['cvo','low','blo','uao'])
     except:
         print("Error %d %d %s" % (doy, year, sky_line_tag))
 #    MakeSummaryMovies(year, doy, sky_line_tag, download_data = False, sites_asi = ['mro'])

@@ -155,6 +155,97 @@ _sites['tht'] = {
         'borders':      True,
     }
 
+_sites['cvo'] = {
+        'Location':     (43+13/60.+59/3600.,-(120+40/60.+59/3600.),0.),
+        'Name':         'Christmas Valley Observatory',
+        'Abbreviation': 'CVO',
+        'Timezone':     'US/Pacific',
+        'sql_id':       None,
+        'share':        False,
+        'borders':      True,
+    }
+
+_sites['blo'] = {
+        'Location':     (41+56/60.+1/3600.,-(111+25/60.+14/3600.),0.),
+        'Name':         'Bear Lake Observatory',
+        'Abbreviation': 'BLO',
+        'Timezone':     'US/Mountain',
+        'sql_id':       None,
+        'share':        False,
+        'borders':      True,
+    }
+
+_sites['cfs'] = {
+        'Location':     (38+11/60.+6/3600.,-(111+10/60.+44/3600.),0.),
+        'Name':         'Capitol Reef Field Station',
+        'Abbreviation': 'CFS',
+        'Timezone':     'US/Mountain',
+        'sql_id':       None,
+        'share':        False,
+        'borders':      True,
+    }
+
+_sites['low'] = {
+        'Location':     (34+45/60.+9/3600.,-(111+25/60.+23/3600.),0.),
+        'Name':         'Lowell Observatory',
+        'Abbreviation': 'LOW',
+        'Timezone':     'America/Phoenix',
+        'sql_id':       None,
+        'share':        False,
+        'borders':      True,
+    }
+
+_sites['mro'] = {
+        'Location':     (33+58/60.+36/3600.,-(107+11/60.+6/3600.),0.),
+        'Name':         'Magdalena Ridge Observatory',
+        'Abbreviation': 'MRO',
+        'Timezone':     'US/Mountain',
+        'sql_id':       None,
+        'share':        False,
+        'borders':      True,
+    }
+
+_sites['bdr'] = {
+        'Location':     (31+14/60.+13/3600.,-(98+18/60.+53/3600.),0.),
+        'Name':         'Big Dog Ranch',
+        'Abbreviation': 'BDR',
+        'Timezone':     'US/Central',
+        'sql_id':       None,
+        'share':        False,
+        'borders':      True,
+    }
+
+_sites['eio'] = {
+        'Location':     (41+53/60.+33/3600.,-(91+30/60.+3/3600.),0.),
+        'Name':         'Eastern Iowa Observatory',
+        'Abbreviation': 'EIO',
+        'Timezone':     'US/Central',
+        'sql_id':       None,
+        'share':        False,
+        'borders':      True,
+    }
+
+_sites['par'] = {
+        'Location':     (35.2011, -82.8749,0.),
+        'Name':         'Easte',
+        'Abbreviation': 'Psigah Astronomical Research Institute',
+        'Timezone':     'US/Eastern',
+        'sql_id':       None,
+        'share':        False,
+        'borders':      True,
+    }
+
+_sites['mto'] = {
+        'Location':     (48.16267,-97.683143,0.),
+        'Name':         'Martens Observatory',
+        'Abbreviation': 'MTO',
+        'Timezone':     'US/Central',
+        'sql_id':       None,
+        'share':        False,
+        'borders':      True,
+    }
+
+
 # Instrument definitions
 _instruments = {}
 #TODO: lat, lon and cal file are site dependant ANDt insturment dependent (filter type)  ??
