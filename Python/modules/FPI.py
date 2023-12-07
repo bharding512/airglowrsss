@@ -1448,7 +1448,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
             ccdB_guess = sky_spectra[N0:N1].min()
 
             sky_params.add('lamc', value = lam0,       vary = True ) # We'll do a grid search to find a good value for lamc
-            sky_params.add('T',    value = 1000,       vary = True , min = 0.1, max = 5000.0)
+            sky_params.add('T',    value = 1000,       vary = True , min = 20., max = 5000.0)
             sky_params.add('skyI', value = skyI_guess, vary = True , min = 0.0)
             sky_params.add('skyB', value = skyB_guess, vary = True )
             sky_params.add('skym', value = 0.0,        vary = False) # Don't try to estimate skym (or should we?)
