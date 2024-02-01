@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('AGG')
+#matplotlib.use('AGG')
 
 import time
 from mpl_toolkits.basemap import Basemap
@@ -225,10 +225,10 @@ def process_instr(inst,year,doy,do_DB=True):
                         sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\", SummaryMovie=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (web_stub + keo_name, web_stub + movie_name, site_id, in_id, startut)
                         cur.execute(sql_cmd)
             else:
-                print 'No files used for '+fils+' on this day.'
+                print('No files used for '+fils+' on this day.')
             
         except:
-            print 'Something bad happenend...'
+            print('Something bad happenend...')
             warnings = warnings + traceback.format_exc() + '\n'
             
         finally:
@@ -262,7 +262,7 @@ def ASI_multiprocess(arg_list, num_processes):
             # Set up the thread
             p = multiprocessing.Process(target=process_instr, args=args)
             p.start()
-            print args
+            print(args)
             threads.append(p)
         else:
             # No more free processes.  Check for one to end

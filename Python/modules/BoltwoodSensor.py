@@ -56,7 +56,7 @@ def SkyAlertLog_formatE(file, tz):
         SkyTemp_BoltWood=SkyTemp-AmbientTemp
         return [dt,SkyTemp_BoltWood,AmbientTemp]
 
-    print(file)
+#    print(file)
     lines=open(file,'r').readlines()
     data=np.array(list(map(parser,lines)))
 
@@ -116,7 +116,7 @@ def SkyAlertLog_format(file, tz):
         except:
             return [np.nan, np.nan, np.nan]
 
-    print(file)
+#    print(file)
     lines=open(file,'r').readlines()
     data=np.array(list(map(parser,lines)))
 
@@ -395,7 +395,7 @@ def ReadTempLog(file,tz):
         return ([],[],[])
 
     format=DetermineFormat(file)
-    print(format)
+#    print(format)
     if "old" in format.lower():
         #print "old format"
         dns, sky_temp, amb_temp = ReadTempLog_oldformat(file,tz)

@@ -2,7 +2,7 @@
 # Filename: FPI.py
 
 import matplotlib
-matplotlib.use('AGG')
+#matplotlib.use('AGG')
 
 import subprocess
 import re
@@ -648,7 +648,7 @@ def get_conv_matrix_1D(instr_params, r, L, lam0, nFSRs = 4.):
     for i in range(len(lamvec)):
         # Create a "laser image" at this wavelength and add this to the cumulative sky image
         ptemp = Parameters()
-        for p in instr_params.values():
+        for p in list(instr_params.values()):
             ptemp.add(p.name,value=p.value,vary=p.vary)
         ptemp['lam'].value = lamvec[i]
         single_wavelength_image = Laser_FringeModel(ptemp,r) - B
@@ -736,7 +736,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
 
 
     ############## TEMPORARY ################
-    if 'Abbreviation' in site.keys():
+    if 'Abbreviation' in list(site.keys()):
         if   site['Abbreviation'] == 'a3o':
             FRINGEFACTOR = 0.6
         elif site['Abbreviation'] == 'mrh':
@@ -1031,7 +1031,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                 sigma = laser_sigma[N0:N1]
 
                 for group in order: # set all the params in this group to "vary=True", and then run inversion
-                    for param in laser_params.keys():
+                    for param in list(laser_params.keys()):
                         if param in group:
                             laser_params[param].vary = True
                         else:
@@ -1045,7 +1045,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                     laser_fit = Minimizer(Laser_Residual,laser_params, \
                                         fcn_args=(annuli['r'][N0:N1],), fcn_kws={'data': data, 'sigma': sigma}, \
                                         scale_covar = True)
-                    laser_fit.leastsq()
+                    result = laser_fit.leastsq()
                     laser_params=laser_fit.params
 
                 #if (laser_fit.redchi/laser_fit.params['I'].value < 1.): # TODO: try to find a better way to do this
@@ -1054,15 +1054,15 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                     laser_times.append(local.localize(d.info['LocalTime']))
                     laser_fns.append(fname)
                     # Save the results
-                    output.append(laser_fit)
+                    output.append(result)
 
-                    last_chi = laser_fit.redchi
+                    last_chi = result.redchi
                     last_t = best_t
-                    laser_redchi.append(laser_fit.redchi)
+                    laser_redchi.append(last_chi)
                     laser_fringes.append(data)
                     laser_annuli.append(annuli['r'][N0:N1])
 
-                    logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + '%s reduced chisqr: %.4f\n' % (fname, laser_fit.redchi))
+                    logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + '%s reduced chisqr: %.4f\n' % (fname, last_chi))
 
             else:
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + '%s is invalid and not analyzed.\n' % fname)
@@ -1319,7 +1319,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
     # Categorize the look directions in the directory
     valid_az = np.array([site['Directions'][direc]['az'] for direc in site['Directions']])
     valid_ze = np.array([site['Directions'][direc]['ze'] for direc in site['Directions']])
-    direc_names = site['Directions'].keys()
+    direc_names = list(site['Directions'].keys())
     all_az = []
     all_ze = []
     for fname in sky:
@@ -1388,7 +1388,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
             az.append(temp_az)
             ze.append(temp_ze)
             # Change direction index into string
-            idx_match = direc_idx[i] # This is a list like [1] or [1,3] or []
+            idx_match = list(direc_idx[i]) # This is a list like [1] or [1,3] or []
             # How many matches were there? Do something different for each case.
             direcstr = ''
             if len(idx_match)==0: # No match was found
@@ -1427,7 +1427,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
 
 
             # Use the spline-interpolated values for the instrument function at this time
-            for param in laser_spfits.iterkeys():
+            for param in laser_spfits.keys():
                 sky_params.add(param, value = laser_spfits[param](my_dt), vary = False)
 
             # But change the sky wavelength to lam0
@@ -1480,7 +1480,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                      ]
 
             for group in order: # set all the params in this group to "vary=True", and then run inversion
-                for param in sky_params.keys():
+                for param in list(sky_params.keys()):
                     if param in group:
                         sky_params[param].vary = True
                     else:
@@ -1489,8 +1489,8 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                 sky_fit = Minimizer(Sky_Residual,sky_params,fcn_args=(annuli['r'][N0:N1],lamvec,A_1D), \
                           fcn_kws={'data': sky_spectra[N0:N1], 'sigma': sky_sigma[N0:N1]}, scale_covar=True)
                 sky_fit.prepare_fit()
-                sky_fit.leastsq()
-                sky_params=sky_fit.params
+                result = sky_fit.leastsq()
+                sky_params=result.params
 
             # Redo the fit using only points near the spectral peak (determined by fringefactor)
             if FRINGEFACTOR < 1.0:
@@ -1524,17 +1524,17 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                           fcn_kws={'data': sky_spectra2, 'sigma': sky_sigma2})
                 sky_fit.prepare_fit()
                 sky_fit.scale_covar = True
-                sky_fit.leastsq()
-                sky_params=sky_fit.params
+                result = sky_fit.leastsq()
+                sky_params=result.params
 
              # if the inversion failed, replace values with nans and set error bars to inf
-            if not sky_fit.success or not sky_fit.errorbars or np.isnan(sky_fit.params['lamc'].stderr):
-                for p in sky_fit.params:
-                    sky_fit.params[p].value = np.nan
-                    sky_fit.params[p].stderr = np.inf
+            if not result.success or not result.errorbars or np.isnan(result.params['lamc'].stderr):
+                for p in result.params:
+                    result.params[p].value = np.nan
+                    result.params[p].stderr = np.inf
 
-            sky_redchi.append(sky_fit.redchi)
-            sky_out.append(sky_fit)
+            sky_redchi.append(result.redchi)
+            sky_out.append(result)
             sky_fringes.append(sky_spectra[N0:N1])
             sky_annuli.append(annuli['r'][N0:N1])
 
@@ -1561,8 +1561,8 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
             sigma_fit_LOSwind.append(sigma_fit_v) # fit error
             sigma_cal_LOSwind.append(sigma_cal_v)
             sigma_LOSwind.append(sqrt(sigma_fit_v**2 + sigma_cal_v**2))
-            T.append(sky_fit.params['T'].value)
-            sigma_T.append(sky_fit.params['T'].stderr)
+            T.append(result.params['T'].value)
+            sigma_T.append(result.params['T'].stderr)
             # Normalize skyI and skyB by integration time
             skyI.append(sky_params['skyI'].value/intT)
             sigma_skyI.append(sky_params['skyI'].stderr/intT)
@@ -1570,7 +1570,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
             sigma_skyB.append(sky_params['skyB'].stderr/intT)
             ccdB.append(sky_params['ccdB'].value)
             sigma_ccdB.append(sky_params['ccdB'].stderr)
-            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + '%s reduced chisqr: %.4f.\n\t\t\tMessage:"%s"\n' % (fname, sky_fit.redchi, sky_fit.message))
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + '%s reduced chisqr: %.4f.\n\t\t\tMessage:"%s"\n' % (fname, result.redchi, result.message))
 
 
             # use the lamc value to center the next grid search, if the error bars are small enough
@@ -1741,7 +1741,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
 
         ax = fig.add_subplot(428, projection='polar')
         ax.plot(valid_az_rad, valid_ze, 'kx', label = 'valid')
-        valid_idx = [d is not 'Unknown' for d in direction]
+        valid_idx = [d != 'Unknown' for d in direction]
         invalid_idx = [not i for i in valid_idx]
         ax.plot(az_rad[np.where(valid_idx)], all_ze[np.where(valid_idx)], 'k.', label = 'actual')
         ax.plot(az_rad[np.where(invalid_idx)], all_ze[np.where(invalid_idx)], 'r.', label = 'unrecognized')
@@ -2043,7 +2043,7 @@ def average_data(files, bins=np.arange(17,32,0.25),
                         edop = np.sqrt(FPI_Results['sigma_LOSwind'][ind]**2+sigma_w[ind]**2)
 
                         # Check if clouds are provided
-                        if 'Clouds' in FPI_Results.keys():
+                        if 'Clouds' in list(FPI_Results.keys()):
                             if FPI_Results['Clouds'] is not None:
                                 clouds = FPI_Results['Clouds']['mean'][ind]
                                 idx = clouds < cloudy_temperature
@@ -2078,7 +2078,7 @@ def average_data(files, bins=np.arange(17,32,0.25),
                         edop = np.sqrt(FPI_Results['sigma_LOSwind'][ind]**2+sigma_w[ind]**2)
 
                         # Check if clouds are provided
-                        if 'Clouds' in FPI_Results.keys():
+                        if 'Clouds' in list(FPI_Results.keys()):
                             if FPI_Results['Clouds'] is not None:
                                 clouds = FPI_Results['Clouds']['mean'][ind]
                                 idx = clouds < cloudy_temperature
@@ -2111,7 +2111,7 @@ def average_data(files, bins=np.arange(17,32,0.25),
                         edop = np.sqrt(FPI_Results['sigma_LOSwind'][ind]**2+sigma_w[ind]**2)
 
                         # Check if clouds are provided
-                        if 'Clouds' in FPI_Results.keys():
+                        if 'Clouds' in list(FPI_Results.keys()):
                             if FPI_Results['Clouds'] is not None:
                                 clouds = FPI_Results['Clouds']['mean'][ind]
                                 idx = clouds < cloudy_temperature
@@ -2146,7 +2146,7 @@ def average_data(files, bins=np.arange(17,32,0.25),
                         edop = np.sqrt(FPI_Results['sigma_LOSwind'][ind]**2+sigma_w[ind]**2)
 
                         # Check if clouds are provided
-                        if 'Clouds' in FPI_Results.keys():
+                        if 'Clouds' in list(FPI_Results.keys()):
                             if FPI_Results['Clouds'] is not None:
                                 clouds = FPI_Results['Clouds']['mean'][ind]
                                 idx = clouds < cloudy_temperature
@@ -2179,7 +2179,7 @@ def average_data(files, bins=np.arange(17,32,0.25),
                         edop = np.sqrt(FPI_Results['sigma_LOSwind'][ind]**2+sigma_w[ind]**2)
 
                         # Check if clouds are provided
-                        if 'Clouds' in FPI_Results.keys():
+                        if 'Clouds' in list(FPI_Results.keys()):
                             if FPI_Results['Clouds'] is not None:
                                 clouds = FPI_Results['Clouds']['mean'][ind]
                                 idx = clouds < cloudy_temperature
@@ -2203,7 +2203,7 @@ def average_data(files, bins=np.arange(17,32,0.25),
                             ev2_dop = np.hstack((ev2_dop,edop))
 
             except:
-                print(f + 'does not exist')
+                print((f + 'does not exist'))
 
 
         center_time = (bins[0:-1]+bins[1:])/2.

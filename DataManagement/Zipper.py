@@ -23,7 +23,7 @@ import os
 import sys
 from glob import glob
 import datetime as dt
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import tarfile
 import shutil
 from optparse import OptionParser
@@ -247,7 +247,7 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
             d = dt.date.fromordinal(dt.datetime(pyear,1,1).toordinal()-1+pdoy+1)
             nday = d.strftime('%d')
 
-        print instr+': '+day+'-'+mon+'-'+year
+        print(instr+': '+day+'-'+mon+'-'+year)
         # Go to local directory!
         os.chdir(code[site][instr][num]['local_dir'])
         filename = "%03s%02s_%s_%04s%02s%02s.tar.gz" %(instr,num,site,year,month,day)
@@ -264,7 +264,7 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
                 if os.path.dirname(nn) not in _f:
                     _f.append(os.path.dirname(nn))
             for __i in _f:
-                print "Zipping from %s/%s"%( code[site][instr][num]['local_dir'], __i )
+                print("Zipping from %s/%s"%( code[site][instr][num]['local_dir'], __i ))
             #
             zipper(name,filename)
             splitter(site,instr,num,code,filename,checkname,mfs)
@@ -283,7 +283,7 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
                 tar.add(doy);
                 os.rename(code[site][instr][num]['local_dir']+year+'/'+doy,code[site][instr][num]['local_dir']+year+'/'+mon+name)
             except:
-                print "!!! No Data"
+                print("!!! No Data")
             tar.close()
             splitter(site,instr,num,code,filename,checkname,mfs)
             os.remove(code[site][instr][num]['local_dir']+year+'/'+filename)
@@ -300,7 +300,7 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
             if os.path.exists(localpath):
                 os.remove(localpath)
             if 'api/history' in code[site][instr][num]['url']:
-                print "homeassistant starts..."
+                print("homeassistant starts...")
                 sys.path = sys.path + ['C:\Scripts',]
                 from read_history_hass import query_sensor
                 d0=(dt.datetime.now()-dt.timedelta(days=30)).replace(tzinfo=pytz.UTC)
@@ -311,15 +311,15 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
                     line="%s,%.2f\n"%(_date.strftime("%Y/%m/%d %H:%M:%S"),_temp)
                     h.write(line)
                 h.close()
-		sys.path.pop()
+                sys.path.pop()
             else:
-                print 'try reading from rpi or x300'
+                print('try reading from rpi or x300')
                 ntry=5
                 while ntry>0:
                     try:
-                        urllib.urlretrieve(code[site][instr][num]['url'],localpath)
+                        urllib.request.urlretrieve(code[site][instr][num]['url'],localpath)
                         if os.stat(localpath).st_size > 100:
-                            print 'success!'
+                            print('success!')
                             break
                     except:
                         pass
@@ -348,7 +348,7 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
             # Check filesize for offline X300
             if os.stat(code[site][instr][num]['send_dir']+filename).st_size < 100:
                 # Send checkfile that system is down!
-                print 'No Data ERROR!!!'
+                print('No Data ERROR!!!')
                 check = open(checkname, 'w')
                 check.write(filename+'\n0\n0\n'+str(now)+'\n999\n')
                 # Legend for checkfile + boosts size for Sending
@@ -379,7 +379,7 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
                     h=open(compiledfile,'r')
                     lines=h.readlines()
                     h.close()
-                    selected=list(filter(lambda line:"%04s-%02s-%02s"%(y,m,d) in line,lines))
+                    selected=list([line for line in lines if "%04s-%02s-%02s"%(y,m,d) in line])
                     #save rows into temporal file if any
                     if len(selected)>0:
                         temporal=local_dir+'temporal.txt'
@@ -413,7 +413,7 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
                         send_skyalert_rows(tyear,tmonth,tday,send_name=filename)
             else:
                 ## Send checkfile that system is down!
-                print 'No Data Error!'
+                print('No Data Error!')
                 os.chdir(code[site][instr][num]['send_dir'])
                 check = open(checkname, 'w')
                 check.write(filename+'\n0\n0\n'+str(now)+'\n999\n')
@@ -455,7 +455,7 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
             os.remove(code[site][instr][num]['local_dir']+filename)
 
         if 'xxx' == instr:
-            print '\nPlease check your input:\nsite -s\ninstrumetn -i\nnumber -n\n'
+            print('\nPlease check your input:\nsite -s\ninstrumetn -i\nnumber -n\n')
 
 def searcher(site,instrument,num,local_dir):
     '''
@@ -499,15 +499,15 @@ def searcher(site,instrument,num,local_dir):
     #get acquisition datetime
     dts=list(map(getDT,imgpaths))
     #build matrix with rows [dt,path]
-    data=np.array(zip(dts,imgpaths),dtype=np.object)
-    print("Total IMG found %i"%data.shape[0])
+    data=np.array(list(zip(dts,imgpaths)),dtype=np.object)
+    print(("Total IMG found %i"%data.shape[0]))
     #flag the ones were not readable
     idx=data[:,0]==None
     badfiles=data[idx,:]
-    print("\tIMG with non-readable headers were %i"%badfiles.shape[0])
+    print(("\tIMG with non-readable headers were %i"%badfiles.shape[0]))
     #work with good IMG files
     data=data[~idx,:]
-    print("\tIMG OK were %i"%data.shape[0])
+    print(("\tIMG OK were %i"%data.shape[0]))
     #sort them
     data=sorted(data.tolist())
     #group them by day. One day is considered from 15 LT to next day 15 LT.
@@ -523,14 +523,14 @@ def searcher(site,instrument,num,local_dir):
         for _dt,_items in repeatedgroups:
             items=np.array(list(_items),dtype=np.object)
             if items.shape[0]>1:
-                sizes=np.array(map(lambda item:os.stat(item[1]).st_size,items))
+                sizes=np.array([os.stat(item[1]).st_size for item in items])
                 idx=np.where(sizes==np.max(sizes))[0][0]
                 lista.append(items[idx,1])
             else:
                 lista.append(items[0,1])
         #getting ready to zip and upload files
         _dt=dt.datetime.strptime(doyyear,"%j%Y")
-        print("Zipping and Splitting %i non-repeated files from %s"%(len(lista),_dt.strftime("%d %h %Y")))
+        print(("Zipping and Splitting %i non-repeated files from %s"%(len(lista),_dt.strftime("%d %h %Y"))))
         os.chdir(code[site][instr][num]['local_dir'])
         filename = "%03s%02s_%s_%s.tar.gz" %(instr,num,site,_dt.strftime("%Y%m%d"))
         checkname = "%03s%02s_%s_%s.txt" %(instr,num,site,_dt.strftime("%Y%m%d"))
@@ -613,7 +613,7 @@ def splitter(site,instr,num,code,filename,checkname,mfs):
         pieces = glob(filename + '*')
         check.write(pieces[0]+'\n' + str(len(pieces))+'\n' + str(statinfo.st_size)+'\n'+str(now)+'\n'+str(df)+'\n')
     else:
-        print 'COLLECTION ERROR!!!'
+        print('COLLECTION ERROR!!!')
         # Make error checkfile
         os.chdir(code[site][instr][num]['send_dir'])
         check = open(checkname, 'w')
@@ -664,14 +664,14 @@ if __name__=="__main__":
         sys.exit()
 
     if len(instr)>3:
-        print 'Usable Instrument Keys: fpi,asi,nfi,pic,sky,swe,cas,tec,scn,bwc,x3t'
+        print('Usable Instrument Keys: fpi,asi,nfi,pic,sky,swe,cas,tec,scn,bwc,x3t')
 
     if "None" in path2search:
         doer(site,instr,num,prior,pyear,pdoy)
     else:
-        print "Searching within %s..."%path2search
+        print("Searching within %s..."%path2search)
         searcher(site, instr, num, path2search)
 
-    print 'Zip Complete...'
+    print('Zip Complete...')
 
 

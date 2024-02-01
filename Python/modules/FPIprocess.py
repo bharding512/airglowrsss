@@ -25,9 +25,9 @@ from matplotlib import dates
 import shutil
 
 # For quick testing of these modules, force a reload
-reload(FPIDisplay)
-reload(FPI)
-reload(fpiinfo)
+#reload(FPIDisplay)
+#reload(FPI)
+#reload(fpiinfo)
 
 
 
@@ -426,7 +426,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
 
     # More than 90% of sky images were taken under too hot conditions
     if not use_npz and sky_fns:
-        temps=np.array(map(lambda fn:FPI.ReadIMG(fn).info['CCDTemperature'],sky_fns))
+        temps=np.array(list(map(lambda fn:FPI.ReadIMG(fn).info['CCDTemperature'],sky_fns)))
         nbad=np.count_nonzero(temps>-10)
         if nbad/temps.size>0.9:
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'About %i/%i sky images from %s had temperatures over -10C between %s and %s. <HOTCCD> \n' % (nbad, temps.size, instr_name, str(start_dt), str(stop_dt)))
@@ -470,13 +470,14 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
     FPI_Results = quality_hack(instr_name, year, doy, FPI_Results, logfile)
 
 
-    # Grab the SVN revision number, so we know what code was used to process this day.
-    svndir = '/'.join(FPI.__file__.split('/')[:-1]) # get the directory of FPI.py
-    p = subprocess.Popen('svnversion %s'%svndir,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    (stdout,stderr) = p.communicate()
-    sv = re.split(':|\n', stdout)[0]
+#    # Grab the SVN revision number, so we know what code was used to process this day.
+#    svndir = '/'.join(FPI.__file__.split('/')[:-1]) # get the directory of FPI.py
+#    p = subprocess.Popen('svnversion %s'%svndir,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+#    (stdout,stderr) = p.communicate()
+#    sv = re.split(':|\n', stdout)[0]
 
     # Save the SVN version number
+    sv = "NONE"
     FPI_Results['SVNRevision'] = sv
 
     # Try to load the Boltwood and X300 data. This is inside a try block so that
@@ -869,7 +870,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         _npzpath=[p for p in _npzpath if p not in npzname]#removed npz already displayed on this run
         if len(_npzpath)==1:
             ss='X' if 'G' in sky_line_tag else 'XG'
-            FPIDisplay.__add_skyline2diagnostic(Diagnostic_Fig,_npzpath[0],sky_line_tag=ss)
+# DISABLED JJM            FPIDisplay.__add_skyline2diagnostic(Diagnostic_Fig,_npzpath[0],sky_line_tag=ss)
         elif len(_npzpath)>1:
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Several npz files found for other line sources!: '+str(_npzpath)+'This was not added into the diagnostic plots and needs attention!!!!.\n' % (datestr))
 
@@ -945,10 +946,11 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         plt.close(fig)
 
     if send_to_website:
+        import configparser
         import MySQLdb as mdb
         from sshtunnel import SSHTunnelForwarder
 
-        def query(sql_cmd):
+        def query(sql_cmd, params=None):
             with SSHTunnelForwarder(
                     ('webhost.engr.illinois.edu', 22),
                     ssh_username='airglowgroup',
@@ -957,11 +959,11 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             ) as server:
                     con = mdb.connect(host='127.0.0.1', db='airglowgroup_webdatabase', port=server.local_bind_port, read_default_file="/home/airglow/.my.cnf")
                     cur = con.cursor()
-                    cur.execute(sql_cmd)
+                    cur.execute(sql_cmd, params)
                     rows = cur.fetchall()
                     return rows
             
-        def query2(sql_cmd):
+        def query2(sql_cmd, params=None):
             with SSHTunnelForwarder(
                     ('airglowgroup.web.illinois.edu', 22),
                     ssh_username='airglowgroup',
@@ -970,10 +972,10 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             ) as server:
                     con = mdb.connect(host='127.0.0.1', db='airglowgroup_webdatabase', port=server.local_bind_port, read_default_file="/home/airglow/.my2.cnf")
                     cur = con.cursor()
-                    cur.execute(sql_cmd)
+                    cur.execute(sql_cmd,params)
                     rows = cur.fetchall()
                     return rows
-
+            
         site_id = site['sql_id']
         utc = pytz.utc # Define timezones
 
@@ -990,72 +992,80 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         stoput = dn.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
 
         ## ORIGINAL DATABASE
-        # Open the database (see http://zetcode.com/databases/mysqlpythontutorial/ for help)
-        # Read the user and password from a file.
-#        con = mdb.connect(host='webhost.engr.illinois.edu', db='airglowgroup_webdatabase', read_default_file="/home/airglow/.my.cnf")
-#        cur = con.cursor()
-        # Send summary images to server
-        for fn, db_id in zip(summary_fns, db_ids):
-            flag = subprocess.call(['scp', temp_plots_stub + fn, scp_user + ':' + web_images_stub + fn]) # send to airglow
-            if flag != 0: # Sending png to airglow failed
-                logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
-                notify_the_humans = True
-            # If we are supposed to put this png in Madrigal, put it in the Madrigal database directory
-            if send_to_madrigal and instrument['send_to_madrigal'] and 'diagnostic' not in fn:
-                shutil.copy(temp_plots_stub + fn ,madrigal_stub) # save the figure to the madrigal directory
-            # update the database
-            # Send png. First find out if the entry is in there (i.e., we are just updating the png)
-            sql_cmd = 'SELECT id FROM DataSet WHERE SummaryImage = \"%s\"' % (db_image_stub + fn)
-            #sql_cmd = 'SELECT id FROM DataSet WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (site_id, db_id, startut)
-            rows = query(sql_cmd)
-#            cur.execute(sql_cmd)
-#            rows = cur.fetchall()
-            log_fn = db_log_stub + instrsitedate + '_log.log'
-            if len(rows) == 0: # Create the entry
-                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%d, %d, \"%s\", \"%s\", \"%s\", \"%s\")' % (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
-                logfile.write(sql_cmd + '\n')
-                query(sql_cmd)
-#                cur.execute(sql_cmd)
-            else: # Entry exists. Update it.
-                sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE id = %d' % (db_image_stub + fn, log_fn, rows[0][0])
-                # sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + fn, log_fn, site_id, db_id, startut)
-#                cur.execute(sql_cmd)
-                logfile.write(sql_cmd + '\n')
-                query(sql_cmd)
+        # Reworked to Python3 using mysql.connector
 
-        # Send level 3 windfield gif to website, if we made one
-        if gif_fn is not None:
-            # Since the start/stop time of a network is ill-defined, just make up a start time: 21 UT on the 1st night, and 12 UT on the second night. This will have to be updated for networks other than NATION.
-            d = FPI.ReadIMG(sky_fns[0])
-            # Define midnight on the first night
-            dtime = d.info['LocalTime'] - datetime.timedelta(hours=12)
-            midnight = dtime - datetime.timedelta(hours=dtime.hour, minutes=dtime.minute, seconds=dtime.second)
-            start = midnight + datetime.timedelta(hours=21)
-            stop  = midnight + datetime.timedelta(hours=36)
-            startut = start.strftime('%Y-%m-%d %H:%M:%S')
-            stoput = stop.strftime('%Y-%m-%d %H:%M:%S')
-            network_info = fpiinfo.get_network_info(network_name)
-            network_id   = network_info['sql_id']
-            gif_id       = network_info['quicklook_gif_id']
-            flag = subprocess.call(['scp', gif_fn, scp_user + ':' + web_images_stub + gif_fn.split('/')[-1]]) # send to airglow
-            if flag != 0: # Sending png to airglow failed
-                logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending "%s" to airglow server for displaying on website.\n' % gif_fn)
-                notify_the_humans = True
-            # Register the gif. First find out if the entry is in there (i.e., we are just updating it)
-            sql_cmd = 'SELECT id FROM DataSet WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (network_id, gif_id, startut)
-#            cur.execute(sql_cmd)
-#            rows = cur.fetchall()
-            row = query(sql_cmd)
-            if len(rows) == 0: # Create the entry
-        #if True:
-                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage) VALUES(%d, %d, \"%s\", \"%s\", \"%s\")' % (network_id, gif_id, startut, stoput, db_image_stub + gif_fn.split('/')[-1])
-                logfile.write(sql_cmd + '\n')
-                query(sql_cmd)
-#                cur.execute(sql_cmd)
-            else: # Entry exists. Update it.
-                sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + gif_fn.split('/')[-1], network_id, gif_id, startut)
-                query(sql_cmd)
-#                cur.execute(sql_cmd)
+#        # Send summary images to server
+#        for fn, db_id in zip(summary_fns, db_ids):
+#            flag = subprocess.call(['scp', temp_plots_stub + fn, scp_user + ':' + web_images_stub + fn]) # send to airglow
+#            if flag != 0: # Sending png to airglow failed
+#                logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
+#                notify_the_humans = True
+#            print('Upload')
+#            # If we are supposed to put this png in Madrigal, put it in the Madrigal database directory
+#            if send_to_madrigal and instrument['send_to_madrigal'] and 'diagnostic' not in fn:
+#                shutil.copy(temp_plots_stub + fn ,madrigal_stub) # save the figure to the madrigal directory
+#            print('Madrigal')
+#            # update the database
+#            # Send png. First find out if the entry is in there (i.e., we are just updating the png)
+#            sql_cmd = 'SELECT id FROM DataSet WHERE SummaryImage = %s'
+#            params = (db_image_stub + fn, )
+#        
+#            # Call the query function and capture the result
+#            rows = query(sql_cmd, params)
+#            print('Query1')
+#            # The log filename
+#            log_fn = db_log_stub + instrsitedate + '_log.log'
+#            if len(rows) == 0: # Create the entry
+#                print('Going to insert')
+#                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%s, %s, %s, %s, %s, %s)'
+#                params = (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
+#                logfile.write(sql_cmd + ' ' + str(params) + '\n')
+#                query(sql_cmd, params)  
+#                print('inserted')
+#            else: # Entry exists. Update it.
+#                sql_cmd = 'UPDATE DataSet SET SummaryImage=%s, LogFile=%s WHERE id = %s'
+#                params = (db_image_stub + fn, log_fn, rows[0][0])
+#                logfile.write(sql_cmd + ' ' + str(params) + '\n')
+#                query(sql_cmd, params)
+#
+#        # Send level 3 windfield gif to website, if we made one
+#        if gif_fn is not None:
+#            # Since the start/stop time of a network is ill-defined, just make up a start time: 21 UT on the 1st night, and 12 UT on the second night. This will have to be updated for networks other than NATION.
+#            d = FPI.ReadIMG(sky_fns[0])
+#            # Define midnight on the first night
+#            dtime = d.info['LocalTime'] - datetime.timedelta(hours=12)
+#            midnight = dtime - datetime.timedelta(hours=dtime.hour, minutes=dtime.minute, seconds=dtime.second)
+#           start = midnight + datetime.timedelta(hours=21)
+#            stop  = midnight + datetime.timedelta(hours=36)
+#            startut = start.strftime('%Y-%m-%d %H:%M:%S')
+#            stoput = stop.strftime('%Y-%m-%d %H:%M:%S')
+#            network_info = fpiinfo.get_network_info(network_name)
+#            network_id   = network_info['sql_id']
+#            gif_id       = network_info['quicklook_gif_id']
+#            flag = subprocess.call(['scp', gif_fn, scp_user + ':' + web_images_stub + gif_fn.split('/')[-1]]) # send to airglow
+#            if flag != 0: # Sending png to airglow failed
+#                logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending "%s" to airglow server for displaying on website.\n' % gif_fn)
+#                notify_the_humans = True
+#            # Register the gif. First find out if the entry is in there (i.e., we are just updating it)
+#            sql_cmd = 'SELECT id FROM DataSet WHERE Site = %s and Instrument = %s and StartUTTime = %s'
+#            params = (network_id, gif_id, startut)
+#            rows = query(sql_cmd, params)
+#
+#            if len(rows) == 0: # Create the entry
+#                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage) VALUES(%s, %s, %s, %s, %s)'
+#                params = (network_id, gif_id, startut, stoput, db_image_stub + gif_fn.split('/')[-1])
+#
+#                # Logging the command; note that we log the command with placeholders
+#                logfile.write(sql_cmd + ' ' + str(params) + '\n')
+#
+#                # Execute the query
+#                query(sql_cmd, params)
+#            else: # Entry exists. Update it.
+#                sql_cmd = 'UPDATE DataSet SET SummaryImage = %s WHERE Site = %s and Instrument = %s and StartUTTime = %s'
+#                params = (db_image_stub + gif_fn.split('/')[-1], network_id, gif_id, startut)
+#
+#                # Execute the query
+#                query(sql_cmd, params)
 
         # NEW DATABASE
         # Open the database (see http://zetcode.com/databases/mysqlpythontutorial/ for help)
@@ -1063,27 +1073,35 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
 
         # Send summary images to server
         for fn, db_id in zip(summary_fns, db_ids):
-#            flag = subprocess.call(['scp', temp_plots_stub + fn, scp_user + ':' + web_images_stub + fn]) # send to airglow
-#            if flag != 0: # Sending png to airglow failed
-#                logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
-#                notify_the_humans = True
-#            # If we are supposed to put this png in Madrigal, put it in the Madrigal database directory
-#            if send_to_madrigal and instrument['send_to_madrigal'] and 'diagnostic' not in fn:
-#                shutil.copy(temp_plots_stub + fn ,madrigal_stub) # save the figure to the madrigal directory
+            flag = subprocess.call(['scp', temp_plots_stub + fn, scp_user + ':' + web_images_stub + fn]) # send to airglow
+            if flag != 0: # Sending png to airglow failed
+                logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
+                notify_the_humans = True
+
+            # If we are supposed to put this png in Madrigal, put it in the Madrigal database directory
+            if send_to_madrigal and instrument['send_to_madrigal'] and 'diagnostic' not in fn:
+                shutil.copy(temp_plots_stub + fn ,madrigal_stub) # save the figure to the madrigal directory
+
             # update the database
             # Send png. First find out if the entry is in there (i.e., we are just updating the png)
-            sql_cmd = 'SELECT id FROM DataSet WHERE SummaryImage = \"%s\"' % (db_image_stub + fn)
-            #sql_cmd = 'SELECT id FROM DataSet WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (site_id, db_id, startut)
-            rows = query2(sql_cmd)
+            sql_cmd = 'SELECT id FROM DataSet WHERE SummaryImage = %s'
+            params = (db_image_stub + fn, )
+
+            # Call the query function and capture the result
+            rows = query2(sql_cmd, params)
+
+            # The log filename
             log_fn = db_log_stub + instrsitedate + '_log.log'
             if len(rows) == 0: # Create the entry
-                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%d, %d, \"%s\", \"%s\", \"%s\", \"%s\")' % (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
-                logfile.write(sql_cmd + '\n')
-                query2(sql_cmd)
+                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%s, %s, %s, %s, %s, %s)'
+                params = (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
+                logfile.write(sql_cmd + ' ' + str(params) + '\n')
+                query2(sql_cmd, params)  
             else: # Entry exists. Update it.
-                sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\",LogFile=\"%s\" WHERE id = %d' % (db_image_stub + fn, log_fn, rows[0][0])
-                logfile.write(sql_cmd + '\n')
-                query2(sql_cmd)
+                sql_cmd = 'UPDATE DataSet SET SummaryImage=%s, LogFile=%s WHERE id = %s'
+                params = (db_image_stub + fn, log_fn, rows[0][0])
+                logfile.write(sql_cmd + ' ' + str(params) + '\n')
+                query2(sql_cmd, params)
 
         # Send level 3 windfield gif to website, if we made one
         if gif_fn is not None:
@@ -1104,15 +1122,25 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending "%s" to airglow server for displaying on website.\n' % gif_fn)
                 notify_the_humans = True
             # Register the gif. First find out if the entry is in there (i.e., we are just updating it)
-            sql_cmd = 'SELECT id FROM DataSet WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (network_id, gif_id, startut)
-            row = query2(sql_cmd)
+            sql_cmd = 'SELECT id FROM DataSet WHERE Site = %s and Instrument = %s and StartUTTime = %s'
+            params = (network_id, gif_id, startut)
+            rows = query2(sql_cmd, params)
+
             if len(rows) == 0: # Create the entry
-                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage) VALUES(%d, %d, \"%s\", \"%s\", \"%s\")' % (network_id, gif_id, startut, stoput, db_image_stub + gif_fn.split('/')[-1])
-                logfile.write(sql_cmd + '\n')
-                query2(sql_cmd)
+                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage) VALUES(%s, %s, %s, %s, %s)'
+                params = (network_id, gif_id, startut, stoput, db_image_stub + gif_fn.split('/')[-1])
+
+                # Logging the command; note that we log the command with placeholders
+                logfile.write(sql_cmd + ' ' + str(params) + '\n')
+
+                # Execute the query
+                query2(sql_cmd, params)
             else: # Entry exists. Update it.
-                sql_cmd = 'UPDATE DataSet SET SummaryImage=\"%s\" WHERE Site = %d and Instrument = %d and StartUTTime = \"%s\"' % (db_image_stub + gif_fn.split('/')[-1], network_id, gif_id, startut)
-                query2(sql_cmd)
+                sql_cmd = 'UPDATE DataSet SET SummaryImage = %s WHERE Site = %s and Instrument = %s and StartUTTime = %s'
+                params = (db_image_stub + gif_fn.split('/')[-1], network_id, gif_id, startut)
+
+                # Execute the query
+                query2(sql_cmd, params)
 
     logfile.close()
     if send_to_website:

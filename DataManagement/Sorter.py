@@ -8,6 +8,7 @@ History: 25 Aug 2011 - initial script written (PERL)
          08 Nov 2021 - Added alert if no FPI data is found for two consecutive nights by L. Navarro
 
 Written by Daniel J. Fisher (dfisher2@illinois.edu)
+Updated
 '''
 
 # Import required modules
@@ -27,14 +28,14 @@ from Zipper import activeinstruments
 import matplotlib
 matplotlib.use('AGG')
 import fpiinfo
-import asiinfo
+import asiinfo 
 import gpsinfo
 # Data Processing modules
 import FPI
 from PIL import Image
 import FPIprocess
-import ASIprocess
-import GPSprocess
+#import ASIprocess # Disabled on Jan 30, 2024 by JJM as asi processing isn't updated to py3
+# import GPSprocess # Disabled on Jan 30, 2024 by JJM as gps processing isn't updated to py3
 
 
 def instrumentcode():
@@ -103,7 +104,7 @@ def sortinghat(dir_data,f):
     info.close()
 
     # Parse Name
-    print f
+    print(f)
     instr_inum,site,dates=f.split('_')
     instr= instr_inum[0:3]
     inum = instr_inum[3:5]
@@ -113,11 +114,11 @@ def sortinghat(dir_data,f):
     emails = activeinstruments()[site][instr][inum]['email']
 
     # Check all parts present
-    print 'Parts:',len(glob(zelda + '*')),'/',parts
+    print('Parts:',len(glob(zelda + '*')),'/',parts)
     ## Case 1 - no data created last night
     if(tsize ==0 and parts == 0):
         ## Emails Warning that system is down!
-        print '!!! No Data Collected'
+        print('!!! No Data Collected')
         if instr in ['asi','nfi','pic','sky','swe']:
             msg = "%s%s down at %s!\nIs it a full moon?\nInternet & Sortinghat are working, is it an instrument/PC issue." %(code[instr],inum,site)
         else:
@@ -132,19 +133,19 @@ def sortinghat(dir_data,f):
         try:
             os.makedirs(dir_data)
             os.system('chmod u+rwx,go+rX,go-w ' +dir_data)
-            print "!!! Folder Created - Verify..."
+            print("!!! Folder Created - Verify...")
         except OSError:
-            print '!!! Folders Exist... moving on'
+            print('!!! Folders Exist... moving on')
         # Concatinate the split files
         oscar = glob(zelda+'*')
         oscar.sort()
-        print "\n".join(str(x) for x in oscar)
+        print("\n".join(str(x) for x in oscar))
         tempfile="temp_%s.tar.gz"%(dt.datetime.now().strftime("%Y%m%d%H%M%S%f"))
         os.system('cat ' + zelda + '* > '+tempfile)
         os.system('chmod 770 '+tempfile)
         # Check that size is correct
         statinfo = os.stat(tempfile)
-        print 'Sizes:',statinfo.st_size,'/',tsize
+        print('Sizes:',statinfo.st_size,'/',tsize)
         if statinfo.st_size == tsize:
             # Untar the gunzip files
             tar = tarfile.open(tempfile,"r:gz")
@@ -155,20 +156,20 @@ def sortinghat(dir_data,f):
             except:
                 age = (dt.datetime.utcnow()-time).total_seconds()/3600.0
                 subject = "!!! Extract Error on %02s-%02s-%02s" %(mon,day,year)
-                print subject
+                print(subject)
                 msg = "%s%s issue at %s!\nThis file will not untar.\nBad Zip? Try -p %i" %(code[instr],inum,site,age/24)
                 Emailer.emailerror(emails,subject,msg)
                 result = []
             tar.close()
         else:
-            print '!!! Waiting for complete parts...'
+            print('!!! Waiting for complete parts...')
 
         if os.path.exists(tempfile):
             os.system('rm -f '+tempfile)
 
     ## Case 3 - all parts not yet sent
     else:
-        print '!!! Waiting for parts...'
+        print('!!! Waiting for parts...')
     return(result)
 
 
@@ -287,23 +288,24 @@ def sorter(san,pgm):
     pid = str(os.getpid())
     pidfile = "/tmp/Sorter_%s.pid"%pgm
     if os.path.isfile("/tmp/Sorterall.pid"):
-        print "Sorterall exists, must finish before calling new batch"
+        print("Sorterall exists, must finish before calling new batch")
         sys.exit()
     elif os.path.isfile(pidfile):
-        print "%s already exists, exiting" % pidfile
+        print("%s already exists, exiting" % pidfile)
         sys.exit()
     else:
-        file(pidfile, 'w').write(pid)
+        with open(pidfile, 'w') as f:
+            f.write(str(pid))
 
     # Start Write to Log File
-    print "\n!!!!!!!!!!!!!!!!!!!!"
-    print '!!! BEGIN TIMESTAMP:',dt.datetime.now()
+    print("\n!!!!!!!!!!!!!!!!!!!!")
+    print('!!! BEGIN TIMESTAMP:',dt.datetime.now())
 
     # Load instrument dictionary
     code = instrumentcode()
     # Set order so bwc & x3t process first
     ids = ['Cloud','TempL']
-    ids.extend(code.keys())
+    ids.extend(list(code.keys()))
 
 
     # TRY YOUR HARDEST
@@ -311,7 +313,7 @@ def sorter(san,pgm):
         # Get Data in RX folder
         #os.chdir(dir_local+'rx/')
         os.chdir(dir_rx_local)
-        print("Working directory: %s"%(os.getcwd()))
+        print(("Working directory: %s"%(os.getcwd())))
         #os.system('chmod 774 *') No longer have permissions, tx sends as 774.
         # Get info files for non-standard (Zip->Send->Sort) data
         rxfiles = ["fpi04_kaf","cas01_hka"]
@@ -325,7 +327,7 @@ def sorter(san,pgm):
                 search = '*.txt'
             else:
                 search = '*'+san+'*.txt'
-            print('Searching %s files for %s using %s'%(str(i),str(pgm),search))
+            print(('Searching %s files for %s using %s'%(str(i),str(pgm),search)))
             for f in glob(i + search):
                 #Searching for IIIII_san_YYYYMMDD/YYYYDOY.txt
                 # Get information for assembling & sos this unAmericarting file
@@ -360,7 +362,7 @@ def sorter(san,pgm):
                 #    day = int(f[16:18])         # day          = DD
                 #    dn = dt.datetime(year,month,day)
                 #    doy = dn.timetuple().tm_yday
-                print "\n!!! For", name
+                print("\n!!! For", name)
                 # Fix inum for Letters
                 if inum[1].isalpha():
                     inum = inum[1]
@@ -371,7 +373,7 @@ def sorter(san,pgm):
                 ##### TEMPLOG CASE: #####
                 if instrument in ['cloud', 'templ']:
                     ### Part 1: Sorting Data
-                    print "!!! Begin Sorting..."
+                    print("!!! Begin Sorting...")
                     # Create fake checksum for tracker
                     checkname = code[instrument]+'00'+f[5:]
                     os.system('cp '+f+' '+checkname)
@@ -386,11 +388,11 @@ def sorter(san,pgm):
                     #os.rename(f, dir_data + f) # does not work with rclone as it is different filesystem
                     os.system('chmod 744 ' + dir_data + f)
                     #os.system('chown airglow.airglow ' + dir_data + r)
-                    print "!!! Success Sorting"
+                    print("!!! Success Sorting")
 
                 elif instr in ['bwc', 'x3t']:
                     ### Send Error if checkfile
-                    print "!!! Begin Sorting..."
+                    print("!!! Begin Sorting...")
                     sortinghat([],f)
 
 
@@ -406,10 +408,10 @@ def sorter(san,pgm):
                             os.system('chown airglow.fpi ' + dir_data + r)
                         # Remove files from rx
                         os.system('rm -f ' + name + '*')
-                        print "!!! Success Sorting"
+                        print("!!! Success Sorting")
                         #continue
                     ####Part 2: Processing Data
-                        print "!!! Begin Processing..."
+                        print("!!! Begin Processing...")
                         # Get correct doy from files
                         for r in result:
                             if r[-4:] in '.img':
@@ -457,13 +459,13 @@ def sorter(san,pgm):
                                 warning = FPIprocess.process_instr(code[instr] + inum,year,doy,**process_kwargs)
                                 if warning:
                                     subject = "!!! Manually inspect (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
-                                    print subject
-                                    print traceback.print_exc()
+                                    print(subject)
+                                    print(traceback.print_exc())
                                     Emailer.emailerror(emails, subject, warning)
                             except:
                                 subject = "!!! Processing error XG (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
-                                print subject
-                                print traceback.print_exc()
+                                print(subject)
+                                print(traceback.print_exc())
 
                         # Run red line with XR tag if existing
                         if len([r for r in result if 'XR' in os.path.basename(r)])>0:
@@ -472,13 +474,13 @@ def sorter(san,pgm):
                                 warning = FPIprocess.process_instr(code[instr] + inum,year,doy,**process_kwargs)
                                 if warning:
                                     subject = "!!! Manually inspect XR (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
-                                    print subject
-                                    print traceback.print_exc()
+                                    print(subject)
+                                    print(traceback.print_exc())
                                     Emailer.emailerror(emails, subject, warning)
                             except:
                                 subject = "!!! Processing error XR (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
-                                print subject
-                                print traceback.print_exc()
+                                print(subject)
+                                print(traceback.print_exc())
 
                         # Run red line with X tag if existing
                         elif len([r for r in result if 'X' in os.path.basename(r)])>0:
@@ -487,13 +489,13 @@ def sorter(san,pgm):
                                 warning = FPIprocess.process_instr(code[instr] + inum,year,doy,**process_kwargs)
                                 if warning:
                                     subject = "!!! Manually inspect X (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
-                                    print subject
-                                    print traceback.print_exc()
+                                    print(subject)
+                                    print(traceback.print_exc())
                                     Emailer.emailerror(emails, subject, warning)
                             except:
                                 subject = "!!! Processing error X (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
-                                print subject
-                                print traceback.print_exc()
+                                print(subject)
+                                print(traceback.print_exc())
 
 
                 ##### GPS CASE: #####
@@ -507,7 +509,7 @@ def sorter(san,pgm):
                             os.makedirs(dir_data)
                             os.system('chmod 755 ' + dir_data)
                         except OSError:
-                            print '!!! Raw Folder Exists... moving on'
+                            print('!!! Raw Folder Exists... moving on')
                     result = sortinghat(dir_data,f)
                     if result:
                         # CHMOD all added files
@@ -517,18 +519,19 @@ def sorter(san,pgm):
                         # Remove files from rx
                         os.system('rm -f ' + name + '*')
 
-                        print "!!! Success Sorting"
+                        print("!!! Success Sorting")
 
                     ### Part 2: Processing Data
-                        print "!!! Begin Processing..."
+                        print("!!! Begin Processing...")
                         # Run processing script for site
-                        try:
-                            GPSprocess.process_instr(code[instr] + inum,year,doy)
-                        except:
-                            subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
-                            print subject
-                            Emailer.emailerror(emails, subject, traceback.format_exc())
-                        print "!!! End Processing"
+# DISABLED ON JAN 30, 2024 BY JJM AS GPS processing isn't PY3
+#                        try:
+#                            GPSprocess.process_instr(code[instr] + inum,year,doy)
+#                        except:
+#                            subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+#                            print(subject)
+#                            Emailer.emailerror(emails, subject, traceback.format_exc())
+#                        print("!!! End Processing")
 
 
                 ##### CASES CASE: #####
@@ -540,22 +543,23 @@ def sorter(san,pgm):
                         os.makedirs(dir_data)
                         os.system('chmod 755 ' + dir_data)
                     except OSError:
-                        print '!!! Raw Folder Exists... moving on'
+                        print('!!! Raw Folder Exists... moving on')
                     # Move info file to tracking
                     os.system('mv ' + f + ' ./tracking')
                     # Remove files from rx (it was a duplicate)
                     os.system('rm -f ' + name + '*')
-                    print "!!! Success Sorting"
+                    print("!!! Success Sorting")
 
                     ### Part 2: Processing Data
-                    print "!!! Begin Processing..."
+                    print("!!! Begin Processing...")
                     # Run processing script for site
-                    try:
-                        GPSprocess.process_instr(code[instr] + inum,year,doy)
-                    except:
-                        subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
-                        print subject
-                        Emailer.emailerror(emails, subject, traceback.format_exc())
+# DISABLED ON JAN 30, 2024 BY JJM AS NOT PY3
+#                    try:
+#                        GPSprocess.process_instr(code[instr] + inum,year,doy)
+#                    except:
+#                        subject = "!!! Processing error (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+#                        print(subject)
+#                        Emailer.emailerror(emails, subject, traceback.format_exc())
 
 
                 ##### IMAGER CASE: #####
@@ -570,9 +574,9 @@ def sorter(san,pgm):
                             try:
                                 os.makedirs(dir_copy)
                                 os.system('chmod 755' + dir_copy)
-                                print "!!! Share Folder Created"
+                                print("!!! Share Folder Created")
                             except OSError:
-                                print '!!! Share Folder Exists... moving on'
+                                print('!!! Share Folder Exists... moving on')
                         # CHMOD all added files
                         for r in result:
                             os.system('chmod u+rwx,go+rX,go-w ' + dir_data + r)
@@ -583,10 +587,10 @@ def sorter(san,pgm):
                                 os.system('cp -r ' + dir_data + r + ' ' + dir_copy)
                         # Remove files from rx
                         os.system('rm -f ' + name + '*')
-                        print "!!! Success Sorting"
+                        print("!!! Success Sorting")
 
                     ### Part 2: Processing Data
-                        print "!!! Begin Processing..."
+                        print("!!! Begin Processing...")
                         ## Get correct doy from files
                         #for r in result:
                         #    if r[-4:] in '.tif':
@@ -598,19 +602,20 @@ def sorter(san,pgm):
                         #        break
                         # Run processing script for site
                         # TODO: Mimic FPIprocess warnings
-                        msg = ASIprocess.process_instr(code[instr] + inum,year,doy)
-                        if msg:
-                            subject = "!!! Processing Issue (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
-                            print subject
-                            Emailer.emailerror(emails, subject, msg)
-                        print "!!! End Processing"
+# DISABLED ON JAN 30, 2024 as ASIprocess ISN'T PY3
+#                        msg = ASIprocess.process_instr(code[instr] + inum,year,doy)
+#                        if msg:
+#                            subject = "!!! Processing Issue (\'" + code[instr]+inum+'\','+str(year)+','+str(doy)+') @ ' + site
+#                            print(subject)
+#                            Emailer.emailerror(emails, subject, msg)
+                        print("!!! End Processing")
 
 
                 ##### BAD INSTR CATCH #####
                 else:
                     emails = activeinstruments()['ADMIN']['email']
                     subject = "!!! Badly named files: " + name
-                    print subject
+                    print(subject)
                     Emailer.emailerror(emails, subject, 'Name is not real instrument...')
 
         #####CHECK CUSTOM ALERTS
@@ -620,13 +625,13 @@ def sorter(san,pgm):
     except Exception as e:
         emails = activeinstruments()['ADMIN']['email']
         subject = "!!! Something is wrong..."
-        print subject
-        print "Sending emails to Admin..."
-        print traceback.print_exc()
+        print(subject)
+        print("Sending emails to Admin...")
+        print(traceback.print_exc())
         Emailer.emailerror(emails, subject+f, traceback.format_exc())
 
     finally:
-        print "\n!!! Script Complete!"
+        print("\n!!! Script Complete!")
         os.unlink(pidfile)
 
 
@@ -644,17 +649,17 @@ if __name__=="__main__":
 
     # CASE= if 'all'
     if pgm == 'all':
-        print 'All sites to be sorted - no additional calls may be made!'
-        sites = fpiinfo.get_all_sites_info().keys() + \
-                asiinfo.get_all_sites_info().keys() + \
-                gpsinfo.get_all_sites_info().keys()
+        print('All sites to be sorted - no additional calls may be made!')
+        sites = list(fpiinfo.get_all_sites_info().keys()) + \
+                list(asiinfo.get_all_sites_info().keys()) + \
+                list(gpsinfo.get_all_sites_info().keys())
         sites = np.unique(sites)
 
     # CASE= if 'other' (not fpi sites)
     elif pgm == 'other':
-        fpis  = fpiinfo.get_all_sites_info().keys()
-        other = asiinfo.get_all_sites_info().keys() + \
-                gpsinfo.get_all_sites_info().keys()
+        fpis  = list(fpiinfo.get_all_sites_info().keys())
+        other = list(asiinfo.get_all_sites_info().keys()) + \
+                list(gpsinfo.get_all_sites_info().keys())
         sites = [x for x in other if x not in fpis]
 
     else:

@@ -2248,7 +2248,7 @@ def DisplayRawKeogram(path,fmt='*img',center=None,direction=None):
 # HISTORY:
 #   Written by L. Navarro on 13 Sep 2021
 
-    matplotlib.use('AGG')
+#    matplotlib.use('AGG')
     from matplotlib import pyplot,ticker
     from matplotlib.colors import LinearSegmentedColormap
     import matplotlib.gridspec as gridspec
@@ -2422,7 +2422,7 @@ def DailyFittingMovie(f,output_dir="",output_format="mp4",keep_frames=False,img_
     if not os.path.exists(tmpfolder):
         os.makedirs(tmpfolder)
 
-    matplotlib.use('AGG')
+#    matplotlib.use('AGG')
     from matplotlib import pyplot,ticker
     from matplotlib.colors import LinearSegmentedColormap
     import matplotlib.gridspec as gridspec

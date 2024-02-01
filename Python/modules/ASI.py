@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('AGG')
+#matplotlib.use('AGG')
 
 import ASIDisplay
 import numpy as np
