@@ -29,9 +29,20 @@ def load_level0(instr_name, year, doy, sky_line_tag='X', fpi_results_dir =  '/rd
     instrsitedate = instr_name + '_' + site_name + '_' + datestr
     if not (sky_line_tag=='X'):
         instrsitedate=instrsitedate+'_%s'%sky_line_tag.lower()
-    npzfn = fpi_results_dir + instrsitedate + '.npz'
-    npzfile = np.load(npzfn, fix_imports=True, allow_pickle=True, encoding='bytes')
-    r = npzfile['FPI_Results'].item()
+    try:
+        npzfn = fpi_results_dir + instrsitedate + '.npz'
+        npzfile = np.load(npzfn, fix_imports=True, allow_pickle=True, encoding='bytes')
+    except: # If this was one of the normal red-line files that's labeled as xr, try that
+        if sky_line_tag=='X':
+            npzfn = fpi_results_dir + instrsitedate + '_xr.npz'
+            npzfile = np.load(npzfn, fix_imports=True, allow_pickle=True, encoding='bytes')
+        else:
+            raise
+    try:
+        r = npzfile['FPI_Results'].item()
+    except KeyError as e: # 2023 May 8: This seems to be a very rare error with a corrupted file. Just remap as IOError so it's skipped.
+        print('FAILED (%s): %s'  % (npzfn, e))
+        raise IOError(e)
     
     # Annoying decoding to read Python2-saved-npzs in Python3
     npzdict = {k.decode(): r[k] for k in r.keys()}
@@ -63,7 +74,7 @@ def get_max_kp(t, prevhrs = 24.):
     
 def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLOUD_THRESH = np.inf, 
                 DROP_NO_CLOUD = True, NO_CLOUD_FILL = -999.,
-                SKYI_THRESH = None, SKYB_THRESH = np.inf, T_THRESH = 150., verbose = True, 
+                SKYI_THRESH = None, SKYB_THRESH = np.inf, T_THRESH = None, verbose = True, 
                 fpi_results_dir =  '/rdata/airglow/fpi/results/', sky_line_tag = 'X'):
     '''
     Load raw line-of-sight FPI data and perform quality control.
@@ -99,8 +110,8 @@ def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLO
     df   - pandas DataFrame
     '''
     
-    if sky_line_tag == 'XG': # Change the T_THRESH to something more reasonable
-        T_THRESH = 20.
+#     if sky_line_tag == 'XG': # Change the T_THRESH to something more reasonable
+#         T_THRESH = 20.
     
     t0 = datetime(year, 1, 1) + timedelta(days=doy_start-1)
 
@@ -158,7 +169,7 @@ def get_raw_fpi(instr_name, year, doy_start, doy_stop, SIGMA_THRESH = 100. , CLO
     
 
     #################### Quality control on samples #######################
-    bmiss  = dfraw['Clouds'].isnull()
+    bmiss  = (dfraw['Clouds'].isnull()) | (dfraw['Clouds'] < -998) # -999 is error code
     dfraw.loc[bmiss,'Clouds'] = NO_CLOUD_FILL
     bcloud = dfraw['Clouds'] > CLOUD_THRESH
     bsigma = (dfraw['sigma_LOSwind'] > SIGMA_THRESH) | (dfraw['sigma_T'] > SIGMA_THRESH)
