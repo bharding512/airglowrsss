@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 5 # Should only be incremented on major changes
-software_version_minor = 7 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 8 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -755,8 +755,8 @@ def analyze_row(row, unwrap_phase=False):
     
     if unwrap_phase: # BJH added 3 Feb 2020. This should (probably) never be used on finalized public data.
         nx = len(row)
-        row_phase =  unwrap(row_phase, start=nx/2) # Remove negative jumps
-        row_phase = -unwrap(-row_phase, start=nx/2) # Remove positive jumps
+        row_phase =  unwrap(row_phase, start=int(nx/2)) # Remove negative jumps
+        row_phase = -unwrap(-row_phase, start=int(nx/2)) # Remove positive jumps
     
     tot_phase = np.nanmean(row_phase)
     
@@ -7721,8 +7721,9 @@ def plot_level22_summary(L22_fng, L22_fnr, pngpath, val, vmax = 150., close=Fals
         # Quality control and other things
         for d in [dr, dg]:
             idx = d['wind_quality'] < 0.5
-            d['u'].mask[idx] = True
-            d['v'].mask[idx] = True
+            if not np.isscalar(d['u'].mask): # If mask is not correct then skip this step. (Useful for TIEGCM or WACCM-X sampled files)
+                d['u'].mask[idx] = True
+                d['v'].mask[idx] = True
 
         # 2022 Oct 31: Check if red and green orbits are out of sync. This is very rare and only happens if the UT switch happens 
         # when ICON is crossing lon = 0.
@@ -7821,6 +7822,7 @@ def plot_level22_summary(L22_fng, L22_fnr, pngpath, val, vmax = 150., close=Fals
         plt.text(0.5, 0.5, 'Summary plots failed, but the\nunderlying .NC files\nmight be okay.\nContact MIGHTI Team\nbefore approving', va='center',ha='center', fontsize=16)
         plt.ylim((0,1))
         plt.xlim((0,1))
+        raise
         
         
     #### Save
