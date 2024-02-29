@@ -323,8 +323,8 @@ for var_type in var_type_ordered:
                dims_p]
         tab_data.append(row)           
 
-    tab = Table(tab_data, colWidths=[1.6*inch,3.3*inch,0.6*inch,1.3*inch],
-                repeatRows=1)
+#     tab = Table(tab_data, colWidths=[1.6*inch,3.3*inch,0.6*inch,1.3*inch], repeatRows=1)
+    tab = Table(tab_data, colWidths=[1.2*inch,3.7*inch,0.6*inch,1.3*inch], repeatRows=1) ## HACK
     tab.setStyle(TableStyle([('INNERGRID', (0,0), (-1,-1), 0.25, colors.black), # Grid
                              ('BOX', (0,0), (-1,-1), 0.25, colors.black), # Grid
                              ('VALIGN', (0,0), (-1,-1), "TOP"), # Grid
