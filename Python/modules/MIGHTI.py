@@ -2,7 +2,7 @@ import numpy as np
 
        
     
-def add_noise(I, instr_params):
+def add_noise(I, instr_params, return_snr=True):
     '''
     I is in units of DN (not electrons). DN = gain*electrons.
     '''
@@ -13,23 +13,33 @@ def add_noise(I, instr_params):
 
     # Add dark signal
     # (Adding shot noise on top of this will account for "dark noise")
-    signal += instr_params['darkcurrent']*instr_params['exptime'] # still "electrons" 
+    noise = instr_params['darkcurrent']*instr_params['exptime'] # still "electrons" 
+    signal += noise
 
     # Add shot noise (doesn't matter if you do this before/after binning)
     # This accounts for dark noise if dark current is in the signal.
     shotnoise = np.sqrt(signal)*np.random.randn(*np.shape(signal))
+    noise += shotnoise
     signal += shotnoise
 
     # On-chip binning is already implicitly done.
 
     # Read noise
     readnoise = instr_params['readnoise']*np.random.randn(*np.shape(signal))
+    noise += shotnoise
     signal += readnoise
     
     # Convert back from electrons to DN
+    noise = noise*instr_params['gain']
     signal = signal*instr_params['gain']
     
-    return signal
+    # Compute average SNR
+    snr = np.sqrt(np.mean(signal**2, axis=1) / np.mean(noise**2, axis=1))
+    
+    if return_snr:
+        return signal, snr
+    else:
+        return signal
 
 
 
@@ -392,17 +402,17 @@ def L1_filt(f, showplot=False, width1=20, width2=5):
     N = len(F)
     n = np.arange(N)
     # Create filter as per Ken Marr's email 2013/10/29
-    peaki = abs(F[5:int(np.floor(N/2))]).argmax() + 5
+    peaki = int(abs(F[5:int(np.floor(N/2))]).argmax() + 5)
     if peaki-width1/2-(width2-1)/2 < 0: # this row is probably mostly noise
         # Just do something as a placeholder
         peaki = width1/2 + (width2-1)/2 + 1
     hann = np.hanning(width1)
     # Create full filter
-    H = np.hstack((np.zeros(peaki-width1/2-(width2-1)/2), 
-                hann[:width1/2], 
+    H = np.hstack((np.zeros(int(peaki-width1/2-(width2-1)/2)), 
+                hann[:int(width1/2)], 
                 np.ones(width2), 
-                hann[width1/2:], 
-                np.zeros(N - peaki - width1/2 - (width2-1)/2 - 1)))
+                hann[int(width1/2):], 
+                np.zeros(int(N - peaki - width1/2 - (width2-1)/2 - 1))))
     ap = np.hanning(N)
     f = f - f.mean()
     fap = f*ap
