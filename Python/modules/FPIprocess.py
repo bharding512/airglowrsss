@@ -1,8 +1,8 @@
 
 # Functions to process FPI data on remote2
 
-import matplotlib
-matplotlib.use('AGG')
+#import matplotlib
+#matplotlib.use('AGG')
 
 import FPI
 import glob
@@ -322,8 +322,10 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
     scp_user       = 'airglowgroup@webhost.engr.illinois.edu'
     db_image_stub  =        'SummaryImages/' # relative path from web server directory on airglow
     db_log_stub =           'SummaryLogs/'
-    web_images_stub =       '/home/airglowgroup/data/SummaryImages/' # absolute location on airglow of summary images
-    web_logs_stub =         '/home/airglowgroup/data/SummaryLogs/' # absolute location on airglow of summary logs
+#    web_images_stub =       '/home/airglowgroup/data/SummaryImages/' # absolute location on airglow of summary images
+#    web_logs_stub =         '/home/airglowgroup/data/SummaryLogs/' # absolute location on airglow of summary logs
+    web_images_stub =       '/home/airglow/public_html/Data/SummaryImages/' # absolute location on airglow of summary images
+    web_logs_stub =         '/home/airglow/public_html/Data/SummaryLogs/' # absolute location on airglow of summary logs
     # Information about sending to Madrigal. Only used if send_to_madrigal==True
     madrigal_stub =         '/rdata/airglow/database/' # where reduced ascii txt and png files are saved for Madrigal
     # Information about sending to partner institutions. Only used if enable_share==True
@@ -778,7 +780,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
     tempnpzname="/home/airglow/rdata/airglow/fpi/results/"+os.path.basename(npzname)
     np.savez(tempnpzname, FPI_Results=FPI_Results, site=site, instrument=instrument)
     try:
-        os.system("cp %s %s"%( tempnpzname,os.path.dirname(npzname) ) )
+        os.system("mv %s %s"%( tempnpzname,os.path.dirname(npzname) ) )
     except Exception as e:
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'IOError: using local filesystem.\n')
         npzname=tempnpzname
@@ -1073,7 +1075,8 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
 
         # Send summary images to server
         for fn, db_id in zip(summary_fns, db_ids):
-            flag = subprocess.call(['scp', temp_plots_stub + fn, scp_user + ':' + web_images_stub + fn]) # send to airglow
+#            flag = subprocess.call(['scp', temp_plots_stub + fn, scp_user + ':' + web_images_stub + fn]) # send to airglow
+            flag = subprocess.call(['cp', temp_plots_stub + fn, web_images_stub + fn]) # send to airglow
             if flag != 0: # Sending png to airglow failed
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
                 notify_the_humans = True
@@ -1117,7 +1120,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             network_info = fpiinfo.get_network_info(network_name)
             network_id   = network_info['sql_id']
             gif_id       = network_info['quicklook_gif_id']
-            flag = subprocess.call(['scp', gif_fn, scp_user + ':' + web_images_stub + gif_fn.split('/')[-1]]) # send to airglow
+            flag = subprocess.call(['cp', gif_fn, web_images_stub + gif_fn.split('/')[-1]]) # send to airglow
             if flag != 0: # Sending png to airglow failed
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending "%s" to airglow server for displaying on website.\n' % gif_fn)
                 notify_the_humans = True
@@ -1145,7 +1148,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
     logfile.close()
     if send_to_website:
         # Send the log file
-        subprocess.call(['scp', logname, scp_user + ':' + web_logs_stub + instrsitedate + '_log.log'])
+        subprocess.call(['cp', logname, web_logs_stub + instrsitedate + '_log.log'])
         # Close the connection to airglow database
 #        con.close()
 

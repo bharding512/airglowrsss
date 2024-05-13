@@ -1046,7 +1046,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                                         fcn_args=(annuli['r'][N0:N1],), fcn_kws={'data': data, 'sigma': sigma}, \
                                         scale_covar = True)
                     result = laser_fit.leastsq()
-                    laser_params=laser_fit.params
+                    laser_params=result.params
 
                 #if (laser_fit.redchi/laser_fit.params['I'].value < 1.): # TODO: try to find a better way to do this
                 if True: # TODO: just keep this? Let's just do quality control at a later stage.

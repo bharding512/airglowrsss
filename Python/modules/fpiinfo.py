@@ -1949,6 +1949,14 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
             instrument['default_params']['b1'] = 3.43e-1
             instrument['default_params']['b2'] = -1.21e-2
 
+        #Reinstalled motors and other fixes
+        if dn>=datetime.datetime(2024,5,1):
+            instrument['default_params']['center'] = (233.51, 247.03)
+            instrument['default_params']['a1'] = 0.121
+            instrument['default_params']['a2'] = -0.0497
+            instrument['default_params']['b0'] = 1.91
+            instrument['default_params']['b1'] = 0.324
+            instrument['default_params']['b2'] = 0.185
 
     # In mid-2017, the minime09 instrument was moved to KWJ, and new instrument parameters are needed.
     # I only trust these after Jan 1, 2018, however.

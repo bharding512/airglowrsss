@@ -1,12 +1,16 @@
 # See http://www.pythonware.com/library/pil/handbook/decoder.htm
 
-try:
-    import Image, ImageFile
-except ImportError:
-    from PIL import Image, ImageFile
+#try:
+#    import Image, ImageFile
+#except ImportError:
+from PIL import Image, ImageFile
 import string
 import struct
 import datetime
+
+def _accept(prefix):
+#    print(prefix[:4] == b"A3OI")
+    return prefix[:4] == b"A3OI"
 
 class ImgImageFile(ImageFile.ImageFile):
 
@@ -14,12 +18,13 @@ class ImgImageFile(ImageFile.ImageFile):
     format_description = "Sherwood img format for FPI images"
 
     def _open(self):
-
+#        print('here2')
         # check header
         FileIdentifier = self.fp.read(4)
-        if FileIdentifier != "A3OI":
+#        print(FileIdentifier)
+        if FileIdentifier != b"A3OI":
             raise SyntaxError("not an IMG file")
-
+#        print('here2')
 	# read in the header structure
         vn = struct.unpack('i',self.fp.read(4))
         pgmVersion = struct.unpack('i',self.fp.read(4))
@@ -130,16 +135,18 @@ class ImgImageFile(ImageFile.ImageFile):
                      'LocalTime':LocalTime,'CCDTemperature':CCDTemperature[0]}
 
         # size in pixels (width, height)
-        self._size = rows[0]/YBinning[0], cols[0]/XBinning[0]
+        self._size = rows[0]//YBinning[0], cols[0]//XBinning[0]
 
+#        print(self._size)
 	# mode setting
-        self.mode = "I;16L"
+        self._mode = "I;16L"
 
         # data descriptor
         self.tile = [
             ("raw", (0, 0) + self.size, 1024, (self.mode, 0, 1))
         ]
 
-Image.register_open("IMG", ImgImageFile)
+#Image.register_open("IMG", ImgImageFile)
+Image.register_open(ImgImageFile.format, ImgImageFile, _accept)
 
-Image.register_extension("IMG", ".img")
+Image.register_extensions(ImgImageFile.format, [".img"])
