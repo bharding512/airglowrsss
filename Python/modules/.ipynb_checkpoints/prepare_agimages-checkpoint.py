@@ -1,5 +1,5 @@
-#import matplotlib
-#matplotlib.use('Agg')
+import matplotlib
+matplotlib.use('Agg')
 import sys
 import numpy as np
 import asiinfo
@@ -22,7 +22,7 @@ from scipy import interpolate
 from scipy import signal
 import datetime
 import multiprocessing as mp
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 import bu_process
 
@@ -561,11 +561,10 @@ def prepare_airglow_bu(station, year, doy, height, el_cutoff):
 def prepare_airglow_dasi(instr_name, year, doy, emission, el_cutoff,cobermax=300, daily_dir="/home/airglow/scratch_data/", repo_ASI="/home/airglow/scratch_data/MANGO_Data",coord_nan=True):
 
     success = True
-    print(instr_name)
 
     # Check if we need to use the other prepare_airglow_dasi function because the 
     # calibration npz file is different
-    if instr_name in ['mro','eio','cvo','low','blo','cfs','bdr','mto','par','mro','mdk']:
+    if instr_name in ['mro','eio','cvo','low','blo','cfs','bdr']:
         return prepare_airglow_dasi2(instr_name, year, doy, emission, el_cutoff, daily_dir=daily_dir, repo_ASI=repo_ASI,coord_nan=coord_nan)
 
     # Obtain datetime object for the imaging data
@@ -690,7 +689,7 @@ def prepare_airglow_dasi2(instr_name,year,doy,emission,el_cutoff,
         
         #apply 7x7 median filter
         from scipy import signal
-        img=signal.medfilt2d(currentdata, kernel_size=11).astype(float)
+        img=signal.medfilt2d(currentdata, kernel_size=7).astype(float)
         
         # Apply horizon
         ind = np.where(el < el_cutoff)
@@ -888,7 +887,7 @@ def remap_airglow_uniform(IM3Dfiltarg, lat, lon, emissionHeight, observation_poi
 #   plt.close()
 
     K = np.shape(IM3Dfilt)[2]
-    frames = range(0, K) # Changed from K-1 jjm 12/12/2023
+    frames = range(0, K-1)
 
     # interpolate images onto uniform grid and load the data into a container
     data_frames  = []
@@ -937,7 +936,7 @@ def initialize_airglow_filter(ntaps, Tlo, Thi, times, t_irregular = 3, raise_irr
 
     Tst            = np.median(sample_periods)
 
- #   print("median sampling rate: " + str(Tst) + " min")
+    print("median sampling rate: " + str(Tst) + " min")
 
     if raise_irregular is True:
         if any((sample_periods - Tst) > t_irregular):
@@ -948,7 +947,7 @@ def initialize_airglow_filter(ntaps, Tlo, Thi, times, t_irregular = 3, raise_irr
     cutofflo  = (1./(Thi*60))/fs
     cutoffhi  = (1./(Tlo*60))/fs
 
- #   print("lo %.2f; hi %.2f" % (cutofflo, cutoffhi))
+    print("lo %.2f; hi %.2f" % (cutofflo, cutoffhi))
 
     #b           = signal.firwin(ntaps, [cutofflo, cutoffhi], pass_zero=False, nyq = 0.5)
     b           = signal.firwin(ntaps, [cutofflo], pass_zero=False, nyq = 0.5)
@@ -1017,7 +1016,7 @@ def filter_airglow(IM3Darg, b, ntaps):
     IM3Dfilt  = np.zeros(np.shape(IM3D))
     K = np.shape(IM3D)[2]
 
-#    print("Temporally convolving...")
+    print("Temporally convolving...")
     pool = mp.Pool(processes = NUM_PROCESSORS)
 
     args = [(b, i, K, ntaps) for i in range(K)]
@@ -1031,6 +1030,6 @@ def filter_airglow(IM3Darg, b, ntaps):
     for k in range(K):
         IM3Dfilt[:,:,k] = IM3Dfilt_LIST[k]
 
-#    print("finished.")
+    print("finished.")
 
     return IM3Dfilt

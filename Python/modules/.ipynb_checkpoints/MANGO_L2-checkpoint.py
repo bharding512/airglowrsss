@@ -189,10 +189,7 @@ def load_cloud_and_moon(analysis_parameters, times):
 
     # Merge the cloud data onto the image data. This is done by finding the previous measurement
     # in cloud_df. May want to look into some sort of interpolation scheme?
-    
-    # results_df = pd.merge_asof(image_df, cloud_df, left_index=True, right_index=True,
-                                    # tolerance=pd.Timedelta("60s"),)
-    results_df = pd.merge_asof(image_df, cloud_df.sort_values('LT'), left_index=True, right_index=True,
+    results_df = pd.merge_asof(image_df, cloud_df, left_index=True, right_index=True,
                                     tolerance=pd.Timedelta("60s"),)
     results_df = results_df.drop(['LT'],axis=1)
     results_df['Moon Altitude'] = moon_alt
@@ -309,13 +306,11 @@ def run_rcp(subset, mask):
             KX, KY = np.meshgrid(kx*1000, ky*1000)
             absC = np.abs(C)
         
-            # # kx and ky index of the peak in the cross-periodogram
-            # kym, kxm = peak_local_max(absC[512:,:], min_distance = 1, num_peaks = 1)[0] # was [512:,:512]
+            # kx and ky index of the peak in the cross-periodogram
+            kym, kxm = peak_local_max(absC[512:,:], min_distance = 1, num_peaks = 1)[0] # was [512:,:512]
         
-            # # kx and ky values of the peak in the cross-periodogram
-            # kym=kym+512
-            
-            kym, kxm = peak_local_max(absC, min_distance = 1, num_peaks = 1)[0]
+            # kx and ky values of the peak in the cross-periodogram
+            kym=kym+512
             kxmax, kymax = KX[kym, kxm], KY[kym, kxm]
         
             # Get the mirror image location

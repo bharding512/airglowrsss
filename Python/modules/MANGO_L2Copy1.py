@@ -10,6 +10,7 @@ import BoltwoodSensor
 import asiinfo
 import ephem
 import gabor
+import gaborCopy1
 import multiprocessing as mp
 import numpy.fft as fft
 from skimage.feature import peak_local_max
@@ -189,10 +190,7 @@ def load_cloud_and_moon(analysis_parameters, times):
 
     # Merge the cloud data onto the image data. This is done by finding the previous measurement
     # in cloud_df. May want to look into some sort of interpolation scheme?
-    
-    # results_df = pd.merge_asof(image_df, cloud_df, left_index=True, right_index=True,
-                                    # tolerance=pd.Timedelta("60s"),)
-    results_df = pd.merge_asof(image_df, cloud_df.sort_values('LT'), left_index=True, right_index=True,
+    results_df = pd.merge_asof(image_df, cloud_df, left_index=True, right_index=True,
                                     tolerance=pd.Timedelta("60s"),)
     results_df = results_df.drop(['LT'],axis=1)
     results_df['Moon Altitude'] = moon_alt
@@ -224,7 +222,7 @@ def run_gabor(subset, real_lam, theta, n_stds, Bf, Btheta, NUM_PROCESSORS = 32):
     # Set up the Gabor filter
     lam        = real_lam/subset['dr'].values # This dr must be what gets the spatial information!
     u          = 1./lam
-    g          = gabor.Create_FilterBank_Gabor(n_stds, u, theta, Bf, Btheta)
+    g          = gaborCopy1.Create_FilterBank_Gabor(n_stds, u, theta, Bf, Btheta)
 
     gabor.g_kernels = g
 
@@ -235,6 +233,8 @@ def run_gabor(subset, real_lam, theta, n_stds, Bf, Btheta, NUM_PROCESSORS = 32):
     print("largest kernel size: " + str(g[-1][0].real.shape[1]) + " x " + str(g[-1][0].real.shape[0]) + " pixels")
 
     # Setup the grid of wavelengths and orientations
+    # THETA, LAM = np.meshgrid(np.degrees(theta), real_lam/1000)
+
     THETA, LAM = np.meshgrid(np.degrees(theta), real_lam/1000)
 
     energies_data = []
@@ -244,6 +244,60 @@ def run_gabor(subset, real_lam, theta, n_stds, Bf, Btheta, NUM_PROCESSORS = 32):
     energies_data = pool.map(gabor.Energies_Direct_PLL, np.arange(0,len(background_subtract.time)))
 
     return energies_data, LAM, THETA
+
+
+
+def run_gabor_test2(subset, real_lam, theta, n_stds, Bf, Btheta, NUM_PROCESSORS = 32):
+# Run the Gabor filter on a dataset
+# INPUTS:
+#   subset - xarray data structure containing information on the dataset to be processed with at least the following format:
+#       Coordinates:
+#           time (datetime64) - time stamps of each image in the data set
+#           east (float) - east km distance from the center of the image. This is a uniform step.
+#           north (float) - north km distance from the center of the image. This is a uniform step.
+#       Data Variable:
+#           FilteredImageData (float) - intensity values in the image (dims: time, north, east)
+#                                       the image data has had a 7x7 median filter applied to remove stars and has been temporally filtered 
+#   real_lam - array of wavelengths to run the Gabor filtering through (meters)
+#   theta - array of orientations to run the Gabor filtering through (radians)
+#   n_stds - width of the Gabor filter kernel (see Ch 3.2 of Grawe thesis)
+#   Bf - frequency bandwidth for the Gabor filter kernel (see Ch 3.2 of Grawe thesis)
+#   Btheta - orientation bandwidth for the Gabor filter kernel (see Ch 3.2 of Grawe thesis)
+#   NUM_PROCESSORS - (optional) number of cores to use in the processing
+# OUTPUTS:
+#   energies_data - size (time, len(real_lam), len(theta)) array containing the energy in a specified Gabor filter kernel at each time step
+#   LAM - size (len(real_lam), len(theta)) array containing the meshgrid of wavelengths
+#   THETA - size (len(real_lam), len(theta)) array containing the meshgrid of orientations
+
+    # Set up the Gabor filter
+    lam        = real_lam/subset['dr'].values # This dr must be what gets the spatial information!
+    u          = 1./lam
+    g          = gaborCopy1.Create_FilterBank_Gabor_test2(n_stds, u, theta, Bf, Btheta)
+
+    gabor.g_kernels = g
+
+    # Need to run filter on data with the background removed
+    background_subtract = subset.FilteredImageData - subset.FilteredImageData.mean(dim=['east','north'])
+    gabor.data_frames = background_subtract.transpose('time','north','east')
+
+    print("largest kernel size: " + str(g[-1][0].real.shape[1]) + " x " + str(g[-1][0].real.shape[0]) + " pixels")
+
+    # Setup the grid of wavelengths and orientations
+    # THETA, LAM = np.meshgrid(np.degrees(theta), real_lam/1000)
+
+    THETA, LAM = np.meshgrid(np.degrees(theta), real_lam/1000)
+
+    energies_data = []
+
+    # Setup multiprocessing and run the analysis
+    pool = mp.Pool(processes = NUM_PROCESSORS)
+    energies_data = pool.map(gabor.Energies_Direct_PLL, np.arange(0,len(background_subtract.time)))
+
+    return energies_data, LAM, THETA
+
+
+
+
 
 def run_rcp(subset, mask):
 # Run the rolling cross periodogram process (see Ch 3.3 of Grawe thesis)
@@ -309,13 +363,11 @@ def run_rcp(subset, mask):
             KX, KY = np.meshgrid(kx*1000, ky*1000)
             absC = np.abs(C)
         
-            # # kx and ky index of the peak in the cross-periodogram
-            # kym, kxm = peak_local_max(absC[512:,:], min_distance = 1, num_peaks = 1)[0] # was [512:,:512]
+            # kx and ky index of the peak in the cross-periodogram
+            kym, kxm = peak_local_max(absC[512:,:], min_distance = 1, num_peaks = 1)[0] # was [512:,:512]
         
-            # # kx and ky values of the peak in the cross-periodogram
-            # kym=kym+512
-            
-            kym, kxm = peak_local_max(absC, min_distance = 1, num_peaks = 1)[0]
+            # kx and ky values of the peak in the cross-periodogram
+            kym=kym+512
             kxmax, kymax = KX[kym, kxm], KY[kym, kxm]
         
             # Get the mirror image location

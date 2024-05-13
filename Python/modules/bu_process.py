@@ -1,5 +1,5 @@
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 import numpy as np
 from scipy.io import loadmat, savemat
 import matplotlib.pyplot as plt
