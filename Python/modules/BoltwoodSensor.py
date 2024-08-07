@@ -372,13 +372,17 @@ def DetermineFormat(file):
         if "FvrSkyTemAmbBlkHeaFlgC1sC1tC1aC1bC2sC2tC2aC2bC3sC3tC3aC3bTetAmtRqtSmtDitVctSeqChk" in line:
             _format="old BoltWood format"
             break
+        if "T  Ser# Firmw Serrs  Cldy VCldy Windy VWindy  Rain   Wet  DC   Day  Vday  Ty SNBot SNTop EV WCC  ClarV" in line:
+            _format="new BoltWood format"
+            break
         if ")" in line[:10]:
             _format="Sky Alert format"
             break
         w = line.split()
-        if w[2][-2] == 'E':
-            _format='SA Ethernet format'
-            break
+        if len(w[2]) > 2:
+            if w[2][-2] == 'E':
+                _format='SA Ethernet format'
+                break
     fid.close()
 
     return _format
