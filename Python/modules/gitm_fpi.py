@@ -18,6 +18,7 @@ def load_level0(instr_name, year, doy, sky_line_tag='X', fpi_results_dir =  '/rd
     sky_line_tag == 'X'  --> red line
                  == 'XG' --> green line
     '''
+    doy = int(doy)
     # Load FPI_Results
     process_dn = datetime(year,1,1) + timedelta(days = doy-1)
     site_name = fpiinfo.get_site_of(instr_name, process_dn)
@@ -45,15 +46,18 @@ def load_level0(instr_name, year, doy, sky_line_tag='X', fpi_results_dir =  '/rd
         raise IOError(e)
     
     # Annoying decoding to read Python2-saved-npzs in Python3
-    npzdict = {k.decode(): r[k] for k in r.keys()}
-    # Now do all sub-dicts
-    for k0 in npzdict.keys():
-        if type(npzdict[k0]) == dict:
-            npzdict[k0] = {k1.decode(): npzdict[k0][k1] for k1 in npzdict[k0].keys()}
+    if type(list(r.keys())[0]) == bytes:
+        npzdict = {k.decode(): r[k] for k in r.keys()}
+        # Now do all sub-dicts
+        for k0 in npzdict.keys():
+            if type(npzdict[k0]) == dict:
+                npzdict[k0] = {k1.decode(): npzdict[k0][k1] for k1 in npzdict[k0].keys()}
 
-    del npzfile.f
-    npzfile.close()
-    return npzdict
+        del npzfile.f
+        npzfile.close()
+        return npzdict
+    
+    return r
 
 
 
