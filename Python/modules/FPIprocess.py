@@ -877,7 +877,10 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Several npz files found for other line sources!: '+str(_npzpath)+'This was not added into the diagnostic plots and needs attention!!!!.\n' % (datestr))
 
         #Generate Temperature and Wind plots
-        _kwargs={'reference':instrument['plot_ref'], 'sky_line_tag':sky_line_tag}
+        plot_ref = instrument['plot_ref'] # How to generate plots (not necessarily same as what's in npz file
+        if FPI_Results['reference']=='zenith':
+            plot_ref = 'zenith' # You can't use laser reference for plotting a day run with zenith reference
+        _kwargs={'reference':plot_ref, 'sky_line_tag':sky_line_tag}
         if 'G' in sky_line_tag:
             _kwargs['Tmin']=0
             _kwargs['Tmax']=500
@@ -964,7 +967,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                     cur.execute(sql_cmd, params)
                     rows = cur.fetchall()
                     return rows
-            
+
         def query2(sql_cmd, params=None):
             with SSHTunnelForwarder(
                     ('airglowgroup.web.illinois.edu', 22),
@@ -977,7 +980,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                     cur.execute(sql_cmd,params)
                     rows = cur.fetchall()
                     return rows
-            
+
         site_id = site['sql_id']
         utc = pytz.utc # Define timezones
 
@@ -1011,7 +1014,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
 #            # Send png. First find out if the entry is in there (i.e., we are just updating the png)
 #            sql_cmd = 'SELECT id FROM DataSet WHERE SummaryImage = %s'
 #            params = (db_image_stub + fn, )
-#        
+#
 #            # Call the query function and capture the result
 #            rows = query(sql_cmd, params)
 #            print('Query1')
@@ -1022,7 +1025,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
 #                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%s, %s, %s, %s, %s, %s)'
 #                params = (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
 #                logfile.write(sql_cmd + ' ' + str(params) + '\n')
-#                query(sql_cmd, params)  
+#                query(sql_cmd, params)
 #                print('inserted')
 #            else: # Entry exists. Update it.
 #                sql_cmd = 'UPDATE DataSet SET SummaryImage=%s, LogFile=%s WHERE id = %s'
@@ -1099,7 +1102,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                 sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%s, %s, %s, %s, %s, %s)'
                 params = (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
                 logfile.write(sql_cmd + ' ' + str(params) + '\n')
-                query2(sql_cmd, params)  
+                query2(sql_cmd, params)
             else: # Entry exists. Update it.
                 sql_cmd = 'UPDATE DataSet SET SummaryImage=%s, LogFile=%s WHERE id = %s'
                 params = (db_image_stub + fn, log_fn, rows[0][0])
