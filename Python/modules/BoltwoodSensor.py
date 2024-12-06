@@ -144,16 +144,33 @@ def ReadTempLog_newformat(file, tz):
     # Get the local timezone
     local = pytz.timezone(tz)
 
+#    try:
+#        fid = open(file,'r')
+#    except IOError as e:
+#        print (file, 'does not exist')
+#        return [],[],[]
+#    data = []
+#    for line in fid:
+#        single_line = line.split()
+#        data.append(single_line)
+#    fid.close()
+
     try:
-        fid = open(file,'r')
+        # Open the file with UTF-8 encoding and 'replace' option to handle encoding errors
+        fid = open(file, 'r', encoding='utf-8', errors='replace')
     except IOError as e:
-        print (file, 'does not exist')
-        return [],[],[]
+        print(file, 'does not exist')
+        return [], [], []
+    
     data = []
-    for line in fid:
-        single_line = line.split()
-        data.append(single_line)
-    fid.close()
+    try:
+        for line in fid:
+            single_line = line.split()
+            data.append(single_line)
+    finally:
+        # Ensure the file is closed properly
+        fid.close()
+
 
     N = len(data) # number of lines in file
 
@@ -379,7 +396,7 @@ def DetermineFormat(file):
             _format="Sky Alert format"
             break
         w = line.split()
-        if len(w[2]) > 2:
+        if (len(w) > 2) and (len(w[2]) > 2):
             if w[2][-2] == 'E':
                 _format='SA Ethernet format'
                 break
