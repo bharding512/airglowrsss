@@ -227,8 +227,8 @@ _sites['eio'] = {
 
 _sites['par'] = {
         'Location':     (35.2011, -82.8749,0.),
-        'Name':         'Easte',
-        'Abbreviation': 'Psigah Astronomical Research Institute',
+        'Name':         'Psigah Astronomical Research Institute',
+        'Abbreviation': 'PAR',
         'Timezone':     'US/Eastern',
         'sql_id':       None,
         'share':        False,
@@ -239,6 +239,27 @@ _sites['mto'] = {
         'Location':     (48.16267,-97.683143,0.),
         'Name':         'Martens Observatory',
         'Abbreviation': 'MTO',
+        'Timezone':     'US/Central',
+        'sql_id':       None,
+        'share':        False,
+        'borders':      True,
+    }
+
+_sites['new'] = {
+        'Location':     (48+15/60.+51/3600.,-(117+7/60.+21/3600.),0.),
+        'Name':         'Newport Geophysical Observatory',
+        'Abbreviation': 'NEW',
+        'Timezone':     'US/Pacific',
+        'sql_id':       None,
+        'share':        False,
+        'borders':      True,
+    }
+
+
+_sites['mdk'] = {
+        'Location':     (38+7/60.+4/3600.,-(96+5/60.+25/3600.),0.),
+        'Name':         'Madison, Kansas',
+        'Abbreviation': 'MDK',
         'Timezone':     'US/Central',
         'sql_id':       None,
         'share':        False,
