@@ -1103,16 +1103,16 @@ _instruments['minime03'] = {
         'lam0'          : 630.0e-9,     # nominal line center wavelength in m
         'nominal_t'     : 1.5e-2,       # approximate etalon gap in m
         'default_params': {# instrument params to be used if the laser fails (i.e., zenith reference)
-                                'R': 5.266e-01,
-                            'alpha': 8.380e-05,
+                                'R': 6.098e-01,
+                            'alpha': 8.377e-05,
                                 'I': 1.0,
                                 'B': 0.0,
-                               'a1': 2.809e-01,
-                               'a2': -1.472e-01,
-                               'b0': -1.197e-01,
-                               'b1': -2.140e-01,
-                               'b2': 9.668e-01,
-                           'center':  (287.7,270.2),
+                               'a1': -3.041e-01,
+                               'a2': 3.307e-02,
+                               'b0': 4.420e-02,
+                               'b1': -6.222e-01,
+                               'b2': 9.518e-01,
+                           'center':  (250.31, 245.12),
                           },
         'sql_winds_id'          : 99,           # ID for SQL database
         'sql_temperatures_id'   : 100,           # ID for SQL database
@@ -1181,7 +1181,9 @@ _instruments['minime05'] = {
                                'b0': 1.1,
                                'b1': 2.0e-1,
                                'b2': -2.0e-1,
-                           'center':  (254.2, 254.6),
+                            'center': (254.7, 248.3), # Updated 10/18/2024 by BJH for Aug 2024 reprocess
+#                           'center': (254.7, 258.3), # Updated 09/19/2024 by JJM
+#                           'center':  (254.2, 254.6),
                           },
         'sql_winds_id'          : 72,           # ID for SQL database
         'sql_temperatures_id'   : 73,           # ID for SQL database
@@ -1882,6 +1884,7 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
                                    'b2': 7.130e-02,
                                'center': (283.7,276.9),
                               }
+
 	# The laser failed on 01/07/2021
         # These are the instrument parameters from before that period:
         elif dn < datetime.datetime(2021,1,7,0,0):
@@ -1898,6 +1901,21 @@ def get_instr_info(instr_name, dn = datetime.datetime.now()):
                                'center': (290.5,268.4),
                                }
 
+        # The system was reinstalled on 11/13/2024
+        # These are the instrument parameters from before that period:
+        elif dn < datetime.datetime(2024,11,13,0,0):
+            instrument['default_params'] = {# instrument params to be used if the laser fails (i.e., zenith reference)
+                                    'R': 5.5266e-01,
+                                'alpha': 8.3780e-05,
+                                    'I': 1.0,
+                                    'B': 0.0,
+                                   'a1': 2.809e-01,
+                                   'a2': -1.472e-01,
+                                   'b0': -1.197e-01,
+                                   'b1': -2.140e-01,
+                                   'b2': 9.668e-01,
+                               'center': (287.7,270.2),
+                               }
 
 
     # On Aug 4, 2015, the CAR FPI was rebuilt with parts from the CAJ FPI.
