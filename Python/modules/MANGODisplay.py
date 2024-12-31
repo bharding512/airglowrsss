@@ -123,7 +123,41 @@ def toTimestamp(d):
 #        print(std_out.strip(), std_err)
 #    pass
 
-def MakeSummaryMovies(system_parameters, analysis_parameters):
+# Define parameters based on sky_line_tag
+def get_parameters(sky_line_tag, analysis_parameters):
+    params = {}
+    if sky_line_tag == 'XG':
+        params['figsize'] = (8, 4)
+        params['width_ratios'] = [2., 2]
+        params['extent'] = [-122, -95, 25, 55]
+        params['ymin'] = -200
+        params['ymax'] = 200
+        params['title'] = 'Green Line Winds'
+        params['scale'] = 25.
+        params['xoff'], params['yoff'] = 0.06, 0.05
+        params['cloc'] = [0.7, -0.0, 0.4, 0.02]
+        if (np.isnan(analysis_parameters['Thi'])):
+            params['cmap'] = 'viridis'
+        else:
+            params['cmap'] = 'Greens_r'
+        
+    elif sky_line_tag == 'XR':
+        params['figsize'] = (9, 4)
+        params['width_ratios'] = [2.2, 2]
+        params['extent'] = [-125, -75, 25, 55]
+        params['ymin'] = -300
+        params['ymax'] = 300
+        params['title'] = 'Red Line Winds'
+        params['scale'] = 100.
+        params['xoff'], params['yoff'] = 0.06, 0.05
+        params['cloc'] = [0.55, -0.02, 0.5, 0.02]
+        if (np.isnan(analysis_parameters['Thi'])):
+            params['cmap'] = 'inferno'
+        else:
+            params['cmap'] = 'Reds'
+    return params
+
+def MakeSummaryMovies(system_parameters, analysis_parameters, delete_working_files=True):
     # Runs the full process of creating a fusion movie with MANGO imaging data and
     # FPI data overplotted. Results in a mp4 file. All data downloaded and created
     # are removed upon completion
@@ -164,7 +198,7 @@ def MakeSummaryMovies(system_parameters, analysis_parameters):
                 elif sky_line_tag == 'XR':
                     cmd = '/usr/bin/wget -r -nH --cut-dirs=8 --no-parent -P %s/%s/%s https://data.mangonetwork.org/data/transport/mango/archive/%s/redline/level1/%04d/%s/' % \
                     (system_parameters['ASI_directory'], site, analysis_parameters['date'].year, site, analysis_parameters['date'].year, analysis_parameters['date'].strftime('%j'))
-            
+                print(cmd)
                 MANGO_L2.runcmd(cmd)
             except:
                 print('!!! Failure to download %s on %s' % (site, analysis_parameters['date']))
@@ -193,6 +227,7 @@ def MakeSummaryMovies(system_parameters, analysis_parameters):
 
     # Process all images
     for site in ds.keys():
+        print(site)
         # Apply a temporal filter to the data on this night
         IM3D = ds[site].ImageData.values
         
@@ -201,8 +236,12 @@ def MakeSummaryMovies(system_parameters, analysis_parameters):
         times = pd.to_datetime(ds[site].time.values)
         
         # Create the filter and implement it
-        b = prepare_agimages.initialize_airglow_filter(analysis_parameters['ntaps'],analysis_parameters['Tlo'],analysis_parameters['Thi'],times)
-        IM3Dfilt = prepare_agimages.filter_airglow(IM3Dt,b,analysis_parameters['ntaps'])
+        if (np.isnan(analysis_parameters['Tlo'])) and (np.isnan(analysis_parameters['Thi'] )):
+            # No filtering
+            IM3Dfilt = IM3Dt
+        else:
+            b = prepare_agimages.initialize_airglow_filter(analysis_parameters['ntaps'],analysis_parameters['Tlo'],analysis_parameters['Thi'],times)
+            IM3Dfilt = prepare_agimages.filter_airglow(IM3Dt,b,analysis_parameters['ntaps'])
         
         # Add this to the dataset, rearranging the dimensions back to (time, north, east)
         filt_array = xr.DataArray(np.transpose(IM3Dfilt, (2, 0, 1)), dims=('time','north','east'))
@@ -277,27 +316,8 @@ def MakeSummaryMovies(system_parameters, analysis_parameters):
         if all_unique_times[i] - all_unique_times[i-1] > np.timedelta64(10,'s'):
             unique_times.append(all_unique_times[i])
 
-    # create plots
-    fig = plt.figure(figsize=(8,4))
-    if sky_line_tag == 'XG':
-        spec=gridspec.GridSpec(ncols=2,nrows=2,figure=fig,
-                                left=0.04,right=0.94,bottom=0.1,top=0.90,
-                                wspace=0.05,hspace=0.25,
-                                width_ratios=[2.,2,])
-    elif sky_line_tag == 'XR':
-        spec=gridspec.GridSpec(ncols=2,nrows=2,figure=fig,
-                                left=0.04,right=0.94,bottom=0.1,top=0.90,
-                                wspace=0.05,hspace=0.25,
-                                width_ratios=[1.5,2,])
-
-    # The lon, lat range to plot in the map
-    if sky_line_tag == 'XG':
-        if 'bdr' in analysis_parameters['sites_asi']:
-            extent=[-122,-95,25,48]
-        else:
-            extent=[-124,-102,30,48]
-    elif sky_line_tag == 'XR':
-        extent=[-125, -75, 25, 55]
+    # Load parameters
+    params = get_parameters(sky_line_tag, analysis_parameters)
 
     my_colors = {}
     my_colors['cvo'] = '#1f77b4'
@@ -307,154 +327,160 @@ def MakeSummaryMovies(system_parameters, analysis_parameters):
 
     # The largest gap size [in minutes] to allow in plotting
     max_gap = 120.
+    max_fpi_gap = 30.
 
     # THIS WOULD BE THE LOOP START
     for target_time in unique_times:
-        fig.clf()
+        fig = plt.figure(figsize=params['figsize'])
+        spec = gridspec.GridSpec(ncols=2, nrows=2, figure=fig,
+                                left=0.04, right=0.94, bottom=0.1, top=0.90,
+                                wspace=0.05, hspace=0.25,
+                                width_ratios=params['width_ratios'])
+        #fig.clf()
         legend_elements = []
-        axes00 = fig.add_subplot(spec[:,0], projection=crs.Orthographic(np.nanmean(extent[:2]),np.nanmean(extent[2:])))    
+
+        axes00 = fig.add_subplot(spec[:, 0], projection=crs.Orthographic(np.nanmean(params['extent'][:2]), np.nanmean(params['extent'][2:])))
         axes00.add_feature(feature.COASTLINE)
-        axes00.add_feature(feature.STATES,alpha=0.2,zorder=1)
-        
+        axes00.add_feature(feature.STATES, alpha=0.2, zorder=1)
+
         for k in ds.keys():
             nearest_time = ds[k].sel(time=target_time, method='nearest')
             time_difference = abs(pd.to_timedelta(nearest_time.time.values - target_time).total_seconds())
 
             if time_difference < 10:
                 data = ds[k].sel(time=target_time, method='nearest')
-        
+
                 latitude = data.Latitude
                 longitude = data.Longitude
                 mask = data.Elevation > analysis_parameters['el_cutoff']
-        
-                pc = axes00.pcolormesh(longitude,latitude,data.FilteredImageData.where(mask),transform=crs.PlateCarree(),cmap='gray')
-        
+
+                pc = axes00.pcolormesh(longitude, latitude, data.FilteredImageData.where(mask), transform=crs.PlateCarree(), cmap=params['cmap'])
+
         # Set the title and limits of the map
-        axes00.set_title(pd.to_datetime(str(target_time)))
-        axes00.set_extent(extent,crs=crs.PlateCarree())
-        
-        # Plot meridional winds
-        axes01 = fig.add_subplot(spec[0,1])
-        axes02 = fig.add_subplot(spec[1,1])
-        
+        axes00.set_title('%s UT' % pd.to_datetime(str(target_time)))
+        axes00.set_extent(params['extent'], crs=crs.PlateCarree())
+        axes00.set_facecolor('lightgray')
+
+        pos = axes00.get_position()
+        cax = fig.add_axes([pos.x0 + params['cloc'][0] * pos.width, pos.y0 + params['cloc'][1], params['cloc'][2] * pos.width - 0.05, + params['cloc'][3]])
+        cbar = fig.colorbar(pc, cax=cax, orientation='horizontal')
+        cbar.set_label('Intensity [units]',fontsize=8)
+        cbar.set_ticks([])
+        cbar.set_ticklabels([])
+        cbar.ax.tick_params(labelsize=8)
+
+        axes01 = fig.add_subplot(spec[0, 1])
+        axes02 = fig.add_subplot(spec[1, 1])
+
         for fpi in FPI_ut.keys():
-            # Plot line segments so we can vary the alpha
             for i in range(len(FPI_ut[fpi]['North']) - 1):
-                if (FPI_ut[fpi]['North'][i+1] - FPI_ut[fpi]['North'][i]).total_seconds() < (max_gap*60.):
-                    axes01.plot(FPI_ut[fpi]['North'][i:i+2], FPI_wind[fpi]['North'][i:i+2],color=my_colors[fpi],label='_nolegend_',alpha=FPI_walpha[fpi]['North'][i+1])
-            axes01.scatter(FPI_ut[fpi]['North'],FPI_wind[fpi]['North'],ec=None, color=my_colors[fpi],label='_nolegend_',alpha=FPI_walpha[fpi]['North'], s=10)
+                if (FPI_ut[fpi]['North'][i + 1] - FPI_ut[fpi]['North'][i]).total_seconds() < (max_gap * 60.):
+                    axes01.plot(FPI_ut[fpi]['North'][i:i + 2], FPI_wind[fpi]['North'][i:i + 2], color=my_colors[fpi], label='_nolegend_', alpha=FPI_walpha[fpi]['North'][i + 1])
+            axes01.scatter(FPI_ut[fpi]['North'], FPI_wind[fpi]['North'], ec=None, color=my_colors[fpi], label='_nolegend_', alpha=FPI_walpha[fpi]['North'], s=10)
 
             for i in range(len(FPI_ut[fpi]['West']) - 1):
-                if (FPI_ut[fpi]['West'][i+1] - FPI_ut[fpi]['West'][i]).total_seconds() < (max_gap*60.):                
-                    axes02.plot(FPI_ut[fpi]['West'][i:i+2], FPI_wind[fpi]['West'][i:i+2],color=my_colors[fpi],label='_nolegend_',alpha=FPI_walpha[fpi]['West'][i+1])
-            axes02.scatter(FPI_ut[fpi]['West'],FPI_wind[fpi]['West'],ec=None, color=my_colors[fpi],label='_nolegend_',alpha=FPI_walpha[fpi]['West'], s=10)
+                if (FPI_ut[fpi]['West'][i + 1] - FPI_ut[fpi]['West'][i]).total_seconds() < (max_gap * 60.):
+                    axes02.plot(FPI_ut[fpi]['West'][i:i + 2], FPI_wind[fpi]['West'][i:i + 2], color=my_colors[fpi], label='_nolegend_', alpha=FPI_walpha[fpi]['West'][i + 1])
+            axes02.scatter(FPI_ut[fpi]['West'], FPI_wind[fpi]['West'], ec=None, color=my_colors[fpi], label='_nolegend_', alpha=FPI_walpha[fpi]['West'], s=10)
 
-            legend_elements.append(Line2D([0],[0], marker='o', linestyle='None', color=my_colors[fpi],label=fpi,markerfacecolor=my_colors[fpi],markersize=np.sqrt(10)))
-        
-        if sky_line_tag == 'XR':
-            ymin = -300
-            ymax = 300
-        elif sky_line_tag == 'XG':
-            ymin = -200
-            ymax = 200
-        
-        axes01.set_ylim([ymin,ymax])
-        axes01.axhline(y=0, color='k',linewidth=1)
-        axes01.axvline(x=target_time, color='r',linewidth=1)
-        axes01.xaxis.set_major_locator(dates.HourLocator(interval = 2))
+            legend_elements.append(Line2D([0], [0], marker='o', linestyle='None', color=my_colors[fpi], label=fpi, markerfacecolor=my_colors[fpi], markersize=np.sqrt(10)))
+
+        axes01.set_ylim([params['ymin'], params['ymax']])
+        axes01.axhline(y=0, color='k', linewidth=1)
+        axes01.axvline(x=target_time, color='r', linewidth=1)
+        axes01.xaxis.set_major_locator(dates.HourLocator(interval=2))
         axes01.xaxis.set_minor_locator(dates.HourLocator())
         axes01.xaxis.set_major_formatter(dates.DateFormatter('%H'))
-        if sky_line_tag == 'XG':
-            axes01.set_title('Green Line Winds')
-        elif sky_line_tag == 'XR':
-            axes01.set_title('Red Line Winds')
-        axes01.tick_params(axis='both',which='major',size=6,direction='in',right=True,top=True,labelright=True,labelleft=False)
-        axes01.tick_params(axis='both',which='minor',size=3,direction='in',right=True,top=True,labelright=True,labelleft=False)
+        axes01.set_title(params['title'])
+        axes01.tick_params(axis='both', which='major', size=6, direction='in', right=True, top=True, labelright=True, labelleft=False)
+        axes01.tick_params(axis='both', which='minor', size=3, direction='in', right=True, top=True, labelright=True, labelleft=False)
         axes01.set_ylabel('Northward Winds [m/s]')
-        axes01.legend(handles=legend_elements,loc='upper right',ncol=2, fontsize=8)
+        axes01.legend(handles=legend_elements, loc='upper right', ncol=2, fontsize=8)
         if len(all_fpi_times) > 0:
-            axes01.set_xlim([np.unique(all_fpi_times)[0],np.unique(all_fpi_times)[-1]])
-        
-        axes02.set_ylim([ymin,ymax])    
-        axes02.axhline(y=0, color='k',linewidth=1)
-        axes02.axvline(x=target_time, color='r',linewidth=1)
-        axes02.xaxis.set_major_locator(dates.HourLocator(interval = 2))
+            axes01.set_xlim([np.unique(all_fpi_times)[0], np.unique(all_fpi_times)[-1]])
+
+        axes02.set_ylim([params['ymin'], params['ymax']])
+        axes02.axhline(y=0, color='k', linewidth=1)
+        axes02.axvline(x=target_time, color='r', linewidth=1)
+        axes02.xaxis.set_major_locator(dates.HourLocator(interval=2))
         axes02.xaxis.set_minor_locator(dates.HourLocator())
         axes02.xaxis.set_major_formatter(dates.DateFormatter('%H'))
-        axes02.tick_params(axis='both',which='major',size=6,direction='in',right=True,top=True,labelright=True,labelleft=False)
-        axes02.tick_params(axis='both',which='minor',size=3,direction='in',right=True,top=True,labelright=True,labelleft=False)
+        axes02.tick_params(axis='both', which='major', size=6, direction='in', right=True, top=True, labelright=True, labelleft=False)
+        axes02.tick_params(axis='both', which='minor', size=3, direction='in', right=True, top=True, labelright=True, labelleft=False)
         axes02.yaxis.tick_right()
         axes02.yaxis.set_label_position("left")
         axes02.set_ylabel('Eastward Wind [m/s]')
         axes02.set_xlabel('UT [hrs]')
-        if len(all_fpi_times) > 0:   
-            axes02.set_xlim([np.unique(all_fpi_times)[0],np.unique(all_fpi_times)[-1]])
-        
-        # Creating custom legend handles
+        if len(all_fpi_times) > 0:
+            axes02.set_xlim([np.unique(all_fpi_times)[0], np.unique(all_fpi_times)[-1]])
+
         low_quality = Line2D([], [], color=my_colors['cvo'], alpha=0.3, label='Low')
         med_quality = Line2D([], [], color=my_colors['cvo'], alpha=0.7, label='Medium')
         high_quality = Line2D([], [], color=my_colors['cvo'], alpha=1.0, label='High Quality')
-
-        # Adding the legend to the plot
         axes02.legend(handles=[low_quality, med_quality, high_quality], loc='upper right', ncols=3, fontsize=6)
 
-        # Plot quiver
-        # Scaling factor
-        if sky_line_tag == 'XG':
-            scale=25.
-        elif sky_line_tag == 'XR':
-            scale=100.
-        
-        xoff,yoff=8e4, -1.3e5
-        width=0.015
+        width = 0.015
         headwidth = 4
         headlength = 4
-        headaxislength= headlength-1
+        headaxislength = headlength - 1
         minshaft = 2
-        sc = axes00.bbox.width/fig.dpi/(10.*scale)
-        
+        sc = axes00.bbox.width / fig.dpi / (10. * params['scale'])
+
         obj = None
         for fpi in FPI_ut.keys():
             valid_t = False
-        
-#            for d in FPI_tt[fpi].keys():
-            # Check if the target_time is within max_gap minutes of a measurement
-            if (np.min(abs(toTimestamp(pd.to_datetime(str(target_time)))-FPI_tt[fpi]['North'])) < max_gap*60) & (np.min(abs(toTimestamp(pd.to_datetime(str(target_time)))-FPI_tt[fpi]['West'])) < max_gap*60):
+
+            if (np.min(abs(toTimestamp(pd.to_datetime(str(target_time))) - FPI_tt[fpi]['North'])) < max_fpi_gap * 60) & (
+                    np.min(abs(toTimestamp(pd.to_datetime(str(target_time))) - FPI_tt[fpi]['West'])) < max_fpi_gap * 60):
                 valid_t = True
-    
+
             if valid_t:
-                # Get interpolated u, v
-                u = np.interp(toTimestamp(pd.to_datetime(str(target_time))),FPI_tt[fpi]['West'],FPI_wind[fpi]['West'])*sc
-                v = np.interp(toTimestamp(pd.to_datetime(str(target_time))),FPI_tt[fpi]['North'],FPI_wind[fpi]['North'])*sc
-                a = np.interp(toTimestamp(pd.to_datetime(str(target_time))),FPI_tt[fpi]['North'],FPI_walpha[fpi]['North'])
+                u = np.interp(toTimestamp(pd.to_datetime(str(target_time))), FPI_tt[fpi]['West'], FPI_wind[fpi]['West']) * sc
+                v = np.interp(toTimestamp(pd.to_datetime(str(target_time))), FPI_tt[fpi]['North'], FPI_wind[fpi]['North']) * sc
+                a = 1
             else:
                 u = np.nan
                 v = np.nan
                 a = 0
 
-            # Don't show if the quality is too low
             if a < 0.5:
                 a = 0
-        
-            glat,glon, x = fpiinfo.get_site_info(fpi)['Location']
-    
-            obj = axes00.quiver(np.array([glon]),np.array([glat]),np.array([u]),np.array([v]),
-                                    angles='uv', scale_units='inches', scale=1, pivot='tail', alpha=a,
-                                    color=my_colors[fpi], transform=crs.PlateCarree(), zorder=1000)
-#                                    angles='uv', scale_units='inches', scale=1,width=width,
-#                                    pivot='tail', headwidth=headwidth, headlength=headlength, alpha=a,
-#                                    minshaft=minshaft, headaxislength=headaxislength, color=my_colors[fpi], transform=crs.PlateCarree(),zorder=1000)
-        
-        x0,x1,y0,y1=axes00.get_extent()
+
+            glat, glon, x = fpiinfo.get_site_info(fpi)['Location']
+
+            obj = axes00.quiver(np.array([glon]), np.array([glat]), np.array([u]), np.array([v]),
+                                angles='uv', scale_units='inches', scale=1, width=width,
+                                pivot='tail', headwidth=headwidth, headlength=headlength, alpha=a,
+                                minshaft=minshaft, headaxislength=headaxislength, color=my_colors[fpi], transform=crs.PlateCarree(), zorder=1000)
+
+        x0, x1, y0, y1 = axes00.get_extent()
         if obj is not None:
-            quiverobj1=axes00.quiverkey(obj, x0+xoff, y0+yoff, sc*scale, r'$%i\,\frac{m}{s}$'%scale,labelsep=0,color="black", alpha=1, coordinates='data',labelpos='N', transform=crs.PlateCarree(),fontproperties={'size': 8})
-        
+            quiverobj1 = axes00.quiverkey(obj, params['xoff'], params['yoff'], sc * params['scale'], r'$%i\,\frac{m}{s}$' % params['scale'],
+                                        labelsep=0.05, color="black", alpha=1, coordinates='axes', labelpos='N',
+                                        transform=axes00.transAxes, fontproperties={'size': 8})
+
+        today_date = pd.to_datetime('today').strftime('%m-%d-%Y')
+        if np.isnan(analysis_parameters['Tlo']) and np.isnan(analysis_parameters['Thi']):
+            text1 = 'No filtering'
+        elif np.isnan(analysis_parameters['Tlo']):
+            text1 = 'Highpass filter cutoff at %d min' % analysis_parameters['Thi']
+        elif np.isnan(analysis_parameters['Thi']):
+            text1 = 'Lowpass filter cutoff at %d min' % analysis_parameters['Tlo']
+        else:
+            text1 = 'Temporal filter: %d-%d min' % (analysis_parameters['Tlo'], analysis_parameters['Thi'])
+        text2 = 'Plotted on ' + today_date
+        text_x = 0
+        axes00.annotate(text1, xy=(text_x, -0.05), xycoords='axes fraction', ha='left', va='bottom', fontsize=8)
+        axes00.annotate(text2, xy=(text_x, -0.05 - 0.05), xycoords='axes fraction', ha='left', va='bottom', fontsize=8)
+
         spec.tight_layout(fig)
-        
+
         folderpngs = system_parameters['output_directory']
         savename = folderpngs + 'MANGO_%s_%s.png' % (pd.to_datetime(str(target_time)).strftime('%Y%m%d_%H%M%S'), sky_line_tag)
-        plt.savefig(savename,dpi=300)
+        plt.savefig(savename, dpi=300)
         created_files.append(savename)
+
+        plt.close(fig)
 
     # Generating video from PNG frames
     linetag="red" if sky_line_tag=='XR' else "green"
@@ -463,18 +489,19 @@ def MakeSummaryMovies(system_parameters, analysis_parameters):
     os.system(cmd)
 
     # Delete all tracked files
-    for file in downloaded_files + created_files:
-        try:
-            os.remove(file)
-        except OSError:
-            pass # File does not exist
+    if delete_working_files:
+        for file in downloaded_files + created_files:
+            try:
+                os.remove(file)
+            except OSError:
+                pass # File does not exist
 
-    # Remove empty directories
-    for directory in set(os.path.dirname(file) for file in downloaded_files + created_files):
-        try:
-            os.removedirs(directory)
-        except OSError:
-            pass  # Directory not empty or already deleted
+        # Remove empty directories
+        for directory in set(os.path.dirname(file) for file in downloaded_files + created_files):
+            try:
+                os.removedirs(directory)
+            except OSError:
+                pass  # Directory not empty or already deleted
 
 if __name__=="__main__":
     # Main module allows this to be run via command line
@@ -523,7 +550,7 @@ if __name__=="__main__":
     # Run the code
     try:
         if sky_line_tag == 'XG':
-            analysis_parameters['sites_asi'] = ['cvo','low','blo','cfs','mro','bdr']
+            analysis_parameters['sites_asi'] = ['cvo','low','blo','cfs','mro','bdr','new']
             analysis_parameters['sites_fpi'] = ['cvo','low','blo']
             analysis_parameters['emission'] = 'green'
             analysis_parameters['Tlo'] = 2
