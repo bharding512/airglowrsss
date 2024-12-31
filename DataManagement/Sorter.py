@@ -480,7 +480,7 @@ def sorter(san,pgm):
                                             message=warning,
                                             issue_type=IssueType.WARNING,
                                             additional_context={
-                                                "Instrument": f"{code[instr]}{inum}"
+                                                "Instrument": f"{code[instr]}{inum}",
                                                 "Year": year,
                                                 "Day of Year": doy
                                             }
