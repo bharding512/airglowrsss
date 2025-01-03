@@ -6,8 +6,8 @@
 
 import FPI
 import glob
-from lmfit import Parameters
-from optparse import OptionParser
+#from lmfit import Parameters
+#from optparse import OptionParser
 import datetime
 import numpy as np
 import os
@@ -23,13 +23,13 @@ import matplotlib.pyplot as plt
 import traceback
 from matplotlib import dates
 import shutil
+from warning_log import WarningLog
+from os.path import basename
 
 # For quick testing of these modules, force a reload
 #reload(FPIDisplay)
 #reload(FPI)
 #reload(fpiinfo)
-
-
 
 def quality_hack(instr_name, year, doy, FPI_Results, logfile):
     '''
@@ -312,6 +312,8 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
 
     '''
 
+    # Initialize warning log
+    warning_log = WarningLog()
 
     # Define constants that do not depend on the site
     direc_tol = 10.0 # tolerance in degrees to recognize a look direction with
@@ -455,7 +457,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             # Run the analysis
             (FPI_Results, notify_the_humans) = FPI.ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag=sky_line_tag, \
                                                 direc_tol=direc_tol, N=instrument['N'], N0=instrument['N0'], N1=instrument['N1'], \
-                                                logfile=logfile, diagnostic_fig=Diagnostic_Fig, reference=reference)
+                                                logfile=logfile, diagnostic_fig=Diagnostic_Fig, reference=reference, warning_log=warning_log)
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                 'Laser and sky image analysis complete.\n')
         except:
@@ -634,6 +636,9 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                 FPI_Results['Clouds'] = {'mean': c, 'max': c, 'min': c}
             if bw_dir: # it should have been found
                 notify_the_humans = True
+                warning_log.add(message="Cannot find bw_dir",
+                                title="No cloud sensor data",
+                                label="warning:cloud_sensor_data")
         else:
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Found and loaded Boltwood cloud sensor data.\n')
         if FPI_Results['Dome'] is None:# if it wasn't found but should have been
@@ -1083,6 +1088,9 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             if flag != 0: # Sending png to airglow failed
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
                 notify_the_humans = True
+                warning_log.add(message="Error sending %s to airglow server for displaying on website." % basename(fn),
+                                title='Cannot send to webserver',
+                                label='warning:webserver')
 
             # If we are supposed to put this png in Madrigal, put it in the Madrigal database directory
             if send_to_madrigal and instrument['send_to_madrigal'] and 'diagnostic' not in fn:
@@ -1127,6 +1135,9 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             if flag != 0: # Sending png to airglow failed
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending "%s" to airglow server for displaying on website.\n' % gif_fn)
                 notify_the_humans = True
+                warning_log.add(message='Error sending "%s" to airglow server for displaying on website.' % basename(gif_fn),
+                                title='Cannot send to webserver',
+                                label='warning:webserver')
             # Register the gif. First find out if the entry is in there (i.e., we are just updating it)
             sql_cmd = 'SELECT id FROM DataSet WHERE Site = %s and Instrument = %s and StartUTTime = %s'
             params = (network_id, gif_id, startut)
@@ -1156,11 +1167,14 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
 #        con.close()
 
     # Return log as string if an email to humans is suggested.
-    s = ''
-    if notify_the_humans:
-        with open (logname, "r") as myfile:
-            s = myfile.read() # return the whole thing as a string, including new-lines
-    return s
+#    s = None
+#    if notify_the_humans:
+#        s = warning_log
+#        with open (logname, "r") as myfile:
+#            s = myfile.read() # return the whole thing as a string, including new-lines
+#        
+#    return s
+    return warning_log if warning_log else None
 
 
 

@@ -37,6 +37,16 @@ import FPIprocess
 #import ASIprocess # Disabled on Jan 30, 2024 by JJM as asi processing isn't updated to py3
 # import GPSprocess # Disabled on Jan 30, 2024 by JJM as gps processing isn't updated to py3
 from GitHubIssueHandler import SiteIssueManager, IssueType
+from github_config import github_config
+from exceptions import *
+
+# Define a mapping of exception types to their subject line prefixes
+ERROR_SUBJECTS = {
+    BadLaserError: "!!! Laser Processing Error",
+    LaserProcessingError: "!!! Other Laser Error",
+    InstrumentProcessingError: "!!! Instrument Error",
+    Exception: "!!! Processing error XG"  # Default catch-all
+}
 
 def instrumentcode():
     '''
@@ -311,8 +321,8 @@ def sorter(san,pgm):
     try:
         # Create issue manager with config
         issue_manager = SiteIssueManager(
-            token=config.github_token,
-            repo_name=config.github_repo
+            token=github_config.github_token,
+            repo_name=github_config.github_repo
         )
 
         # Get Data in RX folder
@@ -457,42 +467,79 @@ def sorter(san,pgm):
 #
 #                        print "!!! End Processing"
 
-                        # Define the tags in priority order (XG and XR should be checked before X to avoid confusion)
-                        tags = ['XG', 'XR', 'X']
+                        # Define the tags and their corresponding kwargs values
+                        tag_mapping = {
+                            'XG_': 'XG',
+                            'XR_': 'XR', 
+                            'X_': 'X'
+                        }
 
-                        # Function to check for tag in results
                         def has_tag(results, tag):
                             return len([r for r in result if tag in os.path.basename(r)]) > 0
 
-                        # Process each tag that exists in the results
-                        for tag in tags:
-                            if has_tag(result, tag):
-                                process_kwargs['sky_line_tag'] = tag
+                        # Process each tag in priority order
+                        for search_tag, kwarg_tag in tag_mapping.items():
+                            if has_tag(result, search_tag):
+                                process_kwargs['sky_line_tag'] = kwarg_tag
                                 try:
                                     warning = FPIprocess.process_instr(code[instr] + inum, year, doy, **process_kwargs)
                                     if warning:
-                                        subject = f"!!! Manually inspect {tag} ('{code[instr]}{inum}',{year},{doy}) @ {site}"
+                                        subject = f"!!! Manually inspect {kwarg_tag} ('{code[instr]}{inum}',{year},{doy}) @ {site}"
                                         print(subject)
                                         print(traceback.print_exc())
                                         print("Creating Issue in GitHub")
                                         issue_manager.handle_processing_issue(
                                             site_id=site,
                                             message=warning,
-                                            issue_type=IssueType.WARNING,
+                                            category=IssueType.WARNING,
                                             additional_context={
                                                 "Instrument": f"{code[instr]}{inum}",
                                                 "Year": year,
-                                                "Day of Year": doy
+                                                "Day of Year": doy,
+                                                "Tag": kwarg_tag
                                             }
                                         )
-#                                        Emailer.emailerror(emails, subject, warning)
-                                except:
-                                    subject = f"!!! Processing error {tag} ('{code[instr]}{inum}',{year},{doy}) @ {site}"
-                                    print(subject)
-                                    print(traceback.print_exc())
+                                except Exception as e:
+                #                    print ('Failed: %s' % str(e))
+                                    # Get the appropriate subject prefix based on exception type
+                                    # If the exact type isn't found, walk up the class hierarchy
+                                    import io
 
-                                # Break after processing first matching tag
-                                break
+                                    subject_prefix = None
+                                    for exc_type in type(e).__mro__:  # walks up inheritance chain
+                                        if exc_type in ERROR_SUBJECTS:
+                                            subject_prefix = ERROR_SUBJECTS[exc_type]
+                                            break
+                    
+                                    subject = f"{subject_prefix} {kwarg_tag} ('{code[instr]}{inum}',{year},{doy}) @ {site}"
+                                    print(subject)
+                                    
+                                    # Capture the traceback as a string
+                                    tb_stream = io.StringIO()
+                                    traceback.print_exc(file=tb_stream)
+                                    tb_string = tb_stream.getvalue()
+                                    print(tb_string)
+                    
+                                    issue_manager.handle_processing_issue(
+                                        site_id=site,
+                                        message=str(e),
+                                        error_type=e.__class__.__name__,
+                                        category=IssueType.ERROR,
+                                        additional_context={
+                                            "Instrument": f"{code[instr]}{inum}",
+                                            "Year": year,
+                                            "Day of Year": doy,
+                                            "Tag": kwarg_tag,
+                                            "Processing Stage": type(e).__name__,
+                                            "Traceback": tb_string
+                                        }
+                                    )
+
+#                                        Emailer.emailerror(emails, subject, warning)
+#                                except:
+#                                    subject = f"!!! Processing error {kwarg_tag} ('{code[instr]}{inum}',{year},{doy}) @ {site}"
+#                                    print(subject)
+#                                    print(traceback.print_exc())
 
 #                        # Run green line if existing
 #                        if len([r for r in result if 'XG' in os.path.basename(r)])>0:

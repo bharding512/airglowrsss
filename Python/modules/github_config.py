@@ -3,10 +3,10 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 
-class Config:
+class GithubConfig:
     def __init__(self):
         # Find .env file from current directory up to root
-        env_path = Path('.').absolute()
+        env_path = Path(__file__).parent.absolute()
         while env_path != env_path.parent:
             if (env_path / '.env').exists():
                 break
@@ -26,4 +26,4 @@ class Config:
             raise ValueError("GitHub repository not found in environment variables")
 
 # Create a singleton instance
-config = Config()
+github_config = GithubConfig()

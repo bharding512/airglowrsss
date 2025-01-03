@@ -27,67 +27,71 @@ class SiteIssueManager:
             IssueType.WARNING: "data_processing:warning"
         }
         
-        # Specific sublabels for different types of processing issues
-        self.SPECIFIC_LABELS = {
-            # Error labels
-            "FileNotFoundError": "error:missing_file",
+        # Specific labels for errors (exceptions)
+        self.ERROR_LABELS = {
             "BadLaserError": "error:laser_centerfinding",
             "LaserProcessingError": "error:laser_general",
             "InstrumentProcessingError": "error:instrument",
-            
-            # Warning labels
-            "LaserWarning": "warning:laser",
-            "DataQualityWarning": "warning:quality",
-            "CalibrationWarning": "warning:calibration",
-            "InstrumentWarning": "warning:instrument"
+            # Add other error types as needed
         }
 
-    def get_specific_label(self, issue_type: str) -> str:
-        """Get the specific label based on the issue type."""
-        return self.SPECIFIC_LABELS.get(issue_type, f"{IssueType.ERROR.value}:general")
+    def get_error_label(self, error_type: str) -> str:
+        """Get the specific label for an error type"""
+        return self.ERROR_LABELS.get(error_type, "error:general")
 
-    def find_open_site_issue(self, site_id: str, issue_type: str = None, 
-                            category: IssueType = IssueType.ERROR) -> Optional[object]:
+    def find_open_site_issue(self, site_id: str, category: IssueType = IssueType.ERROR) -> Optional[object]:
         """
         Check if there's an existing open issue/warning for a specific site.
         
         Args:
             site_id: Identifier for the site
-            issue_type: Optional specific type of issue to search for
             category: Whether this is an error or warning
+            
+        Returns:
+            GitHub Issue object if found, None otherwise
         """
         base_label = self.BASE_LABELS[category]
-        query = f'repo:{self.repo.full_name} is:issue is:open label:"{base_label}" site:{site_id}'
+        query = f'repo:{self.repo.full_name} is:issue is:open label:"{base_label}" label:site:{site_id}'
         
-        if issue_type:
-            specific_label = self.get_specific_label(issue_type)
-            query += f' label:"{specific_label}"'
+        try:
+            open_issues = list(self.github.search_issues(query))
             
-        open_issues = self.github.search_issues(query)
-        
-        for issue in open_issues:
-            if f'[Site: {site_id}]' in issue.title:
+            for issue in open_issues:
                 return issue
+                
+        except Exception as e:
+            self.logger.error(f"Error searching issues: {e}")
+        
         return None
 
-    def create_site_issue(self, site_id: str, message: str, issue_type: str,
+    def create_site_issue(self, site_id: str, message: str,
                          category: IssueType = IssueType.ERROR,
+                         error_type: str = None,
                          additional_context: dict = None) -> object:
         """
         Create a new issue or warning for a site.
         
         Args:
             site_id: Identifier for the site
-            message: Description of the issue
-            issue_type: Type of issue/warning
+            message: Description or WarningLog instance
             category: Whether this is an error or warning
+            error_type: Type of error if this is an error
             additional_context: Optional dictionary of additional information
         """
         base_label = self.BASE_LABELS[category]
-        specific_label = self.get_specific_label(issue_type)
         
-        prefix = "Warning" if category == IssueType.WARNING else "Error"
-        title = f"[Site: {site_id}] {prefix}: {issue_type}"
+        # Handle different cases for title and labels
+        if category == IssueType.WARNING and hasattr(message, 'warning_title'):
+            # Handle WarningLog case
+            title = f"[Site: {site_id}] {message.warning_title}"
+            labels = [base_label, f'site:{site_id}']
+            if hasattr(message, 'warning_labels'):
+                labels.extend(list(message.warning_labels))
+        else:
+            # Handle error case
+            error_label = self.get_error_label(error_type) if error_type else "error:general"
+            title = f"[Site: {site_id}] Error: {error_type or 'Unknown'}"
+            labels = [base_label, error_label, f'site:{site_id}']
         
         # Build additional context section if provided
         context_section = ""
@@ -100,7 +104,6 @@ class SiteIssueManager:
 ## Site Information
 - Site ID: {site_id}
 - Detection Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}
-- Type: {issue_type}
 - Category: {category.value}
 
 ## Details
@@ -109,14 +112,7 @@ class SiteIssueManager:
 ## Processing Information
 - This issue was automatically generated by the data processing pipeline
 - Category: {base_label}
-- Specific Type: {specific_label}
 """
-        
-        labels = [
-            base_label,
-            specific_label,
-            f'site-{site_id}'
-        ]
         
         return self.repo.create_issue(
             title=title,
@@ -124,11 +120,9 @@ class SiteIssueManager:
             labels=labels
         )
 
-    def handle_processing_issue(self, 
-                              site_id: str,
-                              message: str,
-                              issue_type: str = None,
+    def handle_processing_issue(self, site_id: str, message: str,
                               category: IssueType = IssueType.ERROR,
+                              error_type: str = None,
                               additional_context: dict = None) -> Optional[object]:
         """
         Main method to handle a processing issue (error or warning) for a site.
@@ -136,36 +130,41 @@ class SiteIssueManager:
         Args:
             site_id: Identifier for the site
             message: The warning or error message
-            issue_type: Type of issue (e.g., 'LaserWarning', 'BadLaserError')
             category: Whether this is an error or warning
+            error_type: Type of error if this is an error
             additional_context: Optional dictionary of additional information
         """
         try:
-            # If issue_type not provided, use a generic type based on category
-            if not issue_type:
-                issue_type = f"Generic{category.value.capitalize()}"
-            
-            # Check for existing issue of the same type
-            existing_issue = self.find_open_site_issue(site_id, issue_type, category)
+            # Check for existing issue
+            existing_issue = self.find_open_site_issue(site_id, category)
             
             if existing_issue:
+                # Create comment body
+                comment = f"Issue occurred again at {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}\n\n"
+                comment += str(message)  # Add the warning messages
+                if additional_context:
+                    comment += "\n\n## Additional Context\n"
+                    for key, value in additional_context.items():
+                        comment += f"- {key}: {value}\n"
+                
+                existing_issue.create_comment(comment)
                 self.logger.info(
-                    f"Found existing open {category.value} for site {site_id} "
-                    f"of type {issue_type}: {existing_issue.html_url}"
+                    f"Added comment to existing {category.value} for site {site_id}: "
+                    f"{existing_issue.html_url}"
                 )
                 return existing_issue
             
+            # Create new issue if none exists
             new_issue = self.create_site_issue(
                 site_id=site_id,
                 message=message,
-                issue_type=issue_type,
                 category=category,
+                error_type=error_type,
                 additional_context=additional_context
             )
             
             self.logger.info(
-                f"Created new {category.value} for site {site_id} "
-                f"of type {issue_type}: {new_issue.html_url}"
+                f"Created new {category.value} for site {site_id}: {new_issue.html_url}"
             )
             return new_issue
             

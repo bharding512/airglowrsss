@@ -37,6 +37,9 @@ import fpiinfo
 # Is there a better way?
 import ImgImagePlugin
 import h5py
+from exceptions import *
+from warning_log import WarningLog
+from os.path import basename
 
 def sort_look_directions(valid_az, valid_ze, az, ze, tol):
     '''
@@ -658,7 +661,9 @@ def get_conv_matrix_1D(instr_params, r, L, lam0, nFSRs = 4.):
     return A, lamvec
 
 
-def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_tol = 10.0, N=500, N0=0, N1=500, logfile=None, diagnostic_fig=None, horizon_cutoff = -6, reference='laser'):
+def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_tol = 10.0, N=500, N0=0, N1=500, 
+                 logfile=None, diagnostic_fig=None, horizon_cutoff = -6, reference='laser',
+                 warning_log=None):
     '''
      Function that solves for temperatures and Doppler velocities for all data
      in the present directory.  Uses a parameter fit algorithm to first estimate
@@ -687,6 +692,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                        if the laser images are not usable, then specify 'Zenith', and default instrument
                        parameters (specified in the instruments dictionary) will be used in the
                        analysis.
+            warning_log - WarningLog to log the text associated with any "notify_the_human" warnings.
 
 
      OUTPUT:
@@ -772,6 +778,10 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
         # No file was given, generate a default logfile in the current directory
         logfile = open('analyze.log','a')
         created_logfile = True
+
+    if warning_log is None:
+        # No warning log provided, open a new one
+        warning_log = WarningLog()
 
     # Only use images during sundown conditions.
     local = pytz.timezone(site['Timezone']) # pytz timezone of the site
@@ -863,7 +873,8 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
             cy = lambda t: mid
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                     'Centerfinding failed for all laser images. <BADLASER>\n')
-            raise Exception('Centerfinding failed for all laser images. This day was tagged with <BADLASER> flag.')
+#            raise Exception('Centerfinding failed for all laser images. This day was tagged with <BADLASER> flag.')
+            raise BadLaserError('Centerfinding failed for all laser images. This day was tagged with <BADLASER> flag.')
 
         # If there is only one usable point, throw a warning but use this point.
         elif np.shape(center)==(2,):
@@ -871,7 +882,8 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
             cy = lambda t: center[1]
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                     'Centerfinding failed for all but 1 laser image. <BADLASER>\n')
-            raise Exception('Centerfinding failed for all but 1 laser image. This day was tagged with <BADLASER> flag.')
+#            raise Exception('Centerfinding failed for all but 1 laser image. This day was tagged with <BADLASER> flag.')
+            raise BadLaserError('Centerfinding failed for all but 1 laser image. This day was tagged with <BADLASER> flag.')
 
         else: # There are > 1 center points. Use them.
             # If we have too much variation in the center locations, remove outliers
@@ -892,6 +904,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                             'WARNING: %03i laser images ignored because the center is an outlier.\n' % nignored)
                 if nignored > 1: # Only warn humans if there's more than one problem image
                     notify_the_humans = True
+                    warning_log.add(message='%03i laser images ignored because the center is an outlier.' % nignored,
+                                    title='Bad laser center',
+                                    label='warning:laser_center')
 
             # Find large jumps and remove the files that contributed to them
             cenx = center[:,0]
@@ -911,6 +926,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                             'WARNING: %03i laser images ignored because the center jumped by too much.\n' % nignored)
                 if nignored > 2: # Only warn humans if there's more than one problem jump
                     notify_the_humans = True
+                    warning_log.add(message='%03i laser images ignored because the center jumped by too much.' % nignored,
+                                    title='Bad laser center',
+                                    label='warning:laser_center')
 
             # If there are enough points after this, fit a poly to the center positions
             if len(dt_laser) > 0:
@@ -933,6 +951,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                     logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                                 'WARNING: Very few (%i) laser images for center trending. Consider using Zenith reference. <BADLASER>\n' % len(dt_laser))
                     notify_the_humans = True
+                    warning_log.add(message='Very few (%i) laser images for center trending. Consider using Zenith reference. <BADLASER>' % len(dt_laser),
+                                    title='Too few laser centers',
+                                    label='warning:laser_center')
 
             else: # I don't think we can ever get to this point, but just in case:
                 mid = np.ceil(np.shape(d)[0]/2.0)
@@ -942,6 +963,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                         'WARNING: No usable center points for polyfit. Using midpoint of CCD, ' + \
                         'but suggested solution is to use Zenith reference. <BADLASER>\n')
                 notify_the_humans = True
+                warning_log.add(message='No usable center points for polyfit. Using midpoint of CCD, but suggested solution is to use Zenith reference. <BADLASER>',
+                                title='Not enough laser centers to fit',
+                                label='warning:laser_center')
 
     else: # uselaser is False. Use the center locations from the instrument dictionary
         # Create a dummy function of time that always returns the same value.
@@ -1074,7 +1098,8 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'No usable laser images found. <BADLASER>\n')
             if created_logfile:
                 logfile.close()
-            raise Exception('No usable laser images found.')
+ #           raise Exception('No usable laser images found.')
+            raise BadLaserError('No usable laser images found. <BADLASER>')
 
         # Convert laser_params to array
         n = len(output)
@@ -1139,6 +1164,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                     raise Exception('Unrecognized LASERPARAMINTERP: %s' % LASERPARAMINTERP)
             except: # Try linear.
                 notify_the_humans = True
+                warning_log.add(message='Spline interpolation failed for laser param "%s". Defaulting to linear interpolation.' % (param),
+                                title='Parameter fitting failed',
+                                label='warning:parameter_fitting')
                 try: # if there's only one laser image, then even linear won't work.
                     logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                         'Spline interpolation failed for laser param "%s". Defaulting to linear interpolation.\n' % (param))
@@ -1358,6 +1386,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                     'WARNING: %s was taken with a CCD temperature of %.1f C. It will be ignored.\n' % (fname, d.info['CCDTemperature']))
             notify_the_humans = True
+            warning_log.add(message='%s was taken with a CCD temperature of %.1f C. It will be ignored.' % (fname, d.info['CCDTemperature']),
+                            title='Image with high CCD temperature',
+                            label='warning:ccd_temperature')
             ignore_this_one = False # We'll still analyze these images, but they should get a quality flag of 1.
             Novertemp += 1
 
@@ -1396,6 +1427,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                     'WARNING: %s has a look direction that is not recognized: Az=%.1f, Ze=%.1f.\n' % (fname, temp_az, temp_ze))
                 notify_the_humans = True
+#                warning_log.add(message='%s has a look direction that is not recognized: Az=%.1f, Ze=%.1f.' % (basename(fname), temp_az, temp_ze),
+#                                title='Image with unknown direction',
+#                                label='warning:unknown_direction')
             elif len(idx_match)==1: # unique recognized look direction
                 direcstr = direc_names[idx_match[0]]
             else: # more than one match was found
@@ -1413,7 +1447,10 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
             if dists[i] > direc_tol:
                 notify_the_humans = True
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') +\
-                    '%s has a look direction (az,ze) = (%.1f,%.1f) that is too far (%.1f degrees) from known directions. Labeling as "Unknown".\n' % (fname, temp_az, temp_ze, dists[i]))
+                    'WARNING: %s has a look direction (az,ze) = (%.1f,%.1f) that is too far (%.1f degrees) from known directions. Labeling as "Unknown".\n' % (fname, temp_az, temp_ze, dists[i]))
+#                warning_log.add(message='%s has a look direction (az,ze) = (%.1f,%.1f) that is too far (%.1f degrees) from known directions. Labeling as "Unknown".' % (basename(fname), temp_az, temp_ze, dists[i]),
+#                                title='Image with unknown direction',
+#                                label='warning:unknown_direction')
                 direcstr = 'Unknown'
 
             direction.append(direcstr)
@@ -1590,6 +1627,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
     if np.std(sky_intT) == 0.0:
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'WARNING: Exposure time is not changing.\n')
         notify_the_humans = True
+        warning_log.add(message='Exposure time is not changing.',
+                        title='Exposure time is not changing',
+                        label='warning:static_exposure_time')
 
     # Convert sky_params to array
     n = len(sky_out)
@@ -1766,6 +1806,9 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
             notify_the_humans = True # The skyscanner might be acting up.
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                 'WARNING: %03i unrecognized look directions. Is the skyscanner acting up?\n' % sum(invalid_idx))
+            warning_log.add(message='%03i unrecognized look directions. Is the skyscanner acting up?' % sum(invalid_idx),
+                            title='Images with unknown direction',
+                            label='warning:unknown_direction')
 
         ##################### Sky Fit Chi^2 #######################
 
