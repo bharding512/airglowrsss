@@ -460,7 +460,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                                                 logfile=logfile, diagnostic_fig=Diagnostic_Fig, reference=reference, warning_log=warning_log)
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
                 'Laser and sky image analysis complete.\n')
-        except:
+        except Exception as e:
             # FPI.ParameterFit crashed. For now, write the log and re-raise the Exception.
             tracebackstr = traceback.format_exc()
             logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error analyzing %s. Traceback listed below.\n-----------------------------------\n%s\n-----------------------------------\n' % (datestr,tracebackstr))
@@ -468,6 +468,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
     #        Diagnostic_Fig = plt.figure()
     #        Diagnostic_Fig.text(0.5, 0.5, 'Error - see log file', fontsize = 20, ha='center')
             logfile.close()
+            e.warning_log = warning_log
             raise
 
     # Do any necessary manual corrections, as per the quality_hack function
@@ -667,6 +668,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         tracebackstr = traceback.format_exc()
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Unknown error obtaining Boltwood or X300 data for %s. Traceback listed below. Analysis will continue without these data.\n-----------------------------------\n%s\n-----------------------------------\n' % (datestr,tracebackstr))
         notify_the_humans = True
+        e.warning_log = warning_log
 
 
     # Helper function to determine if laser wavelength drift is occuring
@@ -789,6 +791,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
     except Exception as e:
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'IOError: using local filesystem.\n')
         npzname=tempnpzname
+        e.warning_log = warning_log
 
     logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Results saved to %s\n' % npzname)
     if enable_share and site['share']: # save a copy of the npz file in a separate folder
@@ -891,7 +894,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             _kwargs['Tmax']=500
         (Temperature_Fig, Temperature_Graph), (Doppler_Fig, Doppler_Graph) = FPIDisplay.PlotDay(npzname, **_kwargs)
 
-    except:
+    except Exception as e:
         # Summary plots crashed. We still want to send the diagnostics and log to the
         # website, so continue on with dummy plots.
         tracebackstr = traceback.format_exc()
@@ -901,6 +904,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         Temperature_Fig.text(0.5, 0.5, 'Plotting error - see log file', fontsize = 20, ha='center')
         Doppler_Fig = plt.figure()
         Doppler_Fig.text(0.5, 0.5, 'Plotting error - see log file', fontsize = 20, ha='center')
+        e.warning_log = warning_log
 
     gif_fn = None # filename of the gif to send to the website
     if enable_windfield_estimate:
@@ -924,10 +928,11 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Wind field estimation successful. Created gif and quicklook plot.\n')
                     else:
                         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Wind field estimation not successful. No plots created.\n')
-            except:
+            except Exception as e:
                 tracebackstr = traceback.format_exc()
                 logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error creating windfield quicklook plot. Traceback listed below.\n-----------------------------------\n%s\n-----------------------------------\n' % (tracebackstr,))
                 notify_the_humans = True
+                e.warning_log = warning_log
 
     # Save files in temporary folder.
     summary_figs = [Diagnostic_Fig,

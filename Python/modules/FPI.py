@@ -1278,9 +1278,16 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
             cal_error = abs(c/g1*g1diff)
             cal_error_vec[k] = cal_error
 
-        # linearly interpolate to my_dt
-        sfit = interpolate.interp1d(dt[1:-1], cal_error_vec[1:-1])
-        wind_cal_error = sfit(my_dt)
+        try:
+            # linearly interpolate to my_dt
+            sfit = interpolate.interp1d(dt[1:-1], cal_error_vec[1:-1])
+            wind_cal_error = sfit(my_dt)
+        except:
+            logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + \
+                    'WARNING: Interpolation failed in calc_wind_calib_error. Returning NaN.\n')
+
+            wind_cal_error = np.nan 
+        
         return wind_cal_error
 
 
@@ -1582,6 +1589,12 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
                 calt = np.array([(last - caltref).total_seconds() for last in laser_times])
                 skyt = (sky_times[-1] - caltref).total_seconds()
                 sigma_cal_v = calc_wind_calib_error(calt, laser_value['t'], skyt)
+
+                if np.isnan(sigma_cal_v):
+                    notify_the_humans = True
+                    warning_log.add(message='calc_wind_calib_error returned NaN. Sky images are not bounded by laser images.',
+                                    title='Interpolation error in wind calibration',
+                                    label='warning:wind_calibration')
 
             # Transform from lamc to v and collect all parameters
             lamc = sky_params['lamc'].value
@@ -2335,7 +2348,7 @@ def DopplerReference(FPI_Results, reference='zenith', statistic='mode'):
                 # Find the zero offset
                 ind = all_indices('Zenith',FPI_Results['direction'])
                 if len(ind)==0:
-                    raise Exception('Cannot establish Doppler reference: No zenith samples')
+                    raise BadDopplerReferenceError('Cannot establish Doppler reference: No zenith samples')
 
                 # Eliminate samples with large error bars
                 sigma_v = FPI_Results['sigma_LOSwind'][ind]
@@ -2343,9 +2356,9 @@ def DopplerReference(FPI_Results, reference='zenith', statistic='mode'):
                 ind = np.array(ind)[ind_good]
 
                 if len(ind)==0:
-                    raise Exception('Cannot establish Doppler reference: No trustworthy zenith samples')
+                    raise BadDopplerReferenceError('Cannot establish Doppler reference: No trustworthy zenith samples')
                 if len(ind) == 1:
-                    raise Exception('Cannot establish Doppler reference: Only 1 trustworthy zenith sample')
+                    raise BadDopplerReferenceError('Cannot establish Doppler reference: Only 1 trustworthy zenith sample')
 
                 if np.array(FPI_Results['sigma_LOSwind'])[ind].sum() == 0:
                     ref_Dop = np.zeros(len(FPI_Results['LOSwind']))

@@ -45,7 +45,8 @@ ERROR_SUBJECTS = {
     BadLaserError: "!!! Laser Processing Error",
     LaserProcessingError: "!!! Other Laser Error",
     InstrumentProcessingError: "!!! Instrument Error",
-    Exception: "!!! Processing error XG"  # Default catch-all
+    BadDopplerReference: "!!! Doppler Reference Error",
+    Exception: "!!! Processing Error"  # Default catch-all
 }
 
 def instrumentcode():
@@ -505,6 +506,11 @@ def sorter(san,pgm):
                                     # If the exact type isn't found, walk up the class hierarchy
                                     import io
 
+                                    # Capture any warnings that occurred before the error
+                                    warning_messages = ""
+                                    if hasattr(e, 'warning_log') and e.warning_log:
+                                        warning_messages = f"\n\nWarnings before error:\n{str(e.warning_log)}"
+
                                     subject_prefix = None
                                     for exc_type in type(e).__mro__:  # walks up inheritance chain
                                         if exc_type in ERROR_SUBJECTS:
@@ -522,7 +528,7 @@ def sorter(san,pgm):
                     
                                     issue_manager.handle_processing_issue(
                                         site_id=site,
-                                        message=str(e),
+                                        message=str(e) + warning_messages,
                                         error_type=e.__class__.__name__,
                                         category=IssueType.ERROR,
                                         additional_context={

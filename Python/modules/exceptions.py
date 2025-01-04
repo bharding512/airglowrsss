@@ -15,3 +15,7 @@ class BadLaserError(LaserProcessingError):
 class InstrumentProcessingError(ProcessingError):
     """Base exception for general instrument processing errors"""
     pass
+
+class BadDopplerReferenceError(ProcessingError):
+    """Raised when a Doppler reference cannot be established"""
+    pass

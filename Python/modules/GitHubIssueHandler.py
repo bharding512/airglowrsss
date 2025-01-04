@@ -32,6 +32,7 @@ class SiteIssueManager:
             "BadLaserError": "error:laser_centerfinding",
             "LaserProcessingError": "error:laser_general",
             "InstrumentProcessingError": "error:instrument",
+            "BadDopplerReferenceError": "error:bad_doppler_reference",
             # Add other error types as needed
         }
 
