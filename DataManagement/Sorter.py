@@ -45,7 +45,7 @@ ERROR_SUBJECTS = {
     BadLaserError: "!!! Laser Processing Error",
     LaserProcessingError: "!!! Other Laser Error",
     InstrumentProcessingError: "!!! Instrument Error",
-    BadDopplerReference: "!!! Doppler Reference Error",
+    BadDopplerReferenceError: "!!! Doppler Reference Error",
     Exception: "!!! Processing Error"  # Default catch-all
 }
 
