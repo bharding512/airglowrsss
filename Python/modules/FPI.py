@@ -1318,7 +1318,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'No usable sky images found.\n')
         if created_logfile:
             logfile.close()
-        raise Exception('%s: No usable sky images found.')
+        raise Exception('No usable sky images found.')
 
     # Constants
     c = 299792458.

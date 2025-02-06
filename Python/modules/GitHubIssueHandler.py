@@ -40,7 +40,7 @@ class SiteIssueManager:
         """Get the specific label for an error type"""
         return self.ERROR_LABELS.get(error_type, "error:general")
 
-    def find_open_site_issue(self, site_id: str, category: IssueType = IssueType.ERROR) -> Optional[object]:
+    def find_open_site_issue(self, site_id: str, category: IssueType = IssueType.ERROR, error_type: str = None) -> Optional[object]:
         """
         Check if there's an existing open issue/warning for a specific site.
         
@@ -51,8 +51,11 @@ class SiteIssueManager:
         Returns:
             GitHub Issue object if found, None otherwise
         """
-        base_label = self.BASE_LABELS[category]
-        query = f'repo:{self.repo.full_name} is:issue is:open label:"{base_label}" label:site:{site_id}'
+        if category == IssueType.WARNING:
+            error_label = self.BASE_LABELS[category]
+        else:
+            error_label = self.ERROR_LABELS[error_type]
+        query = f'repo:{self.repo.full_name} is:issue is:open label:"{error_label}" label:site:{site_id}'
         
         try:
             open_issues = list(self.github.search_issues(query))
@@ -137,7 +140,7 @@ class SiteIssueManager:
         """
         try:
             # Check for existing issue
-            existing_issue = self.find_open_site_issue(site_id, category)
+            existing_issue = self.find_open_site_issue(site_id, category, error_type)
             
             if existing_issue:
                 # Create comment body

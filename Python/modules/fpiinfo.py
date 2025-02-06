@@ -405,7 +405,7 @@ _sites['sao'] = {
         'Location':     (-32.38, 20.81, 1700),
         'Name':         'South African Astronomical Observatory',
         'Abbreviation': 'sao',
-        'Timezone':     'UTC',
+        'Timezone':     'Africa/Harare',
         'BufferTime':   45,
         'CloudThresh':  -25.0,
         'scpUser':      'meriwej',

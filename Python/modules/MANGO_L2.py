@@ -16,6 +16,15 @@ from skimage.feature import peak_local_max
 import numpy as np
 import datetime
 
+import tensorflow as tf
+import joblib
+IMG_SIZE = (64, 64)  # Resize images to a manageable size
+SEQUENCE_LENGTH = 10  # Number of frames in each sequence
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, LSTM, TimeDistributed, Dense
+from tensorflow.keras.models import Sequential
+from sklearn.cluster import KMeans
+from sklearn.manifold import TSNE
+
 def runcmd(cmd, verbose = False, *args, **kwargs):
 # Runs a commond line command (useful for downloading data)
 # From https://www.scrapingbee.com/blog/python-wget/
@@ -32,7 +41,7 @@ def runcmd(cmd, verbose = False, *args, **kwargs):
         print(std_out.strip(), std_err)
     pass
 
-def load_hdf5_to_xarray(file_path, kernel_size=7):
+def load_hdf5_to_xarray(file_path, kernel_size=7, runClassifier = False):
 # Function to load data from HDF5 file into xarray DataArrays
 # 
 # Input:
@@ -130,6 +139,36 @@ def load_hdf5_to_xarray(file_path, kernel_size=7):
                     'CCDTemperature': CCDTemperature,
                     'east': east_array,
                     'north': north_array})
+
+    if runClassifier is True:
+        # Find the square inscribed in the circle. The side of the square that can be inscribed
+        # in a circle of radius r is sqrt(2)*r. Fine the smallest dimension in the east and north
+        # arrays and use that as the radius. May need to tweak this for imagers that have obstructions
+        # above el_cutoff
+        mask = ds.Elevation > 20.
+        min_r = np.min([np.abs(ds.east.where(mask)).max(),np.abs(ds.north.where(mask)).max()])-100
+        r = np.floor(np.sqrt(2)*min_r/2.)
+        subset = ds.sel(east=slice(-r,r), north=slice(-r,r))
+
+        # Chunk the data into sequences and cluster the data
+        new_data, times = load_image_sequence_time(subset)
+        new_clusters = SequenceClassifier(new_data, times)
+        
+        # Map clusters to labels
+        cluster_to_label = {0: True, 5: False, 1: False, 2: False, 3: False, 4: False}
+        
+        # Initialize the "Useable" variable as all False
+        useable = np.zeros(len(ds.time), dtype=bool)
+        
+        # Iterate over the time intervals and classify
+        for cluster, (start, stop) in zip(new_clusters, times):
+            start = np.datetime64(start)  # Convert to numpy.datetime64
+            stop = np.datetime64(stop)   # Convert to numpy.datetime64
+            mask = (ds.time >= start) & (ds.time <= stop)
+            useable[mask] = cluster_to_label[cluster]
+        
+        # Add the "Useable" variable to the dataset
+        ds = ds.assign(Useable=("time", useable))
     
     return ds
 
@@ -183,9 +222,19 @@ def load_cloud_and_moon(analysis_parameters, times):
     image_df.index = image_df.index.tz_localize(pytz.utc)
 
     # Create the timzone aware cloud data frame
-    cloud_df = pd.DataFrame(np.array([dns,sky_temp]).T, columns=['LT','Cloud Temperature'])
-    cloud_df.index = pd.to_datetime(dns)
-    cloud_df.index = cloud_df.index.tz_convert(pytz.utc)
+    if len(dns) > 0:
+        cloud_df = pd.DataFrame(np.array([dns,sky_temp]).T, columns=['LT','Cloud Temperature'])
+        cloud_df.index = pd.to_datetime(dns)
+        cloud_df.index = cloud_df.index.tz_convert(pytz.utc)
+    else:
+        # No cloud data
+        dns = times.tz_localize(pytz.utc)
+        sky_temp = np.full(times.shape, np.nan)
+        amb_temp = np.full(times.shape, np.nan)
+
+        cloud_df = pd.DataFrame(np.array([dns,sky_temp]).T, columns=['LT','Cloud Temperature'])
+        cloud_df.index = pd.to_datetime(dns)
+        cloud_df.index = cloud_df.index.tz_convert(pytz.utc)
 
     # Merge the cloud data onto the image data. This is done by finding the previous measurement
     # in cloud_df. May want to look into some sort of interpolation scheme?
@@ -355,3 +404,45 @@ def run_rcp(subset, mask):
             wavespeeds_output.append(np.nan)
 
     return periods_output, wavelengths_output, orientations_output, wavespeeds_output
+
+def SequenceClassifier(new_data, times):
+    # Load the saved model
+    model = tf.keras.models.load_model("CloudClassifier_20241117.keras")
+
+    # Load the trained KMeans clustering model
+    kmeans = joblib.load("kmeans_model_20241117.pkl")
+
+    # Step 2: Predict features using the trained CNN-LSTM model
+    new_features = model.predict(new_data)
+    
+    # Step 3: Use the trained clustering model to classify the new data
+    # (Assuming you have a trained kmeans clustering model from the training phase)
+    new_clusters = kmeans.predict(new_features)
+
+    return new_clusters
+
+def load_image_sequence_time(data_xr, sequence_length=SEQUENCE_LENGTH, img_size=IMG_SIZE):    
+    sequences = []
+    current_sequence = []
+    times = []
+    time_ranges = []
+
+    def format_time(dt64):
+        dt = pd.to_datetime(str(dt64))
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
+    
+    for d in data_xr.ImageData:
+        img = d.data
+#        img = cv2.resize(img, img_size) / img.max()  # Normalize to [0, 1]
+        img = tf.keras.preprocessing.image.img_to_array(img) / img.max()
+        
+        current_sequence.append(img)
+        times.append(format_time(d.time.values))
+        
+        if len(current_sequence) == sequence_length:
+            sequences.append(np.array(current_sequence))
+            time_ranges.append([times[0],times[-1]])
+            current_sequence = []
+            times = []
+    
+    return np.array(sequences), np.array(time_ranges)
