@@ -40,7 +40,11 @@ def email(recipient,subject,msg):
     email.login(sender,sender_pass)
     email.sendmail(sender,recipient, headers + "\r\n\r\n" + msg)
     email.quit()
+<<<<<<< Updated upstream
     print("!!! Email Sent")
+=======
+    print ("!!! Email Sent")
+>>>>>>> Stashed changes
     
     
 def emailerror(recipients,subject,msg):
