@@ -25,7 +25,9 @@ folder[6] = '/data/Sending/'
 folder[7] = 'C:/Sending/'
 folder[8] = 'D:/Sending/'
 folder[9] = 'F:/Sending/'
-destiny = 'tx@remote2.ece.illinois.edu:/rdata/airglow/rx/.'
+folder[10] = '/home/airglow/airglow/Sending/'
+#destiny = 'tx@remote2.ece.illinois.edu:/rdata/airglow/rx/.'
+destiny = 'tx@remote2.ece.illinois.edu:/home/tx/rx/.'
 mfs = 70 #minimum file size to send
 
 # Go through all possible folders for data
@@ -40,7 +42,7 @@ for f in [fx for fx in files if os.stat(fx).st_size > mfs]:
     flag = os.system('scp ' + f + ' ' + destiny)
     if flag == 0:
         os.remove(f)
-        print 'Completed...'
+        print ('Completed...')
 
-print 'All Sending is now Complete!'
+print ('All Sending is now Complete!')
 
