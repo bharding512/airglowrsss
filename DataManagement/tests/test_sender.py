@@ -1,4 +1,7 @@
-from unittest.mock import patch
+import os
+from unittest import mock
+from unittest.mock import Mock, patch
+from botocore.exceptions import ClientError
 
 from airglow.Sender import send
 
@@ -45,3 +48,31 @@ def test_send_ssh_err(mock_remove, mock_system):
     assert removes == [
         "./sample_files/foo.txt"
     ]
+
+@patch("airglow.Sender.boto3.client")
+@patch("airglow.Sender.os.system")
+@patch("airglow.Sender.os.remove")
+@mock.patch.dict(os.environ, {
+    "AWS_ACCESS_KEY_ID": "test-key",
+    "AWS_SECRET_ACCESS_KEY": "test-secret",
+    "AWS_S3_ENDPOINT_URL": "http://localhost:4566",
+    "DEST_BUCKET": "test-bucket"
+})
+def test_s3_upload(mock_remove, mock_system, mock_boto3):
+    mock_boto3.return_value = Mock()
+    mock_boto3.return_value.upload_file = Mock(
+        side_effect=[None, ClientError]
+    )
+
+    mock_system.return_value = 0
+
+    send({"./sample_files"}, "airglow.illinois.edu:/home/airglow/Sending/", 10)
+    assert mock_boto3.return_value.upload_file.call_count == 2
+    assert mock_boto3.return_value.upload_file.call_args_list[0].args == (
+        "./sample_files/bar.tar.gzip",
+        "test-bucket",
+        "airglow/raw/./sample_files/bar.tar.gzip"
+    )
+
+    assert mock_system.call_count == 2 * 2  # 2 files, 2 commands each
+    assert mock_remove.call_count == 1  # Only one file was uploaded successfully
