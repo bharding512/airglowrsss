@@ -42,6 +42,7 @@ def send(folders: set[str], destiny: str, mfs: int):
     # Go through all possible folders for data
     files = []
     for f in folders:
+        f = f+"/" if f[-1] != "/" else f
         files = files + glob(f+'*.tar.gz*')
         files = files + glob(f+'*.txt')
 
