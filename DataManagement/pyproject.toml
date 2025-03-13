@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "AirGlow-RSSS"
+version = "0.1.0"
+description = "Tools to support the understanding the dynamics of the ionosphere using a combination of optical and radio techniques."
+authors = [
+    {name = "Brian Harding", email = "bharding@ssl.berkeley.edu"},
+    {name = "Jonathan J. Makela", email = "jmakela@illinois.edu"},
+    {name = "Ben Galewsky", email = "bengal1@illinois.edu"},
+]
+
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "BSD-3-Clause"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"GitHubRepo" = "https://github.com/AirglowRSSS/airglowrsss"
+"Home Page" = "https://airglow.ece.illinois.edu/"
+
+[project.scripts]
+sender = "airglow.Sender:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "flake8>=5.0.0",
+]
