@@ -56,7 +56,8 @@ def test_send_ssh_err(mock_remove, mock_system):
     "AWS_ACCESS_KEY_ID": "test-key",
     "AWS_SECRET_ACCESS_KEY": "test-secret",
     "AWS_S3_ENDPOINT_URL": "http://localhost:4566",
-    "DEST_BUCKET": "test-bucket"
+    "DEST_BUCKET": "test-bucket",
+    "SITE_PATH": "airglow/raw/uao"
 })
 def test_s3_upload(mock_remove, mock_system, mock_boto3):
     mock_boto3.return_value = Mock()
@@ -71,7 +72,7 @@ def test_s3_upload(mock_remove, mock_system, mock_boto3):
     assert mock_boto3.return_value.upload_file.call_args_list[0].args == (
         "./sample_files/bar.tar.gzip",
         "test-bucket",
-        "airglow/raw/./sample_files/bar.tar.gzip"
+        "airglow/raw/uao/bar.tar.gzip"
     )
 
     assert mock_system.call_count == 2 * 2  # 2 files, 2 commands each

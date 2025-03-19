@@ -25,13 +25,14 @@ be installed using pip:
 In order to upload files to S3, the script requires AWS credentials. You can set these
 as environment variables:
 
-| Environment Variable     | Description                                     | Example Value                |
-|--------------------------|-------------------------------------------------|------------------------------|
-| AWS_ACCESS_KEY_ID        | Access key for AWS authentication               | `AKIAIOSFODNN7EXAMPLE`      |
-| AWS_SECRET_ACCESS_KEY    | Secret key for AWS authentication               | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
-| AWS_S3_ENDPOINT_URL      | Custom endpoint URL for S3 API                  | `https://ncsa.osn.xsede.org` |
-| AWS_S3_REGION            | AWS region for S3 bucket  (only needed for AWS) | `us-east-1`                  |
-| DEST_BUCKET              | Destination S3 bucket name                      | `my-backup-bucket`           |
+| Environment Variable  | Description                                     | Example Value                              |
+|-----------------------|-------------------------------------------------|--------------------------------------------|
+| AWS_ACCESS_KEY_ID     | Access key for AWS authentication               | `AKIAIOSFODNN7EXAMPLE`                     |
+| AWS_SECRET_ACCESS_KEY | Secret key for AWS authentication               | `wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY` |
+| AWS_S3_ENDPOINT_URL   | Custom endpoint URL for S3 API                  | `https://ncsa.osn.xsede.org`               |
+| AWS_S3_REGION         | AWS region for S3 bucket  (only needed for AWS) | `us-east-1`                                |
+| DEST_BUCKET           | Destination S3 bucket name                      | `my-backup-bucket`                         |
+| SITE_PATH             | Prfix to be applied to uploaded object name     | `airglow/rar/oau`                          |
 
 These can be set in the shell, or can be put in a `.env` file in the same directory as the script.
 

@@ -41,7 +41,8 @@ def main():
     send(folders, destiny, mfs)
 
 def s3_client():
-    required_vars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', "DEST_BUCKET"]
+    required_vars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY',
+                     "DEST_BUCKET", "SITE_PATH"]
     missing_vars = [var for var in required_vars if not os.environ.get(var)]
 
     # If any required variables are missing, log and skip upload
@@ -85,15 +86,16 @@ def upload_file_to_s3(s3, file_path: str, bucket_name: str, object_name=None):
     :return: True if file was uploaded, False otherwise
     """
 
+    site_path = os.environ.get("SITE_PATH").rstrip("/")
+
     # If object_name was not specified, use file_path's basename
     if object_name is None:
-        object_name = os.path.basename(file_path)
+        object_name = f"{site_path}/{os.path.basename(file_path)}"
 
     # Check if the file exists
     if not os.path.exists(file_path):
         print(f"File not found: {file_path}")
         return False
-
 
     try:
         print(f"Starting upload of {file_path} to {bucket_name}/{object_name}")
@@ -122,7 +124,7 @@ def send(folders: set[str], destiny: str, mfs: int):
     # Send all files one by one; remove if sent successfully
     for f in [fx for fx in files if os.stat(fx).st_size > mfs]:
         if s3 and bucket_name:
-            s3_result = upload_file_to_s3(s3, f, bucket_name, os.path.join("airglow/raw", f))
+            s3_result = upload_file_to_s3(s3, f, bucket_name)
         else:
             s3_result = True
 
