@@ -1,0 +1,8 @@
+[flake8]
+# Exclude everything by default
+exclude = *
+# Then specifically include only the airglow folder and tests directory
+filename = airglow/**/*.py,tests/**/*.py
+
+max-line-length = 95
+
