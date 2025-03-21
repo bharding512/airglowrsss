@@ -21,16 +21,18 @@ def main():
 
     # Set up correct folder options
     folders = {
-        '/cygdrive/c/Sending/',
-        '/cygdrive/d/Sending/',
-        '/cygdrive/f/Sending/',
-        '/home/gps/Sending/',
-        '/home/airglow/Sending/',
-        '/home/scintmon/Sending/',
-        '/data/Sending/',
-        'C:/Sending/',
-        'D:/Sending/',
-        'F:/Sending/'
+#        '/cygdrive/c/Sending/',
+#        '/cygdrive/d/Sending/',
+#        '/cygdrive/f/Sending/',
+#        '/home/gps/Sending/',
+#        '/home/airglow/Sending/',
+#        '/home/scintmon/Sending/',
+#        '/data/Sending/',
+#        'C:/Sending/',
+#        'D:/Sending/',
+#        'F:/Sending/'
+        '/home/airglow/airglow/Sending/',
+        '/data/Sending/'
     }
 
     # destiny = 'tx@remote2.ece.illinois.edu:/rdata/airglow/rx/.'
@@ -123,6 +125,7 @@ def send(folders: set[str], destiny: str, mfs: int):
 
     # Send all files one by one; remove if sent successfully
     for f in [fx for fx in files if os.stat(fx).st_size > mfs]:
+        print(f)
         if s3 and bucket_name:
             s3_result = upload_file_to_s3(s3, f, bucket_name)
         else:
