@@ -12,6 +12,7 @@ History: 27 Sep 2012 - initial script written; Daniel J. Fisher (dfisher2@illino
 import os
 from glob import glob
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError, NoCredentialsError
 from dotenv import load_dotenv
 
@@ -57,10 +58,16 @@ def s3_client():
 
     # Create a boto3 client with the appropriate configuration
     try:
+        s3_config = Config(
+            signature_version='s3',
+            s3={'addressing_style': 'path'}
+        )
+
         s3_client_args = {
             'service_name': 's3',
             'aws_access_key_id': os.environ.get('AWS_ACCESS_KEY_ID'),
-            'aws_secret_access_key': os.environ.get('AWS_SECRET_ACCESS_KEY')
+            'aws_secret_access_key': os.environ.get('AWS_SECRET_ACCESS_KEY'),
+            'config': s3_config
         }
 
         # Add region if specified
