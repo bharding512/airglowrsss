@@ -1,0 +1,36 @@
+[project]
+name = "dagster_airglow"
+version = "0.1.0"
+description = "Dagster pipeline for AirGlow datasets"
+readme = "README.md"
+requires-python = ">=3.9,<3.13"
+dependencies = [
+    "dagster",
+    "dagster-ncsa>=0.1.3",
+    "dagster-cloud",
+    "boto3==1.34.131",
+    "dagster-aws",
+    "dagster-postgres",
+]
+
+[project.optional-dependencies]
+dev = [
+    "dagster-webserver",
+    "pytest",
+    "flake8"
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.dagster]
+module_name = "dagster_airglow.definitions"
+code_location_name = "dagster_airglow"
+
+[tool.setuptools.packages.find]
+exclude=["dagster_airglow_tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["dagster_airglow_tests"]
+norecursedirs = ["dagster_airglow_tests/integration_tests"]

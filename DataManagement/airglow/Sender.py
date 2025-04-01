@@ -1,12 +1,10 @@
-#!/usr/bin/python
-'''
+"""
 Script to send files back to Airglow
   -s to add SITE
 
-History: 27 Sep 2012 - initial script written; Daniel J. Fisher (dfisher2@illinois.edu)
+   History: 27 Sep 2012 - initial script written; Daniel J. Fisher (dfisher2@illinois.edu)
          12 Feb 2014 - Updated to v3.0 - txtcheck; Daniel J. Fisher (dfisher2@illinois.edu)
-
-'''
+"""
 
 # Import required modules
 import os
@@ -16,24 +14,22 @@ from botocore.config import Config
 from botocore.exceptions import ClientError, NoCredentialsError
 from dotenv import load_dotenv
 
+
 def main():
     # Load environment variables from .env file
     load_dotenv()
-
     # Set up correct folder options
     folders = {
-#        '/cygdrive/c/Sending/',
-#        '/cygdrive/d/Sending/',
-#        '/cygdrive/f/Sending/',
-#        '/home/gps/Sending/',
-#        '/home/airglow/Sending/',
-#        '/home/scintmon/Sending/',
-#        '/data/Sending/',
-#        'C:/Sending/',
-#        'D:/Sending/',
-#        'F:/Sending/'
-        '/home/airglow/airglow/Sending/',
-        '/data/Sending/'
+       '/cygdrive/c/Sending/',
+       '/cygdrive/d/Sending/',
+       '/cygdrive/f/Sending/',
+       '/home/gps/Sending/',
+       '/home/airglow/Sending/',
+       '/home/scintmon/Sending/',
+       '/data/Sending/',
+       'C:/Sending/',
+       'D:/Sending/',
+       'F:/Sending/'
     }
 
     # destiny = 'tx@remote2.ece.illinois.edu:/rdata/airglow/rx/.'
@@ -42,6 +38,7 @@ def main():
     mfs = 70  # minimum file size to send
 
     send(folders, destiny, mfs)
+
 
 def s3_client():
     required_vars = ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY',
@@ -146,6 +143,7 @@ def send(folders: set[str], destiny: str, mfs: int):
             print('Completed...')
 
     print('All Sending is now Complete!')
+
 
 if __name__ == "__main__":
     main()

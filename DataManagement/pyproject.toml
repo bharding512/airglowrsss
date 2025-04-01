@@ -38,3 +38,6 @@ dev = [
     "pytest>=7.0.0",
     "flake8>=5.0.0",
 ]
+
+[tool.setuptools]
+packages = ["airglow"]
