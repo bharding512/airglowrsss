@@ -64,9 +64,12 @@ def activeinstruments():
     # The dictionary!
     code = defaultdict(lambda: defaultdict(dict))
 
-    code['uao']['fpi']['05'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
+#    code['uao']['fpi']['05'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
+#    code['uao']['fpi']['05'] = {'send_dir':'/home/airglow/airglow/Sending/', 'local_dir':'/home/airglow/airglow/collected-data/', 'split':'/usr/bin/split','email':UIemail}
+    code['uao']['fpi']['05'] = {'send_dir':'/home/airglow/airglow/Sending/', 'local_dir':'/mnt/data/', 'split':'/usr/bin/split','email':UIemail}
     #code['uao']['sky']['01'] = {'send_dir':'D:/Sending/', 'local_dir':'D:/Data/', 'split':'C:/cygwin/bin/split','email':UIemail}
-    code['uao']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/MiniME/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
+#    code['uao']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/MiniME/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
+    code['uao']['bwc']['00'] = {'send_dir':'/home/airglow/airglow/Sending/', 'local_dir':'/home/airglow/airglow/skyalert-logger/skyalert-logs/', 'email':UIemail}
     code['uao']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Scripts/Python/modules/', 'url':'http://192.168.1.23/log.txt','email':UIemail}
 
     # EKU is being moved as of 2-17-2016
@@ -164,22 +167,29 @@ def activeinstruments():
     code['leo']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'Z:/','email':UIemail}
 
     # DASI FPI at Lowell Observatory, Arizona starting from 12 Aug 2021
-    code['low']['fpi']['11'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
-    code['low']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/DASI03/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
-    code['low']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberryfpi.local/log.txt','email':UIemail}
-    code['low']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
+#    code['low']['fpi']['11'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
+#    code['low']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/DASI03/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
+#    code['low']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberryfpi.local/log.txt','email':UIemail}
+#    code['low']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
+    code['low']['fpi']['11'] = {'send_dir':'/home/airglow/airglow/Sending/', 'local_dir':'/home/airglow/airglow/data/', 'split':'/usr/bin/split','email':UIemail}
+    code['low']['bwc']['00'] = {'send_dir':'/home/airglow/airglow/Sending/', 'local_dir':'/home/airglow/airglow/skyalert-logger/skyalert-logs/', 'email':UIemail}
+
 
     # DASI FPI at Bear Lake Observatory, Utah starting from 19 Aug 2021
-    code['blo']['fpi']['12'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
-    code['blo']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/dasi02/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
-    code['blo']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberryfpi.local/log.txt','email':UIemail}
-    code['blo']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
+#    code['blo']['fpi']['12'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
+#    code['blo']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/dasi02/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
+#    code['blo']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberryfpi.local/log.txt','email':UIemail}
+#    code['blo']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
+    code['blo']['fpi']['12'] = {'send_dir':'/home/airglow/airglow/Sending/', 'local_dir':'/home/airglow/airglow/data/', 'split':'/usr/bin/split','email':UIemail}
+    code['blo']['bwc']['00'] = {'send_dir':'/home/airglow/airglow/Sending/', 'local_dir':'/home/airglow/airglow/skyalert-logger/skyalert-logs/', 'email':UIemail}
 
     # DASI FPI at Christmas Valley, Oregon starting from 18? Nov 2021
-    code['cvo']['fpi']['10'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
-    code['cvo']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/dasi01/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
-    code['cvo']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberryfpi.local/log.txt','email':UIemail}
-    code['cvo']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
+#    code['cvo']['fpi']['10'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
+#    code['cvo']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/dasi01/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
+#    code['cvo']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberryfpi.local/log.txt','email':UIemail}
+#    code['cvo']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
+    code['cvo']['fpi']['10'] = {'send_dir':'/home/airglow/airglow/Sending/', 'local_dir':'/home/airglow/airglow/data/', 'split':'/usr/bin/split','email':UIemail}
+    code['cvo']['bwc']['00'] = {'send_dir':'/home/airglow/airglow/Sending/', 'local_dir':'/home/airglow/airglow/skyalert-logger/skyalert-logs/', 'email':UIemail}
 
     # Last index is for remote2 admin related issues (not site based)
     code['ADMIN']={'email':['jmakela@illinois.edu','bharding@ssl.berkeley.edu']}
@@ -247,7 +257,11 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
             d = dt.date.fromordinal(dt.datetime(pyear,1,1).toordinal()-1+pdoy+1)
             nday = d.strftime('%d')
 
+<<<<<<< Updated upstream
         print(instr+': '+day+'-'+mon+'-'+year)
+=======
+        print (instr+': '+day+'-'+mon+'-'+year)
+>>>>>>> Stashed changes
         # Go to local directory!
         os.chdir(code[site][instr][num]['local_dir'])
         filename = "%03s%02s_%s_%04s%02s%02s.tar.gz" %(instr,num,site,year,month,day)
@@ -258,13 +272,21 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
         if 'fpi' == instr:
             # Grab all files made within 24 hour period
             name = [f for f in glob(os.path.join('*','*.img')) if (dt.datetime(int(year),int(month),int(day),12) < dt.datetime.fromtimestamp(os.path.getmtime(f)) and dt.datetime.fromtimestamp(os.path.getmtime(f)) < (dt.datetime(int(year),int(month),int(day),12)+dt.timedelta(1)))]
+            if name == []:
+                # Try the new format
+                name = [f for f in glob(os.path.join('*','*.hdf5')) if (dt.datetime(int(year),int(month),int(day),12) < dt.datetime.fromtimestamp(os.path.getmtime(f)) and dt.datetime.fromtimestamp(os.path.getmtime(f)) < (dt.datetime(int(year),int(month),int(day),12)+dt.timedelta(1)))]
             #for printing purposes only
+            print(name)
             _f=[]
             for nn in name:
                 if os.path.dirname(nn) not in _f:
                     _f.append(os.path.dirname(nn))
             for __i in _f:
+<<<<<<< Updated upstream
                 print("Zipping from %s/%s"%( code[site][instr][num]['local_dir'], __i ))
+=======
+                print ("Zipping from %s/%s"%( code[site][instr][num]['local_dir'], __i ))
+>>>>>>> Stashed changes
             #
             zipper(name,filename)
             splitter(site,instr,num,code,filename,checkname,mfs)
@@ -283,7 +305,11 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
                 tar.add(doy);
                 os.rename(code[site][instr][num]['local_dir']+year+'/'+doy,code[site][instr][num]['local_dir']+year+'/'+mon+name)
             except:
+<<<<<<< Updated upstream
                 print("!!! No Data")
+=======
+                print ("!!! No Data")
+>>>>>>> Stashed changes
             tar.close()
             splitter(site,instr,num,code,filename,checkname,mfs)
             os.remove(code[site][instr][num]['local_dir']+year+'/'+filename)
@@ -300,7 +326,11 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
             if os.path.exists(localpath):
                 os.remove(localpath)
             if 'api/history' in code[site][instr][num]['url']:
+<<<<<<< Updated upstream
                 print("homeassistant starts...")
+=======
+                print ("homeassistant starts...")
+>>>>>>> Stashed changes
                 sys.path = sys.path + ['C:\Scripts',]
                 from read_history_hass import query_sensor
                 d0=(dt.datetime.now()-dt.timedelta(days=30)).replace(tzinfo=pytz.UTC)
@@ -313,13 +343,21 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
                 h.close()
                 sys.path.pop()
             else:
+<<<<<<< Updated upstream
                 print('try reading from rpi or x300')
+=======
+                print ('try reading from rpi or x300')
+>>>>>>> Stashed changes
                 ntry=5
                 while ntry>0:
                     try:
                         urllib.request.urlretrieve(code[site][instr][num]['url'],localpath)
                         if os.stat(localpath).st_size > 100:
+<<<<<<< Updated upstream
                             print('success!')
+=======
+                            print ('success!')
+>>>>>>> Stashed changes
                             break
                     except:
                         pass
@@ -348,7 +386,11 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
             # Check filesize for offline X300
             if os.stat(code[site][instr][num]['send_dir']+filename).st_size < 100:
                 # Send checkfile that system is down!
+<<<<<<< Updated upstream
                 print('No Data ERROR!!!')
+=======
+                print ('No Data ERROR!!!')
+>>>>>>> Stashed changes
                 check = open(checkname, 'w')
                 check.write(filename+'\n0\n0\n'+str(now)+'\n999\n')
                 # Legend for checkfile + boosts size for Sending
@@ -411,9 +453,21 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
                     name = "%04s-%02s-%02s.txt" %(tyear,tmonth,tday)
                     if is_skyalert:
                         send_skyalert_rows(tyear,tmonth,tday,send_name=filename)
+            elif os.path.isfile(code[site][instr][num]['local_dir']+filename):
+                print('here3')
+                # This is for the linux-version of the SkyAlert file
+                shutil.copy2(code[site][instr][num]['local_dir']+filename, code[site][instr][num]['send_dir']+filename)
+                if prior == 1:
+                    filename = "Cloud_%s_%04s%02s%02s.txt" %(site,tyear,tmonth,tday)
+                    name = "%04s-%02s-%02s.txt" %(tyear,tmonth,tday)
+                    shutil.copy2(code[site][instr][num]['local_dir']+filename,code[site][instr][num]['send_dir']+filename)
             else:
                 ## Send checkfile that system is down!
+<<<<<<< Updated upstream
                 print('No Data Error!')
+=======
+                print ('No Data Error!')
+>>>>>>> Stashed changes
                 os.chdir(code[site][instr][num]['send_dir'])
                 check = open(checkname, 'w')
                 check.write(filename+'\n0\n0\n'+str(now)+'\n999\n')
@@ -455,7 +509,11 @@ def doer(site,instr,num,prior=1,pyear=0,pdoy=0):
             os.remove(code[site][instr][num]['local_dir']+filename)
 
         if 'xxx' == instr:
+<<<<<<< Updated upstream
             print('\nPlease check your input:\nsite -s\ninstrumetn -i\nnumber -n\n')
+=======
+            print ('\nPlease check your input:\nsite -s\ninstrumetn -i\nnumber -n\n')
+>>>>>>> Stashed changes
 
 def searcher(site,instrument,num,local_dir):
     '''
@@ -613,7 +671,11 @@ def splitter(site,instr,num,code,filename,checkname,mfs):
         pieces = glob(filename + '*')
         check.write(pieces[0]+'\n' + str(len(pieces))+'\n' + str(statinfo.st_size)+'\n'+str(now)+'\n'+str(df)+'\n')
     else:
+<<<<<<< Updated upstream
         print('COLLECTION ERROR!!!')
+=======
+        print ('COLLECTION ERROR!!!')
+>>>>>>> Stashed changes
         # Make error checkfile
         os.chdir(code[site][instr][num]['send_dir'])
         check = open(checkname, 'w')
@@ -664,14 +726,25 @@ if __name__=="__main__":
         sys.exit()
 
     if len(instr)>3:
+<<<<<<< Updated upstream
         print('Usable Instrument Keys: fpi,asi,nfi,pic,sky,swe,cas,tec,scn,bwc,x3t')
+=======
+        print ('Usable Instrument Keys: fpi,asi,nfi,pic,sky,swe,cas,tec,scn,bwc,x3t')
+>>>>>>> Stashed changes
 
     if "None" in path2search:
         doer(site,instr,num,prior,pyear,pdoy)
     else:
+<<<<<<< Updated upstream
         print("Searching within %s..."%path2search)
         searcher(site, instr, num, path2search)
 
     print('Zip Complete...')
+=======
+        print ("Searching within %s..."%path2search)
+        searcher(site, instr, num, path2search)
+
+    print ('Zip Complete...')
+>>>>>>> Stashed changes
 
 
