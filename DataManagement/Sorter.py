@@ -281,7 +281,7 @@ class FPIHandler(InstrumentHandler):
             site_id=metadata.site,
             message=str(error),
             category=IssueType.ERROR,
-            error_type=type(error).__name__
+            error_type=type(error).__name__,
             additional_context={
                 "Instrument": f"minime{metadata.instrument_number}",
                 "Year": year,
