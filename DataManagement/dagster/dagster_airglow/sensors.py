@@ -59,7 +59,7 @@ def instrument_upload_sensor(context,
     last_processed_date = int(context.cursor) if context.cursor else 0
     context.log.info(f"Last processed date: {last_processed_date}")
     files = group_files_by_date(
-        list_files(EnvVar('DEST_BUCKET').get_value(), "airglow/raw", s3.get_client())
+        list_files(EnvVar('DEST_BUCKET').get_value(), "raw", s3.get_client())
     )
 
     sensor_files = []
