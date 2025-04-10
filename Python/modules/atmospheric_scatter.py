@@ -16,7 +16,8 @@ import bisect
 import warnings
 
 RE = 6371e3
-sec = lambda(x): 1/cos(x)
+# THIS WAS COMMENTED OUT JUST TO FIX PY3 ERROR. IF USING, UNCOMMENT!
+#sec = lambda(x): 1/cos(x)
 
 
 # Copied from MIGHTI_L2
@@ -247,7 +248,7 @@ def white_light_scatter(dhf, tau0, P, h, om=1., alpha=0., M=20, N=20, R=20, N_in
         if verbose:
             clear_output(wait=True)
             time_mod.sleep(0.01)
-            print 'Building A: %i/%i'%(m+1,M)
+            print('Building A: %i/%i'%(m+1,M))
             sys.stdout.flush()
 
     A = sp.coo_matrix((Aval, [Arow, Acol]), shape=(M*N*R,(M-1)*N*R))
@@ -275,7 +276,7 @@ def white_light_scatter(dhf, tau0, P, h, om=1., alpha=0., M=20, N=20, R=20, N_in
         if verbose:
             clear_output(wait=True)
             time_mod.sleep(0.01)
-            print 'Building B: %i/%i'%(m+1,M-1)
+            print('Building B: %i/%i'%(m+1,M-1))
             sys.stdout.flush()
 
     B = sp.coo_matrix((Bval, [Brow, Bcol]), shape=((M-1)*N*R,M*N*R))
@@ -321,7 +322,7 @@ def white_light_scatter(dhf, tau0, P, h, om=1., alpha=0., M=20, N=20, R=20, N_in
         if verbose:
             clear_output(wait=True)
             time_mod.sleep(0.01)
-            print 'Initial source function: %i/%i'%(n+1,N)
+            print('Initial source function: %i/%i'%(n+1,N))
             sys.stdout.flush()
 
     ######################################################################
@@ -346,14 +347,14 @@ def white_light_scatter(dhf, tau0, P, h, om=1., alpha=0., M=20, N=20, R=20, N_in
         if verbose:
             clear_output(wait=True)
             time_mod.sleep(0.01)
-            print 'Scattering iteration: %i/%i'%(k+1,K)
+            print('Scattering iteration: %i/%i'%(k+1,K))
             sys.stdout.flush()
 
         # See how much solution is changing
         change = norm(J[:,:,:,k+1])/norm(sum(J[:,:,:,:k+1],axis=3))
         if change < tol:
             if verbose:
-                print 'Halted'
+                print('Halted')
             break
             
     Ifull = sum(I,axis=3) # All scattering orders
@@ -545,7 +546,7 @@ def descatter_asi_data(imcut, yim, tau0, P, h,  om=1., M=10, N=20, R=10, N_int=2
         if verbose:
             clear_output(wait=True)
             time_mod.sleep(0.01)
-            print '%i/%i' % (n_iter+1, N_iters)
+            print('%i/%i' % (n_iter+1, N_iters))
             sys.stdout.flush()
 
         # Define 2D brightness distribution function from current guess (sky - scatt)
@@ -647,7 +648,7 @@ def descatter_asi_data_2D(imd, asi_mask_d, Xd, Yd, tau0, P, h, om=1., M=10, N=20
         if verbose:
             clear_output(wait=True)
             time_mod.sleep(0.01)
-            print '%i/%i' % (n_iter+1, N_iters)
+            print('%i/%i' % (n_iter+1, N_iters))
             sys.stdout.flush()
 
         # Define 2D brightness distribution function from current guess (sky - scatt)
@@ -765,7 +766,7 @@ def scattered_and_direct_spectra(dhf, tau0, P, h, th_look, phi_look, uvw, T, om=
         if verbose:
             clear_output(wait=True)
             time_mod.sleep(0.01)
-            print '%i/%i'%(l+1,L)
+            print('%i/%i'%(l+1,L))
             sys.stdout.flush()
 
     return v, spectrum_scatt, spectrum_direct, spectrum_scatt_stray, spectrum_direct_stray
