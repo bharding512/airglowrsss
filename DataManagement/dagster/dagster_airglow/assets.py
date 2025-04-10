@@ -12,16 +12,16 @@ from dagster_ncsa import S3ResourceNCSA
 class ChunkedArchiveConfig(dg.Config):
     observation_date: str = "20250328"
     site: str = "uao"
-    file_chunks: list[str] = ["airglow/raw/fpi05_uao_20250328.tar.gz000000",
-                              "airglow/raw/fpi05_uao_20250328.tar.gz000001",
-                              "airglow/raw/fpi05_uao_20250328.tar.gz000002",
-                              "airglow/raw/fpi05_uao_20250328.tar.gz000003",
-                              "airglow/raw/fpi05_uao_20250328.tar.gz000004",
-                              "airglow/raw/fpi05_uao_20250328.tar.gz000005",
-                              "airglow/raw/fpi05_uao_20250328.tar.gz000006",
-                              "airglow/raw/fpi05_uao_20250328.tar.gz000007",
-                              "airglow/raw/fpi05_uao_20250328.tar.gz000008"]
-    cloud_file: str = "airglow/raw/Cloud_uao_20250328.txt"
+    file_chunks: list[str] = ["raw/fpi05_uao_20250328.tar.gz000000",
+                              "raw/fpi05_uao_20250328.tar.gz000001",
+                              "raw/fpi05_uao_20250328.tar.gz000002",
+                              "raw/fpi05_uao_20250328.tar.gz000003",
+                              "raw/fpi05_uao_20250328.tar.gz000004",
+                              "raw/fpi05_uao_20250328.tar.gz000005",
+                              "raw/fpi05_uao_20250328.tar.gz000006",
+                              "raw/fpi05_uao_20250328.tar.gz000007",
+                              "raw/fpi05_uao_20250328.tar.gz000008"]
+    cloud_files: list[str] = ["raw/Cloud_uao_20250328.txt"]
 
 
 def upload_chunked_archive(data_path: str,
@@ -80,28 +80,32 @@ def unzip_chunked_archive(
         context: dg.AssetExecutionContext,
         config: ChunkedArchiveConfig,
         s3: S3ResourceNCSA
-) -> dg.Output[dict[str, str]]:
+) -> dg.Output[dict[str, list[str]]]:
     """Unzips a chunked archive"""
     year = config.observation_date[0:4]
     data_path = f"fpi/minime05/{config.site}/{year}/{config.observation_date}/"
     s3_client = s3.get_client()
     upload_chunked_archive(data_path, config, context, s3_client)
 
-    # Copy the cloud cover file to the archive directory in the bucket
-    cloud_cover_file = Path(config.cloud_file).name
-    s3_client.copy_object(
-        Bucket=EnvVar("DEST_BUCKET").get_value(),
-        CopySource={
-            "Bucket": EnvVar("DEST_BUCKET").get_value(),
-            "Key": config.cloud_file
-        },
-        Key=f"cloudsensor/{config.site}/{year}/{cloud_cover_file}"
-    )
+    # Copy the cloud cover files to the archive directory in the bucket
+    for cloud_cover_file in config.cloud_files:
+        s3_client.copy_object(
+            Bucket=EnvVar("DEST_BUCKET").get_value(),
+            CopySource={
+                "Bucket": EnvVar("DEST_BUCKET").get_value(),
+                "Key": cloud_cover_file
+            },
+            Key=f"cloudsensor/{config.site}/{year}/{Path(cloud_cover_file).name}"
+        )
 
     return dg.Output(
         value={
-            "data_file": "data_file.csv",
-            "cloud_data": "cloud_data.csv"
+            "raw_files": config.file_chunks,
+            "cloud_data": config.cloud_files
+        },
+        metadata={
+            "observation_date": config.observation_date,
+            "site": config.site
         }
     )
 

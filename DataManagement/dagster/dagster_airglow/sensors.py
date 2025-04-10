@@ -49,6 +49,13 @@ def group_files_by_date(file_list):
     return date_files_dict
 
 
+def cloud_cover_files_for_site(site: str, files: list[str]) -> list[str]:
+    """
+    Filters the list of files to get only the cloud cover files for the specified site.
+    """
+    return [file for file in files if f"Cloud_{site}" in file and file.endswith(".txt")]
+
+
 @dg.sensor(
     job_name="unzip_archive_job",
     minimum_interval_seconds=1 * 60 * 60,  # 1 hour
@@ -56,12 +63,8 @@ def group_files_by_date(file_list):
 def instrument_upload_sensor(context,
                              s3: S3ResourceNCSA
                              ):
-    context.log.info("Instrument data upload")
-
-    files = group_files_by_date(
-        list_files(EnvVar('DEST_BUCKET').get_value(), "raw", s3.get_client())
-    )
-
+    objects = list_files(EnvVar('DEST_BUCKET').get_value(), "raw", s3.get_client())
+    files = group_files_by_date(objects)
 
     for data_date in sorted(files.keys()):
         sensor_files = files[data_date]
@@ -71,16 +74,13 @@ def instrument_upload_sensor(context,
 
         # After processing, there can be just the .txt file for that date
         if sensor_files and len(sensor_files) > 1:
-            cloud_file = {}
             tar_gz_files = {}
 
             for file in sensor_files:
                 filename = file.split('/')[-1]
                 site_code = filename.split('_')[1]
 
-                if filename.startswith("Cloud_"):
-                    cloud_file[site_code] = file
-                elif "tar.gz" in file:
+                if "tar.gz" in file:
                     if site_code in tar_gz_files:
                         tar_gz_files[site_code].append(file)
                     else:
@@ -91,10 +91,12 @@ def instrument_upload_sensor(context,
                     "unzip_chunked_archive": ChunkedArchiveConfig(
                         site=site,
                         observation_date=str(sensor_date),
-                        cloud_file=cloud_file[site],
+                        cloud_files=cloud_cover_files_for_site(site, objects),
                         file_chunks=tar_gz_files[site]
                     )
                     }
                 )
-                print(f"{sensor_date}: {cloud_file[site]}, [{', '.join(tar_gz_files[site])}]")
-                yield dg.RunRequest(run_key=f"sort-{sensor_date}-{site}", run_config=run_config)
+                yield dg.RunRequest(
+                    run_key=f"sort-{sensor_date}-{site}",
+                    run_config=run_config
+                )
