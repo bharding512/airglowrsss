@@ -43,8 +43,7 @@ def email(recipient,subject,msg):
     email.quit()
     print("!!! Email Sent")
 
-
- def emailerror(recipients,subject,msg):
+def emailerror(recipients,subject,msg):
     '''
     Summary:
         emailerror(subject,recipients,msg)
