@@ -306,7 +306,7 @@ if __name__ == "__main__":
     entry = "02130700"
     path = "/Users/duly/data/GEONET/test/"
 
-    print "looking at ",path+entry
+    print("looking at ",path+entry)
 
     tec = parse_tec(path+entry+".11_TEC")
     rx_pos = parse_rx_pos(path+entry+".pos")
@@ -316,8 +316,8 @@ if __name__ == "__main__":
     dns = tec['2'].keys()
     dns.sort()
     dn = dns[500]
-    print "tec['2'][dn=%s] = " % (dn)
-    print tec['2'][dn]
+    print("tec['2'][dn=%s] = " % (dn))
+    print(tec['2'][dn])
 
 
     sv_pos = {}
@@ -376,9 +376,9 @@ if __name__ == "__main__":
 
     # out of bounds should get nan's:
     dn = datetime(2011,3,11,1,3,4,34,tzinfo=pytz.utc)
-    print sv_pos_at(dn,2, fs, epoch)
+    print(sv_pos_at(dn,2, fs, epoch))
     dn = dn + timedelta(days=20)
-    print sv_pos_at(dn,2, fs, epoch)
+    print(sv_pos_at(dn,2, fs, epoch))
     
 
 
