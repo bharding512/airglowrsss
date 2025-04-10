@@ -204,7 +204,7 @@ def Tikhonov(A,b,deg,reg_param=0.,ireg=0):
     reg_corner = Maximum_Curvature(residual,seminorm,reg_param)
     sol = calc_solution(A,b,reg_corner,L) 
     
-    print 'Alpha parameter chose:.%4f' %(reg_corner)
+    print('Alpha parameter chose:.%4f' %(reg_corner))
 
     if ireg==0:
         return sol
@@ -252,7 +252,7 @@ def gcv(A,b,deg,reg_param=0):
     ireg_corner = np.argmin(g)
     reg_corner=reg_param[ireg_corner];
 
-    print reg_corner
+    print(reg_corner)
 
     sol = calc_solution(A,b,reg_corner,L) 
 
