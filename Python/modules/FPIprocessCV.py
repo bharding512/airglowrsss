@@ -731,7 +731,8 @@ def simple_test():
 
 def complicated_test():
     import os
-    print "removing pngs..."; os.system("rm -rf /home/duly/cv/*.png")
+    print("removing pngs...") 
+    os.system("rm -rf /home/duly/cv/*.png")
     #dn_start = datetime(2013,3,14)
     #dn_end = datetime(2013,3,15)
     dn_start = datetime(2013,3,2)
@@ -752,7 +753,7 @@ def complicated_test():
             p = d.plot()
             if p is not None:
                 file_name = "%s_%s_%s" % (d.project, datestr, d.key)
-                print "saving:", file_name
+                print("saving:", file_name)
                 plt.savefig("/home/duly/cv/%s.png" % file_name)
             #print d
             #print "len(d.t1)=",len(d.t1)

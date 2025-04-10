@@ -57,7 +57,7 @@ def guassian_elinimation(S,Rayl,pseudo = 0):
                 Ip[i] = 0
         return Ip
     else:
-        print 'Distance matrix is not square'
+        print('Distance matrix is not square')
         
         return 0
 
@@ -298,7 +298,7 @@ def Tikhonov(A,b,deg,reg_param=0.,method=1,ireg=1):
     sol = calc_solution(A,b,reg_corner,L) 
     
     if ireg==1:
-        print 'Alpha parameter chose:.%4f' %(reg_corner)
+        print('Alpha parameter chose:.%4f' %(reg_corner))
 
     return sol,reg_corner,residual,seminorm,curvature
 
@@ -386,7 +386,7 @@ def Tikhonov_mp(A,b,deg,reg_param=0.,method=1,ireg=1):
         sol = calc_solution(A,b,reg_corner,L) 
 
         if ireg==1:
-            print 'Alpha parameter chose:.%4f' %(reg_corner)
+            print('Alpha parameter chose:.%4f' %(reg_corner))
 
     except (KeyboardInterrupt,SystemExit,ZeroDivisionError,BaseException) as inst :
         
@@ -394,15 +394,15 @@ def Tikhonov_mp(A,b,deg,reg_param=0.,method=1,ireg=1):
             pool.terminate()
             
         #print "You cancelled the program!"
-        print type(inst)
-        print inst
+        print(type(inst))
+        print(inst)
         exit(1) 
 
     except Exception:
     
-        print "Something Happened :("
-        print type(inst)
-        print inst
+        print("Something Happened :(")
+        print(type(inst))
+        print(inst)
         exit(1)
     
     return sol,reg_corner,residual,seminorm,curvature
@@ -465,7 +465,7 @@ def gcv(A,b,deg,reg_param=0,ireg=1):
     reg_corner=reg_param[ireg_corner];
 
     if ireg==1:
-        print reg_corner
+        print(reg_corner)
 
     sol = calc_solution(A,b,reg_corner,L) 
 
@@ -494,7 +494,7 @@ def MAP_Estimation(S,Bright,VER_mean=0.,VER_reshape=0.):
     # Check whether or not the prior is there. If not raise exception
     if not hasattr(VER_reshape, "__len__"):
         if (VER_reshape==0):
-            print 'PRIOR IS MISSING'
+            print('PRIOR IS MISSING')
             raise Exception
     
 
@@ -687,7 +687,7 @@ def find_hm_Nm_F2_Diff(Ne_e,rbot_e,Ne,rbot,abs_flag=0.,interp = 1,int_increase =
     '''
 
     if np.count_nonzero(Ne_e)==0:
-        print "Estimated Electron Density zeros"
+        print("Estimated Electron Density zeros")
         raise Exception
 
     if interp==1:
@@ -771,7 +771,7 @@ def hmF2_region_interpolate(Ne,rbot,int_increase = 5.,kind ='cubic'):
         
         return NE_inter,xnew
     else:
-        print 'Ne maximum ill defined - No interpolation performed'
+        print('Ne maximum ill defined - No interpolation performed')
         
         return Ne,rbot
             
@@ -835,31 +835,31 @@ def FUV_Level_2_OutputProduct_Calculation(Bright,h,satlatlonalt,az,ze,O,cont =1,
 
         
     # Concatinate the matrix to include only lowest tangent altitude input
-    print 'Distance Matrix Calculated'
+    print('Distance Matrix Calculated')
     Bright= Bright[0:len(h)]
     S = S[0:len(h),0:len(h)]
     
     if regu ==0: # Gaussian Elimination
-        print 'Gaussian Elimination Chosen'
+        print('Gaussian Elimination Chosen')
         VER = guassian_elinimation(S,Bright,method)
         #counts= calc_electron_density(VER,O,cont)
         counts= calc_electron_density(VER,satlatlonalt,h,dn,cont)
-        print 'VER & Ne profiles calculated'
+        print('VER & Ne profiles calculated')
     elif regu == 1: # LCurve
-        print 'Tiknonov - Lcurve Chosen'
+        print('Tiknonov - Lcurve Chosen')
         VER,_,_,_,_ = Tikhonov(S,Bright,regu_order,0,method,ireg)
         counts = calc_electron_density(VER,satlatlonalt,h,dn,cont)
-        print 'VER & Ne profiles calculated'
+        print('VER & Ne profiles calculated')
     elif regu == 2: # GSVD
-        print 'Tikhonov-GCV Chosen'
+        print('Tikhonov-GCV Chosen')
         VER = gcv(S,Bright,regu_order,0,ireg)
         counts = calc_electron_density(VER,satlatlonalt,h,dn,cont)
-        print 'VER & Ne profiles calculated'
+        print('VER & Ne profiles calculated')
     elif regu ==3: # Bayesian
-        print 'MAP Estimation Method Chose'
+        print('MAP Estimation Method Chose')
         VER = MAP_Estimation(S,Bright,VER_mean=VER_mean,VER_reshape=VER_reshape) 
         counts =calc_electron_density(VER,satlatlonalt,h,dn,cont)
-        print 'VER & Ne profiles calculated'
+        print('VER & Ne profiles calculated')
               
     return VER,counts,h
 
@@ -1067,7 +1067,7 @@ def Get_lvl2_5_product(path_input='/home/dimitris/Data_Files/ICON_FUV_ray_UT_15s
     
     FUV_Level_2_OutputProduct_NetCDF(dn,satlatlonalt,az,ze,tanlatlonalt,bright,ver,Ne,NmF2,hmF2,path_output)
     
-    print 'LVL2.5 Processing Terminated. File created!'
+    print('LVL2.5 Processing Terminated. File created!')
     
 def print_netcdf_decription(path):
     '''
@@ -1086,16 +1086,16 @@ def print_netcdf_decription(path):
     no_info_variables = []
 
     template = "{Variable:22}|{Units:19}|{Description:15}" # same, but named
-    print template.format(Variable="VARIABLE NAME", Units="UNITS", Description="DESCRIPTION")
-    print template.format(Variable= 22*"=",Units= 19*"=",Description=22*"="   )
+    print(template.format(Variable="VARIABLE NAME", Units="UNITS", Description="DESCRIPTION"))
+    print(template.format(Variable= 22*"=",Units= 19*"=",Description=22*"="   ))
     for var_name in variables.iterkeys():
         try:
-            print template.format(Variable=var_name, Units="["+variables[var_name].units+"]", Description= variables[var_name].long_name)
+            print(template.format(Variable=var_name, Units="["+variables[var_name].units+"]", Description= variables[var_name].long_name))
             #print '%010s [%s]:%s' % (var_name, variables[var_name].units, variables[var_name].long_name)
         except Exception as e:
             no_info_variables.append(var_name)
-            print '\n The following variables had no information:'
-            print no_info_variables
+            print('\n The following variables had no information:')
+            print(no_info_variables)
     g.close()
 
 
