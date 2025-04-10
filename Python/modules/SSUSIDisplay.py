@@ -141,7 +141,7 @@ def Line_star(a_b):
     else:
         return (np.nan, np.nan, np.nan, np.nan, np.nan)
 
-def project_SSUSI(ssusi_fname, (lat0, lat1, lon0, lon1), bin_resolution = 0.5, emission_ht = 350., trace_step = 10., num_processors=8):
+def project_SSUSI(ssusi_fname, lat0, lat1, lon0, lon1, bin_resolution = 0.5, emission_ht = 350., trace_step = 10., num_processors=8):
 # Loads in a SSUSI L1B file and projects the low-latitude data up to the magnetic equator (apex altitude).
 #
 # INPUTS:
@@ -255,7 +255,7 @@ def get_cnfi_image(dn, ht=250):
 
         # Exit out if nothing is within 30 minutes
         if a > 30*60.:
-            print a
+            print(a)
             return np.nan, np.nan, np.nan, np.nan
         
     # Load the closest image
@@ -264,7 +264,7 @@ def get_cnfi_image(dn, ht=250):
     
     im = np.asarray(d)
     dt = d.info['UniversalTime']
-    print 'SSUSI:', dn, 'CNFI:', dt
+    print('SSUSI:', dn, 'CNFI:', dt)
     
     # Load appropriate calibration image
     instr_info = asiinfo.get_instr_info('cnfi01', dt)
@@ -387,7 +387,7 @@ def create_plots(target_lat, target_lon,lat_centers, lon_centers, binned_i1356, 
     if SSUSIbubbles is not None:
         apex_bub = []
 
-        print np.shape(SSUSIbubbles)
+        print(np.shape(SSUSIbubbles))
         for b in SSUSIbubbles:
             lon = b[0]
             lat = b[1]
@@ -411,7 +411,7 @@ def create_plots(target_lat, target_lon,lat_centers, lon_centers, binned_i1356, 
                 apex_bub.append([lo[i], la[i], al[i], ndep])
 
         apex_bub = np.array(apex_bub)
-        print np.shape(apex_bub)
+        print(np.shape(apex_bub))
 
         plt.scatter(apex_bub[:,0],apex_bub[:,2],c=apex_bub[:,3],marker='.',linewidth=0,s=25)
 
