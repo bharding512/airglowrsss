@@ -60,7 +60,7 @@ def SetBinTime(MIN):
     btime = _np.array([(arbdate + _dt.timedelta(minutes=_x)).time() for _x in range(0,b_len*MIN,MIN)])
     times = _np.array([(arbdate + _dt.timedelta(minutes=_x)) for _x in range(0,b_len*MIN,MIN)])
 
-    print 'Bin length is set to %i minutes.'%MIN
+    print('Bin length is set to %i minutes.'%MIN)
 
 
 def SetFilter(UMIN=-250.,UMAX=250.,VMIN=-250.,VMAX=250.,WMIN=-75.,WMAX=75.,TMIN=600.,TMAX=1400., \
@@ -94,8 +94,8 @@ def SetFilter(UMIN=-250.,UMAX=250.,VMIN=-250.,VMAX=250.,WMIN=-75.,WMAX=75.,TMIN=
            'wmax':WMAX,'wmin':WMIN,'we':WERR}
    
     if VERBOSE:
-        print 'The following limits are set:'
-        print sorted(lim.items())
+        print('The following limits are set:')
+        print(sorted(lim.items()))
 
 
 # Set up default parameters
@@ -109,7 +109,7 @@ _utc = _pytz.UTC
 SetBinTime(30)
 SetFilter()
 loader = _pyglow.Point(arbdate,0,0,250.) # First run is slow, so get it out of the way now
-print 'FPIResults Ready\n'
+print('FPIResults Ready\n')
 
 
 def FilterData(DATA,QF=1):
@@ -462,7 +462,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIE
     d.t = times
     d.lla = SITELLA
     if _np.isnan(SITELLA).any():
-        print 'Bad LLA'
+        print('Bad LLA')
         return
 
     # Altitudes
@@ -524,7 +524,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIE
                 elif WMODEL.lower() == 'hwm14':
                     pt.run_hwm(version=2014)
                 else:
-                    print 'Bad Wind Model'
+                    print('Bad Wind Model')
                 uData[tind] += pt.u*pt.ag6300
                 ueData[tind] += 1.
                 vData[tind] += pt.v*pt.ag6300
@@ -540,7 +540,7 @@ def GetModels(SITELLA,YEAR,DOY,WMODEL,TMODEL='msis',ALT=250.,WEIGHTED=False,QUIE
                     pt.run_iri()
                     TData[tind] += pt.Tn_iri*pt.ag6300
                 else:
-                    print 'Bad Temp Model'
+                    print('Bad Temp Model')
                 TeData[tind] += 1.
                 
                 # Altitude
@@ -628,7 +628,7 @@ def _MPsinglemodel(T,ALTS,SITELLA,WMODEL,TMODEL,QUIET):
         elif WMODEL.lower() == 'hwm14':
             pt.run_hwm(version=2014)
         else:
-            print 'Bad Wind Model'
+            print('Bad Wind Model')
         uData  += pt.u*pt.ag6300
         ueData += 1.
         vData  += pt.v*pt.ag6300
@@ -644,7 +644,7 @@ def _MPsinglemodel(T,ALTS,SITELLA,WMODEL,TMODEL,QUIET):
             pt.run_iri()
             TData += pt.Tn_iri*pt.ag6300
         else:
-            print 'Bad Temp Model'
+            print('Bad Temp Model')
         TeData += 1.
         
         # alt
@@ -762,7 +762,7 @@ def BinMonthlyData(SITE,YEAR,MONTH,DLIST=[],YLIST=[],SPLIT=False,KP=[0,10],CV=Tr
             dl.append(doy)
             yl.append(yr)
         if not(dl):
-            print 'Doy List contains no days in desired month.'
+            print('Doy List contains no days in desired month.')
 
     # Make a site list
     if SITE in ['renoir','peru','nation']:
@@ -979,17 +979,17 @@ def BinMonthlyData(SITE,YEAR,MONTH,DLIST=[],YLIST=[],SPLIT=False,KP=[0,10],CV=Tr
 
     #print '%s %s %04d'%(SITE, mon,YEAR),'Days used:',len(d.daysused),' Ave pts/time: %02.2f'%(_np.nanmin(_np.array([_np.ma.masked_array(ucount,_np.isnan(ucount)).mean(), _np.ma.masked_array(vcount,_np.isnan(vcount)).mean(), _np.ma.masked_array(Tcount,_np.isnan(Tcount)).mean()])))
     if VERBOSE:
-        print '%s %s %04d'%(SITE, mon,YEAR),' Days used:',len(d.daysused)
+        print('%s %s %04d'%(SITE, mon,YEAR),' Days used:',len(d.daysused))
         if SPLIT and not(mflag):
-            print 'Ave pts/bin: u-%02.2f  u2-%02.2f  v-%02.2f  v2-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uCount),_np.nanmean(u2Count),_np.nanmean(vCount),_np.nanmean(v2Count),_np.nanmean(wCount),_np.nanmean(TCount))
-            print 'Ave day/bin: u-%02.2f  u2-%02.2f  v-%02.2f  v2-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uDays),_np.nanmean(u2Days),_np.nanmean(vDays),_np.nanmean(v2Days),_np.nanmean(wDays),_np.nanmean(TDays))
+            print('Ave pts/bin: u-%02.2f  u2-%02.2f  v-%02.2f  v2-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uCount),_np.nanmean(u2Count),_np.nanmean(vCount),_np.nanmean(v2Count),_np.nanmean(wCount),_np.nanmean(TCount)))
+            print('Ave day/bin: u-%02.2f  u2-%02.2f  v-%02.2f  v2-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uDays),_np.nanmean(u2Days),_np.nanmean(vDays),_np.nanmean(v2Days),_np.nanmean(wDays),_np.nanmean(TDays)))
 
         else:
-            print 'Ave pts/bin: u-%02.2f  v-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uCount),_np.nanmean(vCount),_np.nanmean(wCount),_np.nanmean(TCount))
-            print 'Ave day/bin: u-%02.2f  v-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uDays),_np.nanmean(vDays),_np.nanmean(wDays),_np.nanmean(TDays))
-        print 'Cards:',cards,' CVs:',cvs,' %%CV: %02.2f'%(100.*cvs/(cvs+cards+.000001))
-        print 'Bads:',bads, ' %%Good: %02.2f'%(100.*(cards+cvs)/(cards+cvs+bads+.000001))
-        print 'Days:',d.daysused,'\n'
+            print('Ave pts/bin: u-%02.2f  v-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uCount),_np.nanmean(vCount),_np.nanmean(wCount),_np.nanmean(TCount)))
+            print('Ave day/bin: u-%02.2f  v-%02.2f  w-%02.2f  T-%02.2f'%(_np.nanmean(uDays),_np.nanmean(vDays),_np.nanmean(wDays),_np.nanmean(TDays)))
+        print('Cards:',cards,' CVs:',cvs,' %%CV: %02.2f'%(100.*cvs/(cvs+cards+.000001)))
+        print('Bads:',bads, ' %%Good: %02.2f'%(100.*(cards+cvs)/(cards+cvs+bads+.000001)))
+        print('Days:',d.daysused,'\n')
 
     return d
 
@@ -1103,12 +1103,12 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
             try:
                 ut_offset = _fpiinfo.get_site_info(SITE)['Location'][1]/360.*(24*60*60)
             except:
-                print 'No UT/LT conversion... Plots lie! Actually in UT'
+                print('No UT/LT conversion... Plots lie! Actually in UT')
 
     # Get Monthly Average for basis
     dn = _dt.datetime(YEAR,MONTHSTART,1)
     if SPLIT and NMONTHS > 12:
-        print "Only 1 year allowed in SPLIT Mode"
+        print("Only 1 year allowed in SPLIT Mode")
         NMONTHS = 12
     for nsp,mon in enumerate(range(0,NMONTHS)):
         nsp = ((nsp*2)%24 -11*((nsp*2)%24>11))%12  # fill left column then right.
@@ -1127,8 +1127,8 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         gflag = 'on'
  
         try:
-	    tstart = _np.where(_np.isnan(MD.T[:-1])*_np.isfinite(MD.T[1:]))[0][0]-1
-    	    tend   = _np.where(_np.isfinite(MD.T[:-1])*_np.isnan(MD.T[1:]))[0][0]+1
+            tstart = _np.where(_np.isnan(MD.T[:-1])*_np.isfinite(MD.T[1:]))[0][0]-1
+            tend   = _np.where(_np.isfinite(MD.T[:-1])*_np.isnan(MD.T[1:]))[0][0]+1
         except:
             continue
        
@@ -1145,9 +1145,9 @@ def PlotClimatology(SITE,YEAR,MONTHSTART=1,NMONTHS=12,SPLIT=False,KP=[0,10],UT=T
         # ylabel("%s %4.0f" % (_cal.month_abbr[month], year))
         axz[nsp].set_ylabel("%s" % (_cal.month_abbr[month]),labelpad=2)
         axz[nsp].set_ylim(-50, 150)
-	if UT:
-	    axz[nsp].set_xlim(tlim)
-	else:
+        if UT:
+            axz[nsp].set_xlim(tlim)
+        else:
 #        print MD.t[tstart], MD.t[tend]
 #        axz[nsp].set_xlim(MD.t[tstart],MD.t[tend])
             axz[nsp].set_xlim([_dt.datetime(1969,12,31,17,00,00),_dt.datetime(1970,1,1,7,0,0)])
@@ -1299,7 +1299,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,QF=1,F_
     for nsp,mon in enumerate(range(1,13)):
         nsp = ((nsp*2)%24 - 11*((nsp*2)%24>11))%12
         for k,(f_doy,f_yr) in enumerate(zip(f_doy_index,f_yr_index)):
-            print mon,'-',F_VAL[k]
+            print(mon,'-',F_VAL[k])
             MD = BinMonthlyData(SITE,arbdate.year,mon,DLIST=f_doy,YLIST=f_yr,SPLIT=SPLIT,KP=KP,QF=QF,VERBOSE=VERBOSE)
             #print '|_ F107b:',MD.f107,'\n\n'
             MD.t2 = MD.t + _dt.timedelta(minutes=3)
@@ -1334,7 +1334,7 @@ def PlotClimatologyF107(SITE,DNSTART,DNEND,SPLIT=False,KP=[0,10],UT=True,QF=1,F_
                     sltoffset = - _dt.timedelta(hours=2,minutes=12)
                 else:
                     sltoffset = _dt.timedelta(minutes=0)
-                    print 'No UT/LT conversion... in UT'
+                    print('No UT/LT conversion... in UT')
             else:
                 sltoffset = _dt.timedelta(minutes=0)
             MD.t = MD.t + sltoffset
@@ -1756,8 +1756,8 @@ def PlotAverages(SITE,YEAR,MONTH,WMODEL=[],TMODEL='msis',SPLIT=False,KP=[0,10],U
     # Hardcoded Tmodel -- Fix
     for nm,m in enumerate(WMODEL):
         if nm == 0:
-	    _plt.fill_between(tm[m],Tm[m]-Tem[m],Tm[m]+Tem[m],alpha=0.5,linewidth=0,facecolor=facecolor['MSIS'])
-	    _plt.plot(tm[m],Tm[m],'r',label='MSIS')
+            plt.fill_between(tm[m],Tm[m]-Tem[m],Tm[m]+Tem[m],alpha=0.5,linewidth=0,facecolor=facecolor['MSIS'])
+            _plt.plot(tm[m],Tm[m],'r',label='MSIS')
 #           _plt.errorbar(tm[m],Tm[m],yerr=Tem[m],fmt=color[nm],capsize=markerwide,label='MSIS')
     _plt.plot([MD.t[0],MD.t[-1]],[0,0],'k--')
     _plt.ylim([600,1200])
@@ -1809,13 +1809,13 @@ def PlotAverages(SITE,YEAR,MONTH,WMODEL=[],TMODEL='msis',SPLIT=False,KP=[0,10],U
     _plt.grid()
 
     if(HIST):
-	bin_width = (MD.t[1]-MD.t[0])/4
+        bin_width = (MD.t[1]-MD.t[0])/4
         ax2 = ax.twinx()
         ax2.bar(MD.t-bin_width,MD.uc,.015,alpha=0.5,linewidth=0)
         ax2.set_ylabel('N/bin',position=(1,.1875))
-	ticklabelpad = _mpl.rcParams['xtick.major.pad']
+        ticklabelpad = _mpl.rcParams['xtick.major.pad']
         ax2.set_ylim([0,80])
-	ax2.set_yticks([0,10,20,30])
+        ax2.set_yticks([0,10,20,30])
 
     _plt.xlim([MD.t[tstart],MD.t[tend]])
 
@@ -1848,7 +1848,7 @@ def PlotAverages(SITE,YEAR,MONTH,WMODEL=[],TMODEL='msis',SPLIT=False,KP=[0,10],U
     _plt.grid()
 
     if(HIST):
-	bin_width = (MD.t[1]-MD.t[0])/4
+        bin_width = (MD.t[1]-MD.t[0])/4
         ax2 = ax.twinx()
         ax2.bar(MD.t-bin_width,MD.vc,.015,alpha=0.5,linewidth=0)
         ax2.set_ylabel('N/bin',position=(1,.1875))
@@ -1880,7 +1880,7 @@ def PlotAverages(SITE,YEAR,MONTH,WMODEL=[],TMODEL='msis',SPLIT=False,KP=[0,10],U
     _plt.grid()
 
     if(HIST):
-	bin_width = (MD.t[1]-MD.t[0])/4
+        bin_width = (MD.t[1]-MD.t[0])/4
         ax2 = ax.twinx()
         ax2.bar(MD.t-bin_width,MD.wc,.015,alpha=0.5,linewidth=0)
         ax2.set_ylabel('N/bin',position=(1,.1875))
@@ -2110,7 +2110,7 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True,WIS0=False):
     try:
         ax[34].legend([(l1,m1),(l2,m2),(l3,m3),(l4,m4),(l5,m5)],['North','South','East','West','Z'],ncol=3)
     except:
-        print 'not enough data for legend...'
+        print('not enough data for legend...')
     ax[0].xaxis.set_major_formatter(_md.DateFormatter('%H'))
     ax[3].set_title('%s Temperature Grid %s %04d'%(SITE,_cal.month_name[MONTH],YEAR))
     f.text(0.5, 0.04, 'Time [UT]', ha='center', va='center')
@@ -2152,7 +2152,7 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True,WIS0=False):
     try:
         ax[34].legend([(l1,m1),(l2,m2)],['East','West'])
     except:
-        print 'not enough data for legend...'
+        print('not enough data for legend...')
     ax[0].xaxis.set_major_formatter(_md.DateFormatter('%H'))
     ax[3].set_title('%s Zonal Wind Grid %s %04d'%(SITE,_cal.month_name[MONTH],YEAR))
     f.text(0.5, 0.04, 'Time [UT]', ha='center', va='center')
@@ -2194,7 +2194,7 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True,WIS0=False):
     try:
         ax[34].legend([(l1,m1),(l2,m2)],['North','South'])
     except:
-        print 'not enough data for legend...'
+        print('not enough data for legend...')
     ax[0].xaxis.set_major_formatter(_md.DateFormatter('%H'))
     ax[3].set_title('%s Meridional Wind Grid %s %04d'%(SITE,_cal.month_name[MONTH],YEAR))
     f.text(0.5, 0.04, 'Time [UT]', ha='center', va='center')
@@ -2279,7 +2279,7 @@ def PlotGridMonth(SITE,YEAR,MONTH,SPLIT=True,WIS0=False):
     try:
         ax[34].legend([(l1,m1),(l2,m2)],['CV1','CV2'])
     except:
-        print 'not enough data for legend...'
+        print('not enough data for legend...')
     ax[0].xaxis.set_major_formatter(_md.DateFormatter('%H'))
     ax[3].set_title('%s CV Wind Grid %s %04d'%(SITE,_cal.month_name[MONTH],YEAR))
     f.text(0.5, 0.04, 'Time [UT]', ha='center', va='center')
@@ -2329,29 +2329,32 @@ def CreateL2ASCII(PROJECT,YEAR,DOY,WIS0=False):
     note.write('Direction  Time[UTC]  Lat  Lon  Alt[km]  u[m/s]  uError[m/s]  v[m/s]  vError[m/s]  CloudDT[C]\n')
     
     for x in D:
-	    for i in range(len(x.t1)):
-	        if not(x.error): # Remove bad look combo
-	            dn = x.t1[i].astimezone(_utc)
-	            utctime = dn.strftime("%Y-%m-%d %H:%M:%S")
-	            if('North' in x.key or 'South' in x.key):
-	                line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  -999.00  -999.00  {:7.2f}  {:7.2f}  {:1.0f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.v[i], x.ve[i], x.flag_wind[i])
-	            elif('East' in x.key or 'West' in x.key):
-	                line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  {:7.2f}  {:7.2f}  -999.00  -999.00  {:1.0f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.u[i], x.ue[i], x.flag_wind[i])
-	            elif('CV_VTI_EKU_PAR' in x.key):
-	                line = ""
-	            elif('CV' in x.key):
-	                line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  {:7.2f}  {:7.2f}  {:7.2f}  {:7.2f}  {:1.0f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.u[i], x.ue[i], x.v[i], x.ve[i], x.flag_wind[i])
-	            # For debugg
-	            elif('Zenith' in x.key or 'IN' in x.key):
-	                line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  VERTICAL  {:7.2f}  {:7.2f}  {:1.0f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.w[i], x.we[i], x.flag_wind[i])
-	            else:
-	                line = ""
-	            note.write(line)
+        for i in range(len(x.t1)):
+            if not(x.error): # Remove bad look combo
+                dn = x.t1[i].astimezone(_utc)
+                utctime = dn.strftime("%Y-%m-%d %H:%M:%S")
+                
+                if('North' in x.key or 'South' in x.key):
+                    line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  -999.00  -999.00  {:7.2f}  {:7.2f}  {:1.0f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.v[i], x.ve[i], x.flag_wind[i])
+                elif('East' in x.key or 'West' in x.key):
+                    line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  {:7.2f}  {:7.2f}  -999.00  -999.00  {:1.0f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.u[i], x.ue[i], x.flag_wind[i])
+                elif('CV_VTI_EKU_PAR' in x.key):
+                    line = ""
+                elif('CV' in x.key):
+                    line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  {:7.2f}  {:7.2f}  {:7.2f}  {:7.2f}  {:1.0f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.u[i], x.ue[i], x.v[i], x.ve[i], x.flag_wind[i])
+
+                # For debugg
+                elif('Zenith' in x.key or 'IN' in x.key):
+                    line = "{:14s}  {:19s}  {:5.1f}  {:5.1f}  250.0  VERTICAL  {:7.2f}  {:7.2f}  {:1.0f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.w[i], x.we[i], x.flag_wind[i])
+                else:
+                    line = ""
+
+                note.write(line)
 		    
     note.close()
     
-    print 'Results saved to: ' + notename
-    print 'This is a test case, not for official L2 use'
+    print('Results saved to: ' + notename)
+    print('This is a test case, not for official L2 use')
     
     
 
@@ -2397,26 +2400,27 @@ def CreateL2ASCII_Legacy(PROJECT,YEAR,DOY,QF=1,WIS0=False):
     
     for x in D:
         for i in range(len(x.t1)):
-            if not(x.error): # Remove bad look combo
-		        dn = x.t1[i].astimezone(_utc)
-		        utctime = dn.strftime("%Y-%m-%d %H:%M:%S")
-		        if('Zenith' in x.key or 'IN' in x.key):
-		            line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.w[i], x.we[i], x.i[i], x.ie[i], x.b[i], x.be[i])
-		        elif('North' in x.key or 'South' in x.key):
-		            line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i])
-		        elif('East' in x.key or 'West' in x.key):
-		            line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i])
-		        elif('CV_VTI_EKU_PAR' in x.key):
-		            line = ""
-		        elif('Unknown' in x.key):
-		            line = ""
-                        # Code to add MTM Temps (REMOVE SOON)
-		        elif('MTM_Search' in x.key):
-		            line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  -------  ------  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.i[i], x.ie[i], x.b[i], x.be[i])
-                        elif('CV' in x.key):
-		            line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i])
+            if not(x.error): # Remove bad loo
+                dn = x.t1[i].astimezone(_utc)
+                utctime = dn.strftime("%Y-%m-%d %H:%M:%S")
+                if('Zenith' in x.key or 'IN' in x.key):
+                    line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.w[i], x.we[i], x.i[i], x.ie[i], x.b[i], x.be[i])
+                elif('North' in x.key or 'South' in x.key):
+                    line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i])
+                elif('East' in x.key or 'West' in x.key):
+                    line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  -------  ------  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i])
+                elif('CV_VTI_EKU_PAR' in x.key):
+                    line = ""
+                elif('Unknown' in x.key):
+                    line = ""
+                # Code to add MTM Temps (REMOVE SOON)
+                elif('MTM_Search' in x.key):
+                    line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  -------  ------  -------  ------  -------  ------  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.i[i], x.ie[i], x.b[i], x.be[i])
+                elif('CV' in x.key):
+                    line = "{:16s}  {:19s}  {:5.1f}  {:5.1f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:7.2f}  {:6.2f}  {:6.4f}  {:4.4f}  {:6.1f}  {:4.2f}\n".format(x.key, utctime, x.lla[0], x.lla[1], x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.wi[i], x.wie[i], x.i[i], x.ie[i], x.b[i], x.be[i])
 		        #line = "%14s  %19s  %3.1f  %3.1f  %4.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %3.2f  %2.2f  %1.3f  %1.3f  %5s  %30s" % (x.key, utctime, lat, lon, x.T[i], x.Te[i], x.u[i], x.ue[i], x.v[i], x.ve[i], x.w[i], x.we[i], x.I[i], x.Ie[i], x.cloudy[i], x.notes)
-		        note.write(line)
+                
+                note.write(line)
 		    
     note.close()
     
@@ -2675,7 +2679,7 @@ class _BinnedData:
                     peppy = -76%360/360.
                 else:
                     peppy = 0
-                    print 'No Location Specified, assume UTC'
+                    print('No Location Specified, assume UTC')
 
         # To force data in middle of 00:00-23:59, need +/-12 UTC offset == 0.5 loc
         roll = int(round((0.5+peppy)%1*fox))
@@ -2820,4 +2824,4 @@ def Fmodel(alt):
 
 if __name__=="__main__":
 
-    print "Insert Coin"
+    print("Insert Coin")
