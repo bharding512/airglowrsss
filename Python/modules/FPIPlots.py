@@ -1503,7 +1503,7 @@ def PlotGridMonthV(SITE,YEAR,MONTH,SPLIT=True):
         ax[34].legend([(l2,m2)],['Caj'])
         ax[34].legend([(l3,m3)],['Inline'])
     except:
-        print 'Not enough data for legend'
+        print('Not enough data for legend')
     ax[0].xaxis.set_major_formatter(_md.DateFormatter('%H'))
     ax[3].set_title('%s Vertical Wind Grid %s %04d'%(SITE,_cal.month_name[MONTH],YEAR))
     f.text(0.5, 0.04, 'Time [UT]', ha='center', va='center')
@@ -1516,7 +1516,7 @@ def PDF2EPS():
     import os
     from glob import glob
     
-    print "Transform PDF -> EPS"
+    print("Transform PDF -> EPS")
     files = glob('/rdata/airglow/database/L2/plots/*.pdf')
     for f in files:
         os.system('pdftops -eps %s %s'%(f,f[:-4]+'.eps'))
@@ -1525,7 +1525,7 @@ def PDF2EPS():
            
 if __name__=="__main__":
 
-    print 'convert PDF -> EPS'
+    print('convert PDF -> EPS')
 
     
     
