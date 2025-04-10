@@ -4,7 +4,7 @@
 import matplotlib
 import numpy as np
 import datetime
-from matplotlib.pyplot import figure, show, rc, grid
+from matplotlib.pyplot import figure, show, rc, grid, setp
 from math import pi
 from pylab import *
 
@@ -185,7 +185,7 @@ def plot_s4summary(txprn,txdn,el,az,txsystem,s4prn,s4dn,s4,s4system,fname):
         ax.yaxis.set_major_locator( FixedLocator([0.0,0.6]) )
         ax.yaxis.set_minor_locator( FixedLocator([0.3,0.9]) )
         ax.yaxis.set_major_formatter( FormatStrFormatter('%.1f') )
-	setp( ax.get_yticklabels(), fontsize=10)
+        setp( ax.get_yticklabels(), fontsize=10)
         ax.set_xlim(d0,d1)
         ax.xaxis.set_major_locator( HourLocator(byhour=range(0,24,6)) )
         ax.xaxis.set_minor_locator( HourLocator(byhour=range(0,24,3)) )
@@ -215,7 +215,7 @@ def plot_s4summary(txprn,txdn,el,az,txsystem,s4prn,s4dn,s4,s4system,fname):
         ax2.yaxis.set_major_locator( FixedLocator([0,45]) )
         ax2.yaxis.set_minor_locator( FixedLocator([15,30,60,75]) )
         ax2.yaxis.set_major_formatter( FormatStrFormatter('%.1f') )
-	setp( ax2.get_yticklabels(), fontsize=10)
+        setp( ax2.get_yticklabels(), fontsize=10)
         ax2.set_xlim(d0,d1)
         ax2.xaxis.set_major_locator( HourLocator(byhour=range(0,24,6)) )
         ax2.xaxis.set_minor_locator( HourLocator(byhour=range(0,24,3)) )
