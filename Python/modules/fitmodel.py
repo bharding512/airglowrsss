@@ -275,14 +275,14 @@ class FitModel:
 
             self.m.migrad()
 
-            print "fval = %g, nfcn %d" % (self.m.fval, self.m.ncalls)
+            print("fval = %g, nfcn %d" % (self.m.fval, self.m.ncalls))
 
             self.m.migrad()
 
-            print "fval = %g, nfcn %d" % (self.m.fval, self.m.ncalls)
+            print("fval = %g, nfcn %d" % (self.m.fval, self.m.ncalls))
 
-            print "Fit parameters : "
-            print self.m.values
+            print("Fit parameters : ")
+            print(self.m.values)
 
             self.par_vals = self.m.values
 
@@ -311,14 +311,14 @@ class FitModel:
         """
 
         if not(self.have_fit) :
-            print "Warning: uncert requires a valid fit."
+            print("Warning: uncert requires a valid fit.")
             return
 
         # in case minos fails
         self.m.hesse()
 
-        print "Hesse errors : "
-        print self.m.errors
+        print("Hesse errors : ")
+        print(self.m.errors)
 
         self.par_err = {}
 
@@ -338,16 +338,16 @@ class FitModel:
 
             except minuit.MinuitError :
 
-                print "Caught MinuitError: Minos failed. using Hesse error."
-                print "Only really valid for a well behaved fitting FCN !"
+                print("Caught MinuitError: Minos failed. using Hesse error.")
+                print("Only really valid for a well behaved fitting FCN !")
                 error = self.m.errors[key] * nsigma
     
 
             self.par_err[key] = error
 
             
-        print "Parameter errors :"
-        print self.par_err
+        print("Parameter errors :")
+        print(self.par_err)
 
 
 
@@ -356,11 +356,11 @@ class FitModel:
         Display the fit parameter correlation matrix."
         """
         if not(self.have_fit) :
-            print "Warning: uncert requires a valid fit."
+            print("Warning: uncert requires a valid fit.")
             return
 
-        print "Correlation matrix :"
-        print numpy.array(self.m.matrix(correlation=True))
+        print("Correlation matrix :")
+        print(numpy.array(self.m.matrix(correlation=True)))
 
     
 
@@ -404,7 +404,7 @@ def FCN(x,y,yerr, model, statfunc):
 ''' % (paramstring, paramstring)
 
     
-    exec class_template
+    exec(class_template)
 
 
     return fitclass(x,y,yerr,model,statfunc)
