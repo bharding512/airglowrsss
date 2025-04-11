@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import dagster as dg
 from botocore.exceptions import ClientError
 from dagster import EnvVar, RunConfig
@@ -27,12 +29,15 @@ def list_files(bucket: str, prefix: str, s3_client) -> list[str]:
 
 
 def group_files_by_date(file_list):
+    """
+    Using a list of files from the S3 bucket, this function groups the files by date.
+    """
     date_files_dict = {}
 
     for file in file_list:
         # Extract the date part from the filename
         # The date appears in format YYYYMMDD
-        filename = file.split('/')[-1]  # Get just the filename without path
+        filename = Path(file).name
 
         # Look for the date pattern in the filename
         parts = filename.split('_')
@@ -40,7 +45,7 @@ def group_files_by_date(file_list):
             # The date should be in the last part before .txt or .tar.gz
             date_part = int(parts[2][:8])  # Extract YYYYMMDD
 
-            # Add to dictionary
+            # Add to dictionary or append to existing entry if there
             if date_part in date_files_dict:
                 date_files_dict[date_part].append(file)
             else:
@@ -75,10 +80,17 @@ def instrument_upload_sensor(context,
         # After processing, there can be just the .txt file for that date
         if sensor_files and len(sensor_files) > 1:
             tar_gz_files = {}
+            complete_sites = set()
 
             for file in sensor_files:
                 filename = file.split('/')[-1]
                 site_code = filename.split('_')[1]
+
+                if filename.startswith("fpi05") and filename.endswith(".txt"):
+                    # This is a log file, we can ignore it, but it signifies that all
+                    # the files are uploaded for this date/site
+                    complete_sites.add(site_code)
+                    continue
 
                 if "tar.gz" in file:
                     if site_code in tar_gz_files:
@@ -87,16 +99,19 @@ def instrument_upload_sensor(context,
                         tar_gz_files[site_code] = [file]
 
             for site in tar_gz_files.keys():
-                run_config = RunConfig({
-                    "unzip_chunked_archive": ChunkedArchiveConfig(
-                        site=site,
-                        observation_date=str(sensor_date),
-                        cloud_files=cloud_cover_files_for_site(site, objects),
-                        file_chunks=tar_gz_files[site]
+                if site in complete_sites:
+                    run_config = RunConfig({
+                        "unzip_chunked_archive": ChunkedArchiveConfig(
+                            site=site,
+                            observation_date=str(sensor_date),
+                            cloud_files=cloud_cover_files_for_site(site, objects),
+                            file_chunks=tar_gz_files[site]
+                        )
+                        }
                     )
-                    }
-                )
-                yield dg.RunRequest(
-                    run_key=f"sort-{sensor_date}-{site}",
-                    run_config=run_config
-                )
+                    yield dg.RunRequest(
+                        run_key=f"sort-{sensor_date}-{site}",
+                        run_config=run_config
+                    )
+                else:
+                    context.log.info(f"Incomplete upload for {site} on {sensor_date} - will pick them up next time")  # NOQA E501

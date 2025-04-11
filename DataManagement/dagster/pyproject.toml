@@ -17,6 +17,7 @@ dependencies = [
 dev = [
     "dagster-webserver",
     "pytest",
+    "pytest-mock",
     "flake8"
 ]
 

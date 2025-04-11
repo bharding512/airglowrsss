@@ -4,8 +4,7 @@ import dagster as dg
 
 def test_read_raw_dataset(s3_resource):
     context = dg.build_sensor_context(
-        resources={"s3": s3_resource},
-        cursor="20250325"
+        resources={"s3": s3_resource}
     )
     for run in instrument_upload_sensor(context):
         print(run)
