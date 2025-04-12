@@ -148,6 +148,7 @@ class Configuration:
         self.aws_madrigal_prefix = os.getenv('AWS_MADRIGAL_PREFIX', 'madrigal/')
         self.aws_fpi_prefix = os.getenv('AWS_FPI_PREFIX', 'fpi/')
         self.aws_cloudsensor_prefix = os.getenv('AWS_CLOUDSENSOR_PREFIX', 'cloudsensor/')
+        self.aws_mango_movies_prefix = os.getenv('AWS_MANGO_MOVIES_PREFIX', 'mango_movies/')
         
         # Local temporary directory
         self.temp_dir = os.getenv('TEMP_DIR', '/home/jmakela/tmp/mango')

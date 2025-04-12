@@ -951,7 +951,8 @@ def initialize_airglow_filter(ntaps, Tlo, Thi, times, t_irregular = 3, raise_irr
  #   print("lo %.2f; hi %.2f" % (cutofflo, cutoffhi))
 
     #b           = signal.firwin(ntaps, [cutofflo, cutoffhi], pass_zero=False, nyq = 0.5)
-    b           = signal.firwin(ntaps, [cutofflo], pass_zero=False, nyq = 0.5)
+    #b           = signal.firwin(ntaps, [cutofflo], pass_zero=False, nyq = 0.5)
+    b           = signal.firwin(ntaps, [cutofflo], pass_zero=False, fs = 1.0)
     w,h         = signal.freqz(b,[1])
 
     # Frequency Response
