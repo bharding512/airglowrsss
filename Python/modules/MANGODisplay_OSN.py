@@ -33,6 +33,7 @@ from matplotlib.lines import Line2D
 import logging
 from pathlib import Path
 from cloud_storage import CloudStorage, Configuration
+import cv2
 
 
 def setup_logging():
@@ -239,6 +240,38 @@ def delete_files_and_empty_dirs(file_list):
         except Exception as e:
             logger.error(f"Error removing directory {directory}: {e}")
 
+def create_video_with_opencv(png_pattern, mp4file, framerate=15):
+    # Get all matching PNG files and sort them
+    png_files = sorted(glob.glob(png_pattern))
+    
+    if not png_files:
+        print(f"No PNG files found matching pattern: {png_pattern}")
+        return False
+    
+    # Read the first image to get dimensions
+    img = cv2.imread(png_files[0])
+    if img is None:
+        print(f"Failed to read image: {png_files[0]}")
+        return False
+        
+    height, width, layers = img.shape
+    
+    # Create video writer
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # MPEG-4 codec
+    video = cv2.VideoWriter(mp4file, fourcc, framerate, (width, height))
+    
+    # Add each image to the video
+    for i, png_file in enumerate(png_files):
+        img = cv2.imread(png_file)
+        if img is not None:
+            video.write(img)
+        else:
+            print(f"Warning: Failed to read image {i+1}/{len(png_files)}: {png_file}")
+    
+    # Release the video writer
+    video.release()
+    print(f"Video saved to {mp4file}")
+    return True
 
 def MakeSummaryMovies(system_parameters, analysis_parameters, cloud_storage, config, delete_working_files=True):
     """
@@ -577,10 +610,11 @@ def MakeSummaryMovies(system_parameters, analysis_parameters, cloud_storage, con
     
     # Create ffmpeg command to create MP4 from PNGs
     png_pattern = os.path.join(system_parameters['output_directory'], f"*MANGO_{pd.to_datetime(str(target_time)).strftime('%Y%m%d')}*_{sky_line_tag}.png")
-    cmd = f'/usr/bin/ffmpeg -framerate 15 -pattern_type glob -i "{png_pattern}" -c:v mpeg4 -q:v 1 -y {mp4file}'
-    
-    logger.info(f"Generating video with command: {cmd}")
-    os.system(cmd)
+ #   cmd = f'/usr/bin/ffmpeg -framerate 15 -pattern_type glob -i "{png_pattern}" -c:v mpeg4 -q:v 1 -y {mp4file}'
+ #   
+ #   logger.info(f"Generating video with command: {cmd}")
+ #   os.system(cmd)
+    generate_video(png_pattern, mp4file)
     
     # Upload the movie to OSN
     if os.path.exists(mp4file):
