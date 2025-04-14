@@ -3,5 +3,5 @@ WORKDIR /project
 COPY pyproject.toml /project/
 
 RUN pip install .
-COPY dagster_airglow/ /project/dagster_airglow/
+COPY src/airglow/ /project/airglow/
 RUN pip install -e .

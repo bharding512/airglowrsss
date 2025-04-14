@@ -2,8 +2,8 @@
 from dagster import Definitions, EnvVar
 from dagster_ncsa import S3ResourceNCSA
 
-from dagster_airglow.assets import unzip_archive_job, unzip_chunked_archive
-from dagster_airglow.sensors import instrument_upload_sensor
+from airglow.dagster_airglow.assets import unzip_archive_job, unzip_chunked_archive
+from airglow.dagster_airglow.sensors import instrument_upload_sensor
 
 all_assets = [
     unzip_chunked_archive

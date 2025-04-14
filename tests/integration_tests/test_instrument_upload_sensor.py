@@ -1,4 +1,4 @@
-from dagster_airglow.sensors import instrument_upload_sensor
+from airglow.dagster_airglow.sensors import instrument_upload_sensor
 import dagster as dg
 
 

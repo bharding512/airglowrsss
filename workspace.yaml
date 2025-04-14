@@ -1,0 +1,5 @@
+load_from:
+  - python_file:
+      relative_path: src/airglow/dagster_airglow/definitions.py
+      working_directory: src
+

@@ -26,12 +26,12 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.dagster]
-module_name = "dagster_airglow.definitions"
-code_location_name = "dagster_airglow"
+module_name = "airglow.dagster_airglow.definitions"
+code_location_name = "src"
 
 [tool.setuptools.packages.find]
 exclude=["dagster_airglow_tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["dagster_airglow_tests"]
-norecursedirs = ["dagster_airglow_tests/integration_tests"]
+norecursedirs = ["tests/integration_tests"]

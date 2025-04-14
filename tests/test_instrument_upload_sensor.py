@@ -1,8 +1,8 @@
 from unittest.mock import MagicMock
 
-from dagster_airglow.sensors import (cloud_cover_files_for_site,
-                                     group_files_by_date,
-                                     instrument_upload_sensor)
+from airglow.dagster_airglow.sensors import (cloud_cover_files_for_site,
+                                             group_files_by_date,
+                                             instrument_upload_sensor)
 import dagster as dg
 
 
