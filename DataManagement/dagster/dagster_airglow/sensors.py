@@ -79,6 +79,7 @@ def instrument_upload_sensor(context,
 
         # After processing, there can be just the .txt file for that date
         if sensor_files and len(sensor_files) > 1:
+            context.log.info(f"Found {len(sensor_files)} files on {sensor_date}")
             tar_gz_files = {}
             complete_sites = set()
 
@@ -86,7 +87,7 @@ def instrument_upload_sensor(context,
                 filename = file.split('/')[-1]
                 site_code = filename.split('_')[1]
 
-                if filename.startswith("fpi05") and filename.endswith(".txt"):
+                if filename.startswith("fpi") and filename.endswith(".txt"):
                     # This is a log file, we can ignore it, but it signifies that all
                     # the files are uploaded for this date/site
                     complete_sites.add(site_code)
@@ -98,6 +99,7 @@ def instrument_upload_sensor(context,
                     else:
                         tar_gz_files[site_code] = [file]
 
+            context.log.info(f"Found files for {tar_gz_files.keys()}")
             for site in tar_gz_files.keys():
                 if site in complete_sites:
                     run_config = RunConfig({
