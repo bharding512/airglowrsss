@@ -71,10 +71,10 @@ def test_cloud_cover_files_for_site():
 def test_instrument_upload_sensor():
     mock_s3 = MagicMock()
     paginator = MagicMock()
-    files = ["raw/fpi05_ABC_20250409.tar.gz000000",
-             "raw/fpi05_ABC_20250409.tar.gz000001",
-             "raw/fpi05_ABC_20250409.tar.gz000002",
-             "raw/fpi05_ABC_20250409.txt",
+    files = ["raw/fpi12_ABC_20250409.tar.gz000000",
+             "raw/fpi12_ABC_20250409.tar.gz000001",
+             "raw/fpi12_ABC_20250409.tar.gz000002",
+             "raw/fpi12_ABC_20250409.txt",
              "raw/Cloud_ABC_20250409.txt",
              "raw/Cloud_ABC_20250410.txt",
              # Incomplete upload
@@ -99,8 +99,9 @@ def test_instrument_upload_sensor():
     assert run09.run_key == 'sort-20250409-ABC'
     assert run09.run_config["ops"]['unzip_chunked_archive']["config"] == {
         'observation_date': '20250409', 'site': 'ABC',
-        'file_chunks': ['raw/fpi05_ABC_20250409.tar.gz000000',
-                        'raw/fpi05_ABC_20250409.tar.gz000001',
-                        'raw/fpi05_ABC_20250409.tar.gz000002'],
-        'cloud_files': ['raw/Cloud_ABC_20250409.txt', 'raw/Cloud_ABC_20250410.txt']
+        'file_chunks': ['raw/fpi12_ABC_20250409.tar.gz000000',
+                        'raw/fpi12_ABC_20250409.tar.gz000001',
+                        'raw/fpi12_ABC_20250409.tar.gz000002'],
+        'cloud_files': ['raw/Cloud_ABC_20250409.txt', 'raw/Cloud_ABC_20250410.txt'],
+        'instrument_name': 'minime12'
     }

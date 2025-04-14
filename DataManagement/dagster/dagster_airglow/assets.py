@@ -22,6 +22,7 @@ class ChunkedArchiveConfig(dg.Config):
                               "raw/fpi05_uao_20250328.tar.gz000007",
                               "raw/fpi05_uao_20250328.tar.gz000008"]
     cloud_files: list[str] = ["raw/Cloud_uao_20250328.txt"]
+    instrument_name: str = "minime05"
 
 
 def upload_chunked_archive(data_path: str,
@@ -83,7 +84,7 @@ def unzip_chunked_archive(
 ) -> dg.Output[dict[str, list[str]]]:
     """Unzips a chunked archive"""
     year = config.observation_date[0:4]
-    data_path = f"fpi/minime05/{config.site}/{year}/{config.observation_date}/"
+    data_path = f"fpi/{config.instrument_name}/{config.site}/{year}/{config.observation_date}/"
     s3_client = s3.get_client()
     upload_chunked_archive(data_path, config, context, s3_client)
 

@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 import dagster as dg
@@ -75,8 +76,6 @@ def instrument_upload_sensor(context,
         sensor_files = files[data_date]
         sensor_date = data_date
 
-        context.log.info(f"Found {len(sensor_files)} files on {sensor_date}")
-
         # After processing, there can be just the .txt file for that date
         if sensor_files and len(sensor_files) > 1:
             context.log.info(f"Found {len(sensor_files)} files on {sensor_date}")
@@ -102,12 +101,24 @@ def instrument_upload_sensor(context,
             context.log.info(f"Found files for {tar_gz_files.keys()}")
             for site in tar_gz_files.keys():
                 if site in complete_sites:
+                    # The upload file contains the serial number of the instrument.
+                    # Use that to construct the canonical name of the instrument
+                    # Use regex to find the pattern "fpi" followed by two digits
+                    match = re.search(r'fpi(\d{2})', tar_gz_files[site][0])
+
+                    if match:
+                        instrument_name = f"minime{match.group(1)}"
+                    else:
+                        context.log.warn(f"Could not find instrument name for {tar_gz_files[site][0]}")  # NOQA E501
+                        instrument_name = "minime??"
+
                     run_config = RunConfig({
                         "unzip_chunked_archive": ChunkedArchiveConfig(
                             site=site,
                             observation_date=str(sensor_date),
                             cloud_files=cloud_cover_files_for_site(site, objects),
-                            file_chunks=tar_gz_files[site]
+                            file_chunks=tar_gz_files[site],
+                            instrument_name=instrument_name,
                         )
                         }
                     )
