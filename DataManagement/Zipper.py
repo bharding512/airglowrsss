@@ -167,16 +167,21 @@ def activeinstruments():
     code['leo']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'Z:/','email':UIemail}
 
     # DASI FPI at Lowell Observatory, Arizona starting from 12 Aug 2021
-    code['low']['fpi']['11'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
-    code['low']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/DASI03/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
-    code['low']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberryfpi.local/log.txt','email':UIemail}
-    code['low']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
+#    code['low']['fpi']['11'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
+#    code['low']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/DASI03/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
+#    code['low']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberryfpi.local/log.txt','email':UIemail}
+#    code['low']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
+    code['low']['fpi']['11'] = {'send_dir':'/home/airglow/airglow/Sending/', 'local_dir':'/home/airglow/airglow/data/', 'split':'/usr/bin/split','email':UIemail}
+    code['low']['bwc']['00'] = {'send_dir':'/home/airglow/airglow/Sending/', 'local_dir':'/home/airglow/airglow/skyalert-logger/skyalert-logs/', 'email':UIemail}
+
 
     # DASI FPI at Bear Lake Observatory, Utah starting from 19 Aug 2021
-    code['blo']['fpi']['12'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
-    code['blo']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/dasi02/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
-    code['blo']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberryfpi.local/log.txt','email':UIemail}
-    code['blo']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
+#    code['blo']['fpi']['12'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
+#    code['blo']['bwc']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/Users/dasi02/Documents/Interactiveastronomy/SkyAlert/','email':UIemail}
+#    code['blo']['x3t']['00'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/', 'url':'http://raspberryfpi.local/log.txt','email':UIemail}
+#    code['blo']['x3t']['01'] = {'send_dir':'C:/Sending/', 'local_dir':'/cygdrive/c/Scripts/Python/modules/','url':'http://homeassistant.local:8123/api/history/period','email':UIemail}
+    code['blo']['fpi']['12'] = {'send_dir':'/home/airglow/airglow/Sending/', 'local_dir':'/home/airglow/airglow/data/', 'split':'/usr/bin/split','email':UIemail}
+    code['blo']['bwc']['00'] = {'send_dir':'/home/airglow/airglow/Sending/', 'local_dir':'/home/airglow/airglow/skyalert-logger/skyalert-logs/', 'email':UIemail}
 
     # DASI FPI at Christmas Valley, Oregon starting from 18? Nov 2021
     code['cvo']['fpi']['10'] = {'send_dir':'C:/Sending/', 'local_dir':'C:/FPI_Data/', 'split':'C:/cygwin64/bin/split','email':UIemail}
