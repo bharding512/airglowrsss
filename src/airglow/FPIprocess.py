@@ -4,26 +4,26 @@
 #import matplotlib
 #matplotlib.use('AGG')
 
-import FPI
+import airglow.FPI as FPI
 import glob
 #from lmfit import Parameters
 #from optparse import OptionParser
 import datetime
 import numpy as np
 import os
-import BoltwoodSensor
-import X300Sensor
-import FPIDisplay
+import airglow.BoltwoodSensor as BoltwoodSensor
+import airglow.X300Sensor as X300Sensor
+import airglow.FPIDisplay as FPIDisplay
 import pytz
 import multiprocessing
 import subprocess
 import re
-import fpiinfo
+import airglow.fpiinfo as fpiinfo
 import matplotlib.pyplot as plt
 import traceback
 from matplotlib import dates
 import shutil
-from warning_log import WarningLog
+from airglow.warning_log import WarningLog
 from os.path import basename
 
 # For quick testing of these modules, force a reload

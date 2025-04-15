@@ -32,13 +32,13 @@ from matplotlib.font_manager import FontProperties
 import ephem
 #import logging
 # Since FPI.py is intended to be general purpose, this shouldn't be necessary:
-import fpiinfo
+import airglow.fpiinfo
 # but it's the easiest way to deal with the chain-vs-direct drive issue in Peru.
 # Is there a better way?
-import ImgImagePlugin
+import airglow.ImgImagePlugin
 import h5py
-from exceptions import *
-from warning_log import WarningLog
+from airglow.exceptions import *
+from airglow.warning_log import WarningLog
 from os.path import basename
 
 def sort_look_directions(valid_az, valid_ze, az, ze, tol):

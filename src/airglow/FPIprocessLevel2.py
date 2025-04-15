@@ -1,7 +1,7 @@
 #import pdb
 from datetime import datetime,timedelta
 import numpy as np
-import fpiinfo
+import airglow.fpiinfo
 import pytz
 import matplotlib as mpl
 import matplotlib.pyplot as plt

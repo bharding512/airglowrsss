@@ -1,6 +1,6 @@
 import glob
-import BoltwoodSensor
-import FPI
+import airglow.BoltwoodSensor as BoltwoodSensor
+import airglow.FPI as FPI
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
@@ -10,7 +10,7 @@ from matplotlib.ticker import FuncFormatter
 import datetime
 from scipy import interpolate
 import os as os
-import FPIprocessLevel2
+import airglow.FPIprocessLevel2 as FPIprocessLevel2
 
 
 from matplotlib.backends.backend_pdf import PdfPages
@@ -20,8 +20,8 @@ from pytz import timezone
 import os.path
 from calendar import Calendar, SUNDAY
 import ephem
-import fpiinfo
-import FPI
+import airglow.fpiinfo as fpiinfo
+import airglow.FPI as FPI
 
 import sys
 

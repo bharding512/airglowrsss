@@ -11,6 +11,12 @@ dependencies = [
     "boto3==1.34.131",
     "dagster-aws",
     "dagster-postgres",
+    "numpy==2.2.4",
+    "ephem==4.2",
+    "matplotlib==3.10.1",
+    "lmfit==1.1.0",
+    "mahotas==1.4.18",
+    "h5py==3.13.0"
 ]
 
 [project.optional-dependencies]
