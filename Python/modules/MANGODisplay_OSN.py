@@ -242,7 +242,7 @@ def delete_files_and_empty_dirs(file_list):
 
 def create_video_with_opencv(png_pattern, mp4file, framerate=15):
     # Get all matching PNG files and sort them
-    png_files = sorted(glob.glob(png_pattern))
+    png_files = sorted(glob(png_pattern))
     
     if not png_files:
         print(f"No PNG files found matching pattern: {png_pattern}")
@@ -272,6 +272,15 @@ def create_video_with_opencv(png_pattern, mp4file, framerate=15):
     video.release()
     print(f"Video saved to {mp4file}")
     return True
+
+# Example usage to replace your original code
+def generate_video(png_pattern, mp4file):
+    logger.info(f"Generating video from pattern: {png_pattern}")
+    result = create_video_with_opencv(png_pattern, mp4file, framerate=15)
+    if result:
+        logger.info(f"Successfully generated video: {mp4file}")
+    else:
+        logger.error(f"Failed to generate video: {mp4file}")
 
 def MakeSummaryMovies(system_parameters, analysis_parameters, cloud_storage, config, delete_working_files=True):
     """

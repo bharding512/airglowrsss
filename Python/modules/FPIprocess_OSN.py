@@ -210,10 +210,16 @@ def process_fpi_data(site, year, doy, env_file='.env'):
     created_files, instr_name = download_fpi_data(
         cloud_storage, config, site, year, datestr, target_dir, bucket_prefix_dir
     )
+
+    # Figure out the tags that are available for processing
+    for tag, kwarg_tag in [('XG_', 'XG'), ('XR_', 'XR'), ('X_', 'X')]:
+        if any(tag in Path(f).name for f in created_files):
+            logger.info(f"Processing {tag}")
+            config.fpi_process_kwargs['sky_line_tag'] = kwarg_tag
     
-    # Process the FPI data
-    logger.info(f"Processing FPI data for {instr_name} on day {doy} of {year}")
-    FPIprocess.process_instr(instr_name, year, doy, **config.fpi_process_kwargs)
+            # Process the FPI data
+            logger.info(f"Processing FPI data for {instr_name} on day {doy} of {year}")
+            FPIprocess.process_instr(instr_name, year, doy, **config.fpi_process_kwargs)
     
     # Clean up and upload results
     logger.info("Cleaning up and uploading results")
