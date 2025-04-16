@@ -32,7 +32,7 @@ from matplotlib.font_manager import FontProperties
 import ephem
 #import logging
 # Since FPI.py is intended to be general purpose, this shouldn't be necessary:
-import airglow.fpiinfo
+import airglow.fpiinfo as fpiinfo
 # but it's the easiest way to deal with the chain-vs-direct drive issue in Peru.
 # Is there a better way?
 import airglow.ImgImagePlugin
