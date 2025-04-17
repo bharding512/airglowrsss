@@ -768,7 +768,7 @@ def ParameterFit(instrument, site, laser_fns, sky_fns, sky_line_tag='X',direc_to
 
 
     if len(sky_all)==0:
-        raise Exception('No sky images specified.')
+        raise NoSkyImagesError('No sky images specified.')
 
     notify_the_humans = False
 

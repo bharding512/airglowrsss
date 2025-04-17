@@ -63,7 +63,7 @@ def cloud_cover_files_for_site(site: str, files: list[str]) -> list[str]:
 
 
 @dg.sensor(
-    job_name="unzip_archive_job",
+    job_name="analysis_job",
     minimum_interval_seconds=1 * 60 * 60,  # 1 hour
 )
 def instrument_upload_sensor(context,

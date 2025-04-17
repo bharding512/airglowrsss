@@ -19,3 +19,7 @@ class InstrumentProcessingError(ProcessingError):
 class BadDopplerReferenceError(ProcessingError):
     """Raised when a Doppler reference cannot be established"""
     pass
+
+class NoSkyImagesError(ProcessingError):
+    """Raised when no sky images are found for a given sky line tag"""
+    pass

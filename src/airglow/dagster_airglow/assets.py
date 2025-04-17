@@ -81,7 +81,7 @@ def unzip_chunked_archive(
         context: dg.AssetExecutionContext,
         config: ChunkedArchiveConfig,
         s3: S3ResourceNCSA
-) -> dg.Output[dict[str, list[str]]]:
+) -> dg.Output[dict[str, str]]:
     """Unzips a chunked archive"""
     year = config.observation_date[0:4]
     data_path = f"fpi/{config.instrument_name}/{config.site}/{year}/{config.observation_date}/"
@@ -89,6 +89,7 @@ def unzip_chunked_archive(
     upload_chunked_archive(data_path, config, context, s3_client)
 
     # Copy the cloud cover files to the archive directory in the bucket
+    cloud_cover_path = f"cloudsensor/{config.site}/{year}"
     for cloud_cover_file in config.cloud_files:
         s3_client.copy_object(
             Bucket=EnvVar("DEST_BUCKET").get_value(),
@@ -96,13 +97,16 @@ def unzip_chunked_archive(
                 "Bucket": EnvVar("DEST_BUCKET").get_value(),
                 "Key": cloud_cover_file
             },
-            Key=f"cloudsensor/{config.site}/{year}/{Path(cloud_cover_file).name}"
+            Key=f"{cloud_cover_path}/{Path(cloud_cover_file).name}"
         )
 
     return dg.Output(
         value={
-            "raw_files": config.file_chunks,
-            "cloud_data": config.cloud_files
+            "site":  config.site,
+            "year":  year,
+            "observation_date":  config.observation_date,
+            "fpi_data_path":  data_path,
+            "cloud_cover_path": cloud_cover_path
         },
         metadata={
             "observation_date": config.observation_date,

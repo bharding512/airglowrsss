@@ -7,6 +7,7 @@ from dagster import EnvVar
 from dagster_ncsa import S3ResourceNCSA
 
 from airglow import FPIprocess, fpiinfo
+from airglow.exceptions import NoSkyImagesError
 
 
 def get_instrument_info(site, year, doy):
@@ -20,26 +21,18 @@ def get_instrument_info(site, year, doy):
     # Import the site information
     site_name = fpiinfo.get_site_of(instr_name, nominal_dt)
 
-    # Import the instrument information
-    instrument = fpiinfo.get_instr_info(instr_name, nominal_dt)
-
     # Create "minime05_uao_20130729" string
     datestr = nominal_dt.strftime('%Y%m%d')
     instrsitedate = instr_name + '_' + site_name + '_' + datestr
 
     return instr_name, site_name, datestr, instrsitedate
 
-class AnalysisConfig(dg.Config):
-    site: str = "uao"
-    year: int = 2025
-    observation_date: str = "20250413"
-    fpi_data_path: str = "fpi/minime05/uao/2025/20250413"
-    cloud_cover_path: str = "cloudsensor/uao/2025"
 
 def download_fpi_data(context: dg.AssetExecutionContext,
-                      config: AnalysisConfig,
                       s3: S3ResourceNCSA,
                       site, year, datestr, target_dir,
+                      fpi_data_path,
+                      cloud_cover_path,
                       bucket_prefix_dir=''):
     """Download FPI data files from cloud storage."""
 
@@ -49,10 +42,10 @@ def download_fpi_data(context: dg.AssetExecutionContext,
     instr_name = get_instrument_info(site, year, int(datestr[-3:]))[0]
 
     # Download FPI data
-    context.log.info(f"Downloading FPI data for {config.fpi_data_path}")
+    context.log.info(f"Downloading FPI data for {fpi_data_path}")
 
     files = s3.list_files(EnvVar("DEST_BUCKET").get_value(),
-                          config.fpi_data_path, "hdf5")
+                          fpi_data_path, "hdf5")
 
     for f in files:
         relative_path = os.path.dirname(f[len(bucket_prefix_dir):])
@@ -63,9 +56,9 @@ def download_fpi_data(context: dg.AssetExecutionContext,
 
         local_file = os.path.join(target_dir, relative_file)
         s3.get_client().download_file(
-                Bucket=EnvVar("DEST_BUCKET").get_value(),
-                Key=f,
-                Filename=local_file
+            Bucket=EnvVar("DEST_BUCKET").get_value(),
+            Key=f,
+            Filename=local_file
         )
 
         created_files.append(local_file)
@@ -74,7 +67,7 @@ def download_fpi_data(context: dg.AssetExecutionContext,
     context.log.info(f"Downloading cloud sensor data for {site} on {datestr}")
     files = s3.list_files(
         EnvVar("DEST_BUCKET").get_value(),
-        config.cloud_cover_path, "txt"
+        cloud_cover_path, "txt"
     )
 
     for f in files:
@@ -87,14 +80,15 @@ def download_fpi_data(context: dg.AssetExecutionContext,
         local_file = os.path.join(target_dir, relative_file)
 
         s3.get_client().download_file(
-                Bucket=EnvVar("DEST_BUCKET").get_value(),
-                Key=f,
-                Filename=local_file
+            Bucket=EnvVar("DEST_BUCKET").get_value(),
+            Key=f,
+            Filename=local_file
         )
 
         created_files.append(local_file)
 
     return created_files, instr_name
+
 
 def upload_results(context: dg.AssetExecutionContext,
                    s3: S3ResourceNCSA,
@@ -137,24 +131,61 @@ def upload_results(context: dg.AssetExecutionContext,
 
     return uploaded_files
 
-@dg.asset
+
+@dg.asset(
+    name="analyze_data_x",
+    ins={"unzip_chunked_archive": dg.AssetIn()},
+)
+def analyze_data_x(context: dg.AssetExecutionContext,
+                   unzip_chunked_archive: dict[str, str],
+                   s3: S3ResourceNCSA) -> str:
+    return analyze_data(context, unzip_chunked_archive, "X", s3)
+
+
+@dg.asset(
+    name="analyze_data_xr",
+    ins={"unzip_chunked_archive": dg.AssetIn()},
+)
+def analyze_data_xr(context: dg.AssetExecutionContext,
+                    unzip_chunked_archive: dict[str, str],
+                    s3: S3ResourceNCSA) -> str:
+    return analyze_data(context, unzip_chunked_archive, "XR", s3)
+
+
+@dg.asset(
+    name="analyze_data_xg",
+    ins={"unzip_chunked_archive": dg.AssetIn()},
+)
+def analyze_data_xg(context: dg.AssetExecutionContext,
+                    unzip_chunked_archive: dict[str, str],
+                    s3: S3ResourceNCSA) -> str:
+    return analyze_data(context, unzip_chunked_archive, "XG", s3)
+
+
 def analyze_data(context: dg.AssetExecutionContext,
-                 config: AnalysisConfig,
+                 unzip_chunked_archive: dict[str, str],
+                 sky_line_tag: str,
                  s3: S3ResourceNCSA) -> str:
     """
     Analyze the data and return the analysis result.
     :param context: The asset execution context.
-    :param config: The data to analyze.
+    :param unzip_chunked_archive: Output from the unzip asset.
     :param s3: The S3 resource.
     :return: The analysis result.
     """
     # Perform some analysis on the data
-    date_obj = datetime.strptime(config.observation_date, "%Y%m%d")
+    observation_date = unzip_chunked_archive["observation_date"]
+    date_obj = datetime.strptime(observation_date, "%Y%m%d")
     doy = date_obj.timetuple().tm_yday
+    year = int(unzip_chunked_archive["year"])
 
     # Get date string from year and day of year
-    instr_name, site_name, datestr, instrsitedate = get_instrument_info(config.site,
-                                                                        config.year, doy)
+    instr_name, site_name, datestr, instrsitedate = \
+        get_instrument_info(
+            unzip_chunked_archive["site"],
+            year,
+            doy
+        )
 
     context.log.info("Instrument name: %s", instr_name)
     context.log.info("Site name: %s", site_name)
@@ -172,27 +203,34 @@ def analyze_data(context: dg.AssetExecutionContext,
         share_stub = os.path.join(temp_dir, 'share/')
         temp_plots_stub = os.path.join(temp_dir, 'temporary_plots/')
 
-
-
         # Make sure all directories exist
         for directory in [fpi_dir, bw_dir, x300_dir, results_stub,
                           madrigal_stub, share_stub, temp_plots_stub]:
             os.makedirs(directory, exist_ok=True)
 
         download_fpi_data(
-            context, config, s3, config.site, config.year,
-            config.observation_date, temp_dir, bucket_prefix_dir=""
+            context, s3, unzip_chunked_archive["site"], year,
+            observation_date, temp_dir,
+            unzip_chunked_archive['fpi_data_path'],
+            unzip_chunked_archive['cloud_cover_path']
         )
 
-        FPIprocess.process_instr(instr_name, config.year, doy,
-                                 sky_line_tag="XR",
-                                 fpi_dir=fpi_dir, bw_dir=bw_dir,
-                                 send_to_madrigal=True,
-                                 x300_dir=x300_dir, results_stub=results_stub,
-                                 madrigal_stub=madrigal_stub, share_stub=share_stub,
-                                 temp_plots_stub=temp_plots_stub)
+        try:
+            FPIprocess.process_instr(instr_name, year, doy,
+                                     sky_line_tag=sky_line_tag,
+                                     fpi_dir=fpi_dir, bw_dir=bw_dir,
+                                     send_to_madrigal=True,
+                                     x300_dir=x300_dir, results_stub=results_stub,
+                                     madrigal_stub=madrigal_stub, share_stub=share_stub,
+                                     temp_plots_stub=temp_plots_stub)
 
-        upload_results(context, s3, results_stub, EnvVar("RESULTS_PATH").get_value())
-        upload_results(context, s3, temp_plots_stub, EnvVar("SUMMARY_IMAGES_PATH").get_value())
-        upload_results(context, s3, madrigal_stub, EnvVar("MADRIGAL_PATH").get_value())
+            upload_results(context, s3, results_stub, EnvVar("RESULTS_PATH").get_value())
+            upload_results(context, s3, temp_plots_stub,
+                           EnvVar("SUMMARY_IMAGES_PATH").get_value())
+            upload_results(context, s3, madrigal_stub,
+                           EnvVar("MADRIGAL_PATH").get_value())
+        except NoSkyImagesError:
+            context.log.error(
+                f"No SkyImages found for {sky_line_tag} on {observation_date}")
+
     return "ok"
