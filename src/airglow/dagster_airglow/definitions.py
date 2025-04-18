@@ -1,5 +1,7 @@
 
 from dagster import Definitions, EnvVar, define_asset_job
+from dagster_mysql import MySQLResource
+
 from dagster_ncsa import S3ResourceNCSA
 
 from airglow.dagster_airglow.analysis_asset import analyze_data_xg, \
@@ -33,5 +35,11 @@ defs = Definitions(
             aws_access_key_id=EnvVar("AWS_ACCESS_KEY_ID"),
             aws_secret_access_key=EnvVar("AWS_SECRET_ACCESS_KEY"),
         ),
+        "mysql": MySQLResource(
+            host=EnvVar("MYSQL_HOST"),
+            user=EnvVar("MYSQL_USER"),
+            password=EnvVar("MYSQL_PASSWORD"),
+            database=EnvVar("MYSQL_DATABASE"),
+        )
     },
 )

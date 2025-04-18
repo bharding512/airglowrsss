@@ -3,11 +3,10 @@
 
 #import matplotlib
 #matplotlib.use('AGG')
+from dagster_mysql import MySQLResource
 
 import airglow.FPI as FPI
 import glob
-#from lmfit import Parameters
-#from optparse import OptionParser
 import datetime
 import numpy as np
 import os
@@ -251,8 +250,17 @@ def get_all_sky_images(direc,sky_line_tag='X'):
     return fns_1 + fns_2 + fns_3
 
 
+def query2(sql_cmd, params=None, mysql: MySQLResource = None):
+    with mysql.get_connection() as con:
+        cur = con.cursor()
+        cur.execute(sql_cmd, params)
+        rows = cur.fetchall()
+        return rows
 
-def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', use_npz = False,
+
+def process_instr(instr_name ,year, doy,
+                  mysql:MySQLResource,
+                  reference='laser', sky_line_tag='X', use_npz = False,
                   wind_err_thresh=100., temp_err_thresh=100., cloud_thresh = [-22.,-10.],
                   send_to_website=False, enable_share=False, send_to_madrigal=False,
                   enable_windfield_estimate=False, notify_the_humans = False,
@@ -260,8 +268,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                   x300_dir='/home/jmakela/tmp/mango/templogs/x300/', results_stub='/home/jmakela/tmp/mango/results/',
                   madrigal_stub='/home/jmakela/tmp/mango/madrigal/', share_stub='/home/jmakela/tmp/mango/share/',
                   temp_plots_stub = '/home/jmakela/tmp/mango/temporary_plots/',
-                  web_images_stub = '/home/airglowgroup/public_html/Data/SummaryImages/',
-                  web_logs_stub = '/home/airglowgroup/public_html/Data/SummaryLogs/'
+                  web_images_stub = '/home/airglowgroup/public_html/Data/SummaryImages/'
 ):
     '''
     Process all the data from the instrument with name instr_name on
@@ -972,96 +979,6 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         plt.close(fig)
 
     if send_to_website:
-        import configparser
-        import pymysql
-        pymysql.install_as_MySQLdb()
-        # Then your existing code will work:
-        import MySQLdb as mdb
-        from sshtunnel import SSHTunnelForwarder
-        import paramiko
-        from scp import SCPClient
-
-        def query(sql_cmd, params=None):
-            with SSHTunnelForwarder(
-                    ('webhost.engr.illinois.edu', 22),
-                    ssh_username='airglowgroup',
-                    ssh_private_key='/home/airglow/.ssh/id_rsa',
-                    remote_bind_address=('127.0.0.1', 3306)
-            ) as server:
-                    con = mdb.connect(host='127.0.0.1', db='airglowgroup_webdatabase', port=server.local_bind_port, read_default_file="/home/airglow/.my.cnf")
-                    cur = con.cursor()
-                    cur.execute(sql_cmd, params)
-                    rows = cur.fetchall()
-                    return rows
-
-        def query2(sql_cmd, params=None):
-            with SSHTunnelForwarder(
-                    ('airglowgroup.web.illinois.edu', 22),
-                    ssh_username='airglowgroup',
-                    ssh_private_key='/home/jmakela/.ssh/id_rsa',
-                    remote_bind_address=('127.0.0.1', 3306)
-            ) as server:
-                    con = mdb.connect(host='127.0.0.1', db='airglowgroup_webdatabase', port=server.local_bind_port, read_default_file="/home/jmakela/.my2.cnf")
-                    cur = con.cursor()
-                    cur.execute(sql_cmd,params)
-                    rows = cur.fetchall()
-                    return rows
-
-        def transfer_files_to_server(local_file_path, remote_directory):
-            """
-            Transfer files from local machine to remote server using SCP
-            
-            Parameters:
-            -----------
-            local_file_path : str
-                Full path to the local file to be transferred
-            remote_directory : str
-                Remote directory path where file should be placed
-            """
-            # SSH connection details
-            hostname = 'airglowgroup.web.illinois.edu'
-            username = 'airglowgroup'
-            ssh_key_path = '/home/jmakela/.ssh/id_rsa'
-            
-            try:
-                # Create SSH client
-                ssh = paramiko.SSHClient()
-                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-                
-                # Connect using key-based authentication
-                ssh.connect(
-                    hostname=hostname,
-                    username=username,
-                    key_filename=ssh_key_path
-                )
-                
-                # Create SCP client
-                with SCPClient(ssh.get_transport()) as scp:
-                    # Get just the filename from the path
-                    filename = os.path.basename(local_file_path)
-                    
-                    # Ensure remote directory exists
-                    ssh.exec_command(f'mkdir -p {remote_directory}')
-                    
-                    # Transfer the file
-                    scp.put(local_file_path, remote_directory + '/' + filename)
-
-                    if not logfile.closed:
-                        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + f"Successfully transferred {filename} to {remote_directory}")
-                    
-            except Exception as e:
-                if not logfile.closed:
-                    logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + f"Error during file transfer: {str(e)}")
-                notify_the_humans = True
-                warning_log.add(message="Error sending %s to airglow server for displaying on website." % basename(fn),
-                                title='Cannot send to webserver',
-                                label='warning:webserver')
-            
-            finally:
-                # Close connection
-                if ssh:
-                    ssh.close()
-
         site_id = site['sql_id']
         utc = pytz.utc # Define timezones
 
@@ -1077,9 +994,6 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         startut = d0.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
         stoput = dn.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
 
-        # NEW DATABASE
-        # Open the database (see http://zetcode.com/databases/mysqlpythontutorial/ for help)
-        # Read the user and password from a file.
 
         # Send summary images to server
         for fn, db_id in zip(summary_fns, db_ids):
@@ -1093,7 +1007,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             params = (db_image_stub + fn, )
 
             # Call the query function and capture the result
-            rows = query2(sql_cmd, params)
+            rows = query2(sql_cmd, params, mysql)
 
             # The log filename
             log_fn = db_log_stub + instrsitedate + '_log.log'
@@ -1101,12 +1015,12 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                 sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%s, %s, %s, %s, %s, %s)'
                 params = (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
                 logfile.write(sql_cmd + ' ' + str(params) + '\n')
-                query2(sql_cmd, params)
+                query2(sql_cmd, params, mysql)
             else: # Entry exists. Update it.
                 sql_cmd = 'UPDATE DataSet SET SummaryImage=%s, LogFile=%s WHERE id = %s'
                 params = (db_image_stub + fn, log_fn, rows[0][0])
                 logfile.write(sql_cmd + ' ' + str(params) + '\n')
-                query2(sql_cmd, params)
+                query2(sql_cmd, params, mysql)
 
         # Send level 3 windfield gif to website, if we made one
         if gif_fn is not None:
@@ -1133,7 +1047,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             # Register the gif. First find out if the entry is in there (i.e., we are just updating it)
             sql_cmd = 'SELECT id FROM DataSet WHERE Site = %s and Instrument = %s and StartUTTime = %s'
             params = (network_id, gif_id, startut)
-            rows = query2(sql_cmd, params)
+            rows = query2(sql_cmd, params, mysql)
 
             if len(rows) == 0: # Create the entry
                 sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage) VALUES(%s, %s, %s, %s, %s)'
@@ -1143,13 +1057,13 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                 logfile.write(sql_cmd + ' ' + str(params) + '\n')
 
                 # Execute the query
-                query2(sql_cmd, params)
+                query2(sql_cmd, params, mysql)
             else: # Entry exists. Update it.
                 sql_cmd = 'UPDATE DataSet SET SummaryImage = %s WHERE Site = %s and Instrument = %s and StartUTTime = %s'
                 params = (db_image_stub + gif_fn.split('/')[-1], network_id, gif_id, startut)
 
                 # Execute the query
-                query2(sql_cmd, params)
+                query2(sql_cmd, params, mysql)
 
     logfile.close()
 
@@ -1179,8 +1093,6 @@ def process_site(site_name, year, doy, reference='laser'):
     for instr_name in instr_names:
         print('Starting (%s, %s, %s, %s, reference=%s)' % (instr_name, site_name, year, doy, reference))
         process_instr(instr_name, year, doy, reference)
-
-
 
 
 

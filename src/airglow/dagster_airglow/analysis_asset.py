@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 import dagster as dg
 from dagster import EnvVar
 from dagster_ncsa import S3ResourceNCSA
+from dagster_mysql import MySQLResource
+
 
 from airglow import FPIprocess, fpiinfo
 from airglow.exceptions import NoSkyImagesError
@@ -138,8 +140,9 @@ def upload_results(context: dg.AssetExecutionContext,
 )
 def analyze_data_x(context: dg.AssetExecutionContext,
                    unzip_chunked_archive: dict[str, str],
-                   s3: S3ResourceNCSA) -> str:
-    return analyze_data(context, unzip_chunked_archive, "X", s3)
+                   s3: S3ResourceNCSA,
+                   mysql: MySQLResource) -> str:
+    return analyze_data(context, unzip_chunked_archive, "X", s3, mysql)
 
 
 @dg.asset(
@@ -148,8 +151,9 @@ def analyze_data_x(context: dg.AssetExecutionContext,
 )
 def analyze_data_xr(context: dg.AssetExecutionContext,
                     unzip_chunked_archive: dict[str, str],
-                    s3: S3ResourceNCSA) -> str:
-    return analyze_data(context, unzip_chunked_archive, "XR", s3)
+                    s3: S3ResourceNCSA,
+                    mysql: MySQLResource) -> str:
+    return analyze_data(context, unzip_chunked_archive, "XR", s3, mysql)
 
 
 @dg.asset(
@@ -158,14 +162,16 @@ def analyze_data_xr(context: dg.AssetExecutionContext,
 )
 def analyze_data_xg(context: dg.AssetExecutionContext,
                     unzip_chunked_archive: dict[str, str],
-                    s3: S3ResourceNCSA) -> str:
-    return analyze_data(context, unzip_chunked_archive, "XG", s3)
+                    s3: S3ResourceNCSA,
+                    mysql: MySQLResource) -> str:
+    return analyze_data(context, unzip_chunked_archive, "XG", s3, mysql)
 
 
 def analyze_data(context: dg.AssetExecutionContext,
                  unzip_chunked_archive: dict[str, str],
                  sky_line_tag: str,
-                 s3: S3ResourceNCSA) -> str:
+                 s3: S3ResourceNCSA,
+                 mysql: MySQLResource) -> str:
     """
     Analyze the data and return the analysis result.
     :param context: The asset execution context.
@@ -217,9 +223,11 @@ def analyze_data(context: dg.AssetExecutionContext,
 
         try:
             FPIprocess.process_instr(instr_name, year, doy,
+                                     mysql=mysql,
                                      sky_line_tag=sky_line_tag,
                                      fpi_dir=fpi_dir, bw_dir=bw_dir,
                                      send_to_madrigal=True,
+                                     send_to_website=True,
                                      x300_dir=x300_dir, results_stub=results_stub,
                                      madrigal_stub=madrigal_stub, share_stub=share_stub,
                                      temp_plots_stub=temp_plots_stub)
