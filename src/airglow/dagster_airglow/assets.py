@@ -23,6 +23,7 @@ class ChunkedArchiveConfig(dg.Config):
                               "raw/fpi05_uao_20250328.tar.gz000008"]
     cloud_files: list[str] = ["raw/Cloud_uao_20250328.txt"]
     instrument_name: str = "minime05"
+    instrument_log_file: str = "raw/minime05_uao_20250328.log"
 
 
 def upload_chunked_archive(data_path: str,
@@ -81,7 +82,7 @@ def unzip_chunked_archive(
         context: dg.AssetExecutionContext,
         config: ChunkedArchiveConfig,
         s3: S3ResourceNCSA
-) -> dg.Output[dict[str, str]]:
+) -> dg.Output:
     """Unzips a chunked archive"""
     year = config.observation_date[0:4]
     data_path = f"fpi/{config.instrument_name}/{config.site}/{year}/{config.observation_date}/"
@@ -106,7 +107,10 @@ def unzip_chunked_archive(
             "year":  year,
             "observation_date":  config.observation_date,
             "fpi_data_path":  data_path,
-            "cloud_cover_path": cloud_cover_path
+            "cloud_cover_path": cloud_cover_path,
+            "raw_files": config.file_chunks,
+            "cloud_cover_files": config.cloud_files,
+            "instrument_log_file": config.instrument_log_file,
         },
         metadata={
             "observation_date": config.observation_date,

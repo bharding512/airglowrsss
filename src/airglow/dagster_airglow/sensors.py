@@ -80,7 +80,7 @@ def instrument_upload_sensor(context,
         if sensor_files and len(sensor_files) > 1:
             context.log.info(f"Found {len(sensor_files)} files on {sensor_date}")
             tar_gz_files = {}
-            complete_sites = set()
+            complete_sites = {}
 
             for file in sensor_files:
                 filename = file.split('/')[-1]
@@ -89,7 +89,7 @@ def instrument_upload_sensor(context,
                 if filename.startswith("fpi") and filename.endswith(".txt"):
                     # This is a log file, we can ignore it, but it signifies that all
                     # the files are uploaded for this date/site
-                    complete_sites.add(site_code)
+                    complete_sites[site_code] = file
                     continue
 
                 if "tar.gz" in file:
@@ -119,6 +119,7 @@ def instrument_upload_sensor(context,
                             cloud_files=cloud_cover_files_for_site(site, objects),
                             file_chunks=tar_gz_files[site],
                             instrument_name=instrument_name,
+                            instrument_log_file=complete_sites[site],
                         )
                         }
                     )

@@ -1,6 +1,7 @@
 import os
 import tempfile
 from datetime import datetime, timedelta
+from typing import Any
 
 import dagster as dg
 from dagster import EnvVar
@@ -136,10 +137,10 @@ def upload_results(context: dg.AssetExecutionContext,
 
 @dg.asset(
     name="analyze_data_x",
-    ins={"unzip_chunked_archive": dg.AssetIn()},
+    ins={"unzip_chunked_archive": dg.AssetIn(dagster_type=dict[str, Any])},
 )
 def analyze_data_x(context: dg.AssetExecutionContext,
-                   unzip_chunked_archive: dict[str, str],
+                   unzip_chunked_archive: dict[str, Any],
                    s3: S3ResourceNCSA,
                    mysql: MySQLResource) -> str:
     return analyze_data(context, unzip_chunked_archive, "X", s3, mysql)
@@ -147,10 +148,10 @@ def analyze_data_x(context: dg.AssetExecutionContext,
 
 @dg.asset(
     name="analyze_data_xr",
-    ins={"unzip_chunked_archive": dg.AssetIn()},
+    ins={"unzip_chunked_archive": dg.AssetIn(dagster_type=dict[str, Any])},
 )
 def analyze_data_xr(context: dg.AssetExecutionContext,
-                    unzip_chunked_archive: dict[str, str],
+                    unzip_chunked_archive: dict[str, Any],
                     s3: S3ResourceNCSA,
                     mysql: MySQLResource) -> str:
     return analyze_data(context, unzip_chunked_archive, "XR", s3, mysql)
@@ -158,17 +159,17 @@ def analyze_data_xr(context: dg.AssetExecutionContext,
 
 @dg.asset(
     name="analyze_data_xg",
-    ins={"unzip_chunked_archive": dg.AssetIn()},
+    ins={"unzip_chunked_archive": dg.AssetIn(dagster_type=dict[str, Any])},
 )
 def analyze_data_xg(context: dg.AssetExecutionContext,
-                    unzip_chunked_archive: dict[str, str],
+                    unzip_chunked_archive: dict[str, Any],
                     s3: S3ResourceNCSA,
                     mysql: MySQLResource) -> str:
     return analyze_data(context, unzip_chunked_archive, "XG", s3, mysql)
 
 
 def analyze_data(context: dg.AssetExecutionContext,
-                 unzip_chunked_archive: dict[str, str],
+                 unzip_chunked_archive: dict[str, any],
                  sky_line_tag: str,
                  s3: S3ResourceNCSA,
                  mysql: MySQLResource) -> str:

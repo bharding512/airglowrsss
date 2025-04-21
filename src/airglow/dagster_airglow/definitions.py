@@ -6,7 +6,8 @@ from dagster_ncsa import S3ResourceNCSA
 
 from airglow.dagster_airglow.analysis_asset import analyze_data_xg, \
     analyze_data_xr, analyze_data_x
-from airglow.dagster_airglow.assets import unzip_archive_job, unzip_chunked_archive
+from airglow.dagster_airglow.delete_raw import delete_raw
+from airglow.dagster_airglow.assets import unzip_chunked_archive
 from airglow.dagster_airglow.sensors import instrument_upload_sensor
 
 all_assets = [
@@ -14,6 +15,7 @@ all_assets = [
     analyze_data_xg,
     analyze_data_xr,
     analyze_data_x,
+    delete_raw
 ]
 
 analysis_job = define_asset_job(
@@ -23,11 +25,12 @@ analysis_job = define_asset_job(
         "analyze_data_xg",
         "analyze_data_xr",
         "analyze_data_x",
+        "delete_raw",
     ],
 )
 defs = Definitions(
     assets=all_assets,
-    jobs=[unzip_archive_job, analysis_job],
+    jobs=[analysis_job],
     sensors=[instrument_upload_sensor],
     resources={
         "s3": S3ResourceNCSA(
