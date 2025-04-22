@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import dagster as dg
+
 from dagster import EnvVar
 from dagster_ncsa import S3ResourceNCSA
 from dagster_mysql import MySQLResource
@@ -48,7 +49,7 @@ def download_fpi_data(context: dg.AssetExecutionContext,
     context.log.info(f"Downloading FPI data for {fpi_data_path}")
 
     files = s3.list_files(EnvVar("DEST_BUCKET").get_value(),
-                          fpi_data_path, "hdf5")
+                          fpi_data_path, "")
 
     for f in files:
         relative_path = os.path.dirname(f[len(bucket_prefix_dir):])

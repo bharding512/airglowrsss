@@ -9,9 +9,9 @@ def test_analysis(s3_resource):
     )
     analyze_data(context,
        {
-            "observation_date": "20250416",
+            "observation_date": "20250420",
             "year": "2025",
-            "site": "blo",
-            "fpi_data_path": "fpi/minime12/blo/2025/20250416",
-            "cloud_cover_path": "cloudsensor/blo/2025"},
-                 sky_line_tag="XR", s3=s3_resource)
+            "site": "mor",
+            "fpi_data_path": "fpi/minime03/mor/2025/20250420",
+            "cloud_cover_path": "cloudsensor/mor"},
+                 sky_line_tag="X", s3=s3_resource, mysql=None)

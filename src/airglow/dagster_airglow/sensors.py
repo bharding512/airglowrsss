@@ -125,7 +125,12 @@ def instrument_upload_sensor(context,
                     )
                     yield dg.RunRequest(
                         run_key=f"sort-{sensor_date}-{site}",
-                        run_config=run_config
+                        run_config=run_config,
+                        tags={
+                            "site": site,
+                            "instrument_name": instrument_name,
+                            "observation_date": str(sensor_date),
+                        }
                     )
                 else:
                     context.log.info(f"Incomplete upload for {site} on {sensor_date} - will pick them up next time")  # NOQA E501
