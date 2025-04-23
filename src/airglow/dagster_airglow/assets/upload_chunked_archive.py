@@ -29,7 +29,7 @@ class ChunkedArchiveConfig(dg.Config):
 def upload_chunked_archive(data_path: str,
                            config: ChunkedArchiveConfig,
                            context: dg.AssetExecutionContext,
-                           s3: S3FakeSession):
+                           s3: S3FakeSession) -> int:
     """
     Uploads a chunked archive to the destination bucket. This accepts a list
     of tar.gz chunks, downloads them to a temp directory, combines them into a
@@ -67,6 +67,7 @@ def upload_chunked_archive(data_path: str,
             tar.extractall(path=out_dir)
 
         # Upload the unzipped files to the destination bucket
+        uploaded_files = 0
         for root, dirs, files in os.walk(out_dir):
             for file in files:
                 context.log.info(f"upload {file}")
@@ -75,6 +76,8 @@ def upload_chunked_archive(data_path: str,
                     Bucket=EnvVar("DEST_BUCKET").get_value(),
                     Key=f"{data_path}{file}",
                 )
+            uploaded_files = len(files)
+    return uploaded_files
 
 
 @dg.asset
@@ -87,7 +90,7 @@ def unzip_chunked_archive(
     year = config.observation_date[0:4]
     data_path = f"fpi/{config.instrument_name}/{config.site}/{year}/{config.observation_date}/"
     s3_client = s3.get_client()
-    upload_chunked_archive(data_path, config, context, s3_client)
+    uploaded_files = upload_chunked_archive(data_path, config, context, s3_client)
 
     # Copy the cloud cover files to the archive directory in the bucket
     cloud_cover_path = f"cloudsensor/{config.site}/{year}"
@@ -114,7 +117,9 @@ def unzip_chunked_archive(
         },
         metadata={
             "observation_date": config.observation_date,
-            "site": config.site
+            "site": config.site,
+            "dataset_files": uploaded_files,
+            "cloud_cover_files": len(config.cloud_files),
         }
     )
 

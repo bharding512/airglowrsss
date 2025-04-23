@@ -6,7 +6,7 @@ from botocore.exceptions import ClientError
 from dagster import EnvVar, RunConfig
 from dagster_ncsa import S3ResourceNCSA
 
-from airglow.dagster_airglow.assets import ChunkedArchiveConfig
+from airglow.dagster_airglow.assets.upload_chunked_archive import ChunkedArchiveConfig
 
 
 def list_files(bucket: str, prefix: str, s3_client) -> list[str]:
