@@ -40,5 +40,4 @@ code_location_name = "src"
 exclude=["dagster_airglow_tests"]
 
 [tool.pytest.ini_options]
-testpaths = ["dagster_airglow_tests"]
-norecursedirs = ["tests/integration_tests"]
+testpaths = ["tests"]

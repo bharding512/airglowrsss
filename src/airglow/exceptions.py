@@ -23,3 +23,7 @@ class BadDopplerReferenceError(ProcessingError):
 class NoSkyImagesError(ProcessingError):
     """Raised when no sky images are found for a given sky line tag"""
     pass
+
+class NoLaserImagesError(ProcessingError):
+    """Raised when no laser images are found for a given laser line tag"""
+    pass

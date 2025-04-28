@@ -11,7 +11,7 @@ from dagster_mysql import MySQLResource
 
 
 from airglow import FPIprocess, fpiinfo
-from airglow.exceptions import NoSkyImagesError
+from airglow.exceptions import NoLaserImagesError, NoSkyImagesError
 
 
 def get_instrument_info(site, year, doy):
@@ -35,9 +35,10 @@ def get_instrument_info(site, year, doy):
 def download_fpi_data(context: dg.AssetExecutionContext,
                       s3: S3ResourceNCSA,
                       site, year, datestr, target_dir,
-                      fpi_data_path,
-                      cloud_cover_path,
-                      bucket_prefix_dir=''):
+                      sky_line_tag: str,
+                      fpi_data_path: str,
+                      cloud_cover_path: str,
+                      bucket_prefix_dir:str = ''):
     """Download FPI data files from cloud storage."""
 
     created_files = []
@@ -52,6 +53,9 @@ def download_fpi_data(context: dg.AssetExecutionContext,
                           fpi_data_path, "")
 
     for f in files:
+        if f"_{sky_line_tag}_" not in os.path.basename(f):
+            continue
+
         relative_path = os.path.dirname(f[len(bucket_prefix_dir):])
         relative_file = f[len(bucket_prefix_dir):]
 
@@ -217,10 +221,15 @@ def analyze_data(context: dg.AssetExecutionContext,
             os.makedirs(directory, exist_ok=True)
 
         download_fpi_data(
-            context, s3, unzip_chunked_archive["site"], year,
-            observation_date, temp_dir,
-            unzip_chunked_archive['fpi_data_path'],
-            unzip_chunked_archive['cloud_cover_path']
+            context=context, 
+            s3=s3, 
+            site=unzip_chunked_archive["site"], 
+            year=year,
+            sky_line_tag=sky_line_tag,
+            datestr=observation_date, 
+            target_dir=temp_dir,
+            fpi_data_path=unzip_chunked_archive['fpi_data_path'],
+            cloud_cover_path=unzip_chunked_archive['cloud_cover_path']
         )
 
         try:
@@ -242,5 +251,8 @@ def analyze_data(context: dg.AssetExecutionContext,
         except NoSkyImagesError:
             context.log.error(
                 f"No SkyImages found for {sky_line_tag} on {observation_date}")
+        except NoLaserImagesError:
+            context.log.error(
+                f"No LaserImages found for {sky_line_tag} on {observation_date}")
 
     return "ok"

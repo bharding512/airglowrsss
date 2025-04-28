@@ -17,6 +17,7 @@ import pytz
 import multiprocessing
 import subprocess
 import re
+from airglow.exceptions import NoLaserImagesError
 import airglow.fpiinfo as fpiinfo
 import matplotlib.pyplot as plt
 import traceback
@@ -429,7 +430,7 @@ def process_instr(instr_name ,year, doy,
     #sky_fns = [sky_fns[20],sky_fns[78],sky_fns[119]]
 
     if not laser_fns and not sky_fns and not use_npz:
-        raise Exception('No %s data found between %s and %s. \n' % (instr_name, str(start_dt), str(stop_dt)))
+        raise NoLaserImagesError('No %s data found between %s and %s. \n' % (instr_name, str(start_dt), str(stop_dt)))
 
     datestr = nominal_dt.strftime('%Y%m%d')
 

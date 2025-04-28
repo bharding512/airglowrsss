@@ -1,6 +1,6 @@
 from dagster import build_asset_context
 
-from airglow.dagster_airglow.analysis_asset import analyze_data
+from airglow.dagster_airglow.assets.analysis_asset import analyze_data
 
 
 def test_analysis(s3_resource):
@@ -14,4 +14,4 @@ def test_analysis(s3_resource):
             "site": "mor",
             "fpi_data_path": "fpi/minime03/mor/2025/20250420",
             "cloud_cover_path": "cloudsensor/mor"},
-                 sky_line_tag="X", s3=s3_resource, mysql=None)
+                 sky_line_tag="XR", s3=s3_resource, mysql=None)
