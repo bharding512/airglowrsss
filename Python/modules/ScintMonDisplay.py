@@ -17,7 +17,7 @@ def PlotDay(sum_file, el_mask = 20.):
         el[:,prn] = e
         
     data = np.ma.array(s4,mask=(el<el_mask) | (np.isnan(s4)))
-    print el_mask    
+    print(el_mask)
 
     s4_fig = plt.figure()
     s4_graph = s4_fig.add_subplot(111)

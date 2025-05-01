@@ -259,7 +259,7 @@ def calculate_pixel_1356_nighttime(ze,az,satlat,satlon,satalt,dn,cont=1,Ne_scali
     elif cont ==2:
         Rayleigh = IRR # This is needed only when we need RR
     else:
-        print 'Invalid Choice of contribution. 1 for RR+MN or 2 for RR'
+        print('Invalid Choice of contribution. 1 for RR+MN or 2 for RR')
         return 0,0
 
     return Rayleigh
@@ -350,7 +350,7 @@ def calculate_pixel_1356_nighttime_WGS84(ze,az,satlat,satlon,satalt,dn,symmetry 
     elif cont ==2:
         Rayleigh = IRR # This is needed only when we need RR
     else:
-        print 'Invalid Choice of contribution. 1 for RR+MN or 2 for RR'
+        print('Invalid Choice of contribution. 1 for RR+MN or 2 for RR')
         return 0,0
     return Rayleigh
 
@@ -515,15 +515,15 @@ def get_Photons_from_Brightness_Profile_1356_nighttime(ze,az,satlat,satlon,satal
             pool.terminate()
 
         #print "You cancelled the program!"
-        print type(inst)
-        print inst
+        print(type(inst))
+        print(inst)
         exit(1)
 
     except Exception:
 
-        print "Something Happened :("
-        print type(inst)
-        print inst
+        print("Something Happened :(")
+        print(type(inst))
+        print(inst)
         exit(1)
 
     return Rayl,photons
@@ -573,7 +573,7 @@ def add_noise_to_photon_and_brightness(photons,exposure=0., TE=0., stripes_used 
             '''
             if photons[i]==0:
                 shot_noise[rep,i]
-                print 'add_noise_to_photon_and_brighntess: zero value in signal'
+                print('add_noise_to_photon_and_brighntess: zero value in signal')
             else:
                 #shot_noise[rep,i] = stats.poisson.rvs(photons[i],1)
                 shot_noise[rep,i] = stats.poisson.rvs(photons[i])
@@ -776,9 +776,9 @@ def run_forward_modelling(satlatlonalt,date,ze=0.,az=0.,symmetry = 0.,shperical=
 
 
     except Exception:
-        print "Something Happened :("
-        print type(inst)
-        print inst
+        print("Something Happened :(")
+        print(type(inst))
+        print(inst)
         exit(1)
     return NE,Bright,Bright_n,h,rbot,O,VER_true,h_loc,h_loc_bot,Sigma
 

@@ -255,9 +255,13 @@ def get_all_sky_images(direc,sky_line_tag='X'):
 def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', use_npz = False,
                   wind_err_thresh=100., temp_err_thresh=100., cloud_thresh = [-22.,-10.],
                   send_to_website=False, enable_share=False, send_to_madrigal=False,
-                  enable_windfield_estimate=False,
-                  fpi_dir='/rdata/airglow/fpi/', bw_dir='/rdata/airglow/templogs/cloudsensor/',
-                  x300_dir='/rdata/airglow/templogs/x300/', results_stub='/rdata/airglow/fpi/results/',
+                  enable_windfield_estimate=False, notify_the_humans = False,
+                  fpi_dir='/home/jmakela/tmp/mango/fpi/', bw_dir='/home/jmakela/tmp/mango/templogs/cloudsensor/',
+                  x300_dir='/home/jmakela/tmp/mango/templogs/x300/', results_stub='/home/jmakela/tmp/mango/results/',
+                  madrigal_stub='/home/jmakela/tmp/mango/madrigal/', share_stub='/home/jmakela/tmp/mango/share/',
+                  temp_plots_stub = '/home/jmakela/tmp/mango/temporary_plots/',
+                  web_images_stub = '/home/airglowgroup/public_html/Data/SummaryImages/',
+                  web_logs_stub = '/home/airglowgroup/public_html/Data/SummaryLogs/'
 ):
     '''
     Process all the data from the instrument with name instr_name on
@@ -302,7 +306,11 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                        Set this to empty string ('') if no sensor exists
         results_stub - str. the directory where the results will be saved. A .npz file
                        and a .log file will be created.
-        sky_line_tag = str. tag used to search for specific source files i.e. X for red line images, XG for green, etc
+        sky_line_tag - str. tag used to search for specific source files i.e. X for red line images, XG for green, etc
+        madrigal_stub - str. the directory where reduced ascii txt and png files areh saved for Madrigal. Only use if
+                        sent_to_marigal is True.
+        share_stub - str. the directory where npz files are copied to share with collaboratory. Only used if enable_share 
+                        is True.
 
     OUTPUTS:
         warnings - str - If this script believes a manual check of the data
@@ -320,26 +328,26 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
     ccd_temp_thresh = -60. # sky exposures with a CCD temp above this will get a quality flag.
 
     # Information about sending data to the website. Only used if send_to_website==True.
-    temp_plots_stub= '/rdata/airglow/fpi/results/temporary_plots/' #where to save png files
+#    temp_plots_stub= 'temporary_plots/' #where to save png files # was results_stub + 'temporary_plots/'
+    # Create the directory if it doesn't exist
+    if not os.path.exists(temp_plots_stub):
+        os.makedirs(temp_plots_stub)
+
+    if not os.path.exists(madrigal_stub):
+        os.makedirs(madrigal_stub)
+
+    # Information for sending results for the webserver
+    # NOTE: THIS NEEDS TO BE UPDATED TO SENDING TO OSN
     scp_user       = 'airglowgroup@webhost.engr.illinois.edu'
     db_image_stub  =        'SummaryImages/' # relative path from web server directory on airglow
     db_log_stub =           'SummaryLogs/'
-#    web_images_stub =       '/home/airglowgroup/data/SummaryImages/' # absolute location on airglow of summary images
-#    web_logs_stub =         '/home/airglowgroup/data/SummaryLogs/' # absolute location on airglow of summary logs
-    web_images_stub =       '/home/airglow/public_html/Data/SummaryImages/' # absolute location on airglow of summary images
-    web_logs_stub =         '/home/airglow/public_html/Data/SummaryLogs/' # absolute location on airglow of summary logs
-    # Information about sending to Madrigal. Only used if send_to_madrigal==True
-    madrigal_stub =         '/rdata/airglow/database/' # where reduced ascii txt and png files are saved for Madrigal
-    # Information about sending to partner institutions. Only used if enable_share==True
-    share_stub    =         '/rdata/airglow/share/' # where to save a copy of the .npz file for sharing with collaborators
-
-    notify_the_humans = False # default
 
     nominal_dt = datetime.datetime(year,1,1) + datetime.timedelta(days = doy-1)
 
     # Import the site information
     site_name = fpiinfo.get_site_of(instr_name, nominal_dt)
     site = fpiinfo.get_site_info(site_name, nominal_dt)
+    
     # Import the instrument information
     instrument = fpiinfo.get_instr_info(instr_name, nominal_dt)
 
@@ -353,7 +361,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
 
     # Construct the directories to the relevant data products
     data_stub      = fpi_dir + instr_name + '/' + site_name + '/'
-    bw_dir_stub    = bw_dir + site_name + '/'
+    bw_dir_stub    = bw_dir + site_name + '/' + str(year) + '/'
     bw_name_stub   = 'Cloud_' + site_name + '_'
     x300_dir_stub  = x300_dir + site_name + '/'
     x300_name_stub = 'TempL_' + site_name + '_'
@@ -378,13 +386,17 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
     if not use_npz:
         for day_offset in [-1, 0, 1]: # search folders around the day of interest
             dir_dt = nominal_dt + datetime.timedelta(days = day_offset)
+            
             # Create the YYYYMMDD date format
             yearstr = dir_dt.strftime('%Y')
             datestr = dir_dt.strftime('%Y%m%d')
+            
             # Create the directory name for the data to be processed
             data_dir = data_stub + yearstr + '/' + datestr + '/'
+            
             # Look in the data directory, and grab the files if they were
             # taken between the start and stop times.
+            
             # First, lasers:
             fns_all = get_all_laser_images(data_dir)
             for fn in fns_all:
@@ -392,6 +404,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                 dtime = local.localize(d.info['LocalTime'])
                 if dtime > start_dt and dtime < stop_dt:
                     laser_fns.append(fn)
+            
             # Second, sky:
             fns_all = get_all_sky_images(data_dir,sky_line_tag=sky_line_tag)
 
@@ -402,6 +415,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                     sky_fns.append(fn)
         laser_fns.sort()
         sky_fns.sort()
+        
     # Uncomment these for rapid testing of new code
     # laser_fns = laser_fns[::6]
     # sky_fns   = sky_fns[::10]
@@ -412,8 +426,12 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
 
     datestr = nominal_dt.strftime('%Y%m%d')
 
-    # Open a logfile
+    # Open a logfile, creating the directory if it doesn't exist
     logname = results_stub + instrsitedate + '.log'
+    log_directory = os.path.dirname(logname)
+    if not os.path.exists(log_directory):
+        os.makedirs(log_directory)
+    
     if use_npz: # append to the previous log file
         logfile = open(logname,'a') # overwrite previous log
         logfile.write('\n' + datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Rerunning processing to obtain new cloud and temperature data, and updating plots.\n')
@@ -474,13 +492,6 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
     # Do any necessary manual corrections, as per the quality_hack function
     FPI_Results = quality_hack(instr_name, year, doy, FPI_Results, logfile)
 
-
-#    # Grab the SVN revision number, so we know what code was used to process this day.
-#    svndir = '/'.join(FPI.__file__.split('/')[:-1]) # get the directory of FPI.py
-#    p = subprocess.Popen('svnversion %s'%svndir,shell=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-#    (stdout,stderr) = p.communicate()
-#    sv = re.split(':|\n', stdout)[0]
-
     # Save the SVN version number
     sv = "NONE"
     FPI_Results['SVNRevision'] = sv
@@ -498,6 +509,8 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
     try:
         # call modules from BoltWood for the two days required and combine the data
         if (FPI_Results['sky_times'][0].strftime("%Y%m%d") == FPI_Results['sky_times'][-1].strftime("%Y%m%d")):
+            # DEBUG
+            print(bw_dir_stub + bw_name_stub + FPI_Results['sky_times'][0].strftime("%Y%m%d") + ".txt")
             bw_date, bw_sky, bw_amb = BoltwoodSensor.ReadTempLog(
                     bw_dir_stub + bw_name_stub + FPI_Results['sky_times'][0].strftime("%Y%m%d") + ".txt",
                     tz=site['Timezone']
@@ -515,6 +528,9 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                     tz=site['Timezone']
                     )
         else:
+            # DEBUG
+            print(bw_dir_stub + bw_name_stub + FPI_Results['sky_times'][0].strftime("%Y%m%d") + ".txt")
+            print(bw_dir_stub + bw_name_stub + FPI_Results['sky_times'][-1].strftime("%Y%m%d") + ".txt")
             bw_date1, bw_sky1, bw_amb1 = BoltwoodSensor.ReadTempLog(
                     bw_dir_stub + bw_name_stub + FPI_Results['sky_times'][0].strftime("%Y%m%d") + ".txt",
                     tz=site['Timezone']
@@ -779,26 +795,21 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
     FPI_Results['wind_quality_flag'] = wind_quality_flag
     FPI_Results['temp_quality_flag'] = temp_quality_flag
 
-
-
     # Save the results
     # this transition is temporal. Deals with cloud filesystem. It will be erased in the future.
-    import os
-    tempnpzname="/home/airglow/rdata/airglow/fpi/results/"+os.path.basename(npzname)
+    tempnpzname=results_stub + os.path.basename(npzname)
     np.savez(tempnpzname, FPI_Results=FPI_Results, site=site, instrument=instrument)
-    try:
-        os.system("mv %s %s"%( tempnpzname,os.path.dirname(npzname) ) )
-    except Exception as e:
-        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'IOError: using local filesystem.\n')
-        npzname=tempnpzname
-        e.warning_log = warning_log
 
     logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Results saved to %s\n' % npzname)
-    if enable_share and site['share']: # save a copy of the npz file in a separate folder
+
+    # save a copy of the npz file in a separate folder
+    if enable_share and site['share']: 
         npznameshare = share_stub + site_name + '/' + instrsitedate + '.npz'
         np.savez(npznameshare, FPI_Results=FPI_Results, site=site, instrument=instrument)
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Results also saved to %s\n' % npznameshare)
-    if send_to_madrigal and instrument['send_to_madrigal']: # save the summary ASCII file to send to the Madrigal database
+
+    # save the summary ASCII file to send to the Madrigal database
+    if send_to_madrigal and instrument['send_to_madrigal']: 
         asciiname = madrigal_stub + instrsitedate + '.txt'
         createL1ASCII(npzname, asciiname)
         logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'ASCII results saved to %s\n' % asciiname)
@@ -962,8 +973,13 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
 
     if send_to_website:
         import configparser
+        import pymysql
+        pymysql.install_as_MySQLdb()
+        # Then your existing code will work:
         import MySQLdb as mdb
         from sshtunnel import SSHTunnelForwarder
+        import paramiko
+        from scp import SCPClient
 
         def query(sql_cmd, params=None):
             with SSHTunnelForwarder(
@@ -982,14 +998,69 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
             with SSHTunnelForwarder(
                     ('airglowgroup.web.illinois.edu', 22),
                     ssh_username='airglowgroup',
-                    ssh_private_key='/home/airglow/.ssh/id_rsa',
+                    ssh_private_key='/home/jmakela/.ssh/id_rsa',
                     remote_bind_address=('127.0.0.1', 3306)
             ) as server:
-                    con = mdb.connect(host='127.0.0.1', db='airglowgroup_webdatabase', port=server.local_bind_port, read_default_file="/home/airglow/.my2.cnf")
+                    con = mdb.connect(host='127.0.0.1', db='airglowgroup_webdatabase', port=server.local_bind_port, read_default_file="/home/jmakela/.my2.cnf")
                     cur = con.cursor()
                     cur.execute(sql_cmd,params)
                     rows = cur.fetchall()
                     return rows
+
+        def transfer_files_to_server(local_file_path, remote_directory):
+            """
+            Transfer files from local machine to remote server using SCP
+            
+            Parameters:
+            -----------
+            local_file_path : str
+                Full path to the local file to be transferred
+            remote_directory : str
+                Remote directory path where file should be placed
+            """
+            # SSH connection details
+            hostname = 'airglowgroup.web.illinois.edu'
+            username = 'airglowgroup'
+            ssh_key_path = '/home/jmakela/.ssh/id_rsa'
+            
+            try:
+                # Create SSH client
+                ssh = paramiko.SSHClient()
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                
+                # Connect using key-based authentication
+                ssh.connect(
+                    hostname=hostname,
+                    username=username,
+                    key_filename=ssh_key_path
+                )
+                
+                # Create SCP client
+                with SCPClient(ssh.get_transport()) as scp:
+                    # Get just the filename from the path
+                    filename = os.path.basename(local_file_path)
+                    
+                    # Ensure remote directory exists
+                    ssh.exec_command(f'mkdir -p {remote_directory}')
+                    
+                    # Transfer the file
+                    scp.put(local_file_path, remote_directory + '/' + filename)
+
+                    if not logfile.closed:
+                        logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + f"Successfully transferred {filename} to {remote_directory}")
+                    
+            except Exception as e:
+                if not logfile.closed:
+                    logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + f"Error during file transfer: {str(e)}")
+                notify_the_humans = True
+                warning_log.add(message="Error sending %s to airglow server for displaying on website." % basename(fn),
+                                title='Cannot send to webserver',
+                                label='warning:webserver')
+            
+            finally:
+                # Close connection
+                if ssh:
+                    ssh.close()
 
         site_id = site['sql_id']
         utc = pytz.utc # Define timezones
@@ -1006,98 +1077,13 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
         startut = d0.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
         stoput = dn.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
 
-        ## ORIGINAL DATABASE
-        # Reworked to Python3 using mysql.connector
-
-#        # Send summary images to server
-#        for fn, db_id in zip(summary_fns, db_ids):
-#            flag = subprocess.call(['scp', temp_plots_stub + fn, scp_user + ':' + web_images_stub + fn]) # send to airglow
-#            if flag != 0: # Sending png to airglow failed
-#                logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
-#                notify_the_humans = True
-#            print('Upload')
-#            # If we are supposed to put this png in Madrigal, put it in the Madrigal database directory
-#            if send_to_madrigal and instrument['send_to_madrigal'] and 'diagnostic' not in fn:
-#                shutil.copy(temp_plots_stub + fn ,madrigal_stub) # save the figure to the madrigal directory
-#            print('Madrigal')
-#            # update the database
-#            # Send png. First find out if the entry is in there (i.e., we are just updating the png)
-#            sql_cmd = 'SELECT id FROM DataSet WHERE SummaryImage = %s'
-#            params = (db_image_stub + fn, )
-#
-#            # Call the query function and capture the result
-#            rows = query(sql_cmd, params)
-#            print('Query1')
-#            # The log filename
-#            log_fn = db_log_stub + instrsitedate + '_log.log'
-#            if len(rows) == 0: # Create the entry
-#                print('Going to insert')
-#                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%s, %s, %s, %s, %s, %s)'
-#                params = (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
-#                logfile.write(sql_cmd + ' ' + str(params) + '\n')
-#                query(sql_cmd, params)
-#                print('inserted')
-#            else: # Entry exists. Update it.
-#                sql_cmd = 'UPDATE DataSet SET SummaryImage=%s, LogFile=%s WHERE id = %s'
-#                params = (db_image_stub + fn, log_fn, rows[0][0])
-#                logfile.write(sql_cmd + ' ' + str(params) + '\n')
-#                query(sql_cmd, params)
-#
-#        # Send level 3 windfield gif to website, if we made one
-#        if gif_fn is not None:
-#            # Since the start/stop time of a network is ill-defined, just make up a start time: 21 UT on the 1st night, and 12 UT on the second night. This will have to be updated for networks other than NATION.
-#            d = FPI.ReadIMG(sky_fns[0])
-#            # Define midnight on the first night
-#            dtime = d.info['LocalTime'] - datetime.timedelta(hours=12)
-#            midnight = dtime - datetime.timedelta(hours=dtime.hour, minutes=dtime.minute, seconds=dtime.second)
-#           start = midnight + datetime.timedelta(hours=21)
-#            stop  = midnight + datetime.timedelta(hours=36)
-#            startut = start.strftime('%Y-%m-%d %H:%M:%S')
-#            stoput = stop.strftime('%Y-%m-%d %H:%M:%S')
-#            network_info = fpiinfo.get_network_info(network_name)
-#            network_id   = network_info['sql_id']
-#            gif_id       = network_info['quicklook_gif_id']
-#            flag = subprocess.call(['scp', gif_fn, scp_user + ':' + web_images_stub + gif_fn.split('/')[-1]]) # send to airglow
-#            if flag != 0: # Sending png to airglow failed
-#                logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending "%s" to airglow server for displaying on website.\n' % gif_fn)
-#                notify_the_humans = True
-#            # Register the gif. First find out if the entry is in there (i.e., we are just updating it)
-#            sql_cmd = 'SELECT id FROM DataSet WHERE Site = %s and Instrument = %s and StartUTTime = %s'
-#            params = (network_id, gif_id, startut)
-#            rows = query(sql_cmd, params)
-#
-#            if len(rows) == 0: # Create the entry
-#                sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage) VALUES(%s, %s, %s, %s, %s)'
-#                params = (network_id, gif_id, startut, stoput, db_image_stub + gif_fn.split('/')[-1])
-#
-#                # Logging the command; note that we log the command with placeholders
-#                logfile.write(sql_cmd + ' ' + str(params) + '\n')
-#
-#                # Execute the query
-#                query(sql_cmd, params)
-#            else: # Entry exists. Update it.
-#                sql_cmd = 'UPDATE DataSet SET SummaryImage = %s WHERE Site = %s and Instrument = %s and StartUTTime = %s'
-#                params = (db_image_stub + gif_fn.split('/')[-1], network_id, gif_id, startut)
-#
-#                # Execute the query
-#                query(sql_cmd, params)
-
         # NEW DATABASE
         # Open the database (see http://zetcode.com/databases/mysqlpythontutorial/ for help)
         # Read the user and password from a file.
 
         # Send summary images to server
         for fn, db_id in zip(summary_fns, db_ids):
-#            flag = subprocess.call(['scp', temp_plots_stub + fn, scp_user + ':' + web_images_stub + fn]) # send to airglow
-            flag = subprocess.call(['cp', temp_plots_stub + fn, web_images_stub + fn]) # send to airglow
-            if flag != 0: # Sending png to airglow failed
-                logfile.write(datetime.datetime.now().strftime('%m/%d/%Y %H:%M:%S %p: ') + 'Error sending %s to airglow server for displaying on website.\n' % fn)
-                notify_the_humans = True
-                warning_log.add(message="Error sending %s to airglow server for displaying on website." % basename(fn),
-                                title='Cannot send to webserver',
-                                label='warning:webserver')
-
-            # If we are supposed to put this png in Madrigal, put it in the Madrigal database directory
+#            # If we are supposed to put this png in Madrigal, put it in the Madrigal database directory
             if send_to_madrigal and instrument['send_to_madrigal'] and 'diagnostic' not in fn:
                 shutil.copy(temp_plots_stub + fn ,madrigal_stub) # save the figure to the madrigal directory
 
@@ -1124,7 +1110,8 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
 
         # Send level 3 windfield gif to website, if we made one
         if gif_fn is not None:
-            # Since the start/stop time of a network is ill-defined, just make up a start time: 21 UT on the 1st night, and 12 UT on the second night. This will have to be updated for networks other than NATION.
+            # Since the start/stop time of a network is ill-defined, just make up a start time: 
+            #    21 UT on the 1st night, and 12 UT on the second night. This will have to be updated for networks other than NATION.
             d = FPI.ReadIMG(sky_fns[0])
             # Define midnight on the first night
             dtime = d.info['LocalTime'] - datetime.timedelta(hours=12)
@@ -1165,20 +1152,7 @@ def process_instr(instr_name ,year, doy, reference='laser', sky_line_tag='X', us
                 query2(sql_cmd, params)
 
     logfile.close()
-    if send_to_website:
-        # Send the log file
-        subprocess.call(['cp', logname, web_logs_stub + instrsitedate + '_log.log'])
-        # Close the connection to airglow database
-#        con.close()
 
-    # Return log as string if an email to humans is suggested.
-#    s = None
-#    if notify_the_humans:
-#        s = warning_log
-#        with open (logname, "r") as myfile:
-#            s = myfile.read() # return the whole thing as a string, including new-lines
-#        
-#    return s
     return warning_log if warning_log else None
 
 

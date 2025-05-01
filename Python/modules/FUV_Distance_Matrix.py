@@ -146,15 +146,15 @@ def Calculate_D_Matrix_WGS84_mp(satlatlonalt,az,ze,azze_def = 1):
             pool.terminate()
             
         #print "You cancelled the program!"
-        print type(inst)
-        print inst
+        print(type(inst))
+        print(inst)
         exit(1) 
 
     except Exception:
     
-        print "Something Happened :("
-        print type(inst)
-        print inst
+        print("Something Happened :(")
+        print(type(inst))
+        print(inst)
         exit(1) 
     
     return S,rmid

@@ -676,7 +676,7 @@ def MAP_Estimation(S,Bright,VER_mean=0.,VER_profiles=0.,weight_resid=False):
     # Check whether or not the prior is there. If not raise exception
     if not hasattr(VER_profiles, "__len__"):
         if (VER_profiles==0):
-            print 'PRIOR IS MISSING'
+            print('PRIOR IS MISSING')
             raise Exception
 
     if weight_resid:
@@ -987,7 +987,7 @@ def hmF2_region_interpolate(Ne,alt_vector,interval_increase = 20.,kind ='cubic',
         return NE_inter,alt_vector_interp
     else:
         if debug:
-            print 'Ne maximum ill defined - No interpolation performed'
+            print('Ne maximum ill defined - No interpolation performed')
         # In this case the values remain the same. No exception is required since the F2-peak code can run
         return Ne,alt_vector
 
@@ -1753,7 +1753,7 @@ def Get_lvl2_5_product(file_input = None,
             if 'f107a' in gpi.variables.keys():
                 f107a = gpi['f107a'][:]
             else:
-                print 'Cannot find f107a in provided GPI file. Using daily f107 instead'
+                print('Cannot find f107a in provided GPI file. Using daily f107 instead')
                 f107a = gpi['f107d'][:]
         else:
             ap3 = None
@@ -1814,7 +1814,7 @@ def Get_lvl2_5_product(file_input = None,
         sza300 = np.min(FUV_TANGENT_SZA[xx,ind,yy], axis=1)
 
         if FUV_mode[FUV_mode==2].shape[0] == 0:
-            print 'No nighttime data to process. Output file will not be produced.'
+            print('No nighttime data to process. Output file will not be produced.')
             return 0
 
         # Pre-allocate arrays for output variables
@@ -1847,9 +1847,9 @@ def Get_lvl2_5_product(file_input = None,
         max_li = -9999
     except Exception as e:
         if hasattr(e, 'message'):
-            print 'Error setting up reading files and setting up L2.5 inversion: (%s)' % e.message
+            print('Error setting up reading files and setting up L2.5 inversion: (%s)' % e.message)
         else:
-            print 'Error setting up reading files and setting up L2.5 inversion'
+            print('Error setting up reading files and setting up L2.5 inversion')
         # Close the input netCDF files
         ancillary.close()
         data.close()
@@ -1985,20 +1985,20 @@ def Get_lvl2_5_product(file_input = None,
                     FUV_quality_flag[ind,stripe] = quality_flag
 
                 except ImportError as error:
-                    print "You don't have module {0} installed".format(error.message[16:])
+                    print("You don't have module {0} installed".format(error.message[16:]))
                     return 2
                 except ValueError as error:
                     # Just an error in the inversion
-                    print 'ind: %d, stripe: %d, error: %s' %(ind,stripe,sys.exc_info()[0])
+                    print('ind: %d, stripe: %d, error: %s' %(ind,stripe,sys.exc_info()[0]))
                     FUV_quality[ind,stripe] = 0.0
                     inv_quality, quality_flag = quality_check(bright=bright, l1_quality=l1_qual, inv_error = 1)
                     FUV_quality_flag[ind,stripe] = quality_flag
                     exception_counter += 1
                 except Exception as e:
                     if hasattr(e, 'message'):
-                        print 'Unknown inversion error: (%s)' % e.message
+                        print('Unknown inversion error: (%s)' % e.message)
                     else:
-                        print "Unknown inversion error"
+                        print("Unknown inversion error")
                     FUV_quality[ind,stripe] = 0.0
                     inv_quality, quality_flag = quality_check(bright=bright, l1_quality=l1_qual, inv_error = 1)
                     FUV_quality_flag[ind,stripe] = quality_flag
@@ -2054,31 +2054,31 @@ def Get_lvl2_5_product(file_input = None,
 
     # Check the number of exceptions compared to that of inversion attempts and report the success rate
     if exception_counter > 0 and exception_counter < inversion_counter:
-        print 'There were errors in the inversions, but available good data were processed. Percentage of the processed data is: %.2f%%' %(100. - 100.*exception_counter/float(inversion_counter))
+        print('There were errors in the inversions, but available good data were processed. Percentage of the processed data is: %.2f%%' %(100. - 100.*exception_counter/float(inversion_counter)))
 
     elif inversion_counter == 0:
         print('No good data available, output will not be produced')
         return 0
 
     elif exception_counter > 0 and exception_counter == inversion_counter:
-        print 'There were errors in all the inversions, data could not be processed. Output file will not be produced.'
+        print('There were errors in all the inversions, data could not be processed. Output file will not be produced.')
         return 0
 
     else:
-        print 'All the data were succesfully processed without any errors.'
+        print('All the data were succesfully processed without any errors.')
 
     # Write the output
-    print 'Writing netcdf %s' % file_output
+    print('Writing netcdf %s' % file_output)
     try:
         FUV_Level_2_OutputProduct_NetCDF(file_output, L25_dict)
     except Exception as e:
         if hasattr(e, 'message'):
-            print 'Error writing netCDF output file: (%s)' % e.message
+            print('Error writing netCDF output file: (%s)' % e.message)
         else:
-            print 'Error writing netCDF output file: %s (%s)' % (file_output, sys.exc_info()[0])
+            print('Error writing netCDF output file: %s (%s)' % (file_output, sys.exc_info()[0]))
         return 1
 
-    print 'Successfully wrote %s' % file_output
+    print('Successfully wrote %s' % file_output)
     return 0
 
 def get_GPI(dn, year_day, f107, f107a, ap, ap3):
@@ -2270,9 +2270,9 @@ def quality_check(bright=None, Ne=None, hmF2=None, l1_quality=None, inv_error=0,
 
     except Exception as e:
         if hasattr(e, 'message'):
-            print 'Error generating the quality flag: (%s)' % e.message
+            print('Error generating the quality flag: (%s)' % e.message)
         else:
-            print 'Error generating the quality flag'
+            print('Error generating the quality flag')
         inv_quality = 0
         return inv_quality, quality_code
 
@@ -2480,9 +2480,9 @@ def CreateSummaryPlot(file_netcdf, png_stub, stripe=2, min_alt=None, max_alt=Non
         f.close()
     except Exception as e: # UNDO
         if hasattr(e, 'message'):
-            print 'Error generating L2.5 summary file: (%s)' % e.message
+            print('Error generating L2.5 summary file: (%s)' % e.message)
         else:
-            print 'Error generating L2.5 summary file'
+            print('Error generating L2.5 summary file')
         return 1
 
     return 0

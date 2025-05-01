@@ -20,7 +20,7 @@ def parse_sum(fname):
     try:
         fid = open(fname,'r')
     except IOError as e:
-        print file, 'does not exist'
+        print(file, 'does not exist')
         return [], [], [], [], [], [], []
     
     fid = open(fname,'r')

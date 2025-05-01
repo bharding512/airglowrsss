@@ -72,9 +72,9 @@ def process_instr(inst,year,doy,do_DB=True):
         for f in files:
             s4filename = inst+f[-5]+'_'+site+'_'+year+month+day+'_s4.png'
             os.system('chmod 777 ' + data_dir+f[0:-4]+'*')
-            print 'Getting lsum4...'
+            print('Getting lsum4...')
             os.system('/usr/local/bin/lsum4 -n ' + f[0:-4])
-            print 'Move raw data...'
+            print('Move raw data...')
             os.system('chmod 750 '+data_dir+f[0:-4]+'*')
 
             sumfile = glob.glob(f[0:-4]+'.sum')
@@ -87,21 +87,21 @@ def process_instr(inst,year,doy,do_DB=True):
                 s4fig.savefig(data_dir+s4filename)
                 # Add info to the database, if requested
                 if do_DB:
-                    print 'Do databasing...'
+                    print('Do databasing...')
                     database([s4filename],data_dir,startut,stoput,[inst_id],site_id)
                 os.system('rm -f ' + data_dir+s4filename)
             else:
                 subject = "!!! Processing Error (\'" + inst +'\','+year+','+str(doy)+') @ ' + site 
-                print subject
+                print(subject)
                 Emailer.emailerror(subject, 'lsum4 problem - move rawdata back and reprocess?')
 
 
     # Do Scinda S4/TEC Processing
     elif instr == 'scinda':
         try:
-            print 'Running wintep-p...'
+            print('Running wintep-p...')
             os.system('/usr/local/bin/wintec-p-daily.pl ' + date+'*.scn')
-            print 'Move raw data...'
+            print('Move raw data...')
             # Standardize filenames
             s4filename = inst+'_'+site+'_'+year+month+day+'_s4.png'
             tecfilename = inst+'_'+site+'_'+year+month+day+'_tec.png'
@@ -122,20 +122,20 @@ def process_instr(inst,year,doy,do_DB=True):
             # find end time
             r = re.compile('[ \t\n\r:]+')
             for zelda in reversed(open(files[-1]).readlines()):
-		line = r.split(zelda)
+                line = r.split(zelda)
                 if line[0] == 'T':
                     dtime = datetime.datetime(2000+int(line[1]),int(line[2]),int(line[3]))+datetime.timedelta(seconds=line[4])
                     dtime = local.localize(dtime)
                     break
             # Add info to the database, if requested
             if do_DB:
-                print 'Do databasing...'
+                print('Do databasing...')
                 database([s4filename,tecfilename],data_dir,startut,stoput,inst_id,site_id)
             os.system('rm -f ' + data_dir+s4filename)
             os.system('rm -f ' + data_dir+tecfilename)
         except:
             subject = "!!! Processing Error (\'" + inst +'\','+year+','+str(doy)+') @ ' + site 
-            print subject
+            print(subject)
             Emailer.emailerror(subject, 'wintec problem')
 
 
@@ -209,14 +209,14 @@ def process_instr(inst,year,doy,do_DB=True):
 
         except:
             subject = "!!! Processing Error (\'" + inst +'\','+year+','+str(doy)+') @ ' + site
-            print subject
+            print(subject)
             Emailer.emailerror(subject, 'Cases problem')
 
 
     # Send Error if Neither
     else:
         subject = "!!! GPS Problem " + date
-        print subject
+        print(subject)
         Emailer.emailerror(subject, 'Something weird has happened: '+inst)
 
     os.chdir('/rdata/airglow/rx/')
@@ -292,7 +292,7 @@ def GPS_multiprocess(arg_list, num_processes):
             # Set up the thread
             p = multiprocessing.Process(target=process_instr, args=args)
             p.start()
-            print args
+            print(args)
             threads.append(p)
         else:
             # No more free processes.  Check for one to end

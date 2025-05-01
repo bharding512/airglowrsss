@@ -41,10 +41,9 @@ def email(recipient,subject,msg):
     email.login(sender,sender_pass)
     email.sendmail(sender,recipient, headers + "\r\n\r\n" + msg)
     email.quit()
-    print "!!! Email Sent"
+    print("!!! Email Sent")
 
-
- def emailerror(recipients,subject,msg):
+def emailerror(recipients,subject,msg):
     '''
     Summary:
         emailerror(subject,recipients,msg)
