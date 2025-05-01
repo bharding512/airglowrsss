@@ -138,9 +138,10 @@ def send(folders: set[str], destiny: str, mfs: int):
         else:
             s3_result = True
 
-        os.system('chmod 774 '+f)
-        flag = os.system('scp ' + f + ' ' + destiny)
-        if flag == 0 and s3_result:
+#        os.system('chmod 774 '+f)
+#        flag = os.system('scp ' + f + ' ' + destiny)
+#        if flag == 0 and s3_result:
+        if s3_result:
             os.remove(f)
             print('Completed...')
 
