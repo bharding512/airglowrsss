@@ -7,6 +7,8 @@ import dagster as dg
 from dagster import EnvVar
 from dagster_aws.s3 import S3FakeSession
 from dagster_ncsa import S3ResourceNCSA
+from airglow.dagster_airglow.assets.analysis_asset import AnalysisConfig
+from airglow.dagster_airglow.delete_raw import DeleteRawConfig
 
 
 class ChunkedArchiveConfig(dg.Config):
@@ -104,16 +106,24 @@ def unzip_chunked_archive(
             Key=f"{cloud_cover_path}/{Path(cloud_cover_file).name}"
         )
 
+    analysis_config = AnalysisConfig(
+        site=config.site,
+        year=year,
+        observation_date=config.observation_date,
+        fpi_data_path=data_path,
+        cloud_cover_path=cloud_cover_path,
+    )
+
     return dg.Output(
         value={
-            "site":  config.site,
-            "year":  year,
-            "observation_date":  config.observation_date,
-            "fpi_data_path":  data_path,
-            "cloud_cover_path": cloud_cover_path,
-            "raw_files": config.file_chunks,
-            "cloud_cover_files": config.cloud_files,
-            "instrument_log_file": config.instrument_log_file,
+            "analysis_config": analysis_config,
+            "delete_raw_config": DeleteRawConfig(
+                site=config.site,
+                observation_date=config.observation_date,
+                raw_files=config.file_chunks,
+                cloud_cover_files=config.cloud_files,
+                instrument_log_file=config.instrument_log_file,
+            ),
         },
         metadata={
             "observation_date": config.observation_date,
