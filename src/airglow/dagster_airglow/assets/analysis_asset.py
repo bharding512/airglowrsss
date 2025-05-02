@@ -1,17 +1,18 @@
+# Standard library imports
 import os
 import tempfile
 from datetime import datetime, timedelta
 from typing import Any
 
+# Third-party imports
 import dagster as dg
-
 from dagster import EnvVar
-from dagster_ncsa import S3ResourceNCSA
 from dagster_mysql import MySQLResource
+from dagster_ncsa import S3ResourceNCSA
 
-
+# Local imports
 from airglow import FPIprocess, fpiinfo
-from airglow.exceptions import NoLaserImagesError, NoSkyImagesError
+from airglow.exceptions import NoSkyImagesError
 
 
 def get_instrument_info(site, year, doy):
@@ -35,10 +36,9 @@ def get_instrument_info(site, year, doy):
 def download_fpi_data(context: dg.AssetExecutionContext,
                       s3: S3ResourceNCSA,
                       site, year, datestr, target_dir,
-                      sky_line_tag: str,
                       fpi_data_path: str,
                       cloud_cover_path: str,
-                      bucket_prefix_dir:str = ''):
+                      bucket_prefix_dir: str = ''):
     """Download FPI data files from cloud storage."""
 
     created_files = []
@@ -53,9 +53,6 @@ def download_fpi_data(context: dg.AssetExecutionContext,
                           fpi_data_path, "")
 
     for f in files:
-        if f"_{sky_line_tag}_" not in os.path.basename(f):
-            continue
-
         relative_path = os.path.dirname(f[len(bucket_prefix_dir):])
         relative_file = f[len(bucket_prefix_dir):]
 
@@ -141,41 +138,11 @@ def upload_results(context: dg.AssetExecutionContext,
 
 
 @dg.asset(
-    name="analyze_data_x",
+    name="analyze_data",
     ins={"unzip_chunked_archive": dg.AssetIn(dagster_type=dict[str, Any])},
 )
-def analyze_data_x(context: dg.AssetExecutionContext,
-                   unzip_chunked_archive: dict[str, Any],
-                   s3: S3ResourceNCSA,
-                   mysql: MySQLResource) -> str:
-    return analyze_data(context, unzip_chunked_archive, "X", s3, mysql)
-
-
-@dg.asset(
-    name="analyze_data_xr",
-    ins={"unzip_chunked_archive": dg.AssetIn(dagster_type=dict[str, Any])},
-)
-def analyze_data_xr(context: dg.AssetExecutionContext,
-                    unzip_chunked_archive: dict[str, Any],
-                    s3: S3ResourceNCSA,
-                    mysql: MySQLResource) -> str:
-    return analyze_data(context, unzip_chunked_archive, "XR", s3, mysql)
-
-
-@dg.asset(
-    name="analyze_data_xg",
-    ins={"unzip_chunked_archive": dg.AssetIn(dagster_type=dict[str, Any])},
-)
-def analyze_data_xg(context: dg.AssetExecutionContext,
-                    unzip_chunked_archive: dict[str, Any],
-                    s3: S3ResourceNCSA,
-                    mysql: MySQLResource) -> str:
-    return analyze_data(context, unzip_chunked_archive, "XG", s3, mysql)
-
-
 def analyze_data(context: dg.AssetExecutionContext,
                  unzip_chunked_archive: dict[str, any],
-                 sky_line_tag: str,
                  s3: S3ResourceNCSA,
                  mysql: MySQLResource) -> str:
     """
@@ -221,38 +188,41 @@ def analyze_data(context: dg.AssetExecutionContext,
             os.makedirs(directory, exist_ok=True)
 
         download_fpi_data(
-            context=context, 
-            s3=s3, 
-            site=unzip_chunked_archive["site"], 
+            context=context,
+            s3=s3,
+            site=unzip_chunked_archive["site"],
             year=year,
-            sky_line_tag=sky_line_tag,
-            datestr=observation_date, 
+            datestr=observation_date,
             target_dir=temp_dir,
             fpi_data_path=unzip_chunked_archive['fpi_data_path'],
             cloud_cover_path=unzip_chunked_archive['cloud_cover_path']
         )
 
-        try:
-            FPIprocess.process_instr(instr_name, year, doy,
-                                     mysql=mysql,
-                                     sky_line_tag=sky_line_tag,
-                                     fpi_dir=fpi_dir, bw_dir=bw_dir,
-                                     send_to_madrigal=True,
-                                     send_to_website=True,
-                                     x300_dir=x300_dir, results_stub=results_stub,
-                                     madrigal_stub=madrigal_stub, share_stub=share_stub,
-                                     temp_plots_stub=temp_plots_stub)
-
-            upload_results(context, s3, results_stub, EnvVar("RESULTS_PATH").get_value())
-            upload_results(context, s3, temp_plots_stub,
-                           EnvVar("SUMMARY_IMAGES_PATH").get_value())
-            upload_results(context, s3, madrigal_stub,
-                           EnvVar("MADRIGAL_PATH").get_value())
-        except NoSkyImagesError:
-            context.log.error(
-                f"No SkyImages found for {sky_line_tag} on {observation_date}")
-        except NoLaserImagesError:
-            context.log.error(
-                f"No LaserImages found for {sky_line_tag} on {observation_date}")
+        for sky_line_tag in ["X", "XR", "XG"]:
+            try:
+                FPIprocess.process_instr(
+                    instr_name,
+                    year,
+                    doy,
+                    mysql=mysql,
+                    sky_line_tag=sky_line_tag,
+                    fpi_dir=fpi_dir,
+                    bw_dir=bw_dir,
+                    send_to_madrigal=True,
+                    send_to_website=True,
+                    x300_dir=x300_dir,
+                    results_stub=results_stub,
+                    madrigal_stub=madrigal_stub,
+                    share_stub=share_stub,
+                    temp_plots_stub=temp_plots_stub
+                )
+                upload_results(context, s3, results_stub, EnvVar("RESULTS_PATH").get_value())
+                upload_results(context, s3, temp_plots_stub,
+                               EnvVar("SUMMARY_IMAGES_PATH").get_value())
+                upload_results(context, s3, madrigal_stub,
+                               EnvVar("MADRIGAL_PATH").get_value())
+            except NoSkyImagesError as e:
+                context.log.warning(f"No sky images found for {instr_name} on {datestr}: {str(e)}")  # NOQA E501
+                continue
 
     return "ok"
