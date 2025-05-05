@@ -8,7 +8,7 @@ from dagster import EnvVar
 from dagster_aws.s3 import S3FakeSession
 from dagster_ncsa import S3ResourceNCSA
 from airglow.dagster_airglow.assets.analysis_asset import AnalysisConfig
-from airglow.dagster_airglow.delete_raw import DeleteRawConfig
+from airglow.dagster_airglow.assets.delete_raw import DeleteRawConfig
 
 
 class ChunkedArchiveConfig(dg.Config):

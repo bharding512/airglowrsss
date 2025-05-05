@@ -1,11 +1,10 @@
-
 from dagster import Definitions, EnvVar, define_asset_job
 from dagster_mysql import MySQLResource
 
 from dagster_ncsa import S3ResourceNCSA
 
 from airglow.dagster_airglow.assets.analysis_asset import reanalyze_data, analyze_data_pipeline
-from airglow.dagster_airglow.delete_raw import delete_raw
+from airglow.dagster_airglow.assets.delete_raw import delete_raw
 from airglow.dagster_airglow.assets.upload_chunked_archive import unzip_chunked_archive
 from airglow.dagster_airglow.sensors import instrument_upload_sensor
 
