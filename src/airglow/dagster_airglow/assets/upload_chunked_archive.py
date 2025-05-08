@@ -114,18 +114,18 @@ def unzip_chunked_archive(
         cloud_cover_path=cloud_cover_path,
     )
 
-    return dg.Output(
-        value={
-            "analysis_config": analysis_config,
-            "delete_raw_config": DeleteRawConfig(
-                site=config.site,
-                observation_date=config.observation_date,
-                raw_files=config.file_chunks,
-                cloud_cover_files=config.cloud_files,
-                instrument_log_file=config.instrument_log_file,
-            ),
-        },
+    delete_raw_config = DeleteRawConfig(
+        site=config.site,
+        observation_date=config.observation_date,
+        raw_files=config.file_chunks,
+        cloud_cover_files=config.cloud_files,
+        instrument_log_file=config.instrument_log_file,
+    )
+
+    return dg.MaterializeResult(
         metadata={
+            "analysis_config": dg.MetadataValue.json(analysis_config.__dict__),
+            "delete_raw_config": dg.MetadataValue.json(delete_raw_config.__dict__),
             "observation_date": config.observation_date,
             "site": config.site,
             "dataset_files": uploaded_files,

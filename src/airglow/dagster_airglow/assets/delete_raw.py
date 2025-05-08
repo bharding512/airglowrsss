@@ -11,13 +11,18 @@ class DeleteRawConfig(dg.Config):
 
 
 @dg.asset(
-    ins={"unzip_chunked_archive": dg.AssetIn(dagster_type=dict[str, dg.Config])},
+    deps=["unzip_chunked_archive"],
 )
 def delete_raw(
         context: dg.AssetExecutionContext,
-        unzip_chunked_archive: dict[str, dg.Config],
         s3: S3ResourceNCSA):
-    config: DeleteRawConfig = unzip_chunked_archive["delete_raw_config"]
+    # Convert the metadata produced by the unzip_chunked_archive asset to a
+    # DeleteRawConfig object.
+    upstream_metadata = context.instance.get_latest_materialization_event(
+        dg.AssetKey("unzip_chunked_archive")).asset_materialization.metadata
+    config = DeleteRawConfig(**upstream_metadata['delete_raw_config'].data)
+    context.log.info(f"Delete Raw config: {config}")
+
     context.log.info(f"Deleting raw files for {config.site} on {config.observation_date}")  # NOQA E501
     s3_client = s3.get_client()
     bucket = dg.EnvVar("DEST_BUCKET").get_value()

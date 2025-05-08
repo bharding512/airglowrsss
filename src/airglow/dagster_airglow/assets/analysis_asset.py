@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 
 # Third-party imports
 import dagster as dg
-from dagster import EnvVar
+from dagster import AssetKey, EnvVar
 from dagster_mysql import MySQLResource
 from dagster_ncsa import S3ResourceNCSA
 
@@ -255,22 +255,25 @@ def analyze_data(
 
 @dg.asset(
     name="analyze_data_pipeline",
-    ins={"unzip_chunked_archive": dg.AssetIn(dagster_type=dict[str, dg.Config])},
+    deps=["unzip_chunked_archive"],
 )
 def analyze_data_pipeline(
     context: dg.AssetExecutionContext,
-    unzip_chunked_archive: dict[str, dg.Config],
     s3: S3ResourceNCSA,
     mysql: MySQLResource,
 ) -> str:
     """
     Pipeline asset that analyzes the data and returns the analysis result.
     :param context: The asset execution context.
-    :param unzip_chunked_archive: Output from the unzip asset.
     :param s3: The S3 resource.
     :return: The analysis result.
     """
-    analysis_config = unzip_chunked_archive["analysis_config"]
+    # Convert the metadata produced by the unzip_chunked_archive asset to an
+    # AnalysisConfig object.
+    upstream_metadata = context.instance.get_latest_materialization_event(
+        AssetKey("unzip_chunked_archive")).asset_materialization.metadata
+    analysis_config = AnalysisConfig(**upstream_metadata['analysis_config'].data)
+    context.log.info(f"Analysis config: {analysis_config}")
     return analyze_data(context, analysis_config, s3, mysql)
 
 
