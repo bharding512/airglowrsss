@@ -80,3 +80,58 @@ To reanalyze data:
 5. Click "Launch Run" to start the reanalysis
 
 The reanalysis will use the existing data in S3 and MySQL, perform the analysis again, and update the results. 
+
+## Development
+One advantage of dagster is that it is highly developer-friendly. To work on code for this project 
+you just need to create a python virtual environment and follow these steps:
+
+1. Create and activate a virtual environment:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Unix/macOS
+   # or
+   .\venv\Scripts\activate  # On Windows
+   ```
+
+2. Install the project in development mode:
+   ```bash
+   pip install -e .
+   ```
+3. Create a `.env` file in the project's home directory:
+```
+
+AWS_ACCESS_KEY_ID="<OSN Key>"
+AWS_SECRET_ACCESS_KEY="<OSN Secret>"
+AWS_S3_ENDPOINT_URL="https://ncsa.osn.xsede.org"
+
+DEST_BUCKET=airglow
+
+RESULTS_PATH="test/results"
+SUMMARY_IMAGES_PATH="test/summary_images"
+MADRIGAL_PATH="test/madrigal"
+
+MYSQL_HOST="airglowgroup.web.illinois.edu"
+MYSQL_USER="<MySQL User>"
+MYSQL_PASSWORD="<MySQL Password>"
+MYSQL_DATABASE="airglowgroup_webdatabase"
+
+PYTHONPATH="./src"
+```
+
+
+3. Start the Dagster development server:
+   ```bash
+   dagster dev -w workspace.yaml   
+   ```
+
+4. Access the Dagster UI at http://localhost:3000
+
+### Development Workflow
+- The Dagster UI provides a "Reload" button in the top-right corner of the "Deployment" screen.
+- Click this button whenever you make code changes to reload the Dagster instance
+- This allows you to see your changes immediately without restarting the server
+- You can then use the "Materialize" button to test your assets with real data
+
+### Debugging Tips
+- Use the Dagster UI's "Launchpad" to test assets with specific configurations
+- Check the "Runs" tab to monitor execution and view logs
