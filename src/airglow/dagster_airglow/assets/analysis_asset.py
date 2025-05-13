@@ -231,8 +231,11 @@ def analyze_data(
                     share_stub=share_stub,
                     temp_plots_stub=temp_plots_stub,
                 )
+
+                results_path = EnvVar("RESULTS_PATH").get_value()
+
                 upload_results(
-                    context, s3, results_stub, EnvVar("RESULTS_PATH").get_value()
+                    context, s3, results_stub, f"{results_path}/{year}"
                 )
                 upload_results(
                     context,
