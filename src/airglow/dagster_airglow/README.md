@@ -93,9 +93,9 @@ you just need to create a python virtual environment and follow these steps:
    .\venv\Scripts\activate  # On Windows
    ```
 
-2. Install the project in development mode:
+2. Install the project in development mode. Run this in the project root directory:
    ```bash
-   pip install -e .
+   pip install -e ".[dev]"
    ```
 3. Create a `.env` file in the project's home directory:
 ```
@@ -119,12 +119,12 @@ PYTHONPATH="./src"
 ```
 
 
-3. Start the Dagster development server:
+4. Start the Dagster development server:
    ```bash
    dagster dev -w workspace.yaml   
    ```
 
-4. Access the Dagster UI at http://localhost:3000
+5. Access the Dagster UI at http://localhost:3000
 
 ### Development Workflow
 - The Dagster UI provides a "Reload" button in the top-right corner of the "Deployment" screen.
