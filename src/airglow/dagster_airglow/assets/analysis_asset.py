@@ -236,14 +236,17 @@ def analyze_data(
                 upload_results(
                     context, s3, results_stub, f"{results_path}/{year}"
                 )
+
+                summary_path = EnvVar("SUMMARY_IMAGES_PATH").get_value()
+
                 upload_results(
-                    context,
-                    s3,
-                    temp_plots_stub,
-                    EnvVar("SUMMARY_IMAGES_PATH").get_value(),
+                    context, s3, temp_plots_stub, f"{summary_path}/{year}"
                 )
+
+                madrigal_path = EnvVar("MADRIGAL_PATH").get_value()
+
                 upload_results(
-                    context, s3, madrigal_stub, EnvVar("MADRIGAL_PATH").get_value()
+                    context, s3, madrigal_stub, f"{madrigal_path}/{year}"
                 )
             except NoSkyImagesError:
                 # This is just a warning, not an error since we loop over all sky line tags,

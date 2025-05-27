@@ -993,6 +993,7 @@ def process_instr(instr_name ,year, doy,
             dn = local.localize(d.info['LocalTime'])
 
         startut = d0.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
+        start_year = d0.astimezone(utc).strftime('%Y')  # Extract just the year
         stoput = dn.astimezone(utc).strftime('%Y-%m-%d %H:%M:%S')
 
 
@@ -1005,7 +1006,7 @@ def process_instr(instr_name ,year, doy,
             # update the database
             # Send png. First find out if the entry is in there (i.e., we are just updating the png)
             sql_cmd = 'SELECT id FROM DataSet WHERE SummaryImage = %s'
-            params = (db_image_stub + fn, )
+            params = (f'{db_image_stub}{start_year}/{fn}', )
 
             # Call the query function and capture the result
             rows = query2(sql_cmd, params, mysql)
@@ -1014,12 +1015,12 @@ def process_instr(instr_name ,year, doy,
             log_fn = db_log_stub + instrsitedate + '_log.log'
             if len(rows) == 0: # Create the entry
                 sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage, LogFile) VALUES(%s, %s, %s, %s, %s, %s)'
-                params = (site_id, db_id, startut, stoput, db_image_stub + fn, log_fn)
+                params = (site_id, db_id, startut, stoput, f'{db_image_stub}{start_year}/{fn}', log_fn)
                 logfile.write(sql_cmd + ' ' + str(params) + '\n')
                 query2(sql_cmd, params, mysql)
             else: # Entry exists. Update it.
                 sql_cmd = 'UPDATE DataSet SET SummaryImage=%s, LogFile=%s WHERE id = %s'
-                params = (db_image_stub + fn, log_fn, rows[0][0])
+                params = (f'{db_image_stub}{start_year}/{fn}', log_fn, rows[0][0])
                 logfile.write(sql_cmd + ' ' + str(params) + '\n')
                 query2(sql_cmd, params, mysql)
 
@@ -1052,7 +1053,7 @@ def process_instr(instr_name ,year, doy,
 
             if len(rows) == 0: # Create the entry
                 sql_cmd = 'INSERT INTO DataSet (Site, Instrument, StartUTTime, StopUTTime, SummaryImage) VALUES(%s, %s, %s, %s, %s)'
-                params = (network_id, gif_id, startut, stoput, db_image_stub + gif_fn.split('/')[-1])
+                params = (network_id, gif_id, startut, stoput, f'{db_image_stub}{start_year}/{gif_fn.split("/")[-1]}')
 
                 # Logging the command; note that we log the command with placeholders
                 logfile.write(sql_cmd + ' ' + str(params) + '\n')
@@ -1061,7 +1062,7 @@ def process_instr(instr_name ,year, doy,
                 query2(sql_cmd, params, mysql)
             else: # Entry exists. Update it.
                 sql_cmd = 'UPDATE DataSet SET SummaryImage = %s WHERE Site = %s and Instrument = %s and StartUTTime = %s'
-                params = (db_image_stub + gif_fn.split('/')[-1], network_id, gif_id, startut)
+                params = (f'{db_image_stub}{start_year}/{gif_fn.split("/")[-1]}', network_id, gif_id, startut)
 
                 # Execute the query
                 query2(sql_cmd, params, mysql)
