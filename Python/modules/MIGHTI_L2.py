@@ -726,7 +726,7 @@ def unwrap(x, start=0):
     
     
     
-def analyze_row(row, unwrap_phase=False):
+def analyze_row(row, unwrap_phase=False, consolidation='mean'):
     '''
     Given a 1-D interference pattern (i.e., a row of the complex intererogram), 
     analyze it to get a scalar phase value, which represents the wind, and a
@@ -748,6 +748,9 @@ def analyze_row(row, unwrap_phase=False):
       *  chi2              -- TYPE:float,     UNITS:rad^2. Variance of the row of phase.
        
     '''
+    
+    assert consolidation in ['mean','median']
+    
     if all(np.isnan(row)):
         return np.nan, np.nan, np.nan
     
@@ -758,7 +761,17 @@ def analyze_row(row, unwrap_phase=False):
         row_phase =  unwrap(row_phase, start=int(nx/2)) # Remove negative jumps
         row_phase = -unwrap(-row_phase, start=int(nx/2)) # Remove positive jumps
     
-    tot_phase = np.nanmean(row_phase)
+    if consolidation=='median': 
+        # Interpolate first to avoid quantization-like issues
+        from scipy.interpolate import interp1d
+        nx = len(row_phase)
+        x = np.arange(nx)
+        f = interp1d(x,row_phase, kind='linear')
+        x_new = np.linspace(0, nx-1, nx*50)
+        tot_phase2 = f(x_new)
+        tot_phase = np.nanmedian(row_phase)
+    else:
+        tot_phase = np.nanmean(row_phase)
     
     resid = row_phase - tot_phase
     chi2 = np.nanmean(resid**2)
@@ -1525,7 +1538,7 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
 
 
 
-def level1_dict_to_level15_dataset(L1_dict, emission_color, unwrap_phase=False):
+def level1_dict_to_level15_dataset(L1_dict, emission_color, unwrap_phase=False, consolidation='mean'):
     '''
     Starting with the level 1 data, remove S/C velocity and return 1D phase (vs altitude), with other info. This
     copies a lot from the first part of the Level 1 to Level 2.1 processing. No zero wind correction is made, and no
@@ -1582,7 +1595,7 @@ def level1_dict_to_level15_dataset(L1_dict, emission_color, unwrap_phase=False):
     ampL1 = np.zeros(Ny)
     chi2 = np.zeros(Ny)
     for i in range(Ny):
-        p,a,c = analyze_row(I[i,:], unwrap_phase=unwrap_phase)
+        p,a,c = analyze_row(I[i,:], unwrap_phase=unwrap_phase, consolidation=consolidation)
         phL1[i] = p
         ampL1[i] = a
         chi2[i] = c
@@ -1611,6 +1624,7 @@ def level1_dict_to_level15_dataset(L1_dict, emission_color, unwrap_phase=False):
         'sensor':sensor,
         'cal_lamp':L1_quality_flags[0,3],
         'low_signal_corr':(['time','row'], [L1_dict['I_phase_signal_correction']]),
+        'phase_uncertainty':(['time','row'], [I_phase_uncertainty]),
         }
 
     coords={
@@ -3494,7 +3508,7 @@ def get_msisGPI(dn, year_day, f107, f107a, ap, ap3):
     
     
     
-def level1_to_level15_without_info_file(L1_fns, emission_color, L15_path, vers, data_revision):
+def level1_to_level15_without_info_file(L1_fns, emission_color, L15_path, vers, data_revision, consolidation='mean'):
     '''
     High-level function to apply the Level-1-to-Level-1.5 algorithm to a series of Level 1 files. The input files
     must all come from the same sensor (MIGHTI-A or B, not both) and from the same date. It is expected that this 
@@ -3534,7 +3548,7 @@ def level1_to_level15_without_info_file(L1_fns, emission_color, L15_path, vers, 
     L15s = []
     for L1_fn in L1_fns:
         L1_dict = level1_to_dict(L1_fn, emission_color)
-        ds = level1_dict_to_level15_dataset(L1_dict, emission_color)
+        ds = level1_dict_to_level15_dataset(L1_dict, emission_color, consolidation=consolidation)
         L15s.append(ds)
 
     L15 = xr.concat(L15s, dim='time')
