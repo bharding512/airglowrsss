@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 6 # Should only be incremented on major changes
-software_version_minor = 0 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 1 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -113,6 +113,7 @@ import sys
 import copy
 import xarray as xr # Added 2021 May 27 for easier handling of Level 1.5 files.
 import pandas as pd # Added 2021 May 27 for easier handling of Level 1.5 files.
+import warnings # added 2025 Dec 9 to suppress integration warnings.
 
 import matplotlib
 #matplotlib.use('agg')
@@ -135,8 +136,10 @@ except:
         print('WARNING: Neither OMMBV nor pysatMagVect were found')
 
 
-# Added in v1.20
-from pyglow import pyglow # for correcting VER for temperature visibility reduction
+# Added in v1.20. Removed in v6.01 in favor of pymsis
+# from pyglow import pyglow # for correcting VER for temperature visibility reduction
+import pymsis
+
 
 # Some aesthetics for plots
 matplotlib.rcParams['xtick.labelsize'] = 'small'
@@ -191,6 +194,7 @@ def phase_to_wind_factor(sigma_opd):
 
 
 
+
 def visibility_temperature(t, lat, lon, alt, f107=None, f107a=None, f107p=None, apmsis=None):
     '''
     Return the temperature to be used to compute the fringe visibility reduction. 
@@ -201,26 +205,139 @@ def visibility_temperature(t, lat, lon, alt, f107=None, f107a=None, f107p=None, 
       *  lat  -- TYPE:float,  UNITS:deg. Latitude of requested point.
       *  lon  -- TYPE:float,  UNITS:deg. Longitude (0-360) of requested point.
       *  alt  -- TYPE:float,  UNITS:km.  Altitude of requested point.
-      *  f107 -- TYPE:float,  UNITS:sfu. F10.7 value for the date of interest (None is use values from pyglow)
-      *  f107a-- TYPE:float,  UNITS:sfu. F10.7a value for the date of interest (None is use values from pyglow)
-      *  f107p-- TYPE:float,  UNITS:sfu. F10.7p value for the date of interest (None is use values from pyglow)
-      *  apmsis--TYPE:array(7).          Ap vector that MSIS expects (None is use values from pyglow)
+      *  f107 -- TYPE:float,  UNITS:sfu. F10.7 value for the date of interest (None is use values from pymsis)
+      *  f107a-- TYPE:float,  UNITS:sfu. F10.7a value for the date of interest (None is use values from pymsis)
+      *  f107p-- TYPE:float,  UNITS:sfu. F10.7p value for the date of interest (None is use values from pymsis)
+      *  apmsis--TYPE:array(7).          Ap vector that MSIS expects (None is use values from pymsis)
 
     OUTPUTS:
       *  T    -- TYPE:float,  UNITS:K.   Temperature at requested point.
     '''
+
+    
+    def msis(time, lat, lon, alt, f107=None, f107a=None, ap=None, **kwargs):
+        """
+        Compute MSIS atmospheric parameters using pymsis, with support for both 
+        gridded and flythrough modes.
+    
+        Parameters
+        ----------
+        time : array-like of datetime64 or pandas.Timestamp
+            One or more time points for the calculation.
+        lat : array-like
+            Latitude(s) in degrees.
+        lon : array-like
+            Longitude(s) in degrees.
+        alt : array-like
+            Altitude(s) in km.
+    
+        f107 : float or array-like, optional
+            Daily F10.7 solar flux. Can be a scalar or an array matching `time`.
+    
+        f107a : float or array-like, optional
+            81-day averaged F10.7 solar flux. Can be a scalar or an array matching `time`.
+    
+        ap : float or array-like, optional
+            Planetary geomagnetic index. Must be a scalar or array matching `time`.
+            (Note: The storm-time 7-element Ap arrays are not currently supported.)
+    
+        kwargs : dict
+            Additional keyword arguments passed to `pymsis.calculate()`.
+    
+        Returns
+        -------
+        xr.Dataset
+            An xarray Dataset containing MSIS output variables. Dimensions are inferred 
+            from the input shapes. Supports both 1D flythrough and N-D grid output.
+        
+        """
+        
+        t = np.atleast_1d(np.array(time, dtype="datetime64[ns]"))
+        nt = len(t)
+        
+        lat = np.atleast_1d(lat)
+        lon = np.atleast_1d(lon)
+        alt = np.atleast_1d(alt)
+        
+        if f107 is not None and np.isscalar(f107):
+            # Broadcast to len of t if needed.
+            f107 = f107 * np.ones(len(t))
+            
+        if f107a is not None and np.isscalar(f107a):
+            f107a = f107a * np.ones(len(t))
+    
+        if ap is not None:
+            ap = np.asarray(ap)
+        
+            # Case: scalar: expand to (1,7) with zeros in storm slots
+            if ap.ndim == 0:
+                ap = np.array([[ap, 0, 0, 0, 0, 0, 0]])
+        
+            # Case: user gives [a0, a1, ..., a6] (ICON-style)
+            elif ap.ndim == 1 and ap.size == 7:
+                ap = ap.reshape(1, 7)
+        
+            # Anything else is wrong for single-time usage
+            else:
+                raise ValueError("ap must be scalar or length-7; got shape {}".format(ap.shape))
+
+    
+        
+        result = pymsis.calculate(
+            t,
+            lon,
+            lat,
+            alt,
+            f107s=f107,
+            f107as=f107a,
+            aps = ap,
+            **kwargs
+        )
+        
+        variables = pymsis.Variable
+        
+        if result.ndim == 5:
+            ds =  xr.Dataset(
+                {
+                    v.name: (("time", "lon", "lat", "alt"), result[:,:,:,:,i]) for i, v in enumerate(variables)
+                },
+                coords={
+                    "time": t,
+                    "alt": alt,
+                    "lat": lat,
+                    "lon": lon,
+                },
+            )
+        
+        elif result.ndim == 2:
+            ds = xr.Dataset(
+                {
+                    v.name: (("time",), result[:,i]) for i, v in enumerate(variables)
+                },
+                coords={
+                    "time": t,
+                    "alt": alt,
+                    "lat": lat,
+                    "lon": lon,
+                },
+            )
     
     
-    if apmsis is None:
-        pt = pyglow.Point(t, lat, lon, alt)
-    else:
-        pt = pyglow.Point(t, lat, lon, alt, user_ind=True)
-        pt.f107 = f107
-        pt.f107a = f107a
-        pt.f107p = f107p
-        pt.apmsis = apmsis
-    pt.run_msis()
-    T = pt.Tn_msis
+        ds['MASS_DENSITY'].attrs['units'] = 'kg/m^3'
+        for v in ['N2','O2','O','HE','H','AR','N','ANOMALOUS_O','NO']:
+            ds[v].attrs['units'] = '1/m^3'
+        ds['TEMPERATURE'].attrs['units'] = 'K'
+        ds['alt'].attrs['units'] = 'km'
+        ds['lat'].attrs['units'] = 'deg'
+        ds['lon'].attrs['units'] = 'deg'
+        
+        return ds.squeeze(drop=False) # Don't keep dims that are only of length 1
+    
+        
+    
+    ds = msis(t, lat, lon, alt, f107=f107, f107a=f107a, ap=apmsis)
+    T = ds.TEMPERATURE.item()
+    
     return T
     
     
@@ -548,6 +665,8 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', H=26., integr
                #  approximation introduces an error < 1mm/s)
                
     D = np.zeros((M,M))
+
+
     
     #################### Zero-order integration #######################
     # Assume airglow is constant within thin altitude shells. This is
@@ -574,8 +693,9 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', H=26., integr
         sb2 = -np.sin(th)**2 + ((RE+rb)/(RE+icon_alt))**2
         st2 = -np.sin(th)**2 + ((RE+rt)/(RE+icon_alt))**2
 
-        sb2[sb2<0] = 0. # there is no intersection of LOS with altitude rb. Set term to 0.
-        st2[st2<0] = 0. # there is no intersection of LOS with altitude rt. Set term to 0.
+        eps = 1e-12
+        sb2[sb2<eps] = 0. # there is no intersection of LOS with altitude rb. Set term to 0.
+        st2[st2<eps] = 0. # there is no intersection of LOS with altitude rt. Set term to 0.
         D = 2*(RE + icon_alt) * (np.sqrt(st2) - np.sqrt(sb2))
         
         if top_layer == 'exp': # Use exponential falloff model
@@ -588,7 +708,9 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', H=26., integr
                     return np.exp(-1./H*(np.sqrt(x**2 + rt**2) - r0))
                 
                 x0 = np.sqrt(r0**2- rt**2)
-                D[m,M-1] = 2.*integrate.quad(func, x0, np.inf, args=(rt))[0]
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", integrate.IntegrationWarning)
+                    D[m,M-1] = 2.*integrate.quad(func, x0, np.inf, args=(rt))[0]
                 
                 
     #################### First-order integration #######################
@@ -627,7 +749,9 @@ def create_observation_matrix(tang_alt, icon_alt, top_layer='exp', H=26., integr
                     return np.exp(-1./H*(np.sqrt(x**2 + rt**2) - r0))
                 
                 x0 = np.sqrt(r0**2- rt**2)
-                D[m,M-1] += 2.*integrate.quad(func, x0, np.inf, args=(rt))[0]
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", integrate.IntegrationWarning)
+                    D[m,M-1] += 2.*integrate.quad(func, x0, np.inf, args=(rt))[0]
                 
     else:
         raise Exception('"integration_order == %i" not supported. Use 0 or 1.' % integration_order)
@@ -1764,7 +1888,7 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
         import sys
         sys.stdout.flush()
     # Use two thresholds of chi^2.
-    # 2022 May 31 BJH: Changed the ver<0 flag to 6 instead of 11. (If VER<0 then there is no way the winds or VER are actually good).
+    # 2022 May 31 BJH: Changed the ver<0 flag to 6 instead of 11. (If VER<0 then there is no way the winds are actually good).
     quality_flags[:,6]  = (L21_dict['chi2'] > chi2_thresh) | (L21_dict['ver'] < 0)
     quality_flags[:,11] = (L21_dict['chi2'] > chi2_thresh_caution) & (L21_dict['chi2'] <= chi2_thresh)
     
@@ -1808,7 +1932,8 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
             ver_ratings.append(0.5)
         if quality_flags[i,6]: # SNR too low
             wind_ratings.append(0.0) # phase is definitely bad (?)
-            ver_ratings.append(0.0) # in practice, it seems the VERs are bad here too, especially in the SAA
+            ver_ratings.append(0.5) # in practice, it seems the VERs are bad here too, especially in the SAA.
+                                    # Dec 12 2025: Trying to use "caution" flag here instead. 
         if quality_flags[i,11]: # SNR possibly too low ("Caution")
             wind_ratings.append(0.5) # phase is maybe bad
             ver_ratings.append(0.5) # VER is probably fine, but still questionable, especially in SAA
@@ -1846,7 +1971,8 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
     count = countvec.max()
     if count < count_thresh:
         wind_quality[:] = 0
-        ver_quality[:] = 0
+        # ver_quality[:] = 0.5 # changed Dec 12 2025 to be caution only 
+        ver_quality = np.minimum(ver_quality, 0.5)
         quality_flags[:,5] = 1
         
     if global_params['verbose']:
@@ -2096,6 +2222,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                     * slt                       -- TYPE:array(ny),    UNITS:hour. Solar local time
                     * ver_dc                    -- TYPE:array(ny),    UNITS:ph/cm^3/s. Like ver, but generated from the DC value of the
                                                                                   interferogram, not the fringe amplitude.
+                    * ver_dc_error              -- TYPE:array(ny),    UNITS:ph/cm^3/s. Uncertainty in ver_dc (1-sigma)
                     * orbit_node                -- TYPE:int. 0 or 1               0 = Latitude of ICON is increasing
                                                                                   1 = Latitude of ICON is decreasing
                     * orbit_number              -- TYPE:int.                      ICON orbit number
@@ -2158,6 +2285,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
         import sys
         sys.stdout.flush()
     Iraw = L1_dict['I_amp']*np.exp(1j*L1_dict['I_phase'])
+    I_amp = L1_dict['I_amp']
     I_amp_uncertainty = L1_dict['I_amp_uncertainty']
     err_inst = L1_dict['I_phase_uncertainty']
     err_signal = L1_dict['I_phase_signal_uncertainty']
@@ -2211,6 +2339,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
         import sys
         sys.stdout.flush()
     I        = bin_image(bin_size, I)
+    I_amp    = bin_image(bin_size, I_amp)
     I_dc     = bin_array(bin_size, I_dc)
     tang_lat = bin_array(bin_size, tang_lat)
     tang_lon = bin_array(bin_size, tang_lon, lon=True)
@@ -2218,7 +2347,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     tang_alt_hi = bin_array(bin_size, tang_alt, method='max')
     tang_alt    = bin_array(bin_size, tang_alt)
     ny, nx = np.shape(I)
-    mighti_ecef_vectors_center = mighti_ecef_vectors[:,nx/2,:] # For reporting in output file, determine ecef vector at center of row
+    mighti_ecef_vectors_center = mighti_ecef_vectors[:,nx//2,:] # For reporting in output file, determine ecef vector at center of row
     mighti_ecef_vectors_center = bin_image(bin_size, mighti_ecef_vectors_center) # bin each component separately
     L1_quality_flags = bin_image(bin_size, L1_quality_flags, method='max') # bin each flag separately, taking *max* over the bin
     L1_quality       = bin_array(bin_size, L1_quality,       method='min') # bin quality factor, taking *min* over the bin
@@ -2275,11 +2404,15 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     #### Invert DC value of interferogram to get alternative VER product
     D = create_observation_matrix(tang_alt, icon_alt, top_layer=top_layer, integration_order=integration_order, H=H)
     ver_dc = np.linalg.solve(D, I_dc)
+    # Dec 12 2025 add uncertainty propagation
+    Dinv = np.linalg.inv(D)
+    DD = Dinv.dot(Dinv.T)
+    ver_dc_error = I_amp_uncertainty * np.sqrt(np.diag(DD)) # assumption that L1 uncertianty is equal (since it's not provided)
     
     #### Calculate azimuth angles at measurement locations
     az = los_az_angle(icon_latlonalt, lat, lon, alt)
         
-    
+
     # Make a L2.1 dictionary
     L21_dict = {
              'los_wind'                     : v,
@@ -2329,12 +2462,15 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
              'sza'                          : sza,
              'slt'                          : slt,
              'ver_dc'                       : ver_dc,
+             'ver_dc_error'                 : ver_dc_error,
              'orbit_node'                   : int(icon_velocity_vector[2] < 0), # ECEF_Z < 0 --> descending
              'orbit_number'                 : L1_dict['orbit_number'],
              'jitter'                       : L1_dict['jitter'],
              'zero_wind_phase'              : zero_wind_phase,
              'low_signal_corr'              : low_signal_wind_corr,
     }
+
+    
     
     #### Quality control and flagging
     if global_params['verbose']:
@@ -2350,6 +2486,15 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                                                terminator_thresh = terminator_thresh, 
                                                                chi2_thresh = chi2_thresh, chi2_thresh_caution=chi2_thresh_caution,
                                                                count_thresh = count_thresh)
+    # Dec 12 2025 quick addition to add a quality check for VER. Filters out SAA.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        ver_bad = np.nanstd(I_amp, axis=-1) > 2000 # stddev of L1 amplitude.
+        ver_quality[ver_bad] = 0.0
+        # But make sure that VERs are never labeled as WORSE quality than winds.
+        ver_quality = np.maximum(ver_quality, wind_quality)
+
+    
     if global_params['verbose']:
         print('%s:\t\t\t\t Exited level21_quality(...)'% (timestamp()))
         import sys
@@ -2357,6 +2502,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     L21_dict['wind_quality'] = wind_quality
     L21_dict['ver_quality'] = ver_quality
     L21_dict['quality_flags'] = quality_flags
+
     
     ### Mask out points with very bad quality
     if global_params['verbose']:
@@ -2390,6 +2536,7 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     L21_dict['ver'][idx] = np.nan
     L21_dict['ver_error'][idx] = np.nan
     L21_dict['ver_dc'][idx] = np.nan
+    L21_dict['ver_dc_error'][idx] = np.nan
     
     if global_params['verbose']:
         print('%s:\t\t\t Returning from L2.1 core'% (timestamp()))
@@ -2488,7 +2635,7 @@ def _create_variable(ncfile, name, value, format_nc='f8', format_fortran='F', di
     # the variable, replace them with the fill value.
     if fill_value is not None:
         # For sequences that are not strings:
-        if hasattr(value,'__len__') and not isinstance(value,(str,unicode)):
+        if hasattr(value,'__len__') and not isinstance(value,(str)):
             value[np.isnan(value)]  = var._FillValue
         # For non-sequences and strings:
         elif np.isnan(value):
@@ -2553,7 +2700,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 #     for i in range(nt):
 #         date1 = L21_dict['time'][i].date()
 #         assert date0 == date1, 'Files from different dates: %s %s' % (date0, date1)
-    date_ref = L21_dict['time'][nt/2].date() # Assume middle time provides the definition of "today's date"
+    date_ref = L21_dict['time'][nt//2].date() # Assume middle time provides the definition of "today's date"
     t_start_msec = np.array([(t - datetime(1970,1,1)).total_seconds()*1e3 for t in L21_dict['time_start']]).astype(np.int64) # milliseconds since epoch
     t_stop_msec  = np.array([(t - datetime(1970,1,1)).total_seconds()*1e3 for t in L21_dict['time_stop']]).astype(np.int64)
     t_mid_msec   = np.array([(t - datetime(1970,1,1)).total_seconds()*1e3 for t in L21_dict['time']]).astype(np.int64)
@@ -2581,7 +2728,59 @@ def save_nc_level21(path, L21_dict, data_revision=0):
 
     try:
         ########################## Global Attributes #################################
-        ncfile.setncattr_string('Acknowledgement',                L21_dict['acknowledgement'])
+        ncfile.setncattr_string('Acknowledgement',                """
+This is a data product from the NASA Ionospheric Connection Explorer mission, an Explorer launched at 21:59:45 EDT on October 10, 2019, from Cape Canaveral AFB in the USA. Guidelines for the use of this product are described in the ICON Rules of the Road  (http://icon.ssl.berkeley.edu/Data).
+
+
+Responsibility for the mission science falls to the Principal Investigator, Dr. Thomas Immel at UC Berkeley: 
+Immel, T.J., England, S.L., Mende, S.B. et al. Space Sci Rev (2018) 214: 13. https://doi.org/10.1007/s11214-017-0449-2
+Immel, T.J., England, S.L., Harding, B.J. et al. Space Sci Rev (2023) 219: 41. https://doi.org/10.1007/s11214-023-00975-x
+
+
+Responsibility for the validation of the L1 data products falls to the instrument lead investigators/scientists.
+EUV: Dr. Martin Sirk and Dr. Eric Korpela :  https://doi.org/10.1007/s11214-023-00963-1, and https://doi.org/10.1007/s11214-017-0384-2
+FUV: Dr. Harald Frey : https://doi.org/10.1007/s11214-023-00969-9, and https://doi.org/10.1007/s11214-017-0386-0
+MIGHTI: Dr. Christoph Englert : https://doi.org/10.1007/s11214-023-00971-1, https://doi.org/10.1007/s11214-017-0358-4, and https://doi.org/10.1007/s11214-017-0374-4
+IVM: Dr. Roderick Heelis : https://doi.org/10.1007/s11214-017-0383-3
+
+
+Responsibility for the validation of the L2 data products falls to those scientists responsible for those products.
+
+* Daytime O/N2 ratio : Dr. Robert Meier : https://doi.org/10.1007/s11214-018-0477-6
+* Daytime (EUV) O+ profiles: Dr. Andrew Stephan : https://doi.org/10.1007/s11214-022-00933-z, and https://doi.org/10.1007/s11214-017-0385-1
+* Nighttime (FUV) O+ profiles: Dr. Farzad Kamalabadi : https://doi.org/10.1007/s11214-018-0502-9
+* Neutral Wind profiles: Dr. Brian Harding : https://doi.org/10.1007/s11214-017-0359-3, and https://doi.org/10.1029/2020JA028947
+* Neutral Temperature profiles: Dr. Michael Stevens : https://doi.org/10.1007/s11214-022-00935-x, and https://doi.org/10.1007/s11214-017-0434-9
+* Ion Velocity Measurements : Dr. Roderick Heelis : https://doi.org/10.1007/s11214-017-0383-3
+
+Additional theoretical work in support of these products was supported by Dr. Robert Meier
+Daytime O/N2 product : https://doi.org/10.1029/2020JA029059
+Daytime (EUV) O+ profiles : https://doi.org/10.1029/2023JA031533
+
+Additional validation work was performed by Dr. Jonathan Makela, Dr. Gilles Wautelet, and Dr. Yen-Jung (Joanne) Wu:
+Neutral wind profiles : https://doi.org/10.1029/2020JA028726
+Nighttime (FUV) O+ profiles : https://doi.org/10.1007/s11214-023-00970-2
+Daytime (EUV) O+ profiles : https://doi.org/10.1007/s11214-022-00930-2
+Ion Velocity Measurements : https://doi.org/10.1007/s11214-023-00993-9
+
+Responsibility for Level 4 products falls to those scientists responsible for those products.
+
+* Hough Modes : Dr. Chihoko Cullens : https://doi.org/10.1186/s40645-020-00330-6 and https://doi.org/10.1007/s11214-017-0401-5
+* TIEGCM : Dr. Astrid Maute : https://doi.org/10.1007/s11214-017-0330-3
+* SAMI3 : Dr. Joseph Huba : https://doi.org/10.1007/s11214-017-0415-z
+
+Pre-production versions of all above papers are available on the ICON website.
+http://icon.ssl.berkeley.edu/Publications
+
+Overall validation of the products is overseen by the ICON Project Scientist, Dr. Scott England.
+
+NASA oversight for all products is provided by the Mission Scientist, Dr. Jeffrey Klenzing (2018-2022) and Dr. Ruth Lieberman (2022-present).
+
+Users of these data should contact and acknowledge the Principal Investigator Dr. Immel and the party directly responsible for the data product (noted above) and acknowledge NASA funding for the collection of the data used in the research with the following statement :
+
+"ICON is supported by NASA's Explorers Program through contracts NNG12FA45C and NNG12FA42I".
+
+These data are openly available as described in the ICON Data Management Plan available on the ICON website (http://icon.ssl.berkeley.edu/Data).""")
         ncfile.setncattr_string('ADID_Ref',                       'NASA Contract > NNG12FA45C')
         ncfile.setncattr_string('Calibration_File',               calibration_file)
         ncfile.setncattr_string('Conventions',                    'SPDF ISTP/IACG Modified for NetCDF')
@@ -2604,7 +2803,8 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                                                                    'v2.0: First run of on-orbit data, using external zero wind reference and smooth daily-averaged profiles, B. J. Harding, 01 May 2020',
                                                                    'v3.0: Correction for long-term mechanical drift, B. J. Harding, 04 Jun 2020',
                                                                    'v4.0: Updated correction for long-term mechanical drift to handle settling after ~May 2020 and precession cycle variation. LoS winds have changed by a bulk offset of up to 30 m/s. Studies using only perturbations from the mean (e.g., non-migrating tidal retrievals) are unlikely to be affected. B. J. Harding, 21 Oct 2020',
-                                                                   'v5.0: The ad-hoc, HWM-based correction for the zero wind phase has been replaced with a self-calibration based on comparing data from the ascending and descending orbits (see the notes for the wind variables below for details). Long-term trends in the zero wind phase degraded the accuracy of version 4 over time, and the accuracy of version 4 data was tied to the accuracy of HWM. In version 5, errors on these long time scales (>100-150 days) are now accounted for, improving the accuracy to 10-25 m/s (see the "Accuracy" variable for more details) and removing the dependence on external models. A long window of data is required to implement this self-calibration, so v05 data are processed at least 100 days behind real time. For errors on precession-cycle time scales (48 days), the previous ad-hoc correction using initial red-vs-green comparisons has been replaced with a more comprehensive red-green cross-calibration (165-185 km altitude during the day) that accounts for the time-dependence of mechanical drifts of the optics. This result is consistent with a first-principles analysis of the fiducial notch positions (see Marr et al., 2020 and subsequent publications). A mission-average fiducial notch analysis is also used to correct mechanical drifts on an orbital time scale (97 minutes, or 24 hours of local time), which could affect migrating tide estimates. The RMS difference due to this effect is estimated at 5-10 m/s (root mean square). Analysis of waves with periods that do not coincide with these new corrections are not likely to be different than in version 4 (e.g., nonmigrating tides, planetary waves, and gravity waves). New variables related to error (i.e., uncertainty) estimates from various sources are now included, whereas version 4 error estimates only included the effects of shot, read, and dark noise. MIGHTI-A and MIGHTI-B variables related to emission brightness are now cross-calibrated, though not absolutely calibrated. Exposures affected by solar and lunar stray light are now flagged. Some data during periods in May and July 2020 when the sun approached the MIGHTI field of view was marked as unavailable in v04, but is now available in v05 with the exception of a few days. The data from the second row in the green channel (~91 km) is now available when the signal strength permits a wind estimate. An error in the local time calculation has been corrected, which changes the local time by up to 20 min. A new algorithm to identify cosmic ray spikes has been implemented, improving precision. A preliminary algorithm has been implemented to to correct a wind bias associated with low signal levels, and associated uncertainties are estimated (see the "Precision_Low_Signal_Effect" variable for more details). Finally, various quality control parameters have been optimized. More description is provided in the notes below. A full history of software changes can be found on Github: https://github.com/bharding512/airglowrsss/commits/master/Python/modules/MIGHTI_L2.py  B. J. Harding 08 Sep 2022'
+                                                                   'v5.0: The ad-hoc, HWM-based correction for the zero wind phase has been replaced with a self-calibration based on comparing data from the ascending and descending orbits (see the notes for the wind variables below for details). Long-term trends in the zero wind phase degraded the accuracy of version 4 over time, and the accuracy of version 4 data was tied to the accuracy of HWM. In version 5, errors on these long time scales (>100-150 days) are now accounted for, improving the accuracy to 10-25 m/s (see the "Accuracy" variable for more details) and removing the dependence on external models. A long window of data is required to implement this self-calibration, so v05 data are processed at least 100 days behind real time. For errors on precession-cycle time scales (48 days), the previous ad-hoc correction using initial red-vs-green comparisons has been replaced with a more comprehensive red-green cross-calibration (165-185 km altitude during the day) that accounts for the time-dependence of mechanical drifts of the optics. This result is consistent with a first-principles analysis of the fiducial notch positions (see Marr et al., 2020 and subsequent publications). A mission-average fiducial notch analysis is also used to correct mechanical drifts on an orbital time scale (97 minutes, or 24 hours of local time), which could affect migrating tide estimates. The RMS difference due to this effect is estimated at 5-10 m/s (root mean square). Analysis of waves with periods that do not coincide with these new corrections are not likely to be different than in version 4 (e.g., nonmigrating tides, planetary waves, and gravity waves). New variables related to error (i.e., uncertainty) estimates from various sources are now included, whereas version 4 error estimates only included the effects of shot, read, and dark noise. MIGHTI-A and MIGHTI-B variables related to emission brightness are now cross-calibrated, though not absolutely calibrated. Exposures affected by solar and lunar stray light are now flagged. Some data during periods in May and July 2020 when the sun approached the MIGHTI field of view was marked as unavailable in v04, but is now available in v05 with the exception of a few days. The data from the second row in the green channel (~91 km) is now available when the signal strength permits a wind estimate. An error in the local time calculation has been corrected, which changes the local time by up to 20 min. A new algorithm to identify cosmic ray spikes has been implemented, improving precision. A preliminary algorithm has been implemented to to correct a wind bias associated with low signal levels, and associated uncertainties are estimated (see the "Precision_Low_Signal_Effect" variable for more details). Finally, various quality control parameters have been optimized. More description is provided in the notes below. A full history of software changes can be found on Github: https://github.com/bharding512/airglowrsss/commits/master/Python/modules/MIGHTI_L2.py  B. J. Harding 08 Sep 2022',
+                                                                   'v6.0: First, the low-signal correction has been further tuned using on-orbit data, with significant changes near the end of the mission. The tuning utilized the assumption that in the early mission, the wind’s dependence on airglow brightness was accurate, and applied a commensurate correction to late-mission data. Although changes in the green-line are small, changes in red-line data at the end of the mission reached tens of m/s, larger at the terminator. These changes result in a more continuous transition between day and night mode, as well as better agreement with HWM. Second, daily phase calibrations (e.g., thermal drift correction) have been smoothed over time. Third, a new algorithm was developed to identify and mask CCD pixels exhibiting rapid changes in the dark current. These two updates have improved the point-to-point scatter (1-sample precision) and day-to-day scatter (1-day precision). Other minor changes include the following. Minor code refactoring was necessary to upgrade to Python3, and small numerical changes are expected. Quality flagging for Volume Emission Rate (VER) data was updated to permit reporting of VER even where winds are flagged as poor quality. This slightly improves the coverage of VER data. B. J. Harding 12 Dec 2025'
                                                                   ])
         ncfile.setncattr_string('HTTP_LINK',                      'http://icon.ssl.berkeley.edu/Instruments/MIGHTI')
         ncfile.setncattr_string('Instrument',                     'MIGHTI-%s' % sensor)
@@ -2644,21 +2844,20 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                     "Further discussion of the calibration and performance of MIGHTI after launch can be found in a forthcoming paper in Space Science "
                     "Reviews [Englert et al., 2022, in preparation].",
                     
-                     "Known issues with the v05 data release are listed below. Work is in progress to resolve or mitigate these issues in future data releases. ",
+                     "Known issues with the v06 data release are listed below. Work is in progress to resolve or mitigate these issues in future data releases. ",
 
-                     "Known issues with v05:<br/>"
+                     "Known issues with v06:<br/>"
                      " * When ICON is in the South Atlantic Anomaly (SAA), radiation effects on the detector cause poor data quality. The quality control algorithm "
                      "adequately flags and masks most of the affected samples, but some outliers remain, especially near the edge of the SAA. Other uncaught outliers "
                      "are rare but can occur due to cosmic rays, stars in the field of view, moonlight, etc. <br/>"
                      " * The bottom row of data (corresponding to an altitude of ~88 km) is masked out as the signal is rarely strong enough to permit a wind "
-                     "estimate, and calibrations have large uncertainties. It is unlikely but possible that this altitude will be reported in future releases, "
-                     "pending further investigation. <br/>"
+                     "estimate, and calibrations have large uncertainties. <br/>"
                      " * Airglow brightness observations are not a required mission product, and no effort was yet made to absolutely calibrate "
                      "the brightness observations for MIGHTI-A and MIGHTI-B, and thus the Relative_VER "
-                     "variable should be treated with caution. In v05, MIGHTI-A and B are cross-calibrated using a conversion factor derived from on-orbit data. "
-                     "However, there are some indications that this cross-calibration may be changing with time, which is not accounted for in v05. <br/>"
+                     "variable should be treated with caution. In v05 and v06, MIGHTI-A and B are cross-calibrated using a conversion factor derived from on-orbit data. "
+                     "However, there are some indications that this cross-calibration may be changing with time, which is not accounted for. <br/>"
                      
-                     " * As discussed in the variable notes below, a new zero wind phase determination has been implemented in v05. However, during the period "
+                     " * As discussed in the variable notes below, a new zero wind phase determination has been implemented beginning in v05. However, during the period "
                      "from 2021 Apr 26 to Aug 14, data gaps and one period of southward (\"Reverse LVLH\") pointing cause errors in this determination. The "
                      "accuracy is estimated to be degraded by a factor of two. See the *_Accuracy variable. <br/>"
                      " * During the one orbit per day when the calibration lamp is on, the wind data can be noisier and have a slight bias. Although this issue is "
@@ -2670,20 +2869,17 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                      "error estimates (i.e., precision and accuracy) should treat those estimates as uncertain. It is believed that most error estimates are "
                      "correct to within a factor of 2. The largest problems with error reporting occur where the airglow signal is weakest. <br/>"
                      
-                     " * Imperfect daily calibration data lead to small discontinuities in the zero wind phase at the boundaries between days (i.e., "
-                     " between 23:59:59 and 00:00:00 UT), which are not accounted for by the reported error variables. This was estimated to be a 2-5 "
-                     "m/s (root-mean-square) error early in the mission, but is growing over time, possibly reaching 5-10 m/s by mid-2022.<br/>"
                      " * A signal-dependent phase shift is seen in atmospheric and calibration lamp fringes, possibly caused by "
                      "a charge trapping effect in the CCD. This is the subject of ongoing investigation, but a first-order correction "
-                     "is implemented in the v05 dataset. The correction increases linearly with time to match the effect seen in on-orbit calibration data. "
+                     "was implemented in the v05 dataset and improved in v06. The correction increases linearly with time to match the effect seen in on-orbit calibration data. "
                      "The variable *_Precision_Low_Signal_Effect is an estimate of the remaining uncertainty due to an imperfect "
                      "correction. Where this uncertainty is large, caution is recommended. "
                      "For example, for winds in the core science region (90-105 km altitude, away from the terminator), the magnitude of the correction "
                      "is small or zero, but data in the red "
-                     "channel during the night and twilight are subject to a large correction (many tens of m/s) and the uncertainty is correspondingly large. "
-                     "A goal for future releases is to characterize and correct this effect more accurately. <br/>"
+                     "channel during the night and twilight are subject to a large correction (many tens of m/s) and the uncertainty is correspondingly large. <br/>"
                      " * Data near the solar terminators are subject to a variety of errors, including those described above and others related to the rapidly "
-                     "varying illumination. Not all errors near the terminator are accounted for by the reported error. Users are encouraged to "
+                     "varying illumination. Although terminator errors have been much improved in v06, not all errors near the terminator are accounted for "
+                     "by the reported error. Users are encouraged to "
                      "use extra caution with these data.<br/>"
                      "See the documentation below for more information.<br/>"
                     ]
@@ -2949,7 +3145,7 @@ def save_nc_level21(path, L21_dict, data_revision=0):
         var = _create_variable(ncfile, '%s_Relative_VER_Error'%prefix, L21_dict['ver_error'], 
                               dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
                               format_nc='f8', format_fortran='F', desc='Relative volume emission rate error profile', 
-                              display_type='altitude_profile', field_name='Relative VER', fill_value=None, label_axis='VER', bin_location=0.5,
+                              display_type='altitude_profile', field_name='Relative VER Error', fill_value=None, label_axis='VER err', bin_location=0.5,
                               units='ph/cm^3/s', valid_min=0, valid_max=1e30, var_type='data', chunk_sizes=[nt,ny],
                               notes= "The statistical (1-sigma) error in the relative VER estimate. This error arises mostly from shot "
                               "noise. Importantly, it is expected that systematic errors (e.g., calibration errors) dominate the total "
@@ -3331,7 +3527,18 @@ def save_nc_level21(path, L21_dict, data_revision=0):
                                "amplitude. The DC value is susceptible to contamination by stray light and background emission, but is "
                                "not sensitive to atmospheric temperature like the fringe amplitude."
                               )
-
+        
+        # Relative VER Error 
+        var = _create_variable(ncfile, '%s_Relative_VER_DC_Error'%prefix, L21_dict['ver_dc_error'], 
+                              dimensions=('Epoch','Altitude'), depend_0 = 'Epoch', depend_1 = 'Altitude',
+                              format_nc='f8', format_fortran='F', desc='Error in Relative volume emission rate profile derived from DC value', 
+                              display_type='altitude_profile', field_name='Relative VER Error', fill_value=None, label_axis='VER err', bin_location=0.5,
+                              units='ph/cm^3/s', valid_min=0, valid_max=1e30, var_type='data', chunk_sizes=[nt,ny],
+                              notes= "The statistical (1-sigma) error in the relative_VER_DC estimate. This error arises mostly from shot "
+                              "noise. Importantly, it is expected that systematic errors (e.g., calibration errors) dominate the total "
+                              "error, but they are not included in this variable."
+                              )
+        
         # Zero Wind Phase
         var = _create_variable(ncfile, '%s_Zero_Wind_Phase'%prefix, L21_dict['zero_wind_phase'], 
                               dimensions=('Epoch','Row'), depend_0 = 'Epoch', depend_1 = 'Row',
@@ -3384,7 +3591,7 @@ def combine_level21(L21_dicts):
                    'emission_color',
                    'bin_size', # if this varies within a day, we can't save all profiles in one file
                   ]
-    changing_keys = L21_dicts[0].keys()
+    changing_keys = list(L21_dicts[0].keys())
     for k in common_keys:
         changing_keys.remove(k)
     if 'I' in changing_keys:
@@ -3438,7 +3645,7 @@ def get_GPI(dn, year_day, f107, f107a, ap, ap3):
     i = np.argwhere(year_day == yd).flatten()[0]
 
     # Get the index into the 3 hour dimension
-    j = dn.hour/3
+    j = dn.hour//3
 
     return f107[i], f107a[i], ap[i], ap3[j,i]
 
@@ -3586,7 +3793,7 @@ def level1_to_level15_without_info_file(L1_fns, emission_color, L15_path, vers, 
     
 
     
-def zero_wind_phase_from_L1(dsz, L1_dict):
+def zero_wind_phase_from_L1(dsz, L1_dict, lowsigadj = True):
     '''
     Given an already-loaded zero-wind-phase file and a L1 dictionary, determine the row-dependent zero wind phase
     to be applied. This function combines the "zero_phase" and "striation" variables to produce one profile. It also
@@ -3682,22 +3889,64 @@ def zero_wind_phase_from_L1(dsz, L1_dict):
     # Estimate striation error from fluctuations in daily-averaged phase
     p = z.phase # Doesn't matter if we use phase or phase_with_notch here
     phpf = p - p.rolling(row=5, center=True, min_periods=1).median() # High-pass median filtered version
-    q = phpf.to_series().rolling(3, min_periods=2, center=True).std().fillna(method='ffill').fillna(method='bfill') # rolling stddev with extrapolation
+    # q = phpf.to_series().rolling(3, min_periods=2, center=True).std().fillna(method='ffill').fillna(method='bfill') # rolling stddev with extrapolation
+    q = phpf.to_series().rolling(3, min_periods=2, center=True).std().ffill().bfill() # rolling stddev with extrapolation
     q = q.to_xarray().where(~p.isnull()) # Only evaluate where the data actually exist
     z0_err_striation = q.values
     Ncorr_striation = 1 # Unlike in preliminary v05 runs, the striation-correction bandaid is no longer used, and thus they are uncorrelated with other rows.
     
+    if lowsigadj and sensor=='B' and color=='red' and mode=='Day':
+        ## ADDITION DEC 5, 2025:
+        ## Adjustment for v06 low-signal correction for MTB Red Day, Rows 0-15. 
+        ## Make it have the same low-signal correction as the higher rows, 16-19.
+        ## This should only be used in conjunction with a zero wind file that has a commensurate mean correction 
+        phase_adj = L1_dict['I_phase_signal_correction'][16:19].mean() - L1_dict['I_phase_signal_correction']
+        phase_adj[16:] = 0
+        z0 += phase_adj
+        # Also adjust uncertainty
+        L1_dict['I_phase_signal_uncertainty'][0:15] = L1_dict['I_phase_signal_uncertainty'][16:19].mean()
+    
     return z0, z0_err_striation, z0_err_zero_phase, Ncorr_striation
     
         
-        
+
+def smooth_axis0_tri(a, size=25):
+    a = np.asarray(a)
+    out = a.copy()
+
+    w = np.bartlett(size)
+    w = w / w.sum()
+    half = size // 2
+    n0, n1 = a.shape
+
+    for j in range(n1):
+        col = a[:, j]
+        for i in range(n0):
+            lo = i - half
+            hi = i + half + 1
+
+            # edge → keep original
+            if lo < 0 or hi > n0:
+                continue
+
+            window = col[lo:hi]
+            mask = ~np.isnan(window)
+            if mask.any():
+                out[i, j] = (window[mask] * w[mask]).sum() / w[mask].sum()
+            else:
+                out[i, j] = np.nan
+
+    return out
+
+
         
 def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_revision=0,
                                         gpi_yearday=None, gpi_f107=None, gpi_f107a=None, gpi_ap=None, gpi_ap3=None,
                                         sigma=None, top_layer=None, 
                                         H = None, integration_order=None, account_for_local_projection=None, 
                                         bin_size=None, top_layer_thresh=None, terminator_thresh=None, zero_wind_ref=None,
-                                        corr_notch_drift=None, chi2_thresh=None, chi2_thresh_caution=None, zero_wind_file=None):
+                                        corr_notch_drift=None, chi2_thresh=None, chi2_thresh_caution=None, zero_wind_file=None,
+                                        smoothamp=False):
     '''
     High-level function to apply the Level-1-to-Level-2.1 algorithm to a series of Level 1 files. The input files
     must all come from the same sensor (MIGHTI-A or B, not both) and from the same date. It is expected that this 
@@ -3755,6 +4004,7 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
       *  zero_wind_file      -- TYPE:str,                 Full path to a "Zero-Phase-Notch" file, which contains the variables
                                                           "zero_phase" and "zero_phase_with_notch" which will be used to apply the zero wind
                                                           phase correction.
+      *  smoothamp           -- TYPE:bool,  (default False) Whether to smooth the fringe amplitude before inverting.                                                    
                                                           
                                            
     OUTPUTS:      
@@ -3815,6 +4065,10 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
             z, z_err_striation, z_err_zero_phase, Ncorr = None, None, None, 7 # Arbitrary defaults
             if zero_wind_file is not None:
                 z, z_err_striation, z_err_zero_phase, Ncorr = zero_wind_phase_from_L1(dsz, L1_dict)
+
+            # Optional fringe amplitude smooth
+            if smoothamp:
+                L1_dict['I_amp'] = smooth_axis0_tri(L1_dict['I_amp'])
             
             # Perform L1 to L2.1 processing
             if global_params['verbose']:
@@ -3971,7 +4225,7 @@ def level1_to_level15(info_fn):
                                         
     OUTPUTS:   
     
-      *  ret     -- TYPE:str. '' if everything worked. If not, a human-readable error message for each file that failed
+      *  ret     -- TYPE:str. empty if everything worked. If not, a human-readable error message for each file that failed
     
     '''    
     # Read information.txt file
@@ -4231,7 +4485,7 @@ def level21_to_dict(L21_fn, skip_att=[], keep_att=[], tstartstop = None, skip_ba
                   * sza               -- TYPE:array(ny,nt), UNITS:deg.     Solar zenith angle
                   * slt               -- TYPE:array(ny,nt), UNITS:hour.    Solar local time
                   * ver_dc            -- TYPE:array(ny,nt), UNITS:ph/cm^3/s. Volume emission rate derived from 
-                                                                           interferogram DC value.
+                  * ver_dc_error      -- TYPE:array(ny,nt), UNITS:ph/cm^3/s. Uncertainty in ver_dc
                   * bin_size          -- TYPE:int.                    Number of pixels binned together in altitude dimension.
                   * orbit_node        -- TYPE:array(nt).              Descending/Ascending orbit flag
                                                                       0 = ICON latitude is increasing (ascending)
@@ -4342,6 +4596,7 @@ def level21_to_dict(L21_fn, skip_att=[], keep_att=[], tstartstop = None, skip_ba
     z['mag_lat']          = read('%s_Magnetic_Latitude' % prefix)[idx_good]
     z['mag_lon']          = read('%s_Magnetic_Longitude' % prefix)[idx_good]
     z['ver_dc']           = read('%s_Relative_VER_DC' % prefix)[idx_good]
+    # z['ver_dc_error']     = read('%s_Relative_VER_DC_Error' % prefix)[idx_good] # Leaving out for now
     z['bin_size']         = read('%s_Bin_Size' % prefix)[...].item()
     z['chi2']             = read('%s_Chi2' % prefix)[idx_good,:]
     # Load new variables in a backwards compatible way
@@ -5001,7 +5256,7 @@ def level21_dict_to_level22_dict(L21_A_dict, L21_B_dict, sph_asym_thresh = None,
             dlon = dlon_last
         loni += dlon
         lon_vec.append(loni)
-#         dlon_last = dlon # TODO: Enable this in v06 (It was a mistake to omit it, but it only slightly changes the grid.)
+        dlon_last = dlon # TODO: Enable this in v06 (It was a mistake to omit it, but it only slightly changes the grid.)
     lon_vec = np.array(lon_vec)
     
     assert np.std(lon_vec) > 0, "Contact MIGHTI Team - longitude grid not changing"
@@ -5637,7 +5892,60 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
     try: # always close file if an error occurs
     
         ########################## Global Attributes #################################
-        ncfile.setncattr_string('Acknowledgement',                L22_dict['acknowledgement'])
+        ncfile.setncattr_string('Acknowledgement',                """
+This is a data product from the NASA Ionospheric Connection Explorer mission, an Explorer launched at 21:59:45 EDT on October 10, 2019, from Cape Canaveral AFB in the USA. Guidelines for the use of this product are described in the ICON Rules of the Road  (http://icon.ssl.berkeley.edu/Data).
+
+
+Responsibility for the mission science falls to the Principal Investigator, Dr. Thomas Immel at UC Berkeley: 
+Immel, T.J., England, S.L., Mende, S.B. et al. Space Sci Rev (2018) 214: 13. https://doi.org/10.1007/s11214-017-0449-2
+Immel, T.J., England, S.L., Harding, B.J. et al. Space Sci Rev (2023) 219: 41. https://doi.org/10.1007/s11214-023-00975-x
+
+
+Responsibility for the validation of the L1 data products falls to the instrument lead investigators/scientists.
+EUV: Dr. Martin Sirk and Dr. Eric Korpela :  https://doi.org/10.1007/s11214-023-00963-1, and https://doi.org/10.1007/s11214-017-0384-2
+FUV: Dr. Harald Frey : https://doi.org/10.1007/s11214-023-00969-9, and https://doi.org/10.1007/s11214-017-0386-0
+MIGHTI: Dr. Christoph Englert : https://doi.org/10.1007/s11214-023-00971-1, https://doi.org/10.1007/s11214-017-0358-4, and https://doi.org/10.1007/s11214-017-0374-4
+IVM: Dr. Roderick Heelis : https://doi.org/10.1007/s11214-017-0383-3
+
+
+Responsibility for the validation of the L2 data products falls to those scientists responsible for those products.
+
+* Daytime O/N2 ratio : Dr. Robert Meier : https://doi.org/10.1007/s11214-018-0477-6
+* Daytime (EUV) O+ profiles: Dr. Andrew Stephan : https://doi.org/10.1007/s11214-022-00933-z, and https://doi.org/10.1007/s11214-017-0385-1
+* Nighttime (FUV) O+ profiles: Dr. Farzad Kamalabadi : https://doi.org/10.1007/s11214-018-0502-9
+* Neutral Wind profiles: Dr. Brian Harding : https://doi.org/10.1007/s11214-017-0359-3, and https://doi.org/10.1029/2020JA028947
+* Neutral Temperature profiles: Dr. Michael Stevens : https://doi.org/10.1007/s11214-022-00935-x, and https://doi.org/10.1007/s11214-017-0434-9
+* Ion Velocity Measurements : Dr. Roderick Heelis : https://doi.org/10.1007/s11214-017-0383-3
+
+Additional theoretical work in support of these products was supported by Dr. Robert Meier
+Daytime O/N2 product : https://doi.org/10.1029/2020JA029059
+Daytime (EUV) O+ profiles : https://doi.org/10.1029/2023JA031533
+
+Additional validation work was performed by Dr. Jonathan Makela, Dr. Gilles Wautelet, and Dr. Yen-Jung (Joanne) Wu:
+Neutral wind profiles : https://doi.org/10.1029/2020JA028726
+Nighttime (FUV) O+ profiles : https://doi.org/10.1007/s11214-023-00970-2
+Daytime (EUV) O+ profiles : https://doi.org/10.1007/s11214-022-00930-2
+Ion Velocity Measurements : https://doi.org/10.1007/s11214-023-00993-9
+
+Responsibility for Level 4 products falls to those scientists responsible for those products.
+
+* Hough Modes : Dr. Chihoko Cullens : https://doi.org/10.1186/s40645-020-00330-6 and https://doi.org/10.1007/s11214-017-0401-5
+* TIEGCM : Dr. Astrid Maute : https://doi.org/10.1007/s11214-017-0330-3
+* SAMI3 : Dr. Joseph Huba : https://doi.org/10.1007/s11214-017-0415-z
+
+Pre-production versions of all above papers are available on the ICON website.
+http://icon.ssl.berkeley.edu/Publications
+
+Overall validation of the products is overseen by the ICON Project Scientist, Dr. Scott England.
+
+NASA oversight for all products is provided by the Mission Scientist, Dr. Jeffrey Klenzing (2018-2022) and Dr. Ruth Lieberman (2022-present).
+
+Users of these data should contact and acknowledge the Principal Investigator Dr. Immel and the party directly responsible for the data product (noted above) and acknowledge NASA funding for the collection of the data used in the research with the following statement :
+
+"ICON is supported by NASA's Explorers Program through contracts NNG12FA45C and NNG12FA42I".
+
+These data are openly available as described in the ICON Data Management Plan available on the ICON website (http://icon.ssl.berkeley.edu/Data)."""
+                                )
         ncfile.setncattr_string('ADID_Ref',                       'NASA Contract > NNG12FA45C')
         ncfile.setncattr_string('Calibration_File',               '')
         ncfile.setncattr_string('Conventions',                    'SPDF ISTP/IACG Modified for NetCDF')
@@ -5659,7 +5967,8 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                                                                    'v2.0: First run of on-orbit data, using external zero wind reference and smooth daily-averaged profiles, B. J. Harding, 01 May 2020',
                                                                    'v3.0: Correction for long-term mechanical drift, B. J. Harding, 04 Jun 2020',
                                                                    'v4.0: Updated correction for long-term mechanical drift to handle settling after ~May 2020 and precession cycle variation. LoS winds have changed by a bulk offset of up to 30 m/s. Studies using only perturbations from the mean (e.g., non-migrating tidal retrievals) are unlikely to be affected. B. J. Harding 21 Oct 2020',
-                                                                   'v5.0: The ad-hoc, HWM-based correction for the zero wind phase has been replaced with a self-calibration based on comparing data from the ascending and descending orbits (see the notes for the wind variables below for details). Long-term trends in the zero wind phase degraded the accuracy of version 4 over time, and the accuracy of version 4 data was tied to the accuracy of HWM. In version 5, errors on these long time scales (>100-150 days) are now accounted for, improving the accuracy to 10-25 m/s (see the "Accuracy" variable for more details) and removing the dependence on external models. A long window of data is required to implement this self-calibration, so v05 data are processed at least 100 days behind real time. For errors on precession-cycle time scales (48 days), the previous ad-hoc correction using initial red-vs-green comparisons has been replaced with a more comprehensive red-green cross-calibration (165-185 km altitude during the day) that accounts for the time-dependence of mechanical drifts of the optics. This result is consistent with a first-principles analysis of the fiducial notch positions (see Marr et al., 2020 and subsequent publications). A mission-average fiducial notch analysis is also used to correct mechanical drifts on an orbital time scale (97 minutes, or 24 hours of local time), which could affect migrating tide estimates. The RMS difference due to this effect is estimated at 5-10 m/s (root mean square). Analysis of waves with periods that do not coincide with these new corrections are not likely to be different than in version 4 (e.g., nonmigrating tides, planetary waves, and gravity waves). New variables related to error (i.e., uncertainty) estimates from various sources are now included, whereas version 4 error estimates only included the effects of shot, read, and dark noise. MIGHTI-A and MIGHTI-B variables related to emission brightness are now cross-calibrated, though not absolutely calibrated. Exposures affected by solar and lunar stray light are now flagged. Some data during periods in May and July 2020 when the sun approached the MIGHTI field of view was marked as unavailable in v04, but is now available in v05 with the exception of a few days. The data from the second row in the green channel (~91 km) is now available when the signal strength permits a wind estimate. An error in the local time calculation has been corrected, which changes the local time by up to 20 min. A new algorithm to identify cosmic ray spikes has been implemented, improving precision. A preliminary algorithm has been implemented to to correct a wind bias associated with low signal levels, and associated uncertainties are estimated (see the "Precision_Low_Signal_Effect" variable for more details). Finally, various quality control parameters have been optimized. More description is provided in the notes below. A full history of software changes can be found on Github: https://github.com/bharding512/airglowrsss/commits/master/Python/modules/MIGHTI_L2.py  B. J. Harding 08 Sep 2022'
+                                                                   'v5.0: The ad-hoc, HWM-based correction for the zero wind phase has been replaced with a self-calibration based on comparing data from the ascending and descending orbits (see the notes for the wind variables below for details). Long-term trends in the zero wind phase degraded the accuracy of version 4 over time, and the accuracy of version 4 data was tied to the accuracy of HWM. In version 5, errors on these long time scales (>100-150 days) are now accounted for, improving the accuracy to 10-25 m/s (see the "Accuracy" variable for more details) and removing the dependence on external models. A long window of data is required to implement this self-calibration, so v05 data are processed at least 100 days behind real time. For errors on precession-cycle time scales (48 days), the previous ad-hoc correction using initial red-vs-green comparisons has been replaced with a more comprehensive red-green cross-calibration (165-185 km altitude during the day) that accounts for the time-dependence of mechanical drifts of the optics. This result is consistent with a first-principles analysis of the fiducial notch positions (see Marr et al., 2020 and subsequent publications). A mission-average fiducial notch analysis is also used to correct mechanical drifts on an orbital time scale (97 minutes, or 24 hours of local time), which could affect migrating tide estimates. The RMS difference due to this effect is estimated at 5-10 m/s (root mean square). Analysis of waves with periods that do not coincide with these new corrections are not likely to be different than in version 4 (e.g., nonmigrating tides, planetary waves, and gravity waves). New variables related to error (i.e., uncertainty) estimates from various sources are now included, whereas version 4 error estimates only included the effects of shot, read, and dark noise. MIGHTI-A and MIGHTI-B variables related to emission brightness are now cross-calibrated, though not absolutely calibrated. Exposures affected by solar and lunar stray light are now flagged. Some data during periods in May and July 2020 when the sun approached the MIGHTI field of view was marked as unavailable in v04, but is now available in v05 with the exception of a few days. The data from the second row in the green channel (~91 km) is now available when the signal strength permits a wind estimate. An error in the local time calculation has been corrected, which changes the local time by up to 20 min. A new algorithm to identify cosmic ray spikes has been implemented, improving precision. A preliminary algorithm has been implemented to to correct a wind bias associated with low signal levels, and associated uncertainties are estimated (see the "Precision_Low_Signal_Effect" variable for more details). Finally, various quality control parameters have been optimized. More description is provided in the notes below. A full history of software changes can be found on Github: https://github.com/bharding512/airglowrsss/commits/master/Python/modules/MIGHTI_L2.py  B. J. Harding 08 Sep 2022',
+                                                                   'v6.0: First, the low-signal correction has been further tuned using on-orbit data, with significant changes near the end of the mission. The tuning utilized the assumption that in the early mission, the wind’s dependence on airglow brightness was accurate, and applied a commensurate correction to late-mission data. Although changes in the green-line are small, changes in red-line data at the end of the mission reached tens of m/s, larger at the terminator. These changes result in a more continuous transition between day and night mode, as well as better agreement with HWM. Second, daily phase calibrations (e.g., thermal drift correction) have been smoothed over time. Third, a new algorithm was developed to identify and mask CCD pixels exhibiting rapid changes in the dark current. These two updates have improved the point-to-point scatter (1-sample precision) and day-to-day scatter (1-day precision). Other minor changes include the following. Minor code refactoring was necessary to upgrade to Python3, and small numerical changes are expected. Quality flagging for Volume Emission Rate (VER) data was updated to permit reporting of VER even where winds are flagged as poor quality. This slightly improves the coverage of VER data. B. J. Harding 12 Dec 2025'
                                                                   ])
         ncfile.setncattr_string('HTTP_LINK',                      'http://icon.ssl.berkeley.edu/Instruments/MIGHTI')
         ncfile.setncattr_string('Instrument',                     'MIGHTI')
@@ -5699,22 +6008,21 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
         'doi:10.1007/s11214-017-0359-3] for more details of the Level 2.2 algorithm. ' +
         'Further discussion of the calibration and performance of MIGHTI after launch can be found in a forthcoming paper in Space Science ' +
         'Reviews [Englert et al., 2022, in preparation].',
+                    
+                     "Known issues with the v06 data release are listed below. Work is in progress to resolve or mitigate these issues in future data releases. ",
 
-             "Known issues with the v05 data release are listed below. Work is in progress to resolve or mitigate these issues in future data releases. ",
-
-                     "Known issues with v05:<br/>"
+                     "Known issues with v06:<br/>"
                      " * When ICON is in the South Atlantic Anomaly (SAA), radiation effects on the detector cause poor data quality. The quality control algorithm "
                      "adequately flags and masks most of the affected samples, but some outliers remain, especially near the edge of the SAA. Other uncaught outliers "
                      "are rare but can occur due to cosmic rays, stars in the field of view, moonlight, etc. <br/>"
                      " * The bottom row of data (corresponding to an altitude of ~88 km) is masked out as the signal is rarely strong enough to permit a wind "
-                     "estimate, and calibrations have large uncertainties. It is unlikely but possible that this altitude will be reported in future releases, "
-                     "pending further investigation. <br/>"
+                     "estimate, and calibrations have large uncertainties. <br/>"
                      " * Airglow brightness observations are not a required mission product, and no effort was yet made to absolutely calibrate "
                      "the brightness observations for MIGHTI-A and MIGHTI-B, and thus the Relative_VER "
-                     "variable should be treated with caution. In v05, MIGHTI-A and B are cross-calibrated using a conversion factor derived from on-orbit data. "
-                     "However, there are some indications that this cross-calibration may be changing with time, which is not accounted for in v05. <br/>"
+                     "variable should be treated with caution. In v05 and v06, MIGHTI-A and B are cross-calibrated using a conversion factor derived from on-orbit data. "
+                     "However, there are some indications that this cross-calibration may be changing with time, which is not accounted for. <br/>"
                      
-                     " * As discussed in the variable notes below, a new zero wind phase determination has been implemented in v05. However, during the period "
+                     " * As discussed in the variable notes below, a new zero wind phase determination has been implemented beginning in v05. However, during the period "
                      "from 2021 Apr 26 to Aug 14, data gaps and one period of southward (\"Reverse LVLH\") pointing cause errors in this determination. The "
                      "accuracy is estimated to be degraded by a factor of two. See the *_Accuracy variable. <br/>"
                      " * During the one orbit per day when the calibration lamp is on, the wind data can be noisier and have a slight bias. Although this issue is "
@@ -5726,20 +6034,17 @@ def save_nc_level22(path, L22_dict, data_revision = 0):
                      "error estimates (i.e., precision and accuracy) should treat those estimates as uncertain. It is believed that most error estimates are "
                      "correct to within a factor of 2. The largest problems with error reporting occur where the airglow signal is weakest. <br/>"
                      
-                     " * Imperfect daily calibration data lead to small discontinuities in the zero wind phase at the boundaries between days (i.e., "
-                     " between 23:59:59 and 00:00:00 UT), which are not accounted for by the reported error variables. This was estimated to be a 2-5 "
-                     "m/s (root-mean-square) error early in the mission, but is growing over time, possibly reaching 5-10 m/s by mid-2022.<br/>"
                      " * A signal-dependent phase shift is seen in atmospheric and calibration lamp fringes, possibly caused by "
                      "a charge trapping effect in the CCD. This is the subject of ongoing investigation, but a first-order correction "
-                     "is implemented in the v05 dataset. The correction increases linearly with time to match the effect seen in on-orbit calibration data. "
+                     "was implemented in the v05 dataset and improved in v06. The correction increases linearly with time to match the effect seen in on-orbit calibration data. "
                      "The variable *_Precision_Low_Signal_Effect is an estimate of the remaining uncertainty due to an imperfect "
                      "correction. Where this uncertainty is large, caution is recommended. "
                      "For example, for winds in the core science region (90-105 km altitude, away from the terminator), the magnitude of the correction "
                      "is small or zero, but data in the red "
-                     "channel during the night and twilight are subject to a large correction (many tens of m/s) and the uncertainty is correspondingly large. "
-                     "A goal for future releases is to characterize and correct this effect more accurately. <br/>"
+                     "channel during the night and twilight are subject to a large correction (many tens of m/s) and the uncertainty is correspondingly large. <br/>"
                      " * Data near the solar terminators are subject to a variety of errors, including those described above and others related to the rapidly "
-                     "varying illumination. Not all errors near the terminator are accounted for by the reported error. Users are encouraged to "
+                     "varying illumination. Although terminator errors have been much improved in v06, not all errors near the terminator are accounted for "
+                     "by the reported error. Users are encouraged to "
                      "use extra caution with these data.<br/>"
                      "See the documentation below for more information.<br/>"
                     
@@ -6521,7 +6826,6 @@ def level21_to_level22_without_info_file(A_curr_fn, B_curr_fn, A_prev_fn, B_prev
     assert len(L21_A_curr['time'])>0, "No MIGHTI-A samples in %s" % A_curr_fn
     assert len(L21_B_curr['time'])>0, "No MIGHTI-B samples in %s" % B_curr_fn
 
-
     def combine(d0, d1, tstart, tstop):
         '''
         Combine the two L2.1 dictionaries (d0 and d1), only keeping samples taken between
@@ -6563,7 +6867,7 @@ def level21_to_level22_without_info_file(A_curr_fn, B_curr_fn, A_prev_fn, B_prev
     # Define start and stop times (based on "A_curr" data) to include a 30 minute buffer
     # before and after the current 24-hour period.
     nt = len(L21_A_curr['time'])
-    t0 = L21_A_curr['time'][nt/2] # Assume midpoint time in A_curr_fn defines "today's date"
+    t0 = L21_A_curr['time'][nt//2] # Assume midpoint time in A_curr_fn defines "today's date"
     tstart = datetime(t0.year, t0.month, t0.day) - timedelta(hours=0.5)
     tstop  = tstart + timedelta(hours=25.)
 
@@ -6977,7 +7281,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
     
       *  L21_pngs     --TYPE:list of str,  Full path to the saved png files
     '''
-    from mpl_toolkits.basemap import Basemap # For putting map on Tohban plots
+    # from mpl_toolkits.basemap import Basemap # For putting map on Tohban plots
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     from matplotlib.colors import LinearSegmentedColormap
 
@@ -6997,7 +7301,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
                        (1.0, hi_rgb [2], hi_rgb [2]))}
     cmap_byr = LinearSegmentedColormap('Custom', cdict)
 
-    if pngpath[-1] != '/':
+    if pngpath and pngpath[-1] != '/':
         pngpath += '/'
 
     L21_dict = level21_to_dict(L21_fn)
@@ -7111,12 +7415,12 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ############ Quality Factors #############
         cmap = cmap_byr
         bounds = [-0.33,0.33,0.67,1.33]
-        norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)  
+        norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)
 
         ax = axarr[2,0]
         C = 1 - L21_dict['wind_quality'][:,i1:i2]
         C[:,igap] = np.nan
-        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm)
         ax.set_title('Wind Quality')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.5,1])
@@ -7126,7 +7430,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ax = axarr[2,1]
         C = 1 - L21_dict['ver_quality'][:,i1:i2]
         C[:,igap] = np.nan
-        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm)
         ax.set_title('VER Quality')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.5,1])
@@ -7134,43 +7438,113 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ax_format.append(ax)
 
         ############ Location #############
-        try: # because I'm worried something funny may happen with this hacky code
+        # try: # because I'm worried something funny may happen with this hacky code
+        #     ax = axarr[3,0]
+        #     j = int(ny/2) # Use middle altitude for reference lat/lon
+        #     # Annoying code to work longitude ranges for Basemap [-360, 720]
+        #     lon = L21_dict['lon'][j,i1:i2]
+        #     lonu = fix_longitudes(lon)
+        #     lonoff = lonu[0] - (np.mod(lonu[0] + 180., 360.)-180.) # offset to put min lon in [-180, 180]
+        #     lonplot = lonu - lonoff
+        #     latplot = L21_dict['lat'][j,i1:i2]
+        #     # Compute lonmin and lonmax for plot. This is an unfortunately hacky way to ensure
+        #     # that the x axis on the map matches the x axis on the other plots, even for 
+        #     # partial orbits.
+        #     c = np.polyfit(xm, lonplot, 1)
+        #     dlon_dslt = c[0]
+        #     lon_slt0 = c[1]
+        #     lonmin = dlon_dslt*-12 + lon_slt0
+        #     lonmax = dlon_dslt*12  + lon_slt0
+        #     m = Basemap(ax=ax, llcrnrlon=lonmin, urcrnrlon=lonmax, llcrnrlat=-50., urcrnrlat=50.,\
+        #                 resolution='l',projection='merc',lat_ts=0.,\
+        #                 fix_aspect=False)
+        #     m.plot(lonplot, latplot, 'C1-', lw=3, latlon=True, label='Observations')
+        #     xm,ym = m(lonlat_0[:,0], lonlat_0[:,1])
+        #     ax.plot(xm,ym, 'k-', lw=1, label='MLAT=0')
+        #     xm,ym = m(lonlat_m10[:,0], lonlat_m10[:,1])
+        #     ax.plot(xm,ym, 'k--', lw=1, label='MLAT=+/-10 deg')
+        #     xm,ym = m(lonlat_p10[:,0], lonlat_p10[:,1])
+        #     ax.plot(xm,ym, 'k--', lw=1)
+        #     cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad) # Helps alignment
+        #     cax.set_visible(False) # Helps alignment
+        #     m.drawparallels(np.arange(-90.,91.,30.), labels=[0,1,0,1]); # LRTB
+        #     m.drawmeridians(np.arange(-180.,361.,90.), labels=[0,1,0,1]);
+        #     ax.legend(loc='lower left', prop={'size':8})
+        #     m.drawcoastlines(linewidth=0.5);
+        #     m.fillcontinents()
+        # except Exception as e:
+        #     print('Error creating map: %s' % e)
+
+        # Rewritten using cartopy in Python3
+        import cartopy.crs as ccrs
+        import cartopy.feature as cfeature
+        from mpl_toolkits.axes_grid1 import make_axes_locatable
+        
+        try:
             ax = axarr[3,0]
-            j = int(ny/2) # Use middle altitude for reference lat/lon
-            # Annoying code to work longitude ranges for Basemap [-360, 720]
-            lon = L21_dict['lon'][j,i1:i2]
+            axarr[3,0].axis('off') # WIll be overwritten
+        
+            j = int(ny/2)
+            lon = L21_dict['lon'][j, i1:i2]
             lonu = fix_longitudes(lon)
-            lonoff = lonu[0] - (np.mod(lonu[0] + 180., 360.)-180.) # offset to put min lon in [-180, 180]
+            lonoff = lonu[0] - (np.mod(lonu[0] + 180., 360.) - 180.)
             lonplot = lonu - lonoff
-            latplot = L21_dict['lat'][j,i1:i2]
-            # Compute lonmin and lonmax for plot. This is an unfortunately hacky way to ensure
-            # that the x axis on the map matches the x axis on the other plots, even for 
-            # partial orbits.
+            latplot = L21_dict['lat'][j, i1:i2]
+        
+            # Match X-axis span across plots
             c = np.polyfit(xm, lonplot, 1)
             dlon_dslt = c[0]
             lon_slt0 = c[1]
-            lonmin = dlon_dslt*-12 + lon_slt0
-            lonmax = dlon_dslt*12  + lon_slt0
-            m = Basemap(ax=ax, llcrnrlon=lonmin, urcrnrlon=lonmax, llcrnrlat=-50., urcrnrlat=50.,\
-                        resolution='l',projection='merc',lat_ts=0.,\
-                        fix_aspect=False)
-            m.plot(lonplot, latplot, 'C1-', lw=3, latlon=True, label='Observations')
-            xm,ym = m(lonlat_0[:,0], lonlat_0[:,1])
-            ax.plot(xm,ym, 'k-', lw=1, label='MLAT=0')
-            xm,ym = m(lonlat_m10[:,0], lonlat_m10[:,1])
-            ax.plot(xm,ym, 'k--', lw=1, label='MLAT=+/-10 deg')
-            xm,ym = m(lonlat_p10[:,0], lonlat_p10[:,1])
-            ax.plot(xm,ym, 'k--', lw=1)
-            cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad) # Helps alignment
-            cax.set_visible(False) # Helps alignment
-            m.drawparallels(np.arange(-90.,91.,30.), labels=[0,1,0,1]); # LRTB
-            m.drawmeridians(np.arange(-180.,361.,90.), labels=[0,1,0,1]);
-            ax.legend(loc='lower left', prop={'size':8})
-            m.drawcoastlines(linewidth=0.5);
-            m.fillcontinents()
+            lonmin = dlon_dslt * -12 + lon_slt0
+            lonmax = dlon_dslt * 12  + lon_slt0
+        
+            # Cartopy setup
+            pc = ccrs.PlateCarree()
+            proj = ccrs.Mercator()
+        
+            # MUST set projection on the axes
+            ax = plt.subplot(axarr.shape[0], axarr.shape[1], 13, projection=proj)
+        
+            # Set extent in data coords
+            ax.set_extent([lonmin, lonmax, -50, 50], crs=pc)
+        
+            # Observations track
+            ax.plot(lonplot, latplot,
+                    transform=pc,
+                    color='C1', linewidth=3, label='Observations')
+        
+            # MLAT lines
+            ax.plot(lonlat_0[:,0],  lonlat_0[:,1],  'k-',  lw=1, transform=pc, label='MLAT=0')
+            ax.plot(lonlat_m10[:,0], lonlat_m10[:,1], 'k--', lw=1, transform=pc, label='MLAT=+/-10')
+            ax.plot(lonlat_p10[:,0], lonlat_p10[:,1], 'k--', lw=1, transform=pc)
+        
+            # Coastlines + land
+            ax.coastlines(linewidth=0.5)
+            ax.add_feature(cfeature.LAND, facecolor='0.8', zorder=0)
+        
+            # Parallels / meridians
+            gl = ax.gridlines(draw_labels=True,
+                              xlocs=np.arange(-180, 361, 90),
+                              ylocs=np.arange(-90, 91, 30))
+            gl.xlabel_style = {'size': 8}
+            gl.ylabel_style = {'size': 8}
+        
+            # Dummy colorbar axis to keep alignment
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes(
+                'right',
+                size=csize,
+                pad=cpad,
+                axes_class=plt.Axes   # <-- key fix
+            )
+            cax.set_visible(False)
+        
+            ax.legend(loc='lower left', prop={'size': 8})
+        
         except Exception as e:
-            print('Error creating map: %s' % e)
+            print("Map plotting failed:", e)
 
+        
         ############ Quality flags ############
         # There isn't enough room to plot all the flags, so we'll plot the most important ones (subject to change)
         cmap = cmap_byr
@@ -7180,7 +7554,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ax = axarr[0,2]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,0]
         C[:,igap] = np.nan
-        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm)
         ax.set_title('Very low SNR (before inversion)')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
@@ -7189,7 +7563,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ax = axarr[1,2]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,6]
         C[:,igap] = np.nan
-        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm)
         ax.set_title('Very low SNR (after inversion)')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
@@ -7198,7 +7572,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ax = axarr[2,2]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,11]
         C[:,igap] = np.nan
-        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm)
         ax.set_title('Cautiously low SNR (after inversion)')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
@@ -7208,7 +7582,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ax = axarr[3,2]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,5]
         C[:,igap] = np.nan
-        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm)
         ax.set_title('Not enough valid points in profile')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
@@ -7217,7 +7591,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ax = axarr[3,3]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,7]
         C[:,igap] = np.nan
-        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm)
         ax.set_title('Airglow above 300 km')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
@@ -7226,7 +7600,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ax = axarr[3,1]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,8]
         C[:,igap] = np.nan
-        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm)
         ax.set_title('LoS crosses terminator')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
@@ -7235,7 +7609,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ax = axarr[0,3]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,9]
         C[:,igap] = np.nan
-        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm)
         ax.set_title('Thermal drift correction uncertain')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
@@ -7245,7 +7619,7 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ax = axarr[1,3]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,4]
         C[:,igap] = np.nan
-        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm)
         ax.set_title('Solar/lunar contamination')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
@@ -7254,14 +7628,14 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         ax = axarr[2,3]
         C = 1.0 * L21_dict['quality_flags'][:,i1:i2,3]
         C[:,igap] = np.nan
-        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, C, cmap=cmap, norm=norm)
         ax.set_title('Calibration lamps are on')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
         ax_format.append(ax)
 
         #### Turn off unused axes
-#         axarr[3,3].axis('off')
+        # axarr[3,0].axis('off')
 
         #### Make the 2D plots look nice
         for ax in ax_format:
@@ -7289,11 +7663,12 @@ def plot_level21(L21_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100., a_mi
         fig.suptitle('%s MIGHTI-%s %s' % (datetime_str, sensor, L21_dict['emission_color'].capitalize()), fontsize=28)
 
         #### Save
-        versrev = L21_fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
-        desc = L21_fn.split('/')[-1].split('_')[-3] #e.g., Vector-Wind-Green
-        pngfn = pngpath + 'ICON_L2-1_MIGHTI-%s_Plot-%s_%s_%s.PNG'%(sensor, desc, datetime_str, versrev)
-        plt.savefig(pngfn, dpi=120)
-        L21_pngs.append(pngfn)
+        if pngpath:
+            versrev = L21_fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
+            desc = L21_fn.split('/')[-1].split('_')[-3] #e.g., Vector-Wind-Green
+            pngfn = pngpath + 'ICON_L2-1_MIGHTI-%s_Plot-%s_%s_%s.PNG'%(sensor, desc, datetime_str, versrev)
+            plt.savefig(pngfn, dpi=120)
+            L21_pngs.append(pngfn)
         if close: 
             # There seems to be a memory leak here, despite this:
             fig.clf()
@@ -7338,9 +7713,10 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
       *  L22_pngs     --TYPE:list of str,  Full path to the saved png files
       
     '''
-    from mpl_toolkits.basemap import Basemap # For putting map on Tohban plots
+    # from mpl_toolkits.basemap import Basemap # For putting map on Tohban plots
     from mpl_toolkits.axes_grid1 import make_axes_locatable
     from matplotlib.colors import LinearSegmentedColormap
+    from matplotlib import pyplot as plt
 
     # Custom colormap for quality factor/flags
     low_rgb = [0.7, 0.7, 1.0]
@@ -7358,7 +7734,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
                        (1.0, hi_rgb [2], hi_rgb [2]))}
     cmap_byr = LinearSegmentedColormap('Custom', cdict)
 
-    if pngpath[-1] != '/':
+    if pngpath and pngpath[-1] != '/':
         pngpath += '/'
 
     L22_dict = level22_to_dict(L22_fn)
@@ -7470,7 +7846,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)  
 
         ax = axarr[3,0]
-        h = ax.pcolormesh(X, Y, 1 - L22_dict['wind_quality'][:,i1:i2], cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, 1 - L22_dict['wind_quality'][:,i1:i2], cmap=cmap, norm=norm)
         ax.set_title('Wind Quality')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.5,1])
@@ -7478,48 +7854,74 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         ax_format.append(ax)
 
         ax = axarr[3,1]
-        h = ax.pcolormesh(X, Y, 1 - L22_dict['ver_quality'][:,i1:i2], cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, 1 - L22_dict['ver_quality'][:,i1:i2], cmap=cmap, norm=norm)
         ax.set_title('VER Quality')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.5,1])
         cb.ax.set_yticklabels(['Good','Caution','Bad'], rotation=-90, va='center')
         ax_format.append(ax)
 
-        ############ Location #############
-        try: # because I'm worried something funny may happen with this hacky code
+        
+        
+
+        ##### Location #####
+        try:
+            import cartopy.crs as ccrs
+            import cartopy.feature as cfeature
+            
             ax = axarr[5,0]
-            j = int(Nalt/2) # Use middle altitude for reference lat/lon
-            # Annoying code to work longitude ranges for Basemap [-360, 720]
-            lonoff = lonu[j,i1] - (np.mod(lonu[j,i1] + 180., 360.)-180.) # offset to put min lon in [-180, 180]
+            ax.axis('off')
+        
+            j = int(Nalt/2)
+            lonoff = lonu[j,i1] - (np.mod(lonu[j,i1] + 180., 360.) - 180.)
             lonplot = lonu[j,i1:i2] - lonoff
             latplot = L22_dict['lat'][j,i1:i2]
-            # Compute lonmin and lonmax for plot. This is an unfortunately hacky way to ensure
-            # that the x axis on the map matches the x axis on the other plots, even for 
-            # partial orbits.
+        
             c = np.polyfit(x, lonplot, 1)
             dlon_dslt = c[0]
             lon_slt0 = c[1]
-            lonmin = dlon_dslt*-12 + lon_slt0
-            lonmax = dlon_dslt*12  + lon_slt0
-            m = Basemap(ax=ax, llcrnrlon=lonmin, urcrnrlon=lonmax, llcrnrlat=-50., urcrnrlat=50.,\
-                        resolution='l',projection='merc',lat_ts=0.,\
-                        fix_aspect=False)
-            m.plot(lonplot, latplot, 'C1-', lw=3, latlon=True, label='Observations')
-            xm,ym = m(lonlat_0[:,0], lonlat_0[:,1])
-            ax.plot(xm,ym, 'k-', lw=1, label='MLAT=0')
-            xm,ym = m(lonlat_m10[:,0], lonlat_m10[:,1])
-            ax.plot(xm,ym, 'k--', lw=1, label='MLAT=+/-10 deg')
-            xm,ym = m(lonlat_p10[:,0], lonlat_p10[:,1])
-            ax.plot(xm,ym, 'k--', lw=1)
-            cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad) # Helps alignment
-            cax.set_visible(False) # Helps alignment
-            m.drawparallels(np.arange(-90.,91.,30.), labels=[0,1,0,1]); # LRTB
-            m.drawmeridians(np.arange(-180.,361.,90.), labels=[0,1,0,1]);
+            lonmin = dlon_dslt * -12 + lon_slt0
+            lonmax = dlon_dslt *  12 + lon_slt0
+        
+            # Cartopy axis
+            proj = ccrs.Mercator()
+            pc = ccrs.PlateCarree()
+            ax = plt.subplot(nrows, ncols, (5*ncols)+1, projection=proj)
+        
+            # Match baseline limits
+            ax.set_extent([lonmin, lonmax, -50, 50], crs=pc)
+        
+            # Observations track
+            ax.plot(lonplot, latplot,
+                    transform=pc,
+                    color='C1', lw=3, label='Observations')
+        
+            # MLAT lines
+            ax.plot(lonlat_0[:,0],  lonlat_0[:,1],  'k-',  lw=1, transform=pc, label='MLAT=0')
+            ax.plot(lonlat_m10[:,0], lonlat_m10[:,1], 'k--', lw=1, transform=pc, label='MLAT=+/-10')
+            ax.plot(lonlat_p10[:,0], lonlat_p10[:,1], 'k--', lw=1, transform=pc)
+        
+            # Coastlines & land
+            ax.coastlines(linewidth=0.5)
+            ax.add_feature(cfeature.LAND, zorder=0)
+        
+            # Gridlines (replaces drawparallels/meridians)
+            gl = ax.gridlines(draw_labels=True,
+                              xlocs=np.arange(-180, 361, 90),
+                              ylocs=np.arange(-90, 91, 30))
+            gl.xlabel_style = {'size': 8}
+            gl.ylabel_style = {'size': 8}
+        
+            # Dummy axis for alignment (must be plain Axes, not GeoAxes)
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes('right', size=csize, pad=cpad, axes_class=plt.Axes)
+            cax.set_visible(False)
+        
             ax.legend(loc='lower left', prop={'size':8})
-            m.drawcoastlines(linewidth=0.5);
-            m.fillcontinents()
+        
         except Exception as e:
             print('Error creating map: %s' % e)
+            raise
 
         ############ Quality flags derived at L2.2 ############
         # There isn't enough room to plot all the flags, so we'll plot the most important ones (subject to change)
@@ -7528,14 +7930,14 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         norm = matplotlib.colors.BoundaryNorm(bounds, cmap.N)  
 
         ax = axarr[0,2]
-        h = ax.pcolormesh(X, Y, L22_dict['quality_flags'][:,i1:i2,28], cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, L22_dict['quality_flags'][:,i1:i2,28], cmap=cmap, norm=norm)
         ax.set_title('Spherical asymmetry detected')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
         ax_format.append(ax)
 
         ax = axarr[4,0]
-        h = ax.pcolormesh(X, Y, L22_dict['quality_flags'][:,i1:i2,33], cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, L22_dict['quality_flags'][:,i1:i2,33], cmap=cmap, norm=norm)
         ax.set_title('Unknown Error')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,1])
@@ -7548,7 +7950,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
 
         ax = axarr[1,2]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,24] + 0.667*L22_dict['quality_flags'][:,i1:i2,25]
-        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm)
         ax.set_title('MIGHTI A or B: Missing file')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
@@ -7557,7 +7959,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
 
         ax = axarr[2,2]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,0] + 0.667*L22_dict['quality_flags'][:,i1:i2,12]
-        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm)
         ax.set_title('MIGHTI A or B: Very low SNR before inversion')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
@@ -7566,7 +7968,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
 
         ax = axarr[3,2]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,6] + 0.667*L22_dict['quality_flags'][:,i1:i2,18]
-        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm)
         ax.set_title('MIGHTI A or B: Very low SNR after inversion')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
@@ -7575,7 +7977,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         
         ax = axarr[4,2]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,11] + 0.667*L22_dict['quality_flags'][:,i1:i2,23]
-        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm)
         ax.set_title('MIGHTI A or B: Cautiously low SNR after inversion')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
@@ -7584,7 +7986,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
 
         ax = axarr[4,1]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,7] + 0.667*L22_dict['quality_flags'][:,i1:i2,19]
-        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm)
         ax.set_title('MIGHTI A or B: Airglow above 300 km')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
@@ -7593,7 +7995,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
 
         ax = axarr[0,3]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,8] + 0.667*L22_dict['quality_flags'][:,i1:i2,20]
-        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm)
         ax.set_title('MIGHTI A or B: LoS crosses terminator')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
@@ -7602,7 +8004,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
 
         ax = axarr[1,3]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,2] + 0.667*L22_dict['quality_flags'][:,i1:i2,14]
-        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm)
         ax.set_title('MIGHTI A or B: Bad calibration')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
@@ -7611,7 +8013,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
 
         ax = axarr[2,3]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,26] + 0.667*L22_dict['quality_flags'][:,i1:i2,27]
-        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm)
         ax.set_title('MIGHTI A or B: Unobserved altitudes')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
@@ -7621,7 +8023,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         # 2022 Jul 25: Replaced plot of SAA with plot of "not enough valid points in profile"
         ax = axarr[5,2]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,5] + 0.667*L22_dict['quality_flags'][:,i1:i2,17]
-        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm)
         ax.set_title('MIGHTI A or B: Not enough valid points in profile')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
@@ -7630,7 +8032,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         
         ax = axarr[3,3]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,9] + 0.667*L22_dict['quality_flags'][:,i1:i2,21]
-        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm)
         ax.set_title('MIGHTI A or B: Thermal drift correction uncertain')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
@@ -7640,7 +8042,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         # 2021 Feb 8: replaced plot of S/C jitter flag with plot of solar/lunar contamination
         ax = axarr[4,3]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,4] + 0.667*L22_dict['quality_flags'][:,i1:i2,16]
-        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm)
         ax.set_title('MIGHTI A or B: Solar/lunar contamination')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
@@ -7649,7 +8051,7 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         
         ax = axarr[5,3]
         z = 0.333*L22_dict['quality_flags'][:,i1:i2,3] + 0.667*L22_dict['quality_flags'][:,i1:i2,15]
-        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm, vmin=0.0, vmax=1.0)
+        h = ax.pcolormesh(X, Y, z, cmap=cmap, norm=norm)
         ax.set_title('MIGHTI A or B: Calibration lamps are on')
         cax = make_axes_locatable(ax).append_axes('right', size=csize, pad=cpad)
         cb = fig.colorbar(h, cax=cax, ticks=[0,0.333,0.667,1])
@@ -7684,11 +8086,12 @@ def plot_level22(L22_fn, pngpath, v_max = 200., ve_min = 1., ve_max = 100.,
         fig.suptitle('%s %s' % (datetime_str, L22_dict['emission_color']), fontsize=28)
 
         #### Save
-        versrev = L22_fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
-        desc = L22_fn.split('/')[-1].split('_')[-3] #e.g., Vector-Wind-Green
-        pngfn = pngpath + 'ICON_L2-2_MIGHTI_Plot-%s_%s_%s.PNG'%(desc,datetime_str,versrev)
-        plt.savefig(pngfn, dpi=120)
-        L22_pngs.append(pngfn)
+        if pngpath:
+            versrev = L22_fn.split('/')[-1].split('_')[-1].split('.')[0] # e.g., v01r001
+            desc = L22_fn.split('/')[-1].split('_')[-3] #e.g., Vector-Wind-Green
+            pngfn = pngpath + 'ICON_L2-2_MIGHTI_Plot-%s_%s_%s.PNG'%(desc,datetime_str,versrev)
+            plt.savefig(pngfn, dpi=120)
+            L22_pngs.append(pngfn)
         if close: 
             # There seems to be a memory leak here, despite this:
             fig.clf()
