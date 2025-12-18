@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 6 # Should only be incremented on major changes
-software_version_minor = 1 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 2 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -138,7 +138,20 @@ except:
 
 # Added in v1.20. Removed in v6.01 in favor of pymsis
 # from pyglow import pyglow # for correcting VER for temperature visibility reduction
-import pymsis
+try:
+    import pymsis
+    print('pymsis: successfully imported')
+except ImportError:
+    print("WARNING: pymsis not installed! Running L2.1 inversion will fail.")
+    msis_function = None
+else:
+    try:
+        from pymsis import calculate as msis_function
+        print('pymsis: using pymsis.calculate')
+    except ImportError:
+        from pymsis.msis import run as msis_function
+        print('pymsis: using pymsis.msis.run')
+
 
 
 # Some aesthetics for plots
@@ -283,7 +296,7 @@ def visibility_temperature(t, lat, lon, alt, f107=None, f107a=None, f107p=None, 
 
     
         
-        result = pymsis.calculate(
+        result = msis_function(
             t,
             lon,
             lat,
@@ -294,12 +307,12 @@ def visibility_temperature(t, lat, lon, alt, f107=None, f107a=None, f107p=None, 
             **kwargs
         )
         
-        variables = pymsis.Variable
+        variables = ["MASS_DENSITY", "N2", "O2", "O", "HE", "H", "AR", "N", "ANOMALOUS_O", "NO", "TEMPERATURE"]
         
         if result.ndim == 5:
             ds =  xr.Dataset(
                 {
-                    v.name: (("time", "lon", "lat", "alt"), result[:,:,:,:,i]) for i, v in enumerate(variables)
+                    v: (("time", "lon", "lat", "alt"), result[:,:,:,:,i]) for i, v in enumerate(variables)
                 },
                 coords={
                     "time": t,
@@ -312,7 +325,7 @@ def visibility_temperature(t, lat, lon, alt, f107=None, f107a=None, f107p=None, 
         elif result.ndim == 2:
             ds = xr.Dataset(
                 {
-                    v.name: (("time",), result[:,i]) for i, v in enumerate(variables)
+                    v: (("time",), result[:,i]) for i, v in enumerate(variables)
                 },
                 coords={
                     "time": t,
