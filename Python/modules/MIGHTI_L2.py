@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 6 # Should only be incremented on major changes
-software_version_minor = 3 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 4 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -4104,6 +4104,16 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
                                                    zero_wind_phase = z, err_striation = z_err_striation, err_zero_phase = z_err_zero_phase,
                                                    Ncorr = Ncorr)
             L21_dicts.append(L21_dict)
+
+
+        except np.linalg.LinAlgError as e:
+            # Skip ONLY the singular-matrix inversion failure
+            if "Singular matrix" in str(e):
+                print('%s: \tSkipping file due to LinAlgError (Singular matrix): %s'
+                      % (timestamp(), L1_fn))
+                continue
+            # other LinAlgErrors still count as failures
+            failure_msg.append('Failed processing:\t%s\n%s\n' % (L1_fn, traceback.format_exc()))
             
         except Exception as e:
             failure_msg.append('Failed processing:\t%s\n%s\n' % (L1_fn, traceback.format_exc()))
