@@ -11,7 +11,7 @@
 # NOTE: When the major version is updated, you should change the History global attribute
 # in both the L2.1 and L2.2 netcdf files, to describe the change (if that's still the convention)
 software_version_major = 6 # Should only be incremented on major changes
-software_version_minor = 4 # [0-99], increment on ALL published changes, resetting when the major version changes
+software_version_minor = 5 # [0-99], increment on ALL published changes, resetting when the major version changes
 __version__ = '%i.%02i' % (software_version_major, software_version_minor) # e.g., 2.03
 ####################################################################################################
 
@@ -1061,6 +1061,7 @@ def perform_inversion(I, tang_alt, icon_alt, ph_err_inst, ph_err_striation, ph_e
         for i in range(ny):
             _, a, _ = analyze_row(I[i,:], unwrap_phase=unwrap_phase)
             amp_L1[i] = a
+        
         # Be careful with nans. If left unchecked they will contaminate other
         # altitudes. For purposes of inverting amplitude/VER, treat nan 
         # rows as 0 signal, but replace with nan at the end.
@@ -1669,6 +1670,23 @@ def level1_to_dict(L1_fn, emission_color, startstop = True):
     for v in L1_dict.keys():
         if isinstance(L1_dict[v], np.ma.masked_array):
             L1_dict[v] = L1_dict[v].filled(np.nan)
+
+    # MANUAL UPDATE: For Jul 16-17, 2020, the caution factor was unecessarily raised due to the 
+    # "bad cal" flag. This will be fixed by updating all 0.5 quality factors to 1.0, but then 
+    # downgrading again for low SNR and high uncertainty. 
+    if L1_dict['time_start'].date() in [datetime(2020,7,16).date(), datetime(2020,7,17).date()]:
+        print('Using manual adjustment to L1 quality')
+        q0 = L1_dict['quality']
+        q = q0.copy()
+        low_snr = L1_dict['quality_flags'][:,0].astype(bool)
+        high_uncertainty = L1_dict['I_phase_uncertainty'] > 0.35
+        q[q0==0.5] = 1
+        q[low_snr] = 0.5
+        q[high_uncertainty] = 0.5
+        q[q0==0] = 0.0
+        L1_dict['quality_flags'][:,2] = 0 # Turn off bad cal flag
+        L1_dict['quality'] = q
+        
             
     if global_params['verbose']:
         print('%s:\t\t Closing %s' % (timestamp(), L1_fn.split('/')[-1]))
@@ -1976,9 +1994,13 @@ def level21_quality(L1_quality_flags, L21_dict, L1_quality, top_layer_thresh=1.0
         # Lastly, append the L1 quality factor because that should be the maximum allowed rating
         wind_ratings.append(L1_quality[i])
         ver_ratings.append(L1_quality[i]) # Should I do this?
+        # Adding this Mar 26, 2026 to allow VERs through during rLVLH
+        if L21_dict['att_lvlh_reverse']:
+            ver_ratings = ver_ratings[:-1] # Remove the L1 quality that was just added above
         # Compile final quality factor
         wind_quality[i] = min(wind_ratings)
         ver_quality[i]  = min(ver_ratings)
+
         
     # Final check to make sure there are enough continguous samples for the inversion to be trustworthy
 #     count = (np.array(wind_quality) > 0).sum() # This computes total # of samples
@@ -2381,6 +2403,12 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     sza     = bin_array(bin_size, sza)
     slt     = bin_array(bin_size, slt*15., lon=True)/15. # Avoid discontinuity problem by multiplying by 15 and treating like lon
     Ncorr   = int(np.ceil(1.0*Ncorr/bin_size)) # Correlation length drops (ceil is used for conservatism because an int is needed)
+
+    ## Manual adjustment to allow VERs to propagate through in reverse LVLH
+    if L1_dict['att_lvlh_reverse']:
+        print('Manually propagating VER for reverse LVLH')
+        I = I_amp + 0j # Add placeholder phase
+        L1_quality[:] = 0 # But mark all as bad to be safe (this will only apply to winds though)
     
     
     #### Determine geographical locations of inverted wind
@@ -2422,11 +2450,16 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
     
     #### Invert DC value of interferogram to get alternative VER product
     D = create_observation_matrix(tang_alt, icon_alt, top_layer=top_layer, integration_order=integration_order, H=H)
-    ver_dc = np.linalg.solve(D, I_dc)
+    # Careful with nans
+    inan = np.isnan(I_dc)
+    I_dc[inan] = 0.0
+    ver_dc = np.linalg.solve(D, I_dc) 
+    ver_dc[inan] = np.nan
     # Dec 12 2025 add uncertainty propagation
     Dinv = np.linalg.inv(D)
     DD = Dinv.dot(Dinv.T)
     ver_dc_error = I_amp_uncertainty * np.sqrt(np.diag(DD)) # assumption that L1 uncertianty is equal (since it's not provided)
+    
     
     #### Calculate azimuth angles at measurement locations
     az = los_az_angle(icon_latlonalt, lat, lon, alt)
@@ -2505,14 +2538,16 @@ def level1_dict_to_level21_dict(L1_dict, linear_amp = True, sigma = None, top_la
                                                                terminator_thresh = terminator_thresh, 
                                                                chi2_thresh = chi2_thresh, chi2_thresh_caution=chi2_thresh_caution,
                                                                count_thresh = count_thresh)
-    # Dec 12 2025 quick addition to add a quality check for VER. Filters out SAA.
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        ver_bad = np.nanstd(I_amp, axis=-1) > 2000 # stddev of L1 amplitude.
-        ver_quality[ver_bad] = 0.0
-        # But make sure that VERs are never labeled as WORSE quality than winds.
-        ver_quality = np.maximum(ver_quality, wind_quality)
 
+    # Dec 12 2025 quick addition to add a quality check for VER. Filters out SAA.
+    if not L21_dict['att_lvlh_reverse']: # Because of the funny way this was manually handled, this cannot apply to rLVLH
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            ver_bad = np.nanstd(I_amp, axis=-1) > 2000 # stddev of L1 amplitude.
+            ver_quality[ver_bad] = 0.0
+            # But make sure that VERs are never labeled as WORSE quality than winds.
+            ver_quality = np.maximum(ver_quality, wind_quality)
+    
     
     if global_params['verbose']:
         print('%s:\t\t\t\t Exited level21_quality(...)'% (timestamp()))
@@ -4149,8 +4184,9 @@ def level1_to_level21_without_info_file(L1_fns, emission_color, L21_path, data_r
         L21_dict['quality_flags'][j,:,9] = 1
         
     # If all winds are NaN, then crash so we can figure out what happened. There's no need to save an empty file.
-    if np.isnan(L21_dict['los_wind']).all():
-        raise Exception('Processing completed, but all winds are NaN')
+    # UPDATE Mar 25, 2026. Commenting this out so that Reverse LVLH will succeed 
+    # if np.isnan(L21_dict['los_wind']).all():
+    #     raise Exception('Processing completed, but all winds are NaN')
         
     
     
